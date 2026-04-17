@@ -282,22 +282,25 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 }
 
 /* HISTORIA */
-.hist-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-.hist-tbl{width:100%;border-collapse:collapse;border:var(--border);min-width:700px;}
-.hist-tbl thead tr{background:var(--navy);}
-.hist-tbl thead th{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;letter-spacing:.06em;color:#fff;padding:10px 12px;border-bottom:3px solid var(--red);text-align:left;white-space:nowrap;}
-.hist-tbl thead th.c{text-align:center;}
-.hist-tbl tbody tr{border-bottom:1px solid var(--g1);}
-.hist-tbl tbody tr:hover td{background:var(--off);}
-.hist-tbl tbody td{padding:9px 12px;font-family:'Barlow Condensed',sans-serif;font-size:12px;vertical-align:middle;white-space:nowrap;}
-.hist-tbl tbody td.c{text-align:center;}
-.hist-pos{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;color:var(--navy);}
-.hist-ap{font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;color:var(--navy);}
-.hist-nm{font-family:'Oswald',sans-serif;font-size:13px;font-weight:400;color:var(--navy);}
+.hist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
+.hist-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);}
+.hist-card-hdr{background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;letter-spacing:.08em;text-align:center;padding:10px 14px;border-bottom:3px solid var(--red);}
+.hist-yr-tbl{width:100%;border-collapse:collapse;}
+.hist-yr-tbl thead tr{background:var(--g1);}
+.hist-yr-tbl thead th{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);padding:6px 10px;text-align:left;border-bottom:1px solid var(--g2);}
+.hist-yr-tbl thead th.c{text-align:center;}
+.hist-yr-tbl tbody tr{border-bottom:1px solid var(--g1);}
+.hist-yr-tbl tbody tr:last-child{border-bottom:none;}
+.hist-yr-tbl tbody tr:hover td{background:var(--off);}
+.hist-yr-tbl tbody td{padding:7px 10px;vertical-align:middle;}
+.hist-yr-tbl tbody td.c{text-align:center;white-space:nowrap;}
+.hist-pos{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);white-space:nowrap;}
+.hist-ap{font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--navy);}
+.hist-nm{font-family:'Oswald',sans-serif;font-size:12px;font-weight:400;color:var(--navy);}
 @media(max-width:680px){
-  .hist-tbl thead th{padding:8px 8px;font-size:10px;}
-  .hist-tbl tbody td{padding:7px 8px;font-size:11px;}
-  .hist-ap,.hist-nm{font-size:11px;}
+  .hist-grid{grid-template-columns:1fr;gap:10px;}
+  .hist-card-hdr{font-size:18px;padding:8px 12px;}
+  .hist-yr-tbl tbody td{padding:6px 9px;}
 }
 </style>
 </head>
@@ -619,82 +622,83 @@ function fmtHistName(raw){
 }
 
 function buildHist(rows){
-  if(rows.length < 2) return '<div class="lb-error">Datos insuficientes.</div>';
+  if(rows.length < 3) return '<div class="lb-error">Datos insuficientes.</div>';
 
-  // Find the row that contains years. Check first 5 rows
-  let yearRowIdx = -1;
-  let tournaments = [];
-  for(let rIdx = 0; rIdx < Math.min(5, rows.length); rIdx++){
-    const testRow = rows[rIdx] || [];
-    const found = [];
-    for(let i = 0; i < testRow.length; i++){
-      const v = String(testRow[i] || '').trim();
-      const yr = parseInt(v);
-      if(yr >= 2010 && yr <= 2030){
-        found.push({ year: yr, posCol: i, playerCol: i+1 });
-      }
+  // Exact ranges per edition - render each cell as-is, in order
+  // pos and pl are 0-indexed column numbers
+  // firstRow/lastRow are 1-indexed row numbers in the sheet
+  const EDITIONS = [
+    {year:2013, pos:1,  pl:2,  firstRow:3, lastRow:7},   // B3:C7
+    {year:2014, pos:5,  pl:6,  firstRow:3, lastRow:7},   // F3:G7
+    {year:2015, pos:9,  pl:10, firstRow:3, lastRow:6},   // J3:K6
+    {year:2016, pos:13, pl:14, firstRow:3, lastRow:9},   // N3:O9
+    {year:2017, pos:17, pl:18, firstRow:3, lastRow:12},  // R3:S12
+    {year:2018, pos:21, pl:22, firstRow:3, lastRow:15},  // V3:W15
+    {year:2019, pos:25, pl:26, firstRow:3, lastRow:17},  // Z3:AA17
+    {year:2020, pos:29, pl:30, firstRow:3, lastRow:17},  // AD3:AE17
+    {year:2021, pos:33, pl:34, firstRow:3, lastRow:15},  // AH3:AI15
+    {year:2022, pos:37, pl:38, firstRow:3, lastRow:18},  // AL3:AM18
+    {year:2023, pos:41, pl:42, firstRow:3, lastRow:12},  // AP3:AQ12
+    {year:2024, pos:45, pl:46, firstRow:3, lastRow:12},  // AT3:AU12
+    {year:2025, pos:49, pl:50, firstRow:3, lastRow:16},  // AX3:AY16
+  ];
+
+  let out = '<div class="hist-grid">';
+
+  EDITIONS.slice().reverse().forEach(function(ed){
+    const startIdx = ed.firstRow - 1;
+    const endIdx   = ed.lastRow - 1;
+
+    out += '<div class="hist-card">';
+    out += '<div class="hist-card-hdr">' + ed.year + '</div>';
+    out += '<table class="hist-yr-tbl"><thead><tr><th class="c" style="width:60px;white-space:nowrap;">Pos</th><th>Jugador</th></tr></thead><tbody>';
+
+    let anyRow = false;
+    for(let r = startIdx; r <= endIdx && r < rows.length; r++){
+      const row = rows[r] || [];
+      const pos = (row[ed.pos] !== undefined && row[ed.pos] !== null) ? String(row[ed.pos]).trim() : '';
+      const pl  = (row[ed.pl]  !== undefined && row[ed.pl]  !== null) ? String(row[ed.pl]).trim()  : '';
+
+      // Render every row in the range exactly as it appears, even if empty
+      if(!pos && !pl) continue;
+      anyRow = true;
+
+      let posHtml;
+      const n = parseInt(pos);
+      if(n === 1) posHtml = '<span class="pos-dot d1"></span><span class="hist-pos" style="color:var(--gold);">' + pos + '</span>';
+      else if(n === 2) posHtml = '<span class="pos-dot d2"></span><span class="hist-pos">' + pos + '</span>';
+      else if(n === 3) posHtml = '<span class="pos-dot d3"></span><span class="hist-pos">' + pos + '</span>';
+      else posHtml = '<span class="hist-pos">' + (pos || '–') + '</span>';
+
+      out += '<tr><td class="c">' + posHtml + '</td><td>' + (pl ? fmtHistName(pl) : '<span class="s dim">–</span>') + '</td></tr>';
     }
-    if(found.length > tournaments.length){
-      tournaments = found;
-      yearRowIdx = rIdx;
+
+    if(!anyRow){
+      out += '<tr><td colspan="2" class="c"><span class="s dim">Sin datos</span></td></tr>';
     }
-  }
 
-  if(!tournaments.length){
-    // Debug output
-    let debug = 'Estructura detectada:<br><br>';
-    for(let r = 0; r < Math.min(3, rows.length); r++){
-      debug += 'Fila ' + r + ': ' + JSON.stringify((rows[r]||[]).slice(0,10)) + '<br>';
-    }
-    return '<div class="lb-error">No se encontraron ediciones.<br><br><small style="color:var(--g4);font-size:11px;">' + debug + '</small></div>';
-  }
-
-  const dataStartRow = yearRowIdx + 1;
-
-  if(!tournaments.length) return '<div class="lb-error">No se encontraron ediciones.</div>';
-
-  let html = '<div class="hist-scroll"><table class="hist-tbl"><thead><tr>';
-  html += '<th class="c" style="width:46px">Pos</th>';
-  tournaments.forEach(t => {
-    html += `<th class="c">${t.year}</th>`;
+    out += '</tbody></table></div>';
   });
-  html += '</tr></thead><tbody>';
 
-  const maxRows = 20;
-  for(let r = dataStartRow; r < Math.min(rows.length, dataStartRow + maxRows); r++){
-    const row = rows[r] || [];
-    // Use the position from the FIRST tournament column as the row's position label
-    let posLabel = (row[tournaments[0].posCol] || '').trim();
-    if(!posLabel) posLabel = (r - 1).toString();
-
-    let rowHtml = `<tr><td class="c"><span class="hist-pos">${posLabel}</span></td>`;
-    let hasAny = false;
-    tournaments.forEach(t => {
-      const player = (row[t.playerCol] || '').trim();
-      if(player){
-        hasAny = true;
-        rowHtml += `<td>${fmtHistName(player)}</td>`;
-      } else {
-        rowHtml += '<td class="c"><span class="s dim">–</span></td>';
-      }
-    });
-    rowHtml += '</tr>';
-    if(hasAny) html += rowHtml;
-  }
-
-  html += '</tbody></table></div>';
-  return html;
+  out += '</div>';
+  return out;
 }
 
 function histGvizCallback(response){
   try {
     const table = response.table;
-    const rows = table.rows;
-    // Convert gviz rows to simple array format for buildHist
     const allRows = [];
-    // Row 0: year labels — but gviz may put them in cols. Let's extract as rows
-    // gviz rows is array of {c: [{v, f}, ...]}
-    rows.forEach(function(r){
+
+    // Include column labels as first row IF they exist (they contain row 1 data when gviz treats row 1 as header)
+    if(table.cols && table.cols.length){
+      const headerLine = table.cols.map(function(c){
+        return (c.label !== undefined && c.label !== null) ? String(c.label) : '';
+      });
+      allRows.push(headerLine);
+    }
+
+    // Then add all data rows
+    table.rows.forEach(function(r){
       const line = [];
       if(r.c){
         r.c.forEach(function(c){
@@ -704,6 +708,17 @@ function histGvizCallback(response){
       }
       allRows.push(line);
     });
+
+    // Debug: log first 4 rows to console
+    console.log('Historia - Total rows:', allRows.length);
+    for(let i = 0; i < Math.min(5, allRows.length); i++){
+      const r = allRows[i];
+      console.log('Row ' + i + ' (sheet row ' + (i+1) + '):',
+        'B=' + (r[1]||'') + ' C=' + (r[2]||'') +
+        ' | F=' + (r[5]||'') + ' G=' + (r[6]||'') +
+        ' | Z=' + (r[25]||'') + ' AA=' + (r[26]||''));
+    }
+
     document.getElementById('hist-body').innerHTML = buildHist(allRows);
     const now = new Date();
     document.getElementById('hist-sync').textContent =
@@ -724,7 +739,8 @@ function loadHist(){
   const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
     '/gviz/tq?tqx=out:json;responseHandler:histGvizCallback' +
     '&sheet=' + encodeURIComponent('EDICIONES ANTERIORES') +
-    '&range=A1:AZ30' +
+    '&range=A1:BA60' +
+    '&headers=0' +
     '&_=' + Date.now();
   const s = document.createElement('script');
   s.id = 'hist-script';
