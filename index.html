@@ -44,9 +44,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
 .pga{width:100%;border-collapse:collapse;border:var(--border);}
 .pga thead tr{background:var(--g1);}
-.pga thead th{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);padding:9px 14px;text-align:left;white-space:nowrap;position:sticky;top:var(--tb-h,88px);background:#f0eeea;z-index:50;box-shadow:0 1px 0 #c8c5bc;}
+.pga thead th{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);padding:9px 14px;text-align:left;white-space:nowrap;position:sticky;top:var(--tb-h,88px);background:#f0eeea;z-index:100;box-shadow:0 1px 0 #c8c5bc;}
 .pga thead th.c{text-align:center;}
-.pga tbody tr{border-bottom:1px solid var(--g1);background:#fff;}
+.pga tbody tr{border-bottom:1px solid var(--g1);background:#fff;position:relative;z-index:0;}
 .pga tbody tr:last-child{border-bottom:none;}
 .pga tbody tr:hover td{background:var(--off);}
 .pga tbody td{padding:11px 14px;vertical-align:middle;}
@@ -76,8 +76,13 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
 /* FECHA 1 */
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
-@media(max-width:680px){.two-col{grid-template-columns:1fr;}}
-.card{background:var(--white);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 20px rgba(0,0,0,.06);border:var(--border);}
+@media(max-width:680px){
+  .card{overflow:visible;}
+  .card-hdr{border-radius:3px 3px 0 0;}
+  .stb-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.two-col{grid-template-columns:1fr;}}
+.card{background:var(--white);border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 20px rgba(0,0,0,.06);border:var(--border);}
+.card-scroll{overflow-x:auto;}
 .card-hdr{background:var(--navy);padding:11px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid var(--red);}
 .card-hdr-title{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;letter-spacing:.04em;color:#fff;}
 .card-hdr-sub{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);}
@@ -206,8 +211,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   .f1-award-icon{font-size:22px;}
   .f1-award-winner{font-size:15px;}
 
-  /* Stableford: horizontal scroll */
-  .card{overflow-x:auto;}
+  /* Stableford: horizontal scroll - handled by stb-scroll */
   .stb{min-width:500px;}
   .stb thead th{padding:6px 7px;font-size:9px;}
   .stb tbody td{padding:7px 7px;font-size:12px;}
@@ -304,7 +308,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
     <div class="card">
       <div class="card-hdr"><div class="card-hdr-title">Stableford</div></div>
-      <table class="stb">
+      <div class="card-scroll"><table class="stb">
         <thead><tr>
           <th class="c" style="width:32px">Pos</th>
           <th>Jugador</th>
@@ -336,7 +340,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
           <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">CENTENO</span> <span class="plyr-first" style="font-size:13px">Angel</span></td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
           <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">PORRAS</span> <span class="plyr-first" style="font-size:13px">Martin</span></td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
         </tbody>
-      </table>
+      </table></div>
     </div>
 
     <div class="rc-card">
@@ -548,7 +552,10 @@ function setTbHeight(){
   if(tb&&sn)document.documentElement.style.setProperty('--tb-h',(tb.getBoundingClientRect().height+sn.getBoundingClientRect().height)+'px');
 }
 setTbHeight();
-window.addEventListener('resize',setTbHeight);
+window.addEventListener('resize', setTbHeight);
+// Re-run after page fully loads to get accurate heights
+window.addEventListener('load', function(){ setTimeout(setTbHeight, 200); });
+document.fonts && document.fonts.ready && document.fonts.ready.then(setTbHeight);
 loadLB();
 </script>
 </body>
