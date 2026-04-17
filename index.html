@@ -297,6 +297,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .hist-pos{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);white-space:nowrap;}
 .hist-ap{font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--navy);}
 .hist-nm{font-family:'Oswald',sans-serif;font-size:12px;font-weight:400;color:var(--navy);}
+.hist-new .hist-ap,.hist-new .hist-nm{color:var(--red);}
 @media(max-width:680px){
   .hist-grid{grid-template-columns:1fr;gap:10px;}
   .hist-card-hdr{font-size:18px;padding:8px 12px;}
@@ -628,19 +629,19 @@ function buildHist(rows){
   // pos and pl are 0-indexed column numbers
   // firstRow/lastRow are 1-indexed row numbers in the sheet
   const EDITIONS = [
-    {year:2013, pos:1,  pl:2,  firstRow:3, lastRow:7},   // B3:C7
-    {year:2014, pos:5,  pl:6,  firstRow:3, lastRow:7},   // F3:G7
-    {year:2015, pos:9,  pl:10, firstRow:3, lastRow:6},   // J3:K6
-    {year:2016, pos:13, pl:14, firstRow:3, lastRow:9},   // N3:O9
-    {year:2017, pos:17, pl:18, firstRow:3, lastRow:12},  // R3:S12
-    {year:2018, pos:21, pl:22, firstRow:3, lastRow:15},  // V3:W15
-    {year:2019, pos:25, pl:26, firstRow:3, lastRow:17},  // Z3:AA17
-    {year:2020, pos:29, pl:30, firstRow:3, lastRow:17},  // AD3:AE17
-    {year:2021, pos:33, pl:34, firstRow:3, lastRow:15},  // AH3:AI15
-    {year:2022, pos:37, pl:38, firstRow:3, lastRow:18},  // AL3:AM18
-    {year:2023, pos:41, pl:42, firstRow:3, lastRow:12},  // AP3:AQ12
-    {year:2024, pos:45, pl:46, firstRow:3, lastRow:12},  // AT3:AU12
-    {year:2025, pos:49, pl:50, firstRow:3, lastRow:16},  // AX3:AY16
+    {year:2013, pos:1,  pl:2,  firstRow:3, lastRow:8,  prevLast:7},   // B3:C7
+    {year:2014, pos:5,  pl:6,  firstRow:3, lastRow:8,  prevLast:7},   // F3:G7
+    {year:2015, pos:9,  pl:10, firstRow:3, lastRow:7,  prevLast:6},   // J3:K6
+    {year:2016, pos:13, pl:14, firstRow:3, lastRow:10, prevLast:9},   // N3:O9
+    {year:2017, pos:17, pl:18, firstRow:3, lastRow:16, prevLast:12},  // R3:S12
+    {year:2018, pos:21, pl:22, firstRow:3, lastRow:17, prevLast:15},  // V3:W15
+    {year:2019, pos:25, pl:26, firstRow:3, lastRow:19, prevLast:17},  // Z3:AA17
+    {year:2020, pos:29, pl:30, firstRow:3, lastRow:20, prevLast:17},  // AD3:AE17
+    {year:2021, pos:33, pl:34, firstRow:3, lastRow:20, prevLast:15},  // AH3:AI15
+    {year:2022, pos:37, pl:38, firstRow:3, lastRow:25, prevLast:18},  // AL3:AM18
+    {year:2023, pos:41, pl:42, firstRow:3, lastRow:19, prevLast:12},  // AP3:AQ12
+    {year:2024, pos:45, pl:46, firstRow:3, lastRow:16, prevLast:12},  // AT3:AU12
+    {year:2025, pos:49, pl:50, firstRow:3, lastRow:18, prevLast:16},  // AX3:AY16
   ];
 
   let out = '<div class="hist-grid">';
@@ -654,23 +655,35 @@ function buildHist(rows){
     out += '<table class="hist-yr-tbl"><thead><tr><th class="c" style="width:60px;white-space:nowrap;">Pos</th><th>Jugador</th></tr></thead><tbody>';
 
     let anyRow = false;
+    const prevLastIdx = (ed.prevLast || ed.lastRow) - 1;
     for(let r = startIdx; r <= endIdx && r < rows.length; r++){
       const row = rows[r] || [];
       const pos = (row[ed.pos] !== undefined && row[ed.pos] !== null) ? String(row[ed.pos]).trim() : '';
       const pl  = (row[ed.pl]  !== undefined && row[ed.pl]  !== null) ? String(row[ed.pl]).trim()  : '';
 
-      // Render every row in the range exactly as it appears, even if empty
       if(!pos && !pl) continue;
       anyRow = true;
 
+      const isNew = r > prevLastIdx;
+      const rowAttr = isNew ? ' class="hist-new"' : '';
+
       let posHtml;
       const n = parseInt(pos);
-      if(n === 1) posHtml = '<span class="pos-dot d1"></span><span class="hist-pos" style="color:var(--gold);">' + pos + '</span>';
-      else if(n === 2) posHtml = '<span class="pos-dot d2"></span><span class="hist-pos">' + pos + '</span>';
-      else if(n === 3) posHtml = '<span class="pos-dot d3"></span><span class="hist-pos">' + pos + '</span>';
-      else posHtml = '<span class="hist-pos">' + (pos || '–') + '</span>';
+      if(isNew){
+        posHtml = '<span class="hist-pos" style="color:var(--red);">' + (pos || '–') + '</span>';
+      } else if(n === 1){
+        posHtml = '<span class="pos-dot d1"></span><span class="hist-pos" style="color:var(--gold);">' + pos + '</span>';
+      } else if(n === 2){
+        posHtml = '<span class="pos-dot d2"></span><span class="hist-pos">' + pos + '</span>';
+      } else if(n === 3){
+        posHtml = '<span class="pos-dot d3"></span><span class="hist-pos">' + pos + '</span>';
+      } else {
+        posHtml = '<span class="hist-pos">' + (pos || '–') + '</span>';
+      }
 
-      out += '<tr><td class="c">' + posHtml + '</td><td>' + (pl ? fmtHistName(pl) : '<span class="s dim">–</span>') + '</td></tr>';
+      const nameHtml = pl ? fmtHistName(pl) : '<span class="s dim">–</span>';
+
+      out += '<tr' + rowAttr + '><td class="c">' + posHtml + '</td><td>' + nameHtml + '</td></tr>';
     }
 
     if(!anyRow){
@@ -739,7 +752,7 @@ function loadHist(){
   const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
     '/gviz/tq?tqx=out:json;responseHandler:histGvizCallback' +
     '&sheet=' + encodeURIComponent('EDICIONES ANTERIORES') +
-    '&range=A1:BA60' +
+    '&range=A1:BA30' +
     '&headers=0' +
     '&_=' + Date.now();
   const s = document.createElement('script');
