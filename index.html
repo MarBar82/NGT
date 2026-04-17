@@ -79,11 +79,11 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 @media(max-width:680px){
   .card{overflow:visible;}
   .card-hdr{border-radius:3px 3px 0 0;}
-  .stb-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .stb-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;flex:1;}
 .two-col{grid-template-columns:1fr;}}
 .card{background:var(--white);border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 20px rgba(0,0,0,.06);border:var(--border);}
 .card-scroll{overflow-x:auto;}
-.card-hdr{background:var(--navy);padding:11px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid var(--red);}
+.card-hdr{background:var(--navy);padding:11px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid var(--red);flex-shrink:0;}
 .card-hdr-title{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;letter-spacing:.04em;color:#fff;}
 .card-hdr-sub{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);}
 .stb{width:100%;border-collapse:collapse;}
@@ -549,13 +549,15 @@ function pg(id,btn){
 function setTbHeight(){
   const tb=document.querySelector('.tb');
   const sn=document.querySelector('.subnav');
-  if(tb&&sn)document.documentElement.style.setProperty('--tb-h',(tb.getBoundingClientRect().height+sn.getBoundingClientRect().height)+'px');
+  if(tb&&sn){
+    const h = tb.getBoundingClientRect().height + sn.getBoundingClientRect().height;
+    document.documentElement.style.setProperty('--tb-h', h + 'px');
+  }
 }
 setTbHeight();
 window.addEventListener('resize', setTbHeight);
-// Re-run after page fully loads to get accurate heights
-window.addEventListener('load', function(){ setTimeout(setTbHeight, 200); });
-document.fonts && document.fonts.ready && document.fonts.ready.then(setTbHeight);
+window.addEventListener('load', function(){ setTbHeight(); setTimeout(setTbHeight,300); setTimeout(setTbHeight,800); });
+document.addEventListener('DOMContentLoaded', setTbHeight);
 loadLB();
 </script>
 </body>
