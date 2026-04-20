@@ -47,7 +47,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .lb-wrap{background:var(--white);overflow-x:auto;-webkit-overflow-scrolling:touch;}
 .lb-refresh{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;color:var(--g4);cursor:pointer;padding:4px 10px;border:1px solid var(--g3);border-radius:3px;background:none;transition:.12s;}
 .lb-refresh:hover{color:var(--navy);border-color:var(--navy);}
-.lb-topbar{display:flex;align-items:center;justify-content:flex-end;padding:6px 0;gap:8px;}
+.lb-topbar{display:flex;align-items:flex-end;justify-content:flex-end;padding:6px 0;gap:12px;flex-wrap:wrap;}
 .lb-status{padding:36px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--g4);letter-spacing:.06em;}
 .spinner{width:26px;height:26px;border:3px solid var(--g2);border-top-color:var(--navy);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -362,6 +362,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .mh-won-a{background:#1a3a6e;color:#fff;}
 .mh-won-b{background:var(--red);color:#fff;}
 .mh-normal{background:var(--white);color:var(--text);border:1px solid var(--g2);}
+.mh-after{opacity:.4;}
 .mh-empty{color:var(--g3);font-size:11px;}
 
 @media(max-width:680px){
@@ -372,6 +373,15 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   .mh{width:20px;height:20px;font-size:10px;}
   .match-sc-tbl tbody td.match-sc-res{font-size:13px;padding:4px 8px;}
 }
+
+/* Fechas dropdown in subnav */
+.snb-drop{position:relative;display:inline-block;}
+.snb-has-drop{cursor:pointer;}
+.snb-drop-menu{display:none;position:absolute;top:100%;left:0;background:var(--white);border:var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.15);min-width:140px;z-index:300;overflow:hidden;}
+.snb-drop-menu.open{display:block;}
+.snb-drop-menu button{display:block;width:100%;text-align:left;background:none;border:none;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;border-bottom:1px solid var(--g1);}
+.snb-drop-menu button:last-child{border-bottom:none;}
+.snb-drop-menu button:hover{background:var(--off);color:var(--red);}
 </style>
 </head>
 <body>
@@ -382,8 +392,13 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 </div>
 <div class="subnav">
   <button class="snb on" onclick="pg('lb',this)">Leader Board</button>
-  <button class="snb" onclick="pg('f1',this)">Fecha 1</button>
-  <button class="snb" onclick="pg('f2',this)">Fecha 2 ›</button>
+  <div class="snb-drop">
+    <button class="snb snb-has-drop" onclick="toggleFechasDrop(event)" id="fechas-btn">Fechas ▾</button>
+    <div class="snb-drop-menu" id="fechas-menu">
+      <button onclick="pg('f1', document.getElementById('fechas-btn')); closeFechasDrop();">Fecha 1</button>
+      <button onclick="pg('f2', document.getElementById('fechas-btn')); closeFechasDrop();">Fecha 2</button>
+    </div>
+  </div>
   <button class="snb" onclick="pg('match',this)">Match</button>
   <button class="snb" onclick="pg('hist',this)">Historia</button>
 </div>
@@ -587,7 +602,13 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 <div class="pg" id="pg-hist">
 <div class="wrap" style="padding:0 16px 16px 16px;">
   <div class="lb-topbar">
-    <div class="sync-time" id="hist-sync"></div>
+    <div class="filter-group">
+      <label for="hist-year">Año</label>
+      <select id="hist-year" onchange="filterHistByYear()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="sync-time" id="hist-sync" style="margin-left:auto;"></div>
     <button class="lb-refresh" onclick="loadHist()">↻ Actualizar</button>
   </div>
   <div class="lb-wrap">
@@ -760,7 +781,7 @@ function buildHist(rows){
     const startIdx = ed.firstRow - 1;
     const endIdx   = ed.lastRow - 1;
 
-    out += '<div class="hist-card">';
+    out += '<div class="hist-card" data-year="' + ed.year + '">';
     out += '<div class="hist-card-hdr">' + ed.year + '</div>';
     out += '<table class="hist-yr-tbl"><thead><tr><th class="c" style="width:60px;white-space:nowrap;">Pos</th><th>Jugador</th></tr></thead><tbody>';
 
@@ -843,6 +864,7 @@ function histGvizCallback(response){
     }
 
     document.getElementById('hist-body').innerHTML = buildHist(allRows);
+    populateHistYears();
     const now = new Date();
     document.getElementById('hist-sync').textContent =
       'Actualizado: ' + now.toLocaleDateString('es-AR') + ' ' +
@@ -852,6 +874,29 @@ function histGvizCallback(response){
       '<div class="lb-error">Error procesando historia: ' + e.message + '</div>';
     console.error(e);
   }
+}
+
+
+
+function populateHistYears(){
+  const sel = document.getElementById('hist-year');
+  const years = [];
+  document.querySelectorAll('.hist-card[data-year]').forEach(function(c){
+    years.push(c.getAttribute('data-year'));
+  });
+  const unique = [...new Set(years)].sort(function(a,b){ return parseInt(b)-parseInt(a); });
+  sel.innerHTML = '<option value="">Todos</option>';
+  unique.forEach(function(y){
+    sel.innerHTML += '<option value="'+y+'">'+y+'</option>';
+  });
+}
+
+function filterHistByYear(){
+  const year = document.getElementById('hist-year').value;
+  document.querySelectorAll('.hist-card[data-year]').forEach(function(c){
+    if(!year || c.getAttribute('data-year') === year) c.style.display = '';
+    else c.style.display = 'none';
+  });
 }
 
 function loadHist(){
@@ -1179,7 +1224,7 @@ const FECHA_CANCHA = {
 
 function calcMatchResult(rowA, rowB){
   // Columns: 0=name, 1=HCP, 2..19=holes 1..18, 20=raw result (ignored)
-  let upA = 0;           // positive = A ahead, negative = B ahead
+  let upA = 0;
   let holesPlayed = 0;
   let endedAtHole = -1;
   let resultStr = '';
@@ -1200,7 +1245,8 @@ function calcMatchResult(rowA, rowB){
     if(Math.abs(upA) > remaining){
       endedAtHole = holesPlayed;
       winner = upA > 0 ? 'A' : 'B';
-      resultStr = Math.abs(upA) + '&' + remaining;
+      // If remaining=0, match ended on last hole → use "X UP" instead of "X&0"
+      resultStr = remaining === 0 ? (Math.abs(upA) + ' UP') : (Math.abs(upA) + '&' + remaining);
       break;
     }
   }
@@ -1209,10 +1255,10 @@ function calcMatchResult(rowA, rowB){
     if(holesPlayed === 0){
       winner = 'pending';
       resultStr = '–';
-      endedAtHole = 18;
+      endedAtHole = 0;
     } else if(holesPlayed < 18){
       winner = 'pending';
-      resultStr = upA === 0 ? 'AS (parcial)' : (upA > 0 ? (Math.abs(upA) + ' UP') : (Math.abs(upA) + ' DN')) + ' (parcial)';
+      resultStr = upA === 0 ? 'AS parcial' : (upA > 0 ? (Math.abs(upA) + ' UP parcial') : (Math.abs(upA) + ' DN parcial'));
       endedAtHole = holesPlayed;
     } else {
       if(upA === 0){ winner = 'draw'; resultStr = 'AS'; }
@@ -1269,10 +1315,9 @@ function renderMatchTable(){
     out += '<th class="c">Rdo</th>';
     out += '</tr></thead><tbody>';
 
-    // Compute per-hole winners
-    const holeResults = []; // 'A' | 'B' | 'tie' | null
+    // Compute per-hole winners (all 18, we just highlight only up to endedAtHole in render)
+    const holeResults = [];
     for(let h = 0; h < 18; h++){
-      if(h >= res.endedAtHole){ holeResults.push(null); continue; }
       const sA = parseInt(rowA[2 + h]);
       const sB = parseInt(rowB[2 + h]);
       if(isNaN(sA) || isNaN(sB)) holeResults.push(null);
@@ -1281,21 +1326,20 @@ function renderMatchTable(){
       else holeResults.push('tie');
     }
 
-    // Row A
+    // Row A — show all scores, only color circles up to endedAtHole
     out += '<tr>';
     out += '<td class="match-sc-pname">' + fmtHistName(nameA) + '</td>';
     out += '<td class="c"><span class="s">' + (hcpA || '–') + '</span></td>';
     for(let h = 0; h < 18; h++){
       const v = String(rowA[2 + h] || '').trim();
       const winner = holeResults[h];
-      if(h >= res.endedAtHole){
+      const afterEnd = (res.endedAtHole > 0 && h >= res.endedAtHole);
+      if(v === '' || v === '#N/A'){
         out += '<td class="c"><span class="mh-empty">–</span></td>';
-      } else if(v === '' || v === '#N/A'){
-        out += '<td class="c"><span class="mh-empty">–</span></td>';
-      } else if(winner === 'A'){
+      } else if(winner === 'A' && !afterEnd){
         out += '<td class="c"><span class="mh mh-won-a">' + v + '</span></td>';
       } else {
-        out += '<td class="c"><span class="mh mh-normal">' + v + '</span></td>';
+        out += '<td class="c"><span class="mh mh-normal' + (afterEnd ? ' mh-after' : '') + '">' + v + '</span></td>';
       }
     }
     out += '<td class="c match-sc-res" rowspan="2">' + res.resultStr + '</td>';
@@ -1308,14 +1352,13 @@ function renderMatchTable(){
     for(let h = 0; h < 18; h++){
       const v = String(rowB[2 + h] || '').trim();
       const winner = holeResults[h];
-      if(h >= res.endedAtHole){
+      const afterEnd = (res.endedAtHole > 0 && h >= res.endedAtHole);
+      if(v === '' || v === '#N/A'){
         out += '<td class="c"><span class="mh-empty">–</span></td>';
-      } else if(v === '' || v === '#N/A'){
-        out += '<td class="c"><span class="mh-empty">–</span></td>';
-      } else if(winner === 'B'){
+      } else if(winner === 'B' && !afterEnd){
         out += '<td class="c"><span class="mh mh-won-b">' + v + '</span></td>';
       } else {
-        out += '<td class="c"><span class="mh mh-normal">' + v + '</span></td>';
+        out += '<td class="c"><span class="mh mh-normal' + (afterEnd ? ' mh-after' : '') + '">' + v + '</span></td>';
       }
     }
     out += '</tr>';
@@ -1346,6 +1389,19 @@ function loadMatch(){
   };
   document.head.appendChild(s);
 }
+
+function toggleFechasDrop(e){
+  e.stopPropagation();
+  document.getElementById('fechas-menu').classList.toggle('open');
+}
+function closeFechasDrop(){
+  document.getElementById('fechas-menu').classList.remove('open');
+}
+document.addEventListener('click', function(e){
+  const menu = document.getElementById('fechas-menu');
+  const btn = document.getElementById('fechas-btn');
+  if(menu && !menu.contains(e.target) && e.target !== btn) menu.classList.remove('open');
+});
 
 function pg(id,btn){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
