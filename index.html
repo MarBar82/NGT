@@ -125,6 +125,10 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .rc-name.lose{color:var(--text);}
 .rc-name.draw{color:var(--g4);}
 .rc-name .rc-apellido{font-weight:700;text-transform:uppercase;}
+/* Force inherit when name is rendered via fmtHistName (uses hist-ap/hist-nm spans) */
+.rc-name .hist-ap,.rc-name .hist-nm{color:inherit !important;font-family:'Barlow Condensed',sans-serif;font-size:14px;}
+.rc-name .hist-ap{font-weight:700;text-transform:uppercase;}
+.rc-name .hist-nm{font-weight:400;}
 .rc-center{width:78px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
 .rc-center.cleft{background:var(--red);}
 .rc-center.cright{background:#1a3a6e;}
@@ -335,6 +339,18 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 <div class="pg" id="pg-f1">
 <div class="wrap">
 
+  <div class="f2-info-card">
+    <div class="f2-info-item">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="2"/><path d="M4 2l12 5-12 5"/><path d="M2 22h20" opacity=".35"/></svg>
+      <div class="f2-info-body"><span class="f2-info-lbl">Cancha</span><span class="f2-info-val">Everlinks G.C.</span></div>
+    </div>
+    <div class="f2-info-sep"></div>
+    <div class="f2-info-item">
+      <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="9" r="1" fill="currentColor"/><circle cx="13" cy="8" r="1" fill="currentColor"/><circle cx="16" cy="11" r="1" fill="currentColor"/><circle cx="15" cy="15" r="1" fill="currentColor"/><circle cx="11" cy="15" r="1" fill="currentColor"/><circle cx="8" cy="13" r="1" fill="currentColor"/></svg>
+      <div class="f2-info-body"><span class="f2-info-lbl">Modalidad</span><span class="f2-info-val">Stableford + Match</span></div>
+    </div>
+  </div>
+
   <div class="f1-awards">
     <div class="f1-award-item">
       <span class="f1-award-icon">⛳</span>
@@ -357,39 +373,36 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
     <div class="card">
       <div class="card-hdr"><div class="card-hdr-title">Stableford</div></div>
-      <div class="card-scroll"><table class="stb">
+      <div class="card-scroll">      <div class="stb-scroll">
+      <table class="stb">
         <thead><tr>
           <th class="c" style="width:32px">Pos</th>
           <th>Jugador</th>
           <th class="c">Hcp</th>
           <th class="c">STB</th>
-          <th class="c">MCH 1</th>
-          <th class="c">MCH 2</th>
-          <th class="c">PB</th>
-          <th class="c">x2</th>
-          <th class="c" style="color:var(--red)">TOT</th>
         </tr></thead>
         <tbody>
-          <tr><td class="c"><span class="pos-dot d1"></span></td><td><span class="plyr-name" style="font-size:13px">OLIVERIO</span> <span class="plyr-first" style="font-size:13px">Manuel</span></td><td class="c"><span class="s" style="">9</span></td><td class="c"><span class="s" style="">37</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="color:var(--red);">55</span></td></tr>
-          <tr><td class="c"><span class="pos-dot d2"></span></td><td><span class="plyr-name" style="font-size:13px">OBIGLIO</span> <span class="plyr-first" style="font-size:13px">Jose</span></td><td class="c"><span class="s" style="">9</span></td><td class="c"><span class="s" style="">36</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="">36</span></td><td class="c"><span class="s" style="color:var(--red);">84</span></td></tr>
-          <tr><td class="c"><span class="pos-dot d3"></span></td><td><span class="plyr-name" style="font-size:13px">PAZ</span> <span class="plyr-first" style="font-size:13px">Luis</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s" style="">35</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="color:var(--red);">35</span></td></tr>
-          <tr><td class="c"><span class="s dim">4</span></td><td><span class="plyr-name" style="font-size:13px">IRIBARNE</span> <span class="plyr-first" style="font-size:13px">Santiago</span></td><td class="c"><span class="s" style="">15</span></td><td class="c"><span class="s" style="">32</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="color:var(--red);">44</span></td></tr>
-          <tr><td class="c"><span class="s dim">5</span></td><td><span class="plyr-name" style="font-size:13px">BARCHI</span> <span class="plyr-first" style="font-size:13px">Marcos</span></td><td class="c"><span class="s" style="">16</span></td><td class="c"><span class="s" style="">32</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s" style="">3</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="color:var(--red);">41</span></td></tr>
-          <tr><td class="c"><span class="s dim">6</span></td><td><span class="plyr-name" style="font-size:13px">SOJO</span> <span class="plyr-first" style="font-size:13px">Pablo</span></td><td class="c"><span class="s" style="">23</span></td><td class="c"><span class="s" style="">32</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="color:var(--red);">44</span></td></tr>
-          <tr><td class="c"><span class="s dim">7</span></td><td><span class="plyr-name" style="font-size:13px">RODRIGUEZ NAZAR</span> <span class="plyr-first" style="font-size:13px">Jose</span></td><td class="c"><span class="s" style="">31</span></td><td class="c"><span class="s" style="">32</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s" style="">6</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="color:var(--red);">44</span></td></tr>
-          <tr><td class="c"><span class="s dim">8</span></td><td><span class="plyr-name" style="font-size:13px">MARTINEZ FANO</span> <span class="plyr-first" style="font-size:13px">Diego</span></td><td class="c"><span class="s" style="">17</span></td><td class="c"><span class="s" style="">30</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="">3</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="color:var(--red);">33</span></td></tr>
-          <tr><td class="c"><span class="s dim">9</span></td><td><span class="plyr-name" style="font-size:13px">RECONDO</span> <span class="plyr-first" style="font-size:13px">Maximo</span></td><td class="c"><span class="s" style="">23</span></td><td class="c"><span class="s" style="">25</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="color:var(--red);">25</span></td></tr>
-          <tr><td class="c"><span class="s dim">10</span></td><td><span class="plyr-name" style="font-size:13px">RUETE</span> <span class="plyr-first" style="font-size:13px">Marcos</span></td><td class="c"><span class="s" style="">26</span></td><td class="c"><span class="s" style="">24</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="color:var(--red);">24</span></td></tr>
-          <tr><td class="c"><span class="s dim">11</span></td><td><span class="plyr-name" style="font-size:13px">DE SAINT LEGER</span> <span class="plyr-first" style="font-size:13px">Pierre</span></td><td class="c"><span class="s" style="">20</span></td><td class="c"><span class="s" style="">18</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="color:var(--red);">18</span></td></tr>
-          <tr><td class="c"><span class="s dim">12</span></td><td><span class="plyr-name" style="font-size:13px">BIEDMA</span> <span class="plyr-first" style="font-size:13px">Juanse</span></td><td class="c"><span class="s" style="">29</span></td><td class="c"><span class="s" style="">17</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s dim">–</span></td><td class="c"><span class="s" style="color:var(--red);">17</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">HARISPE</span> <span class="plyr-first" style="font-size:13px">Patricio</span></td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">VIDAL</span> <span class="plyr-first" style="font-size:13px">Alejandro</span></td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">BARILATTI</span> <span class="plyr-first" style="font-size:13px">Javier</span></td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">LAVALLE COBO</span> <span class="plyr-first" style="font-size:13px">Joaquin</span></td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">CENTENO</span> <span class="plyr-first" style="font-size:13px">Angel</span></td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">PORRAS</span> <span class="plyr-first" style="font-size:13px">Martin</span></td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
+          <tr><td class="c"><span class="pos-dot d1"></span></td><td><span class="plyr-name" style="font-size:13px">OLIVERIO</span> <span class="plyr-first" style="font-size:13px">Manuel</span></td><td class="c"><span class="s">9</span></td><td class="c"><span class="s big">37</span></td></tr>
+          <tr><td class="c"><span class="pos-dot d2"></span></td><td><span class="plyr-name" style="font-size:13px">OBIGLIO</span> <span class="plyr-first" style="font-size:13px">Jose</span></td><td class="c"><span class="s">9</span></td><td class="c"><span class="s big">36</span></td></tr>
+          <tr><td class="c"><span class="pos-dot d3"></span></td><td><span class="plyr-name" style="font-size:13px">PAZ</span> <span class="plyr-first" style="font-size:13px">Luis</span></td><td class="c"><span class="s">6</span></td><td class="c"><span class="s big">35</span></td></tr>
+          <tr><td class="c"><span class="s dim">4</span></td><td><span class="plyr-name" style="font-size:13px">IRIBARNE</span> <span class="plyr-first" style="font-size:13px">Santiago</span></td><td class="c"><span class="s">15</span></td><td class="c"><span class="s big">32</span></td></tr>
+          <tr><td class="c"><span class="s dim">5</span></td><td><span class="plyr-name" style="font-size:13px">BARCHI</span> <span class="plyr-first" style="font-size:13px">Marcos</span></td><td class="c"><span class="s">16</span></td><td class="c"><span class="s big">32</span></td></tr>
+          <tr><td class="c"><span class="s dim">6</span></td><td><span class="plyr-name" style="font-size:13px">SOJO</span> <span class="plyr-first" style="font-size:13px">Pablo</span></td><td class="c"><span class="s">23</span></td><td class="c"><span class="s big">32</span></td></tr>
+          <tr><td class="c"><span class="s dim">7</span></td><td><span class="plyr-name" style="font-size:13px">RODRIGUEZ NAZAR</span> <span class="plyr-first" style="font-size:13px">Jose</span></td><td class="c"><span class="s">31</span></td><td class="c"><span class="s big">32</span></td></tr>
+          <tr><td class="c"><span class="s dim">8</span></td><td><span class="plyr-name" style="font-size:13px">MARTINEZ FANO</span> <span class="plyr-first" style="font-size:13px">Diego</span></td><td class="c"><span class="s">17</span></td><td class="c"><span class="s big">30</span></td></tr>
+          <tr><td class="c"><span class="s dim">9</span></td><td><span class="plyr-name" style="font-size:13px">RECONDO</span> <span class="plyr-first" style="font-size:13px">Maximo</span></td><td class="c"><span class="s">23</span></td><td class="c"><span class="s big">25</span></td></tr>
+          <tr><td class="c"><span class="s dim">10</span></td><td><span class="plyr-name" style="font-size:13px">RUETE</span> <span class="plyr-first" style="font-size:13px">Marcos</span></td><td class="c"><span class="s">26</span></td><td class="c"><span class="s big">24</span></td></tr>
+          <tr><td class="c"><span class="s dim">11</span></td><td><span class="plyr-name" style="font-size:13px">DE SAINT LEGER</span> <span class="plyr-first" style="font-size:13px">Pierre</span></td><td class="c"><span class="s">20</span></td><td class="c"><span class="s big">18</span></td></tr>
+          <tr><td class="c"><span class="s dim">12</span></td><td><span class="plyr-name" style="font-size:13px">BIEDMA</span> <span class="plyr-first" style="font-size:13px">Juanse</span></td><td class="c"><span class="s">29</span></td><td class="c"><span class="s big">17</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">HARISPE</span> <span class="plyr-first" style="font-size:13px">Patricio</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">VIDAL</span> <span class="plyr-first" style="font-size:13px">Alejandro</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">BARILATTI</span> <span class="plyr-first" style="font-size:13px">Javier</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">LAVALLE COBO</span> <span class="plyr-first" style="font-size:13px">Joaquin</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">CENTENO</span> <span class="plyr-first" style="font-size:13px">Angel</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">PORRAS</span> <span class="plyr-first" style="font-size:13px">Martin</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
         </tbody>
-      </table></div>
+      </table>
+      </div></div>
     </div>
 
     <div class="rc-card">
@@ -416,78 +429,67 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
 <!-- ════ FECHA 2 ════ -->
 <div class="pg" id="pg-f2">
-<div class="wrap-narrow">
+<div class="wrap">
 
   <div class="f2-info-card">
     <div class="f2-info-item">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="2"/><path d="M4 2l12 5-12 5"/><path d="M2 22h20" opacity=".35"/></svg>
-      <div class="f2-info-body"><span class="f2-info-lbl">Cancha</span><span class="f2-info-val">Campo Chico GC</span></div>
-    </div>
-    <div class="f2-info-sep"></div>
-    <div class="f2-info-item">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-      <div class="f2-info-body"><span class="f2-info-lbl">Ubicación</span><span class="f2-info-val"><a href="https://maps.app.goo.gl/mW8563S1CQkNNoyu5" target="_blank">Ver en Maps →</a></span></div>
+      <div class="f2-info-body"><span class="f2-info-lbl">Cancha</span><span class="f2-info-val"><a href="https://maps.app.goo.gl/mW8563S1CQkNNoyu5" target="_blank" style="color:var(--navy);text-decoration:none;">Campo Chico GC</a></span></div>
     </div>
     <div class="f2-info-sep"></div>
     <div class="f2-info-item">
       <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="9" r="1" fill="currentColor"/><circle cx="13" cy="8" r="1" fill="currentColor"/><circle cx="16" cy="11" r="1" fill="currentColor"/><circle cx="15" cy="15" r="1" fill="currentColor"/><circle cx="11" cy="15" r="1" fill="currentColor"/><circle cx="8" cy="13" r="1" fill="currentColor"/></svg>
       <div class="f2-info-body"><span class="f2-info-lbl">Modalidad</span><span class="f2-info-val">Stableford + Match</span></div>
     </div>
-    <div class="f2-info-sep"></div>
-    <div class="f2-info-item">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2"/><path d="M9.5 10a2.5 2.5 0 0 1 5 0c0 1.5-1.5 2-2.5 2.5S9.5 13.5 9.5 15a2.5 2.5 0 0 0 5 0"/></svg>
-      <div class="f2-info-body"><span class="f2-info-lbl">Green Fee</span><span class="f2-info-val">$40.000</span></div>
+  </div>
+
+  <div class="f1-awards">
+    <div class="f1-award-item">
+      <span class="f1-award-icon">⛳</span>
+      <div class="f1-award-body">
+        <span class="f1-award-label">Best Approach</span>
+        <span class="f1-award-winner"><span class="rc-apellido">PAZ</span> Luis</span>
+      </div>
+    </div>
+    <div class="f1-award-divider"></div>
+    <div class="f1-award-item">
+      <span class="f1-award-icon">💪</span>
+      <div class="f1-award-body">
+        <span class="f1-award-label">Long Drive</span>
+        <span class="f1-award-winner"><span class="rc-apellido">VIDAL</span> Alejandro</span>
+      </div>
     </div>
   </div>
 
-  <div class="ln-card">
-    <div class="ln-hdr">
-      <div class="ln-name"><span class="ln-nm">Línea 1</span></div>
-      <div class="ln-info">
-        <div class="ln-cell"><span class="ln-lbl">Tee Time</span><span class="ln-val">8:40</span></div>
-        <div class="ln-cell"><span class="ln-lbl">Salida</span><span class="ln-val sm" style="color:#fff;">Hoyo 10</span></div>
-      </div>
-    </div>
-    <div class="jg"><div class="jug"><span class="jnm"><span class="jnm-ap">PAZ</span> <span class="jnm-fn">Luis</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">5</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">4</span></span></div><div class="jug"><span class="jnm"><span class="jnm-ap">OLIVERIO</span> <span class="jnm-fn">Manuel</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">9</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">8</span></span></div><div class="jug"><span class="jnm"><span class="jnm-ap">VIDAL</span> <span class="jnm-fn">Alejandro</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">12</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">10</span></span></div><div class="jug"><span class="jnm"><span class="jnm-ap">IRIBARNE</span> <span class="jnm-fn">Santiago</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">17</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">14</span></span></div></div>
-    <div class="nm-sec"><div class="nm-lbl">⚔ Match Play</div><div class="nm-grid"><div class="nm-row"><span class="nm-p1">PAZ Luis</span><span class="nm-vs">vs</span><span class="nm-p2">OLIVERIO Manuel</span></div><div class="nm-row"><span class="nm-p1">PAZ Luis</span><span class="nm-vs">vs</span><span class="nm-p2">VIDAL Alejandro</span></div><div class="nm-row"><span class="nm-p1">IRIBARNE Santiago</span><span class="nm-vs">vs</span><span class="nm-p2">OLIVERIO Manuel</span></div><div class="nm-row"><span class="nm-p1">IRIBARNE Santiago</span><span class="nm-vs">vs</span><span class="nm-p2">VIDAL Alejandro</span></div></div></div>
-  </div>
-  <div class="ln-card">
-    <div class="ln-hdr">
-      <div class="ln-name"><span class="ln-nm">Línea 2</span></div>
-      <div class="ln-info">
-        <div class="ln-cell"><span class="ln-lbl">Tee Time</span><span class="ln-val">8:50</span></div>
-        <div class="ln-cell"><span class="ln-lbl">Salida</span><span class="ln-val sm" style="color:#fff;">Hoyo 10</span></div>
-      </div>
-    </div>
-    <div class="jg"><div class="jug"><span class="jnm"><span class="jnm-ap">OBIGLIO</span> <span class="jnm-fn">Jose</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">8</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">7</span></span></div><div class="jug"><span class="jnm"><span class="jnm-ap">HARISPE</span> <span class="jnm-fn">Patricio</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">14</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">12</span></span></div><div class="jug"><span class="jnm"><span class="jnm-ap">MARTINEZ FANO</span> <span class="jnm-fn">Diego</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">19</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">16</span></span></div><div class="jug"><span class="jnm"><span class="jnm-ap">PORRAS</span> <span class="jnm-fn">Martin</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">31</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">26</span></span></div></div>
-    <div class="nm-sec"><div class="nm-lbl">⚔ Match Play</div><div class="nm-grid"><div class="nm-row"><span class="nm-p1">OBIGLIO Jose</span><span class="nm-vs">vs</span><span class="nm-p2">HARISPE Patricio</span></div><div class="nm-row"><span class="nm-p1">OBIGLIO Jose</span><span class="nm-vs">vs</span><span class="nm-p2">MARTINEZ FANO Diego</span></div><div class="nm-row"><span class="nm-p1">PORRAS Martin</span><span class="nm-vs">vs</span><span class="nm-p2">HARISPE Patricio</span></div><div class="nm-row"><span class="nm-p1">PORRAS Martin</span><span class="nm-vs">vs</span><span class="nm-p2">MARTINEZ FANO Diego</span></div></div></div>
-  </div>
-  <div class="ln-card">
-    <div class="ln-hdr">
-      <div class="ln-name"><span class="ln-nm">Línea 3</span></div>
-      <div class="ln-info">
-        <div class="ln-cell"><span class="ln-lbl">Tee Time</span><span class="ln-val">9:00</span></div>
-        <div class="ln-cell"><span class="ln-lbl">Salida</span><span class="ln-val sm" style="color:#fff;">Hoyo 10</span></div>
-      </div>
-    </div>
-    <div class="jg tres"><div class="jug"><span class="jnm"><span class="jnm-ap">BARCHI</span> <span class="jnm-fn">Marcos</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">18</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">15</span></span></div><div class="jug"><span class="jnm"><span class="jnm-ap">SOJO</span> <span class="jnm-fn">Pablo</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">25</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">21</span></span></div><div class="jug"><span class="jnm"><span class="jnm-ap">RUETE</span> <span class="jnm-fn">Marcos</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">29</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">25</span></span></div></div>
-    <div class="nm-sec"><div class="nm-lbl">⚔ Match Play</div><div class="nm-grid"><div class="nm-row"><span class="nm-p1">BARCHI Marcos</span><span class="nm-vs">vs</span><span class="nm-p2">SOJO Pablo</span></div><div class="nm-row"><span class="nm-p1">BARCHI Marcos</span><span class="nm-vs">vs</span><span class="nm-p2">RUETE Marcos</span></div><div class="nm-row"><span class="nm-p1">SOJO Pablo</span><span class="nm-vs">vs</span><span class="nm-p2">RUETE Marcos</span></div></div></div>
-  </div>
-  <div class="ln-card">
-    <div class="ln-hdr">
-      <div class="ln-name"><span class="ln-nm">Línea 4</span></div>
-      <div class="ln-info">
-        <div class="ln-cell"><span class="ln-lbl">Tee Time</span><span class="ln-val">9:10</span></div>
-        <div class="ln-cell"><span class="ln-lbl">Salida</span><span class="ln-val sm" style="color:#fff;">Hoyo 10</span></div>
-      </div>
-    </div>
-    <div class="jg tres"><div class="jug"><span class="jnm"><span class="jnm-ap">RECONDO</span> <span class="jnm-fn">Maximo</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">25</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">21</span></span></div><div class="jug"><span class="jnm"><span class="jnm-ap">BIEDMA</span> <span class="jnm-fn">Juanse</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">32</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">27</span></span></div><div class="jug"><span class="jnm"><span class="jnm-ap">RODRIGUEZ NAZAR</span> <span class="jnm-fn">Jose</span></span><span class="jh"><span class="jhl">HCP</span><span class="jhv">35</span></span><span class="jm"><span class="jml">85%</span><span class="jmv">30</span></span></div></div>
-    <div class="nm-sec"><div class="nm-lbl">⚔ Match Play</div><div class="nm-grid"><div class="nm-row"><span class="nm-p1">RECONDO Maximo</span><span class="nm-vs">vs</span><span class="nm-p2">BIEDMA Juanse</span></div><div class="nm-row"><span class="nm-p1">RECONDO Maximo</span><span class="nm-vs">vs</span><span class="nm-p2">RODRIGUEZ NAZAR Jose</span></div><div class="nm-row"><span class="nm-p1">BIEDMA Juanse</span><span class="nm-vs">vs</span><span class="nm-p2">RODRIGUEZ NAZAR Jose</span></div></div></div>
-  </div>
+  <div class="two-col">
 
+    <div class="card">
+      <div class="card-hdr"><div class="card-hdr-title">Stableford</div></div>
+      <div class="stb-scroll">
+      <table class="stb">
+        <thead><tr>
+          <th class="c" style="width:32px">Pos</th>
+          <th>Jugador</th>
+          <th class="c">Hcp</th>
+          <th class="c">STB</th>
+        </tr></thead>
+        <tbody id="f2-stb-body">
+          <tr><td colspan="4" class="c"><div class="lb-status"><div class="spinner"></div>Cargando...</div></td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="rc-card">
+      <div class="rc-hdr"><div class="rc-hdr-title">⚔ Match Play</div></div>
+      <div class="rc-list" id="f2-match-body">
+        <div class="lb-status"><div class="spinner"></div>Cargando...</div>
+      </div>
+    </div>
+
+  </div>
 </div>
 </div>
-
 
 <!-- ════ HISTORIA ════ -->
 <div class="pg" id="pg-hist">
@@ -518,10 +520,18 @@ function posCell(pos,idx){
   return '<span class="pos-n">'+n+'</span>';
 }
 function movCell(dir,qty){
-  const d=String(dir).trim();const q=parseInt(qty)||0;
-  if(!d||d==='-'||d==='—'||(d===''&&q===0))return '<span class="mov-eq">—</span>';
-  if(d==='↑'||q>0)return '<span class="mov-up">↑'+(q>1?q:'')+'</span>';
-  if(d==='↓'||q<0)return '<span class="mov-dn">↓'+(Math.abs(q)>1?Math.abs(q):'')+'</span>';
+  const d=String(dir).trim();
+  const q=parseInt(qty)||0;
+  // Empty or dash = no movement
+  if((!d||d==='-'||d==='—')&&q===0)return '<span class="mov-eq">—</span>';
+  // Check direction from Unicode arrows first (⬆⬇↑↓)
+  const up = d.indexOf('⬆')>=0 || d.indexOf('↑')>=0 || d.toUpperCase()==='UP';
+  const dn = d.indexOf('⬇')>=0 || d.indexOf('↓')>=0 || d.toUpperCase()==='DN' || d.toUpperCase()==='DOWN';
+  if(up) return '<span class="mov-up">↑'+(q>0?q:'')+'</span>';
+  if(dn) return '<span class="mov-dn">↓'+(q>0?q:(q<0?Math.abs(q):''))+'</span>';
+  // Fallback to numeric sign
+  if(q>0) return '<span class="mov-up">↑'+q+'</span>';
+  if(q<0) return '<span class="mov-dn">↓'+Math.abs(q)+'</span>';
   return '<span class="mov-eq">—</span>';
 }
 function cell(val){return(!val||val==='-'||val==='0')?'<span class="s dim">–</span>':`<span class="s">${val}</span>`;}
@@ -556,7 +566,7 @@ function gvizCallback(response){
     if(!rows.length){document.getElementById('lb-body').innerHTML='<div class="lb-error">No hay datos.</div>';return;}
     let html=`<table class="pga"><thead><tr>
       <th class="c" style="width:50px">Pos</th>
-      <th class="c" style="width:28px">Mov</th><th class="c" style="width:24px"></th>
+      <th class="c" style="width:28px">Mov</th>
       <th>Jugador</th>
       <th class="c">Hcp</th><th class="c">Pts</th><th class="c">STB</th>
       <th class="c">MCH</th><th class="c">Bonus</th>
@@ -570,11 +580,19 @@ function gvizCallback(response){
       const fjug=v(row,8),fgan=v(row,9),hcp=v(row,10),posAnt=v(row,11);
       const doble=v(row,12),pd=v(row,13),golpes=v(row,14),champ=v(row,15);
       if(!nombre)return;
+      if(i<3) console.log('LB Row '+i+':', 'movDir=['+movDir+'] movQty=['+movQty+']');
       const mov=movCell(movDir,movQty);
-      const movNum=(()=>{const q=parseInt(movQty)||0;if(!q)return '<span class="s dim">—</span>';return q>0?`<span class="mov-up">${q}</span>`:`<span class="mov-dn">${q}</span>`;})();
+      const movNum=(()=>{const q=parseInt(movQty)||0;if(!q)return '<span class="s dim">—</span>';
+        // Determine direction from movDir to apply correct color
+        const d=String(movDir).trim();
+        const up=d.indexOf('⬆')>=0||d.indexOf('↑')>=0||d.toUpperCase()==='UP';
+        const dn=d.indexOf('⬇')>=0||d.indexOf('↓')>=0||d.toUpperCase()==='DN'||d.toUpperCase()==='DOWN';
+        if(up||q>0)return `<span class="mov-up">${Math.abs(q)}</span>`;
+        if(dn||q<0)return `<span class="mov-dn">${Math.abs(q)}</span>`;
+        return `<span class="s dim">${q}</span>`;})();
       const ptsHtml=pts&&pts!=='-'&&pts!=='0'?`<span class="s" style="color:var(--red);">${pts}</span>`:'<span class="s dim">–</span>';
       const pbHtml=pb&&pb!=='0'&&pb!=='-'?`<span class="s bonus">+${pb}</span>`:'<span class="s dim">–</span>';
-      html+=`<tr><td class="c">${posCell(pos,i)}</td><td class="c">${mov}</td><td class="c">${movNum}</td>
+      html+=`<tr><td class="c">${posCell(pos,i)}</td><td class="c">${mov}</td>
         <td>${fmtName(nombre)}</td>
         <td class="c">${cell(hcp)}</td><td class="c">${ptsHtml}</td><td class="c">${cell(stb)}</td>
         <td class="c">${cell(mch)}</td><td class="c">${pbHtml}</td>
@@ -766,6 +784,164 @@ function loadHist(){
   document.head.appendChild(s);
 }
 
+
+
+// ══ FECHA 2 RESULTS ══
+function f2StbCallback(response){
+  try {
+    const rows = response.table.rows || [];
+    const allRows = [];
+    // Include col labels as first row (in case gviz consumed row 1 as header)
+    if(response.table.cols && response.table.cols.length){
+      const hr = response.table.cols.map(c => (c.label !== undefined && c.label !== null) ? String(c.label) : '');
+      // Only add if labels look like actual data (pos or name), not header words
+      const firstLabel = (hr[1]||'').toUpperCase();
+      const isHeader = firstLabel === 'JUGADOR' || firstLabel === 'PLAYER' || firstLabel === 'NOMBRE' || firstLabel === '';
+      if(!isHeader) allRows.push(hr);
+    }
+    rows.forEach(r => {
+      const line = [];
+      if(r.c) r.c.forEach(c => line.push((c && c.v !== null && c.v !== undefined) ? String(c.v) : ''));
+      allRows.push(line);
+    });
+    // Filter out any row that looks like a header
+    const filtered = allRows.filter(row => {
+      const p = (row[0]||'').toString().trim().toUpperCase();
+      const n = (row[1]||'').toString().trim().toUpperCase();
+      return !(p === 'POS' || n === 'JUGADOR' || n === 'PLAYER' || n === 'NOMBRE');
+    });
+    allRows.length = 0;
+    filtered.forEach(r => allRows.push(r));
+
+    // B5:E23 → pos=col0, name=col1, hcp=col2, stb=col3
+    let out = '';
+    allRows.forEach((row, i) => {
+      const pos = (row[0]||'').trim();
+      const nm  = (row[1]||'').trim();
+      const hcp = (row[2]||'').trim();
+      const stb = (row[3]||'').trim();
+      if(!nm) return;
+
+      let posHtml;
+      const n = parseInt(pos);
+      if(n===1) posHtml = '<span class="pos-dot d1"></span>';
+      else if(n===2) posHtml = '<span class="pos-dot d2"></span>';
+      else if(n===3) posHtml = '<span class="pos-dot d3"></span>';
+      else if(pos) posHtml = '<span class="s dim">'+pos+'</span>';
+      else posHtml = '<span class="s dim">–</span>';
+
+      const hcpHtml = hcp && hcp!=='0' ? '<span class="s">'+hcp+'</span>' : '<span class="s dim">–</span>';
+      const stbHtml = stb && stb!=='0' && stb!=='-' ? '<span class="s big">'+stb+'</span>' : '<span class="dns">DNS</span>';
+
+      out += '<tr><td class="c">'+posHtml+'</td>'+
+             '<td>'+fmtHistName(nm)+'</td>'+
+             '<td class="c">'+hcpHtml+'</td>'+
+             '<td class="c">'+stbHtml+'</td></tr>';
+    });
+
+    document.getElementById('f2-stb-body').innerHTML = out || '<tr><td colspan="4" class="c"><span class="s dim">Sin datos</span></td></tr>';
+  } catch(e){
+    document.getElementById('f2-stb-body').innerHTML = '<tr><td colspan="4" class="lb-error">Error: '+e.message+'</td></tr>';
+    console.error(e);
+  }
+}
+
+function f2MatchCallback(response){
+  try {
+    const rows = response.table.rows || [];
+    const allRows = [];
+    if(response.table.cols && response.table.cols.length){
+      const hr = response.table.cols.map(c => (c.label !== undefined && c.label !== null) ? String(c.label) : '');
+      const firstLabel = (hr[0]||'').toUpperCase();
+      const isHeader = firstLabel === 'JUGADOR' || firstLabel === 'JUGADOR 1' || firstLabel === '';
+      if(!isHeader) allRows.push(hr);
+    }
+    rows.forEach(r => {
+      const line = [];
+      if(r.c) r.c.forEach(c => line.push((c && c.v !== null && c.v !== undefined) ? String(c.v) : ''));
+      allRows.push(line);
+    });
+    const filtered = allRows.filter(row => {
+      const j1 = (row[0]||'').toString().trim().toUpperCase();
+      return !(j1 === 'JUGADOR' || j1 === 'JUGADOR 1' || j1 === 'PLAYER 1');
+    });
+    allRows.length = 0;
+    filtered.forEach(r => allRows.push(r));
+
+    // H6:L19 → col0=jugador1, col1=resultado, col2=jugador2, col3=W/L for j2, col4=?
+    // User said: extended to L, "si el jugador en columna K gano o perdio"
+    // So: H=j1, I=resultado, J=vacio?, K=j2, L=W/L
+    // Let's map: col0=H=j1, col1=I=resultado, col2=J=?, col3=K=j2, col4=L=W/L
+
+    let out = '';
+    let matchNum = 0;
+    allRows.forEach((row, i) => {
+      const j1  = (row[0]||'').trim();   // I
+      const res = (row[1]||'').trim();   // J
+      const j2  = (row[2]||'').trim();   // K
+      const wl  = (row[3]||'').trim();   // L
+
+      if(!j1 || !j2) return;
+      matchNum++;
+
+      const wlUp = wl.toUpperCase();
+      const j2Won = wlUp.indexOf('W')>=0 || wlUp.indexOf('GANA')>=0 || wlUp==='G' || wlUp==='SI';
+      const draw  = wlUp.indexOf('AS')>=0 || res.toUpperCase().indexOf('AS')>=0 || wlUp==='E' || wlUp==='EMPATE';
+
+      let leftState, rightState, winner, scoreClass, mnumClass, centerClass;
+      if(draw){
+        leftState = 'draw'; rightState = 'draw'; winner='draw';
+        centerClass='cdraw'; scoreClass='rc-score draw'; mnumClass='rc-mnum-c draw';
+      } else if(j2Won){
+        leftState = 'lose'; rightState = 'win'; winner='right';
+        centerClass='cright'; scoreClass='rc-score'; mnumClass='rc-mnum-c';
+      } else {
+        leftState = 'win'; rightState = 'lose'; winner='left';
+        centerClass='cleft'; scoreClass='rc-score'; mnumClass='rc-mnum-c';
+      }
+
+      out += '<div class="rc-match">'+
+             '<div class="rc-left '+leftState+'"><span class="rc-name '+leftState+'">'+fmtHistName(j1)+'</span></div>'+
+             '<div class="rc-center '+centerClass+'"><span class="'+scoreClass+'">'+res+'</span><span class="'+mnumClass+'">Match '+matchNum+'</span></div>'+
+             '<div class="rc-right '+rightState+'"><span class="rc-name '+rightState+'">'+fmtHistName(j2)+'</span></div>'+
+             '</div>';
+    });
+
+    document.getElementById('f2-match-body').innerHTML = out || '<div class="lb-error">Sin datos</div>';
+  } catch(e){
+    document.getElementById('f2-match-body').innerHTML = '<div class="lb-error">Error: '+e.message+'</div>';
+    console.error(e);
+  }
+}
+
+function loadF2(){
+  // Stableford
+  const oldS = document.getElementById('f2-stb-script');
+  if(oldS) oldS.remove();
+  const urlS = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+    '/gviz/tq?tqx=out:json;responseHandler:f2StbCallback' +
+    '&sheet=' + encodeURIComponent('Rdo Fechas') +
+    '&range=B5:E23' +
+    '&headers=0' +
+    '&_=' + Date.now();
+  const sS = document.createElement('script');
+  sS.id = 'f2-stb-script'; sS.src = urlS;
+  document.head.appendChild(sS);
+
+  // Match
+  const oldM = document.getElementById('f2-match-script');
+  if(oldM) oldM.remove();
+  const urlM = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+    '/gviz/tq?tqx=out:json;responseHandler:f2MatchCallback' +
+    '&sheet=' + encodeURIComponent('Rdo Fechas') +
+    '&range=I6:L19' +
+    '&headers=0' +
+    '&_=' + Date.now();
+  const sM = document.createElement('script');
+  sM.id = 'f2-match-script'; sM.src = urlM;
+  document.head.appendChild(sM);
+}
+
 function pg(id,btn){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.snb').forEach(b=>b.classList.remove('on'));
@@ -774,6 +950,7 @@ function pg(id,btn){
   window.scrollTo(0,0);
   if(id==='lb')loadLB();
   if(id==='hist')loadHist();
+  if(id==='f2')loadF2();
 }
 
 function setTbHeight(){
