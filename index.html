@@ -349,27 +349,27 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .match-fecha{color:var(--gold);}
 
 /* Grid: left(names+hcp fixed) | scroll(holes) | right(Rdo fixed) */
-.mc-grid{display:grid;grid-template-columns:auto 1fr auto;font-family:'Barlow Condensed',sans-serif;}
-.mc-left{display:flex;flex-direction:column;background:var(--white);border-right:1px solid var(--g2);flex-shrink:0;}
-.mc-left-hdr,.mc-left-row{display:flex;align-items:center;}
-.mc-left-hdr{background:var(--g1);border-bottom:1px solid var(--g2);padding:6px 0;}
-.mc-left-row{padding:5px 0;}
-.mc-left-row+.mc-left-row{border-top:1px solid var(--g2);}
-.mc-col-name{padding:0 12px;font-size:12px;white-space:nowrap;color:var(--navy);min-width:140px;}
-.mc-left-hdr .mc-col-name{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--g4);}
-.mc-col-hcp{padding:0 10px;font-size:12px;font-weight:600;color:var(--text);text-align:center;min-width:34px;border-left:1px solid var(--g2);}
-.mc-left-hdr .mc-col-hcp{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--g4);}
+.mc-grid{display:grid;grid-template-columns:auto 1fr auto;font-family:'Barlow Condensed',sans-serif;align-items:stretch;}
+
+.mc-left-tbl,.mc-right-tbl,.mc-holes-tbl{border-collapse:collapse;}
+.mc-left-tbl thead tr,.mc-right-tbl thead tr,.mc-holes-tbl thead tr{background:var(--g1);}
+.mc-left-tbl thead th,.mc-right-tbl thead th,.mc-holes-tbl thead th{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--g4);padding:7px 8px;border-bottom:1px solid var(--g2);}
+.mc-left-tbl tbody tr:first-child,.mc-holes-tbl tbody tr:first-child{border-bottom:1px solid var(--g2);}
+
+.mc-left-tbl{flex-shrink:0;border-right:1px solid var(--g2);}
+.mc-th-name{text-align:left;padding:7px 12px !important;}
+.mc-th-hcp{text-align:center;min-width:44px;border-left:1px solid var(--g2);}
+.mc-td-name{padding:5px 12px;font-size:12px;white-space:nowrap;color:var(--navy);min-width:140px;}
+.mc-td-hcp{padding:5px 10px;font-size:12px;font-weight:600;color:var(--text);text-align:center;border-left:1px solid var(--g2);}
 
 .mc-holes-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;}
-.mc-holes-tbl{border-collapse:collapse;width:max-content;}
-.mc-holes-tbl thead tr{background:var(--g1);}
-.mc-holes-tbl thead th{font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--g4);padding:6px 4px;text-align:center;border-bottom:1px solid var(--g2);min-width:30px;}
-.mc-holes-tbl tbody tr:first-child{border-bottom:1px solid var(--g2);}
+.mc-holes-tbl{width:max-content;}
+.mc-holes-tbl thead th{text-align:center;min-width:30px;padding:7px 4px !important;}
 .mc-holes-tbl tbody td{padding:5px 4px;text-align:center;font-size:12px;font-weight:600;color:var(--text);min-width:30px;}
 
-.mc-right{background:var(--off);border-left:1px solid var(--g2);flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 14px;min-width:72px;}
-.mc-right-hdr{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);padding:6px 0;border-bottom:1px solid var(--g2);width:100%;text-align:center;}
-.mc-right-val{font-size:16px;font-weight:800;padding:10px 0;text-align:center;width:100%;}
+.mc-right-tbl{flex-shrink:0;border-left:1px solid var(--g2);background:var(--off);}
+.mc-right-tbl thead th{text-align:center;padding:7px 14px !important;}
+.mc-td-res{text-align:center;font-size:16px;font-weight:800;padding:5px 14px;vertical-align:middle;}
 
 /* Hole circles */
 .mh{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:12px;font-weight:700;line-height:1;}
@@ -380,14 +380,10 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .mh-empty{color:var(--g3);font-size:11px;}
 
 @media(max-width:680px){
-  .mc-col-name{min-width:100px;padding:0 8px;font-size:11px;}
-  .mc-col-hcp{min-width:30px;padding:0 6px;font-size:11px;}
-  .mc-holes-tbl thead th{padding:4px 2px;font-size:9px;min-width:24px;}
+      .mc-holes-tbl thead th{padding:4px 2px;font-size:9px;min-width:24px;}
   .mc-holes-tbl tbody td{padding:3px 2px;min-width:24px;}
   .mh{width:20px;height:20px;font-size:10px;}
-  .mc-right{min-width:60px;padding:0 8px;}
-  .mc-right-val{font-size:14px;padding:8px 0;}
-}
+    }
 
 /* Fechas dropdown in subnav */
 .snb-drop{position:relative;display:inline-block;}
@@ -397,6 +393,8 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .snb-drop-menu button{display:block;width:100%;text-align:left;background:none;border:none;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;border-bottom:1px solid var(--g1);}
 .snb-drop-menu button:last-child{border-bottom:none;}
 .snb-drop-menu button:hover{background:var(--off);color:var(--red);}
+
+.bonus-emo{display:inline-block;margin-left:4px;font-size:12px;vertical-align:middle;filter:saturate(1.2);}
 </style>
 </head>
 <body>
@@ -449,7 +447,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
   <div class="f1-awards">
     <div class="f1-award-item">
-      <span class="f1-award-icon">⛳</span>
+      <span class="f1-award-icon">🎯</span>
       <div class="f1-award-body">
         <span class="f1-award-label">Best Approach</span>
         <span class="f1-award-winner"><span class="rc-apellido">OLIVERIO</span> Manuel</span>
@@ -541,7 +539,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
   <div class="f1-awards">
     <div class="f1-award-item">
-      <span class="f1-award-icon">⛳</span>
+      <span class="f1-award-icon">🎯</span>
       <div class="f1-award-body">
         <span class="f1-award-label">Best Approach</span>
         <span class="f1-award-winner"><span class="rc-apellido">PAZ</span> Luis</span>
@@ -677,6 +675,24 @@ function dobleCell(doble,pd){
   if(uso)return '<span class="doble-yes">✓</span>';
   return '<span class="s dim">–</span>';
 }
+
+// ══ Bonus emojis per player (Best Approach + Long Drive wins) ══
+const PLAYER_BONUSES = {
+  'OLIVERIO MANUEL': { ba: 1, ld: 1 },
+  'PAZ LUIS':        { ba: 1, ld: 0 },
+  'VIDAL ALEJANDRO': { ba: 0, ld: 1 },
+};
+
+function bonusEmojis(nombre){
+  const key = nombre.trim().toUpperCase();
+  const b = PLAYER_BONUSES[key];
+  if(!b) return '';
+  let out = '';
+  for(let i = 0; i < (b.ba||0); i++) out += '<span class="bonus-emo" title="Best Approach">🎯</span>';
+  for(let i = 0; i < (b.ld||0); i++) out += '<span class="bonus-emo" title="Long Drive">💪</span>';
+  return out;
+}
+
 const COMPOUND=['LAVALLE COBO','MARTINEZ FANO','RODRIGUEZ NAZAR','DE SAINT LEGER'];
 function fmtName(nombre){
   const n=nombre.trim();const up=n.toUpperCase();
@@ -696,10 +712,10 @@ function gvizCallback(response){
       <th class="c" style="width:50px">Pos</th>
       <th class="c" style="width:28px">Mov</th>
       <th>Jugador</th>
-      <th class="c">Hcp</th><th class="c">Pts</th><th class="c">STB</th>
+      <th class="c">Pts</th><th class="c">STB</th>
       <th class="c">MCH</th><th class="c">Bonus</th>
       <th class="c">F.Jug</th><th class="c">F.Gan</th>
-      <th class="c">Pos.Ant</th><th class="c">Doble</th>
+      <th class="c">Hcp</th><th class="c">Pos.Ant</th><th class="c">Doble</th>
       <th class="c">Golpes</th><th class="c">Champ</th>
     </tr></thead><tbody>`;
     rows.forEach((row,i)=>{
@@ -721,11 +737,11 @@ function gvizCallback(response){
       const ptsHtml=pts&&pts!=='-'&&pts!=='0'?`<span class="s" style="color:var(--red);">${pts}</span>`:'<span class="s dim">–</span>';
       const pbHtml=pb&&pb!=='0'&&pb!=='-'?`<span class="s bonus">+${pb}</span>`:'<span class="s dim">–</span>';
       html+=`<tr><td class="c">${posCell(pos,i)}</td><td class="c">${mov}</td>
-        <td>${fmtName(nombre)}</td>
-        <td class="c">${cell(hcp)}</td><td class="c">${ptsHtml}</td><td class="c">${cell(stb)}</td>
+        <td>${fmtName(nombre)}${bonusEmojis(nombre)}</td>
+        <td class="c">${ptsHtml}</td><td class="c">${cell(stb)}</td>
         <td class="c">${cell(mch)}</td><td class="c">${pbHtml}</td>
         <td class="c">${cell(fjug)}</td><td class="c">${cell(fgan)}</td>
-        <td class="c">${cell(posAnt)}</td><td class="c">${dobleCell(doble,pd)}</td>
+        <td class="c">${cell(hcp)}</td><td class="c">${cell(posAnt)}</td><td class="c">${dobleCell(doble,pd)}</td>
         <td class="c">${golpesCell(golpes)}</td><td class="c"><span class="trophy">${champ||''}</span></td>
       </tr>`;
     });
@@ -1341,12 +1357,13 @@ function renderMatchTable(){
     // Layout: fixed left (name+HCP) + scrollable center (18 holes) + fixed right (Rdo)
     out += '<div class="mc-grid">';
 
-    // Left fixed: names + HCPs
-    out += '<div class="mc-left">';
-    out += '<div class="mc-left-hdr"><span class="mc-col-name">Jugador</span><span class="mc-col-hcp">HCP</span></div>';
-    out += '<div class="mc-left-row"><span class="mc-col-name">' + fmtHistName(nameA) + '</span><span class="mc-col-hcp">' + (hcpA || '–') + '</span></div>';
-    out += '<div class="mc-left-row"><span class="mc-col-name">' + fmtHistName(nameB) + '</span><span class="mc-col-hcp">' + (hcpB || '–') + '</span></div>';
-    out += '</div>';
+    // Left fixed: names + HCPs (table for alignment with holes)
+    out += '<table class="mc-left-tbl">';
+    out += '<thead><tr><th class="mc-th-name">Jugador</th><th class="mc-th-hcp">HCP</th></tr></thead>';
+    out += '<tbody>';
+    out += '<tr><td class="mc-td-name">' + fmtHistName(nameA) + '</td><td class="mc-td-hcp">' + (hcpA || '–') + '</td></tr>';
+    out += '<tr><td class="mc-td-name">' + fmtHistName(nameB) + '</td><td class="mc-td-hcp">' + (hcpB || '–') + '</td></tr>';
+    out += '</tbody></table>';
 
     // Center scrollable: 18 holes
     out += '<div class="mc-holes-scroll"><table class="mc-holes-tbl"><thead><tr>';
@@ -1388,10 +1405,12 @@ function renderMatchTable(){
     out += '</tr></tbody></table></div>';
 
     // Right fixed: result
-    out += '<div class="mc-right" style="color:' + resColor + ';">';
-    out += '<div class="mc-right-hdr">Rdo</div>';
-    out += '<div class="mc-right-val">' + res.resultStr + '</div>';
-    out += '</div>';
+    out += '<table class="mc-right-tbl">';
+    out += '<thead><tr><th>Rdo</th></tr></thead>';
+    out += '<tbody>';
+    out += '<tr><td rowspan="2" style="color:' + resColor + ';" class="mc-td-res">' + res.resultStr + '</td></tr>';
+    out += '<tr></tr>';
+    out += '</tbody></table>';
 
     out += '</div></div>';
   });
