@@ -205,11 +205,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
   /* Leaderboard: horizontal scroll */
   .lb-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-  .pga{min-width:700px;}
-  .pga thead th{padding:7px 8px;font-size:9px;}
-  .pga tbody td{padding:8px 8px;}
-  .plyr-name{font-size:12px;}
-  .plyr-first{font-size:12px;}
+  
+
+
   .s{font-size:13px;}
   .s.gold{font-size:14px;}
 
@@ -227,10 +225,27 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   .f1-award-icon{font-size:22px;}
   .f1-award-winner{font-size:15px;}
 
-  /* Stableford: horizontal scroll - handled by stb-scroll */
-  .stb{min-width:500px;}
-  .stb thead th{padding:6px 7px;font-size:9px;}
-  .stb tbody td{padding:7px 7px;font-size:12px;}
+/* Stableford: fit to viewport on mobile, no horizontal scroll */
+  .stb{min-width:auto !important;}
+  .stb-scroll{overflow-x:visible;}
+  .stb tbody td{padding:6px 6px;font-size:11px;}
+  .stb thead th{padding:5px 6px;font-size:9px;}
+  .plyr-name{font-size:11px !important;}
+  .plyr-first{font-size:11px !important;}
+
+  /* Match cards: fit to viewport */
+  .rc-match{height:40px;}
+  .rc-left,.rc-right{padding:0 8px;}
+  .rc-name{font-size:10px;}
+  .rc-center{width:52px;}
+  .rc-score{font-size:13px;}
+  .rc-mnum-c{display:none;}
+
+  /* Leaderboard: horizontal scroll ok, but make cells tighter */
+  .pga tbody td{padding:7px 6px;font-size:11px;}
+  .pga thead th{padding:5px 6px;font-size:9px;}
+  
+
 
   /* Match cards */
   .rc-list{padding:6px;}
@@ -389,30 +404,29 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
       <table class="stb">
         <thead><tr>
           <th class="c" style="width:32px">Pos</th>
-          <th style="width:1%;white-space:nowrap;">Jugador</th>
+          <th>Jugador</th>
           <th class="c" style="width:1%;white-space:nowrap;">Hcp</th>
           <th class="c" style="width:1%;white-space:nowrap;">STB</th>
-          <th></th>
         </tr></thead>
         <tbody>
-          <tr><td class="c"><span class="pos-dot d1"></span></td><td><span class="plyr-name" style="font-size:13px">OLIVERIO</span> <span class="plyr-first" style="font-size:13px">Manuel</span></td><td class="c"><span class="s">9</span></td><td class="c"><span class="s big">37</span></td><td></td></tr>
-          <tr><td class="c"><span class="pos-dot d2"></span></td><td><span class="plyr-name" style="font-size:13px">OBIGLIO</span> <span class="plyr-first" style="font-size:13px">Jose</span></td><td class="c"><span class="s">9</span></td><td class="c"><span class="s big">36</span></td><td></td></tr>
-          <tr><td class="c"><span class="pos-dot d3"></span></td><td><span class="plyr-name" style="font-size:13px">PAZ</span> <span class="plyr-first" style="font-size:13px">Luis</span></td><td class="c"><span class="s">6</span></td><td class="c"><span class="s big">35</span></td><td></td></tr>
-          <tr><td class="c"><span class="s dim">4</span></td><td><span class="plyr-name" style="font-size:13px">IRIBARNE</span> <span class="plyr-first" style="font-size:13px">Santiago</span></td><td class="c"><span class="s">15</span></td><td class="c"><span class="s big">32</span></td><td></td></tr>
-          <tr><td class="c"><span class="s dim">5</span></td><td><span class="plyr-name" style="font-size:13px">BARCHI</span> <span class="plyr-first" style="font-size:13px">Marcos</span></td><td class="c"><span class="s">16</span></td><td class="c"><span class="s big">32</span></td><td></td></tr>
-          <tr><td class="c"><span class="s dim">6</span></td><td><span class="plyr-name" style="font-size:13px">SOJO</span> <span class="plyr-first" style="font-size:13px">Pablo</span></td><td class="c"><span class="s">23</span></td><td class="c"><span class="s big">32</span></td><td></td></tr>
-          <tr><td class="c"><span class="s dim">7</span></td><td><span class="plyr-name" style="font-size:13px">RODRIGUEZ NAZAR</span> <span class="plyr-first" style="font-size:13px">Jose</span></td><td class="c"><span class="s">31</span></td><td class="c"><span class="s big">32</span></td><td></td></tr>
-          <tr><td class="c"><span class="s dim">8</span></td><td><span class="plyr-name" style="font-size:13px">MARTINEZ FANO</span> <span class="plyr-first" style="font-size:13px">Diego</span></td><td class="c"><span class="s">17</span></td><td class="c"><span class="s big">30</span></td><td></td></tr>
-          <tr><td class="c"><span class="s dim">9</span></td><td><span class="plyr-name" style="font-size:13px">RECONDO</span> <span class="plyr-first" style="font-size:13px">Maximo</span></td><td class="c"><span class="s">23</span></td><td class="c"><span class="s big">25</span></td><td></td></tr>
-          <tr><td class="c"><span class="s dim">10</span></td><td><span class="plyr-name" style="font-size:13px">RUETE</span> <span class="plyr-first" style="font-size:13px">Marcos</span></td><td class="c"><span class="s">26</span></td><td class="c"><span class="s big">24</span></td><td></td></tr>
-          <tr><td class="c"><span class="s dim">11</span></td><td><span class="plyr-name" style="font-size:13px">DE SAINT LEGER</span> <span class="plyr-first" style="font-size:13px">Pierre</span></td><td class="c"><span class="s">20</span></td><td class="c"><span class="s big">18</span></td><td></td></tr>
-          <tr><td class="c"><span class="s dim">12</span></td><td><span class="plyr-name" style="font-size:13px">BIEDMA</span> <span class="plyr-first" style="font-size:13px">Juanse</span></td><td class="c"><span class="s">29</span></td><td class="c"><span class="s big">17</span></td><td></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">HARISPE</span> <span class="plyr-first" style="font-size:13px">Patricio</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td><td></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">VIDAL</span> <span class="plyr-first" style="font-size:13px">Alejandro</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td><td></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">BARILATTI</span> <span class="plyr-first" style="font-size:13px">Javier</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td><td></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">LAVALLE COBO</span> <span class="plyr-first" style="font-size:13px">Joaquin</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td><td></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">CENTENO</span> <span class="plyr-first" style="font-size:13px">Angel</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td><td></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">PORRAS</span> <span class="plyr-first" style="font-size:13px">Martin</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td><td></td></tr>
+          <tr><td class="c"><span class="pos-dot d1"></span></td><td><span class="plyr-name" style="font-size:13px">OLIVERIO</span> <span class="plyr-first" style="font-size:13px">Manuel</span></td><td class="c"><span class="s">9</span></td><td class="c"><span class="s big">37</span></td></tr>
+          <tr><td class="c"><span class="pos-dot d2"></span></td><td><span class="plyr-name" style="font-size:13px">OBIGLIO</span> <span class="plyr-first" style="font-size:13px">Jose</span></td><td class="c"><span class="s">9</span></td><td class="c"><span class="s big">36</span></td></tr>
+          <tr><td class="c"><span class="pos-dot d3"></span></td><td><span class="plyr-name" style="font-size:13px">PAZ</span> <span class="plyr-first" style="font-size:13px">Luis</span></td><td class="c"><span class="s">6</span></td><td class="c"><span class="s big">35</span></td></tr>
+          <tr><td class="c"><span class="s dim">4</span></td><td><span class="plyr-name" style="font-size:13px">IRIBARNE</span> <span class="plyr-first" style="font-size:13px">Santiago</span></td><td class="c"><span class="s">15</span></td><td class="c"><span class="s big">32</span></td></tr>
+          <tr><td class="c"><span class="s dim">5</span></td><td><span class="plyr-name" style="font-size:13px">BARCHI</span> <span class="plyr-first" style="font-size:13px">Marcos</span></td><td class="c"><span class="s">16</span></td><td class="c"><span class="s big">32</span></td></tr>
+          <tr><td class="c"><span class="s dim">6</span></td><td><span class="plyr-name" style="font-size:13px">SOJO</span> <span class="plyr-first" style="font-size:13px">Pablo</span></td><td class="c"><span class="s">23</span></td><td class="c"><span class="s big">32</span></td></tr>
+          <tr><td class="c"><span class="s dim">7</span></td><td><span class="plyr-name" style="font-size:13px">RODRIGUEZ NAZAR</span> <span class="plyr-first" style="font-size:13px">Jose</span></td><td class="c"><span class="s">31</span></td><td class="c"><span class="s big">32</span></td></tr>
+          <tr><td class="c"><span class="s dim">8</span></td><td><span class="plyr-name" style="font-size:13px">MARTINEZ FANO</span> <span class="plyr-first" style="font-size:13px">Diego</span></td><td class="c"><span class="s">17</span></td><td class="c"><span class="s big">30</span></td></tr>
+          <tr><td class="c"><span class="s dim">9</span></td><td><span class="plyr-name" style="font-size:13px">RECONDO</span> <span class="plyr-first" style="font-size:13px">Maximo</span></td><td class="c"><span class="s">23</span></td><td class="c"><span class="s big">25</span></td></tr>
+          <tr><td class="c"><span class="s dim">10</span></td><td><span class="plyr-name" style="font-size:13px">RUETE</span> <span class="plyr-first" style="font-size:13px">Marcos</span></td><td class="c"><span class="s">26</span></td><td class="c"><span class="s big">24</span></td></tr>
+          <tr><td class="c"><span class="s dim">11</span></td><td><span class="plyr-name" style="font-size:13px">DE SAINT LEGER</span> <span class="plyr-first" style="font-size:13px">Pierre</span></td><td class="c"><span class="s">20</span></td><td class="c"><span class="s big">18</span></td></tr>
+          <tr><td class="c"><span class="s dim">12</span></td><td><span class="plyr-name" style="font-size:13px">BIEDMA</span> <span class="plyr-first" style="font-size:13px">Juanse</span></td><td class="c"><span class="s">29</span></td><td class="c"><span class="s big">17</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">HARISPE</span> <span class="plyr-first" style="font-size:13px">Patricio</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">VIDAL</span> <span class="plyr-first" style="font-size:13px">Alejandro</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">BARILATTI</span> <span class="plyr-first" style="font-size:13px">Javier</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">LAVALLE COBO</span> <span class="plyr-first" style="font-size:13px">Joaquin</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">CENTENO</span> <span class="plyr-first" style="font-size:13px">Angel</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
+          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">PORRAS</span> <span class="plyr-first" style="font-size:13px">Martin</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
         </tbody>
       </table>
       </div></div>
@@ -482,10 +496,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
       <table class="stb">
         <thead><tr>
           <th class="c" style="width:32px">Pos</th>
-          <th style="width:1%;white-space:nowrap;">Jugador</th>
+          <th>Jugador</th>
           <th class="c" style="width:1%;white-space:nowrap;">Hcp</th>
           <th class="c" style="width:1%;white-space:nowrap;">STB</th>
-          <th></th>
         </tr></thead>
         <tbody id="f2-stb-body">
           <tr><td colspan="4" class="c"><div class="lb-status"><div class="spinner"></div>Cargando...</div></td></tr>
@@ -850,7 +863,7 @@ function f2StbCallback(response){
       out += '<tr><td class="c">'+posHtml+'</td>'+
              '<td>'+fmtHistName(nm)+'</td>'+
              '<td class="c">'+hcpHtml+'</td>'+
-             '<td class="c">'+stbHtml+'</td><td></td></tr>';
+             '<td class="c">'+stbHtml+'</td></tr>';
     });
 
     document.getElementById('f2-stb-body').innerHTML = out || '<tr><td colspan="4" class="c"><span class="s dim">Sin datos</span></td></tr>';
