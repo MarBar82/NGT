@@ -334,6 +334,13 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   .hist-card-hdr{font-size:18px;padding:8px 12px;}
   .hist-yr-tbl tbody td{padding:6px 9px;}
 }
+
+/* MATCH filters */
+.match-filters{display:flex;gap:16px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap;padding:4px 0;}
+.filter-group{display:flex;flex-direction:column;gap:4px;}
+.filter-group label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);}
+.filter-group select{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--navy);padding:6px 10px;border:1px solid var(--g3);border-radius:3px;background:var(--white);cursor:pointer;min-width:140px;}
+.filter-group select:focus{outline:none;border-color:var(--navy);}
 </style>
 </head>
 <body>
@@ -346,6 +353,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   <button class="snb on" onclick="pg('lb',this)">Leader Board</button>
   <button class="snb" onclick="pg('f1',this)">Fecha 1</button>
   <button class="snb" onclick="pg('f2',this)">Fecha 2 ›</button>
+  <button class="snb" onclick="pg('match',this)">Match</button>
   <button class="snb" onclick="pg('hist',this)">Historia</button>
 </div>
 
@@ -514,6 +522,32 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
       </div>
     </div>
 
+  </div>
+</div>
+</div>
+
+<!-- ════ MATCH ════ -->
+<div class="pg" id="pg-match">
+<div class="wrap" style="padding:0 16px 16px 16px;">
+  <div class="match-filters">
+    <div class="filter-group">
+      <label for="match-fecha">Fecha</label>
+      <select id="match-fecha" onchange="renderMatchTable()">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="match-jugador">Jugador</label>
+      <select id="match-jugador" onchange="renderMatchTable()">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="filter-group" style="margin-left:auto;align-self:flex-end;">
+      <button class="lb-refresh" onclick="loadMatch()">↻ Actualizar</button>
+    </div>
+  </div>
+  <div class="lb-wrap">
+    <div id="match-body"><div class="lb-status"><div class="spinner"></div>Cargando matches...</div></div>
   </div>
 </div>
 </div>
@@ -828,7 +862,12 @@ function f2StbCallback(response){
     }
     rows.forEach(r => {
       const line = [];
-      if(r.c) r.c.forEach(c => line.push((c && c.v !== null && c.v !== undefined) ? String(c.v) : ''));
+      if(r.c) r.c.forEach(c => {
+        let val = (c && c.v !== null && c.v !== undefined) ? String(c.v) : '';
+        // Strip any HTML tags (gviz sometimes returns <a> for hyperlinks)
+        val = val.replace(/<[^>]*>/g, '').trim();
+        line.push(val);
+      });
       allRows.push(line);
     });
     // Filter out any row that looks like a header
@@ -885,7 +924,11 @@ function f2MatchCallback(response){
     }
     rows.forEach(r => {
       const line = [];
-      if(r.c) r.c.forEach(c => line.push((c && c.v !== null && c.v !== undefined) ? String(c.v) : ''));
+      if(r.c) r.c.forEach(c => {
+        let val = (c && c.v !== null && c.v !== undefined) ? String(c.v) : '';
+        val = val.replace(/<[^>]*>/g, '').trim();
+        line.push(val);
+      });
       allRows.push(line);
     });
     const filtered = allRows.filter(row => {
@@ -969,6 +1012,187 @@ function loadF2(){
   document.head.appendChild(sM);
 }
 
+
+
+// ══ MATCH ══
+let MATCH_RAW_ROWS = [];
+let MATCH_HEADERS = [];
+
+function matchGvizCallback(response){
+  try {
+    const table = response.table;
+    const allRows = [];
+    if(table.cols && table.cols.length){
+      const hr = table.cols.map(c => (c.label !== undefined && c.label !== null) ? String(c.label) : '');
+      allRows.push(hr);
+    }
+    table.rows.forEach(r => {
+      const line = [];
+      if(r.c) r.c.forEach(c => line.push((c && c.v !== null && c.v !== undefined) ? String(c.v) : ''));
+      allRows.push(line);
+    });
+
+    // First row is headers. Data rows follow.
+    MATCH_HEADERS = allRows[0] || [];
+    // Filter out empty rows and #N/A rows (where most fields are empty or contain #N/A)
+    MATCH_RAW_ROWS = allRows.slice(1).filter(row => {
+      if(!row || !row.length) return false;
+      // Check if row has any meaningful data (at least 3 non-empty, non-#N/A cells)
+      let valid = 0;
+      for(let i = 0; i < row.length; i++){
+        const v = String(row[i]||'').trim();
+        if(v && v !== '#N/A' && v !== '#REF!' && v !== '#VALUE!' && v !== '#ERROR!') valid++;
+      }
+      return valid >= 2;
+    });
+
+    // Range D1:X means cols starting at D. Column B (Fecha) is OUTSIDE the range.
+    // We need to fetch Fecha column separately, OR include B in the range.
+    // Let's make a second call to fetch column B.
+    loadMatchFechas();
+  } catch(e){
+    document.getElementById('match-body').innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+    console.error(e);
+  }
+}
+
+let MATCH_FECHAS = [];
+
+function matchFechaCallback(response){
+  try {
+    const rows = response.table.rows || [];
+    MATCH_FECHAS = [];
+    // Include label as first entry
+    if(response.table.cols && response.table.cols.length){
+      MATCH_FECHAS.push((response.table.cols[0].label || '').toString());
+    }
+    rows.forEach(r => {
+      if(r.c && r.c[0]){
+        MATCH_FECHAS.push((r.c[0].v !== null && r.c[0].v !== undefined) ? String(r.c[0].v) : '');
+      } else {
+        MATCH_FECHAS.push('');
+      }
+    });
+    // First entry is header
+    populateFilters();
+    renderMatchTable();
+  } catch(e){
+    document.getElementById('match-body').innerHTML = '<div class="lb-error">Error fecha: ' + e.message + '</div>';
+  }
+}
+
+function loadMatchFechas(){
+  const old = document.getElementById('match-f-script');
+  if(old) old.remove();
+  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+    '/gviz/tq?tqx=out:json;responseHandler:matchFechaCallback' +
+    '&sheet=' + encodeURIComponent('MATCH') +
+    '&range=B1:B' +
+    '&headers=0' +
+    '&_=' + Date.now();
+  const s = document.createElement('script');
+  s.id = 'match-f-script'; s.src = url;
+  document.head.appendChild(s);
+}
+
+function populateFilters(){
+  // Fecha filter: unique non-empty fechas
+  const fechas = [...new Set(MATCH_FECHAS.slice(1).filter(f => f && f.toString().trim() && f !== '#N/A').map(f => String(f).trim()))];
+
+  // Jugador filter: column D in MATCH!D1:X = column 0 in our rows
+  // But wait, MATCH_FECHAS has B column, and MATCH_RAW_ROWS has D:X.
+  // Jugador is column D of sheet = index 0 of MATCH_RAW_ROWS
+  const jugadores = [...new Set(MATCH_RAW_ROWS.map(r => String(r[0]||'').trim()).filter(j => j && j !== '#N/A'))].sort();
+
+  const fsel = document.getElementById('match-fecha');
+  fsel.innerHTML = '<option value="">Todas</option>';
+  fechas.forEach(f => {
+    fsel.innerHTML += '<option value="' + f + '">' + f + '</option>';
+  });
+
+  const jsel = document.getElementById('match-jugador');
+  jsel.innerHTML = '<option value="">Todos</option>';
+  jugadores.forEach(j => {
+    jsel.innerHTML += '<option value="' + j + '">' + j + '</option>';
+  });
+}
+
+function renderMatchTable(){
+  const fsel = document.getElementById('match-fecha').value;
+  const jsel = document.getElementById('match-jugador').value;
+
+  // MATCH_FECHAS[i+1] corresponds to MATCH_RAW_ROWS[i] if they are aligned by row
+  // But MATCH_FECHAS is raw rows of column B from row 1 onward, while MATCH_RAW_ROWS
+  // is from row 2 onward of D:X. So MATCH_FECHAS index 1 = MATCH_RAW_ROWS index 0.
+
+  // Filter rows
+  const filtered = MATCH_RAW_ROWS.filter((row, i) => {
+    const fecha = (MATCH_FECHAS[i+1] || '').toString().trim();
+    const jug = (row[0] || '').toString().trim();
+    if(fsel && fecha !== fsel) return false;
+    if(jsel && jug !== jsel) return false;
+    return true;
+  });
+
+  if(!filtered.length){
+    document.getElementById('match-body').innerHTML = '<div class="lb-error">No hay resultados con los filtros aplicados.</div>';
+    return;
+  }
+
+  // Build table
+  let html = '<table class="pga"><thead><tr>';
+  html += '<th class="c">Fecha</th>';
+  MATCH_HEADERS.forEach(h => {
+    html += '<th class="c">' + (h || '') + '</th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  MATCH_RAW_ROWS.forEach((row, i) => {
+    const fecha = (MATCH_FECHAS[i+1] || '').toString().trim();
+    const jug = (row[0] || '').toString().trim();
+    if(fsel && fecha !== fsel) return;
+    if(jsel && jug !== jsel) return;
+
+    html += '<tr>';
+    html += '<td class="c"><span class="s">' + fecha + '</span></td>';
+    row.forEach((cell, idx) => {
+      const v = String(cell || '').trim();
+      if(v === '#N/A' || v === ''){
+        html += '<td class="c"><span class="s dim">–</span></td>';
+      } else if(idx === 0){
+        // Player column (D)
+        html += '<td>' + fmtHistName(v) + '</td>';
+      } else {
+        html += '<td class="c"><span class="s">' + v + '</span></td>';
+      }
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('match-body').innerHTML = html;
+}
+
+function loadMatch(){
+  document.getElementById('match-body').innerHTML =
+    '<div class="lb-status"><div class="spinner"></div>Cargando matches...</div>';
+  const old = document.getElementById('match-script');
+  if(old) old.remove();
+  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+    '/gviz/tq?tqx=out:json;responseHandler:matchGvizCallback' +
+    '&sheet=' + encodeURIComponent('MATCH') +
+    '&range=D1:X' +
+    '&headers=0' +
+    '&_=' + Date.now();
+  const s = document.createElement('script');
+  s.id = 'match-script'; s.src = url;
+  s.onerror = function(){
+    document.getElementById('match-body').innerHTML =
+      '<div class="lb-error">⚠ No se pudo cargar.<br><button onclick="loadMatch()" style="margin-top:10px;font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;cursor:pointer;padding:6px 16px;border:1px solid var(--red);color:var(--red);background:none;border-radius:3px;">↻ Reintentar</button></div>';
+  };
+  document.head.appendChild(s);
+}
+
 function pg(id,btn){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.snb').forEach(b=>b.classList.remove('on'));
@@ -977,6 +1201,7 @@ function pg(id,btn){
   window.scrollTo(0,0);
   if(id==='lb')loadLB();
   if(id==='hist')loadHist();
+  if(id==='match')loadMatch();
   if(id==='f2')loadF2();
 }
 
