@@ -341,6 +341,37 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .filter-group label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);}
 .filter-group select{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--navy);padding:6px 10px;border:1px solid var(--g3);border-radius:3px;background:var(--white);cursor:pointer;min-width:140px;}
 .filter-group select:focus{outline:none;border-color:var(--navy);}
+
+/* MATCH cards */
+.match-cards{display:flex;flex-direction:column;gap:14px;}
+.match-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 2px 10px rgba(0,0,0,.04);}
+.match-card-hdr{background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:10px 16px;border-bottom:3px solid var(--red);}
+.match-fecha{color:var(--gold);}
+.match-sc{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.match-sc-tbl{width:100%;border-collapse:collapse;font-family:'Barlow Condensed',sans-serif;}
+.match-sc-tbl thead tr{background:var(--g1);}
+.match-sc-tbl thead th{font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--g4);padding:6px 4px;text-align:center;border-bottom:1px solid var(--g2);min-width:30px;}
+.match-sc-tbl thead th.match-sc-pname{text-align:left;padding:6px 12px;min-width:140px;}
+.match-sc-tbl tbody tr:first-child{border-bottom:1px solid var(--g2);}
+.match-sc-tbl tbody td{padding:5px 4px;text-align:center;font-size:12px;font-weight:600;color:var(--text);}
+.match-sc-tbl tbody td.match-sc-pname{text-align:left;padding:7px 12px;font-size:12px;white-space:nowrap;}
+.match-sc-tbl tbody td.match-sc-res{font-weight:800;color:var(--navy);font-size:15px;padding:7px 12px;text-align:center;vertical-align:middle;background:var(--off);border-left:1px solid var(--g2);}
+
+/* Hole circles */
+.mh{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:12px;font-weight:700;line-height:1;}
+.mh-won-a{background:#1a3a6e;color:#fff;}
+.mh-won-b{background:var(--red);color:#fff;}
+.mh-normal{background:var(--white);color:var(--text);border:1px solid var(--g2);}
+.mh-empty{color:var(--g3);font-size:11px;}
+
+@media(max-width:680px){
+  .match-sc-tbl thead th{padding:4px 2px;font-size:9px;min-width:22px;}
+  .match-sc-tbl tbody td{padding:3px 2px;font-size:11px;}
+  .match-sc-tbl thead th.match-sc-pname{min-width:100px;padding:4px 8px;}
+  .match-sc-tbl tbody td.match-sc-pname{padding:4px 8px;font-size:10px;}
+  .mh{width:20px;height:20px;font-size:10px;}
+  .match-sc-tbl tbody td.match-sc-res{font-size:13px;padding:4px 8px;}
+}
 </style>
 </head>
 <body>
@@ -1015,40 +1046,52 @@ function loadF2(){
 
 
 // ══ MATCH ══
-let MATCH_RAW_ROWS = [];
+let MATCH_PAIRS = [];
 let MATCH_HEADERS = [];
 
 function matchGvizCallback(response){
   try {
     const table = response.table;
-    const allRows = [];
-    if(table.cols && table.cols.length){
-      const hr = table.cols.map(c => (c.label !== undefined && c.label !== null) ? String(c.label) : '');
-      allRows.push(hr);
-    }
+    // Range is D2:X → row 0 of response is row 2 of sheet (first match data)
+    const dataRows = [];
     table.rows.forEach(r => {
       const line = [];
-      if(r.c) r.c.forEach(c => line.push((c && c.v !== null && c.v !== undefined) ? String(c.v) : ''));
-      allRows.push(line);
+      if(r.c) r.c.forEach(c => {
+        let val = (c && c.v !== null && c.v !== undefined) ? String(c.v) : '';
+        val = val.replace(/<[^>]*>/g, '').trim();
+        line.push(val);
+      });
+      dataRows.push(line);
     });
 
-    // First row is headers. Data rows follow.
-    MATCH_HEADERS = allRows[0] || [];
-    // Filter out empty rows and #N/A rows (where most fields are empty or contain #N/A)
-    MATCH_RAW_ROWS = allRows.slice(1).filter(row => {
-      if(!row || !row.length) return false;
-      // Check if row has any meaningful data (at least 3 non-empty, non-#N/A cells)
-      let valid = 0;
-      for(let i = 0; i < row.length; i++){
-        const v = String(row[i]||'').trim();
-        if(v && v !== '#N/A' && v !== '#REF!' && v !== '#VALUE!' && v !== '#ERROR!') valid++;
-      }
-      return valid >= 2;
-    });
+    // Build match pairs — each match = 2 consecutive rows
+    MATCH_PAIRS = [];
+    for(let i = 0; i < dataRows.length; i += 2){
+      const r1 = dataRows[i] || [];
+      const r2 = dataRows[i+1] || [];
 
-    // Range D1:X means cols starting at D. Column B (Fecha) is OUTSIDE the range.
-    // We need to fetch Fecha column separately, OR include B in the range.
-    // Let's make a second call to fetch column B.
+      const isValidRow = function(row){
+        if(!row || !row.length) return false;
+        const name = String(row[0]||'').trim();
+        if(!name || name === '#N/A' || name.toUpperCase() === 'JUGADOR') return false;
+        let valid = 0;
+        for(let k = 0; k < row.length; k++){
+          const v = String(row[k]||'').trim();
+          if(v && v !== '#N/A' && v !== '#REF!' && v !== '#VALUE!' && v !== '#ERROR!') valid++;
+        }
+        return valid >= 2;
+      };
+
+      if(!isValidRow(r1) && !isValidRow(r2)) continue;
+
+      MATCH_PAIRS.push({
+        pairIndex: Math.floor(i/2),
+        sheetRow1: i + 2,   // data row 0 = sheet row 2
+        rowA: r1,
+        rowB: r2,
+      });
+    }
+
     loadMatchFechas();
   } catch(e){
     document.getElementById('match-body').innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
@@ -1061,19 +1104,27 @@ let MATCH_FECHAS = [];
 function matchFechaCallback(response){
   try {
     const rows = response.table.rows || [];
-    MATCH_FECHAS = [];
-    // Include label as first entry
-    if(response.table.cols && response.table.cols.length){
-      MATCH_FECHAS.push((response.table.cols[0].label || '').toString());
-    }
+    // Range B2:B → rows[0] is sheet row 2, same as MATCH data rows[0]
+    const fechasAll = [];
     rows.forEach(r => {
       if(r.c && r.c[0]){
-        MATCH_FECHAS.push((r.c[0].v !== null && r.c[0].v !== undefined) ? String(r.c[0].v) : '');
+        let v = (r.c[0].v !== null && r.c[0].v !== undefined) ? String(r.c[0].v) : '';
+        v = v.replace(/<[^>]*>/g, '').trim();
+        fechasAll.push(v);
       } else {
-        MATCH_FECHAS.push('');
+        fechasAll.push('');
       }
     });
-    // First entry is header
+
+    // fechasAll[i] corresponds to sheet row (i+2)
+    // pair.sheetRow1 = 2 for pair 0 → fechasAll[0]
+    MATCH_PAIRS.forEach(function(pair){
+      const idx = pair.sheetRow1 - 2;
+      const row1Fecha = (fechasAll[idx] || '').toString().trim();
+      const row2Fecha = (fechasAll[idx+1] || '').toString().trim();
+      pair.fecha = row1Fecha || row2Fecha || '';
+    });
+
     populateFilters();
     renderMatchTable();
   } catch(e){
@@ -1087,7 +1138,7 @@ function loadMatchFechas(){
   const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
     '/gviz/tq?tqx=out:json;responseHandler:matchFechaCallback' +
     '&sheet=' + encodeURIComponent('MATCH') +
-    '&range=B1:B' +
+    '&range=B2:B' +
     '&headers=0' +
     '&_=' + Date.now();
   const s = document.createElement('script');
@@ -1096,13 +1147,17 @@ function loadMatchFechas(){
 }
 
 function populateFilters(){
-  // Fecha filter: unique non-empty fechas
-  const fechas = [...new Set(MATCH_FECHAS.slice(1).filter(f => f && f.toString().trim() && f !== '#N/A').map(f => String(f).trim()))];
+  const fechas = [...new Set(MATCH_PAIRS.map(p => p.fecha).filter(f => f && f !== '#N/A'))];
 
-  // Jugador filter: column D in MATCH!D1:X = column 0 in our rows
-  // But wait, MATCH_FECHAS has B column, and MATCH_RAW_ROWS has D:X.
-  // Jugador is column D of sheet = index 0 of MATCH_RAW_ROWS
-  const jugadores = [...new Set(MATCH_RAW_ROWS.map(r => String(r[0]||'').trim()).filter(j => j && j !== '#N/A'))].sort();
+  // Players: both rowA[0] and rowB[0] from all pairs
+  const juegaSet = new Set();
+  MATCH_PAIRS.forEach(function(p){
+    const ja = String(p.rowA[0]||'').trim();
+    const jb = String(p.rowB[0]||'').trim();
+    if(ja && ja !== '#N/A') juegaSet.add(ja);
+    if(jb && jb !== '#N/A') juegaSet.add(jb);
+  });
+  const jugadores = [...juegaSet].sort();
 
   const fsel = document.getElementById('match-fecha');
   fsel.innerHTML = '<option value="">Todas</option>';
@@ -1117,20 +1172,69 @@ function populateFilters(){
   });
 }
 
+const FECHA_CANCHA = {
+  '1': 'Everlinks G.C.',
+  '2': 'Campo Chico GC',
+};
+
+function calcMatchResult(rowA, rowB){
+  // Columns: 0=name, 1=HCP, 2..19=holes 1..18, 20=raw result (ignored)
+  let upA = 0;           // positive = A ahead, negative = B ahead
+  let holesPlayed = 0;
+  let endedAtHole = -1;
+  let resultStr = '';
+  let winner = 'pending';
+
+  for(let h = 0; h < 18; h++){
+    const vA = String(rowA[2 + h] || '').trim();
+    const vB = String(rowB[2 + h] || '').trim();
+    const sA = parseInt(vA);
+    const sB = parseInt(vB);
+    if(isNaN(sA) || isNaN(sB)) break;
+
+    holesPlayed = h + 1;
+    if(sA < sB) upA++;
+    else if(sB < sA) upA--;
+
+    const remaining = 18 - holesPlayed;
+    if(Math.abs(upA) > remaining){
+      endedAtHole = holesPlayed;
+      winner = upA > 0 ? 'A' : 'B';
+      resultStr = Math.abs(upA) + '&' + remaining;
+      break;
+    }
+  }
+
+  if(!resultStr){
+    if(holesPlayed === 0){
+      winner = 'pending';
+      resultStr = '–';
+      endedAtHole = 18;
+    } else if(holesPlayed < 18){
+      winner = 'pending';
+      resultStr = upA === 0 ? 'AS (parcial)' : (upA > 0 ? (Math.abs(upA) + ' UP') : (Math.abs(upA) + ' DN')) + ' (parcial)';
+      endedAtHole = holesPlayed;
+    } else {
+      if(upA === 0){ winner = 'draw'; resultStr = 'AS'; }
+      else { winner = upA > 0 ? 'A' : 'B'; resultStr = Math.abs(upA) + ' UP'; }
+      endedAtHole = 18;
+    }
+  }
+
+  return { winner: winner, resultStr: resultStr, endedAtHole: endedAtHole };
+}
+
 function renderMatchTable(){
   const fsel = document.getElementById('match-fecha').value;
   const jsel = document.getElementById('match-jugador').value;
 
-  // MATCH_FECHAS[i+1] corresponds to MATCH_RAW_ROWS[i] if they are aligned by row
-  // But MATCH_FECHAS is raw rows of column B from row 1 onward, while MATCH_RAW_ROWS
-  // is from row 2 onward of D:X. So MATCH_FECHAS index 1 = MATCH_RAW_ROWS index 0.
-
-  // Filter rows
-  const filtered = MATCH_RAW_ROWS.filter((row, i) => {
-    const fecha = (MATCH_FECHAS[i+1] || '').toString().trim();
-    const jug = (row[0] || '').toString().trim();
-    if(fsel && fecha !== fsel) return false;
-    if(jsel && jug !== jsel) return false;
+  const filtered = MATCH_PAIRS.filter(function(p){
+    if(fsel && String(p.fecha).trim() !== fsel) return false;
+    if(jsel){
+      const ja = String(p.rowA[0]||'').trim();
+      const jb = String(p.rowB[0]||'').trim();
+      if(ja !== jsel && jb !== jsel) return false;
+    }
     return true;
   });
 
@@ -1139,38 +1243,88 @@ function renderMatchTable(){
     return;
   }
 
-  // Build table
-  let html = '<table class="pga"><thead><tr>';
-  html += '<th class="c">Fecha</th>';
-  MATCH_HEADERS.forEach(h => {
-    html += '<th class="c">' + (h || '') + '</th>';
-  });
-  html += '</tr></thead><tbody>';
+  let out = '<div class="match-cards">';
 
-  MATCH_RAW_ROWS.forEach((row, i) => {
-    const fecha = (MATCH_FECHAS[i+1] || '').toString().trim();
-    const jug = (row[0] || '').toString().trim();
-    if(fsel && fecha !== fsel) return;
-    if(jsel && jug !== jsel) return;
+  filtered.forEach(function(p){
+    const rowA = p.rowA;
+    const rowB = p.rowB;
+    const nameA = String(rowA[0]||'').trim();
+    const nameB = String(rowB[0]||'').trim();
+    const hcpA  = String(rowA[1]||'').trim();
+    const hcpB  = String(rowB[1]||'').trim();
 
-    html += '<tr>';
-    html += '<td class="c"><span class="s">' + fecha + '</span></td>';
-    row.forEach((cell, idx) => {
-      const v = String(cell || '').trim();
-      if(v === '#N/A' || v === ''){
-        html += '<td class="c"><span class="s dim">–</span></td>';
-      } else if(idx === 0){
-        // Player column (D)
-        html += '<td>' + fmtHistName(v) + '</td>';
+    const res = calcMatchResult(rowA, rowB);
+    const fechaNum = String(p.fecha || '').trim();
+    const cancha = FECHA_CANCHA[fechaNum] || '';
+    const hdrText = fechaNum ? ('FECHA ' + fechaNum + (cancha ? ' · ' + cancha : '')) : 'Match';
+
+    out += '<div class="match-card">';
+    out += '<div class="match-card-hdr"><span class="match-fecha">' + hdrText + '</span></div>';
+    out += '<div class="match-sc"><table class="match-sc-tbl"><thead><tr>';
+    out += '<th class="match-sc-pname">Jugador</th>';
+    out += '<th class="c">HCP</th>';
+    for(let h = 1; h <= 18; h++){
+      out += '<th class="c">' + h + '</th>';
+    }
+    out += '<th class="c">Rdo</th>';
+    out += '</tr></thead><tbody>';
+
+    // Compute per-hole winners
+    const holeResults = []; // 'A' | 'B' | 'tie' | null
+    for(let h = 0; h < 18; h++){
+      if(h >= res.endedAtHole){ holeResults.push(null); continue; }
+      const sA = parseInt(rowA[2 + h]);
+      const sB = parseInt(rowB[2 + h]);
+      if(isNaN(sA) || isNaN(sB)) holeResults.push(null);
+      else if(sA < sB) holeResults.push('A');
+      else if(sB < sA) holeResults.push('B');
+      else holeResults.push('tie');
+    }
+
+    // Row A
+    out += '<tr>';
+    out += '<td class="match-sc-pname">' + fmtHistName(nameA) + '</td>';
+    out += '<td class="c"><span class="s">' + (hcpA || '–') + '</span></td>';
+    for(let h = 0; h < 18; h++){
+      const v = String(rowA[2 + h] || '').trim();
+      const winner = holeResults[h];
+      if(h >= res.endedAtHole){
+        out += '<td class="c"><span class="mh-empty">–</span></td>';
+      } else if(v === '' || v === '#N/A'){
+        out += '<td class="c"><span class="mh-empty">–</span></td>';
+      } else if(winner === 'A'){
+        out += '<td class="c"><span class="mh mh-won-a">' + v + '</span></td>';
       } else {
-        html += '<td class="c"><span class="s">' + v + '</span></td>';
+        out += '<td class="c"><span class="mh mh-normal">' + v + '</span></td>';
       }
-    });
-    html += '</tr>';
+    }
+    out += '<td class="c match-sc-res" rowspan="2">' + res.resultStr + '</td>';
+    out += '</tr>';
+
+    // Row B
+    out += '<tr>';
+    out += '<td class="match-sc-pname">' + fmtHistName(nameB) + '</td>';
+    out += '<td class="c"><span class="s">' + (hcpB || '–') + '</span></td>';
+    for(let h = 0; h < 18; h++){
+      const v = String(rowB[2 + h] || '').trim();
+      const winner = holeResults[h];
+      if(h >= res.endedAtHole){
+        out += '<td class="c"><span class="mh-empty">–</span></td>';
+      } else if(v === '' || v === '#N/A'){
+        out += '<td class="c"><span class="mh-empty">–</span></td>';
+      } else if(winner === 'B'){
+        out += '<td class="c"><span class="mh mh-won-b">' + v + '</span></td>';
+      } else {
+        out += '<td class="c"><span class="mh mh-normal">' + v + '</span></td>';
+      }
+    }
+    out += '</tr>';
+
+    out += '</tbody></table></div></div>';
   });
 
-  html += '</tbody></table>';
-  document.getElementById('match-body').innerHTML = html;
+  out += '</div>';
+  document.getElementById('match-body').innerHTML = out;
 }
 
 function loadMatch(){
@@ -1181,7 +1335,7 @@ function loadMatch(){
   const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
     '/gviz/tq?tqx=out:json;responseHandler:matchGvizCallback' +
     '&sheet=' + encodeURIComponent('MATCH') +
-    '&range=D1:X' +
+    '&range=D2:X' +
     '&headers=0' +
     '&_=' + Date.now();
   const s = document.createElement('script');
