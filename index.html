@@ -872,6 +872,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   <div id="admin-panel" style="display:none;">
     <div class="adm-tabs">
       <button class="adm-tab on" onclick="admTab('crear', this)">Crear Fecha</button>
+      <button class="adm-tab" onclick="admTab('editar', this)">Editar Fecha</button>
       <button class="adm-tab" onclick="admTab('matches', this)">Cargar Matches</button>
       <button class="adm-tab" onclick="adminLogout()" style="margin-left:auto;color:var(--g4);">Salir</button>
     </div>
@@ -903,6 +904,39 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
           <button class="adm-btn-primary" onclick="adminCrearFecha()" style="margin-top:18px;">Crear Fecha</button>
           <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Editar Fecha -->
+    <div class="adm-section" id="adm-editar" style="display:none;">
+      <div class="adm-card">
+        <div class="adm-card-hdr">✏️ Editar Fecha Existente</div>
+        <div class="adm-card-body">
+
+          <label class="adm-label">Seleccionar Fecha</label>
+          <select id="adm-edit-fecha-sel" class="adm-input" onchange="loadFechaParaEditar()">
+            <option value="">Seleccionar...</option>
+          </select>
+
+          <div id="adm-edit-form" style="display:none;">
+            <div class="adm-row" style="margin-top:14px;">
+              <div class="adm-field">
+                <label class="adm-label">Cancha</label>
+                <select id="adm-edit-cancha" class="adm-input"></select>
+              </div>
+            </div>
+
+            <label class="adm-label">Jugadores que disputan la fecha</label>
+            <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
+
+            <label class="adm-label" style="margin-top:14px;">Puntos dobles (Stableford × 2)</label>
+            <div id="adm-edit-dobles" class="adm-jugs">Cargando...</div>
+
+            <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Cambios</button>
+            <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1903,32 +1937,57 @@ function showAdminPanel(){
 }
 
 function loadAdminData(){
-  // Load jugadores y canchas
-  Promise.all([ngtApiGet('jugadores'), ngtApiGet('canchas'), ngtApiGet('fechas')]).then(function(results){
+  Promise.all([
+    ngtApiGet('jugadores'),
+    ngtApiGet('canchas'),
+    ngtApiGet('fechas'),
+    ngtApiGet('jugadoresConDoble'),  // matriculas with doble still AVAILABLE
+  ]).then(function(results){
     ADM_JUGADORES = (results[0] && results[0].data) || [];
     ADM_CANCHAS = (results[1] && results[1].data) || [];
     const fechas = (results[2] && results[2].data) || [];
+    const doblesDisponibles = (results[3] && results[3].data) || [];
 
-    // Cancha select
+    // Save available dobles globally for access when editing
+    window.ADM_DOBLES_DISP = doblesDisponibles;
+
+    // Cancha select (crear)
     const cs = document.getElementById('adm-cancha');
     cs.innerHTML = '<option value="">Seleccionar cancha...</option>';
     ADM_CANCHAS.forEach(c => {
       cs.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>';
     });
 
-    // Jugadores checkboxes
+    // Cancha select (editar)
+    const csE = document.getElementById('adm-edit-cancha');
+    if(csE){
+      csE.innerHTML = '<option value="">Seleccionar...</option>';
+      ADM_CANCHAS.forEach(c => {
+        csE.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>';
+      });
+    }
+
+    // Jugadores checkboxes — ALL players available to select for the fecha
     const jl = document.getElementById('adm-jugadores-list');
-    const dl = document.getElementById('adm-dobles-list');
     let jugHtml = '';
-    let dobHtml = '';
     ADM_JUGADORES.forEach(j => {
-      const ap = j.nombre.split(' ')[0];
-      const nm = j.nombre.split(' ').slice(1).map(w => w.charAt(0)+w.slice(1).toLowerCase()).join(' ');
-      const lbl = '<span class="ap">' + ap + '</span> ' + nm;
+      const lbl = formatPlayerLabel(j.nombre);
       jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
-      dobHtml += '<div class="adm-jug-item"><input type="checkbox" id="dob-' + j.matricula + '" value="' + j.matricula + '"><label for="dob-' + j.matricula + '">' + lbl + '</label></div>';
     });
     jl.innerHTML = jugHtml;
+
+    // Dobles checkboxes — ONLY players who still have doble available
+    const dl = document.getElementById('adm-dobles-list');
+    let dobHtml = '';
+    if(!doblesDisponibles.length){
+      dobHtml = '<div class="s dim" style="padding:10px;">Todos los jugadores ya usaron sus puntos dobles</div>';
+    } else {
+      ADM_JUGADORES.forEach(j => {
+        if(doblesDisponibles.indexOf(String(j.matricula)) < 0) return;
+        const lbl = formatPlayerLabel(j.nombre);
+        dobHtml += '<div class="adm-jug-item"><input type="checkbox" id="dob-' + j.matricula + '" value="' + j.matricula + '"><label for="dob-' + j.matricula + '">' + lbl + '</label></div>';
+      });
+    }
     dl.innerHTML = dobHtml;
 
     // Fechas para matches
@@ -1940,6 +1999,24 @@ function loadAdminData(){
   }).catch(e => {
     console.error('Error loading admin data:', e);
   });
+}
+
+function formatPlayerLabel(nombreCompleto){
+  const COMPOUND = ['LAVALLE COBO','MARTINEZ FANO','RODRIGUEZ NAZAR','DE SAINT LEGER'];
+  const n = (nombreCompleto || '').trim();
+  const up = n.toUpperCase();
+  const comp = COMPOUND.find(c => up.startsWith(c));
+  let ap, nm;
+  if(comp){
+    ap = comp;
+    const rest = n.slice(comp.length).trim();
+    nm = rest ? rest.charAt(0).toUpperCase() + rest.slice(1).toLowerCase() : '';
+  } else {
+    const parts = n.split(' ');
+    ap = (parts[0]||'').toUpperCase();
+    nm = parts.slice(1).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  }
+  return '<span class="ap">' + ap + '</span>' + (nm ? ' ' + nm : '');
 }
 
 function adminCrearFecha(){
@@ -1993,8 +2070,11 @@ function adminCrearFecha(){
       document.getElementById('adm-fecha').value = '';
       document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
       document.querySelectorAll('#adm-dobles-list input:checked').forEach(i => i.checked = false);
-      // Refresh fechas list
-      setTimeout(loadAdminData, 500);
+      // Redirect to Leader Board after 1.5s
+      setTimeout(function(){
+        const lbBtn = document.querySelector('.subnav .snb');
+        if(lbBtn) pg('lb', lbBtn);
+      }, 1500);
     } else {
       msg.className = 'adm-msg err';
       msg.textContent = '✗ ' + (r.error || 'Error desconocido');
@@ -2009,7 +2089,9 @@ function admTab(name, btn){
   document.querySelectorAll('.adm-tab').forEach(t => t.classList.remove('on'));
   btn.classList.add('on');
   document.getElementById('adm-crear').style.display = name === 'crear' ? 'block' : 'none';
+  document.getElementById('adm-editar').style.display = name === 'editar' ? 'block' : 'none';
   document.getElementById('adm-matches').style.display = name === 'matches' ? 'block' : 'none';
+  if(name === 'editar') populateEditFechaSelect();
 }
 
 
@@ -2107,6 +2189,126 @@ function adminGuardarMatches(){
       msg.className = 'adm-msg ok';
       msg.textContent = '✓ ' + r.count + ' matches guardados';
       document.getElementById('adm-matches-list').innerHTML = '';
+      setTimeout(function(){
+        const lbBtn = document.querySelector('.subnav .snb');
+        if(lbBtn) pg('lb', lbBtn);
+      }, 1500);
+    } else {
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+
+
+// ══ EDITAR FECHA ══
+function populateEditFechaSelect(){
+  ngtApiGet('fechas').then(r => {
+    const fechas = (r && r.data) || [];
+    const sel = document.getElementById('adm-edit-fecha-sel');
+    sel.innerHTML = '<option value="">Seleccionar...</option>';
+    fechas.forEach(f => {
+      sel.innerHTML += '<option value="' + f + '">Fecha ' + f + '</option>';
+    });
+    document.getElementById('adm-edit-form').style.display = 'none';
+  });
+}
+
+function loadFechaParaEditar(){
+  const fecha = document.getElementById('adm-edit-fecha-sel').value;
+  const form = document.getElementById('adm-edit-form');
+  if(!fecha){ form.style.display = 'none'; return; }
+
+  // Get fecha detail
+  ngtApiGet('fechaDetalle', { fecha: fecha }).then(r => {
+    const det = (r && r.data) || {};
+    const curMatriculas = (det.jugadores || []).map(j => String(j.matricula));
+    const curDobles = (det.dobles || []).map(String);
+    const curCancha = det.cancha || '';
+
+    // Set cancha select — try to match by name to ID
+    const canchaMatch = ADM_CANCHAS.find(c => c.nombre === curCancha);
+    document.getElementById('adm-edit-cancha').value = canchaMatch ? canchaMatch.id : '';
+
+    // Render jugadores checkboxes with current selection
+    const jl = document.getElementById('adm-edit-jugs');
+    let jugHtml = '';
+    ADM_JUGADORES.forEach(j => {
+      const checked = curMatriculas.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
+      const lbl = formatPlayerLabel(j.nombre);
+      jugHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-jug" value="' + j.matricula + '" id="ejug-' + j.matricula + '" ' + checked + '><label for="ejug-' + j.matricula + '">' + lbl + '</label></div>';
+    });
+    jl.innerHTML = jugHtml;
+
+    // Render dobles — include anyone currently marked OR who has it available
+    // (so you can uncheck mistakes, plus add new)
+    const dl = document.getElementById('adm-edit-dobles');
+    let dobHtml = '';
+    const disponibles = window.ADM_DOBLES_DISP || [];
+    const eligibleForDoble = new Set([...disponibles.map(String), ...curDobles]);
+    if(!eligibleForDoble.size){
+      dobHtml = '<div class="s dim" style="padding:10px;">No hay jugadores disponibles para doble</div>';
+    } else {
+      ADM_JUGADORES.forEach(j => {
+        if(!eligibleForDoble.has(String(j.matricula))) return;
+        const checked = curDobles.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
+        const lbl = formatPlayerLabel(j.nombre);
+        dobHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-dob" value="' + j.matricula + '" id="edob-' + j.matricula + '" ' + checked + '><label for="edob-' + j.matricula + '">' + lbl + '</label></div>';
+      });
+    }
+    dl.innerHTML = dobHtml;
+
+    document.getElementById('adm-edit-form').style.display = 'block';
+    document.getElementById('adm-edit-msg').style.display = 'none';
+  });
+}
+
+function adminEditarFecha(){
+  const fecha = document.getElementById('adm-edit-fecha-sel').value;
+  const canchaId = document.getElementById('adm-edit-cancha').value;
+  const jugadores = [...document.querySelectorAll('.edit-jug:checked')].map(i => i.value);
+  const dobles = [...document.querySelectorAll('.edit-dob:checked')].map(i => i.value);
+
+  const msg = document.getElementById('adm-edit-msg');
+  msg.style.display = 'none';
+
+  if(!fecha){
+    msg.className = 'adm-msg err';
+    msg.textContent = 'Seleccioná una fecha';
+    msg.style.display = 'block';
+    return;
+  }
+
+  msg.className = 'adm-msg';
+  msg.textContent = 'Guardando...';
+  msg.style.display = 'block';
+
+  ngtApiPost({
+    action: 'editarFecha',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+    canchaId: canchaId || undefined,
+    jugadores: jugadores,
+    dobles: dobles,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok';
+      const ch = r.changes || {};
+      let txt = '✓ Guardado';
+      if(ch.added && ch.added.length) txt += ' · +' + ch.added.length + ' jugador(es)';
+      if(ch.removed && ch.removed.length) txt += ' · -' + ch.removed.length + ' removido(s)';
+      if(ch.doblesSet && ch.doblesSet.length) txt += ' · +' + ch.doblesSet.length + ' doble(s)';
+      if(ch.doblesCleared && ch.doblesCleared.length) txt += ' · -' + ch.doblesCleared.length + ' doble(s)';
+      msg.textContent = txt;
+      // Redirect to Leader Board after 1.5s
+      setTimeout(function(){
+        const lbBtn = document.querySelector('.subnav .snb');
+        if(lbBtn) pg('lb', lbBtn);
+      }, 1500);
     } else {
       msg.className = 'adm-msg err';
       msg.textContent = '✗ ' + (r.error || 'Error');
@@ -2424,6 +2626,10 @@ function mitGuardar(){
       let txt = '✓ Tarjeta firmada y guardada';
       if(r.dobleMsg) txt += ' — ' + r.dobleMsg;
       msg.textContent = txt;
+      setTimeout(function(){
+        const lbBtn = document.querySelector('.subnav .snb');
+        if(lbBtn) pg('lb', lbBtn);
+      }, 1500);
     } else {
       msg.className = 'adm-msg err';
       msg.textContent = '✗ ' + (r.error || 'Error');
