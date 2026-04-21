@@ -395,6 +395,97 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .snb-drop-menu button:hover{background:var(--off);color:var(--red);}
 
 .bonus-emo{display:inline-block;margin-left:4px;font-size:12px;vertical-align:middle;filter:saturate(1.2);}
+
+/* ADMIN */
+.snb-admin{font-size:16px;padding:0 12px;}
+.adm-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);margin-bottom:14px;}
+.adm-card-hdr{background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.06em;padding:12px 16px;border-bottom:3px solid var(--red);}
+.adm-card-body{padding:18px;}
+.adm-label{display:block;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--g4);margin-bottom:5px;}
+.adm-input{width:100%;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;color:var(--navy);padding:8px 12px;border:1px solid var(--g3);border-radius:3px;background:var(--white);box-sizing:border-box;}
+.adm-input:focus{outline:none;border-color:var(--navy);}
+.adm-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+.adm-field{display:flex;flex-direction:column;}
+.adm-jugs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;border:1px solid var(--g2);border-radius:3px;padding:10px;max-height:240px;overflow-y:auto;}
+.adm-jug-item{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:2px;cursor:pointer;}
+.adm-jug-item:hover{background:var(--off);}
+.adm-jug-item input{margin:0;cursor:pointer;}
+.adm-jug-item label{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;flex:1;}
+.adm-jug-item label .ap{font-weight:700;text-transform:uppercase;}
+.adm-btn-primary{width:100%;background:var(--red);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:11px;border:none;border-radius:3px;cursor:pointer;transition:.12s;}
+.adm-btn-primary:hover{background:#a30c25;}
+.adm-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+.adm-btn-secondary{background:none;color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;padding:6px 12px;border:1px solid var(--navy);border-radius:3px;cursor:pointer;margin-top:8px;}
+.adm-btn-secondary:hover{background:var(--navy);color:#fff;}
+.adm-error{background:#fee;color:#c8102e;padding:10px;border-radius:3px;font-size:13px;margin-top:10px;border-left:3px solid var(--red);}
+.adm-msg{padding:10px;border-radius:3px;font-size:13px;margin-top:10px;font-family:'Barlow Condensed',sans-serif;}
+.adm-msg.ok{background:#e8f5e9;color:#16a34a;border-left:3px solid #16a34a;}
+.adm-msg.err{background:#fee;color:#c8102e;border-left:3px solid var(--red);}
+.adm-tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:2px solid var(--g2);}
+.adm-tab{background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--g4);padding:10px 16px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;}
+.adm-tab.on{color:var(--navy);border-bottom-color:var(--red);}
+.adm-tab:hover{color:var(--navy);}
+.adm-match-row{display:grid;grid-template-columns:1fr auto 1fr auto;gap:8px;align-items:center;margin-bottom:6px;}
+.adm-match-row select{font-family:'Barlow Condensed',sans-serif;font-size:12px;padding:6px 8px;border:1px solid var(--g3);border-radius:3px;}
+.adm-match-row .vs{font-weight:800;color:var(--red);}
+.adm-match-rm{background:none;border:none;color:var(--g4);cursor:pointer;font-size:18px;}
+.adm-match-rm:hover{color:var(--red);}
+.adm-inv-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
+.adm-inv-row input{flex:1;}
+.adm-inv-rm{background:none;border:none;color:var(--g4);cursor:pointer;font-size:16px;padding:4px 8px;}
+.adm-inv-rm:hover{color:var(--red);}
+
+
+/* MI TARJETA */
+.mit-fecha-card{background:var(--white);border:var(--border);border-radius:3px;padding:14px;margin-bottom:10px;cursor:pointer;transition:.12s;display:flex;align-items:center;gap:14px;}
+.mit-fecha-card:hover{background:var(--off);border-color:var(--navy);}
+.mit-fecha-num{background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;padding:6px 14px;border-radius:3px;flex-shrink:0;}
+.mit-fecha-info{flex:1;}
+.mit-fecha-cancha{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--navy);}
+.mit-fecha-stat{font-size:11px;color:var(--g4);font-family:'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;margin-top:2px;}
+.mit-fecha-arrow{color:var(--g3);font-size:20px;}
+
+/* 18 Holes grid */
+.holes-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:4px 0;}
+@media(max-width:680px){
+  .holes-grid{grid-template-columns:repeat(4,1fr);gap:6px;}
+}
+.hole-cell{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.hole-num{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--g4);text-transform:uppercase;}
+.hole-circle{
+  width:56px;height:56px;border-radius:50%;
+  background:var(--white);border:2px solid var(--g2);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;cursor:pointer;transition:.12s;
+  font-family:'Barlow Condensed',sans-serif;
+}
+.hole-circle:hover{border-color:var(--navy);transform:scale(1.05);}
+.hole-par-bg{position:absolute;font-size:32px;font-weight:800;color:rgba(0,35,75,.12);pointer-events:none;line-height:1;}
+.hole-score{position:relative;z-index:2;font-size:24px;font-weight:800;color:var(--navy);line-height:1;}
+.hole-circle.filled{border-color:var(--navy);background:var(--off);}
+.hole-circle.eagle{background:#fef3c7;border-color:#c9a84c;}  /* 2 under par */
+.hole-circle.birdie{background:#e8f5e9;border-color:#16a34a;}  /* under par */
+.hole-circle.par{background:var(--off);border-color:var(--navy);}  /* par */
+.hole-circle.bogey{background:#fff1e8;border-color:#f97316;}  /* over par */
+.hole-circle.double{background:#fee;border-color:var(--red);}  /* 2+ over par */
+
+/* Bonus checkboxes */
+.mit-bonus{display:flex;flex-direction:column;gap:8px;margin-top:16px;padding:10px;background:var(--off);border-radius:3px;}
+.mit-bonus-chk{display:flex;align-items:center;gap:10px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;color:var(--navy);}
+.mit-bonus-chk input{transform:scale(1.2);}
+
+/* Score modal */
+.sm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;}
+.sm-box{background:var(--white);border-radius:6px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:340px;width:100%;overflow:hidden;}
+.sm-hdr{background:var(--navy);color:#fff;padding:14px 18px;text-align:center;border-bottom:3px solid var(--red);}
+.sm-hoyo{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;letter-spacing:.06em;}
+.sm-par{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-top:2px;}
+.sm-big{text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:56px;font-weight:800;color:var(--navy);padding:14px 0;}
+.sm-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px;}
+.sm-nums button{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;color:var(--navy);background:var(--off);border:1px solid var(--g2);border-radius:4px;padding:12px;cursor:pointer;transition:.1s;}
+.sm-nums button:hover{background:var(--navy);color:#fff;}
+.sm-nums button.sm-clear{background:#fee;color:var(--red);}
+.sm-nums button.sm-close{background:var(--red);color:#fff;grid-column:span 2;}
 </style>
 </head>
 <body>
@@ -414,6 +505,8 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   </div>
   <button class="snb" onclick="pg('match',this)">Match</button>
   <button class="snb" onclick="pg('hist',this)">Historia</button>
+  <button class="snb" onclick="pg('mit',this)">Mi Tarjeta</button>
+  <button class="snb snb-admin" onclick="pg('admin',this)" title="Admin">⚙</button>
 </div>
 
 <!-- ════ LEADER BOARD ════ -->
@@ -578,6 +671,178 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
       <div class="rc-hdr"><div class="rc-hdr-title">⚔ Match Play</div></div>
       <div class="rc-list" id="f2-match-body">
         <div class="lb-status"><div class="spinner"></div>Cargando...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ════ MI TARJETA ════ -->
+<div class="pg" id="pg-mit">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+  <!-- Login screen (matricula only) -->
+  <div id="mit-login">
+    <div class="adm-card">
+      <div class="adm-card-hdr">👤 Mi Tarjeta · Acceso</div>
+      <div class="adm-card-body">
+        <label class="adm-label">Matrícula</label>
+        <input type="tel" id="mit-mat-input" class="adm-input" placeholder="Ej: 60803" autocomplete="off">
+        <button class="adm-btn-primary" onclick="mitLogin()" style="margin-top:14px;">Ingresar</button>
+        <div id="mit-login-error" class="adm-error" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fechas list -->
+  <div id="mit-fechas" style="display:none;">
+    <div class="adm-card">
+      <div class="adm-card-hdr">
+        <span id="mit-greeting">Mis Fechas</span>
+        <button onclick="mitLogout()" style="float:right;background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:11px;">Salir ✕</button>
+      </div>
+      <div class="adm-card-body">
+        <div id="mit-fechas-list">Cargando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Score entry screen -->
+  <div id="mit-score" style="display:none;">
+    <div class="adm-card">
+      <div class="adm-card-hdr">
+        <span id="mit-score-title">Tarjeta</span>
+        <button onclick="mitBackToFechas()" style="float:right;background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:11px;">← Volver</button>
+      </div>
+      <div class="adm-card-body">
+
+        <div class="adm-row" style="margin-bottom:16px;">
+          <div class="adm-field">
+            <label class="adm-label">HCP de juego</label>
+            <input type="number" id="mit-hcp" class="adm-input" min="0" max="54" placeholder="Tu hcp">
+          </div>
+        </div>
+
+        <label class="adm-label">Scores por Hoyo — tocá un círculo para anotar</label>
+        <div class="holes-grid" id="mit-holes"></div>
+
+        <div class="mit-bonus">
+          <label class="mit-bonus-chk">
+            <input type="checkbox" id="mit-ld"><span>💪 Gané el Long Drive</span>
+          </label>
+          <label class="mit-bonus-chk">
+            <input type="checkbox" id="mit-ba"><span>🎯 Gané el Best Approach</span>
+          </label>
+        </div>
+
+        <button class="adm-btn-primary" onclick="mitGuardar()" style="margin-top:18px;">Guardar Tarjeta</button>
+        <div id="mit-save-msg" class="adm-msg" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- Score picker modal -->
+<div id="score-modal" class="sm-overlay" style="display:none;" onclick="smClose(event)">
+  <div class="sm-box" onclick="event.stopPropagation()">
+    <div class="sm-hdr">
+      <div class="sm-hoyo" id="sm-hoyo">Hoyo 1</div>
+      <div class="sm-par" id="sm-par">Par 4</div>
+    </div>
+    <div class="sm-big" id="sm-big">–</div>
+    <div class="sm-nums">
+      <button onclick="smSet(1)">1</button>
+      <button onclick="smSet(2)">2</button>
+      <button onclick="smSet(3)">3</button>
+      <button onclick="smSet(4)">4</button>
+      <button onclick="smSet(5)">5</button>
+      <button onclick="smSet(6)">6</button>
+      <button onclick="smSet(7)">7</button>
+      <button onclick="smSet(8)">8</button>
+      <button onclick="smSet(9)">9</button>
+      <button onclick="smSet(10)">10</button>
+      <button class="sm-clear" onclick="smSet(null)">✕</button>
+      <button class="sm-close" onclick="smClose()">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ ADMIN ════ -->
+<div class="pg" id="pg-admin">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+  <!-- Login screen -->
+  <div id="admin-login">
+    <div class="adm-card">
+      <div class="adm-card-hdr">⚙ Admin · Acceso</div>
+      <div class="adm-card-body">
+        <label class="adm-label">Clave de Administrador</label>
+        <input type="password" id="adm-key-input" class="adm-input" placeholder="Ingresá tu clave" autocomplete="off">
+        <button class="adm-btn-primary" onclick="adminLogin()" style="margin-top:14px;">Ingresar</button>
+        <div id="adm-login-error" class="adm-error" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin panel (after login) -->
+  <div id="admin-panel" style="display:none;">
+    <div class="adm-tabs">
+      <button class="adm-tab on" onclick="admTab('crear', this)">Crear Fecha</button>
+      <button class="adm-tab" onclick="admTab('matches', this)">Cargar Matches</button>
+      <button class="adm-tab" onclick="adminLogout()" style="margin-left:auto;color:var(--g4);">Salir</button>
+    </div>
+
+    <!-- Crear Fecha -->
+    <div class="adm-section" id="adm-crear">
+      <div class="adm-card">
+        <div class="adm-card-hdr">📅 Crear Nueva Fecha</div>
+        <div class="adm-card-body">
+
+          <div class="adm-row">
+            <div class="adm-field">
+              <label class="adm-label">Número de Fecha</label>
+              <input type="number" id="adm-fecha" class="adm-input" placeholder="3" min="1">
+            </div>
+            <div class="adm-field">
+              <label class="adm-label">Cancha</label>
+              <select id="adm-cancha" class="adm-input">
+                <option value="">Cargando...</option>
+              </select>
+            </div>
+          </div>
+
+          <label class="adm-label">Jugadores que disputan la fecha</label>
+          <div id="adm-jugadores-list" class="adm-jugs">Cargando...</div>
+
+          <label class="adm-label" style="margin-top:14px;">Puntos dobles (Stableford × 2) — opcional</label>
+          <div id="adm-dobles-list" class="adm-jugs">Cargando...</div>
+
+          <button class="adm-btn-primary" onclick="adminCrearFecha()" style="margin-top:18px;">Crear Fecha</button>
+          <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cargar Matches -->
+    <div class="adm-section" id="adm-matches" style="display:none;">
+      <div class="adm-card">
+        <div class="adm-card-hdr">⚔ Cargar Matches</div>
+        <div class="adm-card-body">
+          <label class="adm-label">Fecha</label>
+          <select id="adm-match-fecha" class="adm-input" onchange="loadMatchJugadores()">
+            <option value="">Cargando...</option>
+          </select>
+
+          <label class="adm-label" style="margin-top:14px;">Partidos (jugador A vs jugador B)</label>
+          <div id="adm-matches-list"></div>
+          <button class="adm-btn-secondary" onclick="adminAddMatch()">+ Agregar partido</button>
+
+          <button class="adm-btn-primary" onclick="adminGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
+          <div id="adm-match-msg" class="adm-msg" style="display:none;"></div>
+        </div>
       </div>
     </div>
 
@@ -1461,6 +1726,7 @@ function pg(id,btn){
   if(id==='lb')loadLB();
   if(id==='hist')loadHist();
   if(id==='match')loadMatch();
+  if(id==='mit'){ if(MIT_PLAYER) showMitFechas(); else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; } }
   if(id==='f2')loadF2();
 }
 
@@ -1476,6 +1742,545 @@ setTbHeight();
 window.addEventListener('resize', setTbHeight);
 window.addEventListener('load', function(){ setTbHeight(); setTimeout(setTbHeight,300); setTimeout(setTbHeight,800); });
 document.addEventListener('DOMContentLoaded', setTbHeight);
+
+
+// ══════════ ADMIN ══════════
+const NGT_API = 'https://script.google.com/macros/s/AKfycbw2npRNhtCpXKFl_jYjYPTRCwlrHQFQs5nlFKridU4RTEgsWIulsdfg95fL0IBgjM1W/exec';
+
+let ADMIN_KEY_OK = '';
+let ADM_JUGADORES = [];
+let ADM_CANCHAS = [];
+
+function ngtApiGet(action, params){
+  // JSONP call to API
+  return new Promise(function(resolve, reject){
+    const cbName = 'ngtcb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+    window[cbName] = function(data){
+      delete window[cbName];
+      const s = document.getElementById(cbName);
+      if(s) s.remove();
+      resolve(data);
+    };
+    let url = NGT_API + '?action=' + encodeURIComponent(action) + '&callback=' + cbName;
+    if(params){
+      Object.keys(params).forEach(k => {
+        url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+      });
+    }
+    const s = document.createElement('script');
+    s.id = cbName; s.src = url;
+    s.onerror = function(){ delete window[cbName]; reject(new Error('Network error')); };
+    document.head.appendChild(s);
+  });
+}
+
+function ngtApiPost(payload){
+  // Use form-encoded POST to avoid CORS preflight
+  return fetch(NGT_API, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+  }).then(r => r.json());
+}
+
+function adminLogin(){
+  const key = document.getElementById('adm-key-input').value.trim();
+  const errBox = document.getElementById('adm-login-error');
+  errBox.style.display = 'none';
+  if(!key){
+    errBox.textContent = 'Ingresá la clave';
+    errBox.style.display = 'block';
+    return;
+  }
+  ngtApiGet('loginAdmin', { key: key }).then(r => {
+    if(r.ok){
+      ADMIN_KEY_OK = key;
+      sessionStorage.setItem('ngt_admin_key', key);
+      showAdminPanel();
+    } else {
+      errBox.textContent = 'Clave incorrecta';
+      errBox.style.display = 'block';
+    }
+  }).catch(e => {
+    errBox.textContent = 'Error: ' + e.message;
+    errBox.style.display = 'block';
+  });
+}
+
+function adminLogout(){
+  ADMIN_KEY_OK = '';
+  sessionStorage.removeItem('ngt_admin_key');
+  document.getElementById('admin-panel').style.display = 'none';
+  document.getElementById('admin-login').style.display = 'block';
+  document.getElementById('adm-key-input').value = '';
+}
+
+function showAdminPanel(){
+  document.getElementById('admin-login').style.display = 'none';
+  document.getElementById('admin-panel').style.display = 'block';
+  loadAdminData();
+}
+
+function loadAdminData(){
+  // Load jugadores y canchas
+  Promise.all([ngtApiGet('jugadores'), ngtApiGet('canchas'), ngtApiGet('fechas')]).then(function(results){
+    ADM_JUGADORES = (results[0] && results[0].data) || [];
+    ADM_CANCHAS = (results[1] && results[1].data) || [];
+    const fechas = (results[2] && results[2].data) || [];
+
+    // Cancha select
+    const cs = document.getElementById('adm-cancha');
+    cs.innerHTML = '<option value="">Seleccionar cancha...</option>';
+    ADM_CANCHAS.forEach(c => {
+      cs.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>';
+    });
+
+    // Jugadores checkboxes
+    const jl = document.getElementById('adm-jugadores-list');
+    const dl = document.getElementById('adm-dobles-list');
+    let jugHtml = '';
+    let dobHtml = '';
+    ADM_JUGADORES.forEach(j => {
+      const ap = j.nombre.split(' ')[0];
+      const nm = j.nombre.split(' ').slice(1).map(w => w.charAt(0)+w.slice(1).toLowerCase()).join(' ');
+      const lbl = '<span class="ap">' + ap + '</span> ' + nm;
+      jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
+      dobHtml += '<div class="adm-jug-item"><input type="checkbox" id="dob-' + j.matricula + '" value="' + j.matricula + '"><label for="dob-' + j.matricula + '">' + lbl + '</label></div>';
+    });
+    jl.innerHTML = jugHtml;
+    dl.innerHTML = dobHtml;
+
+    // Fechas para matches
+    const mfs = document.getElementById('adm-match-fecha');
+    mfs.innerHTML = '<option value="">Seleccionar fecha...</option>';
+    fechas.forEach(f => {
+      mfs.innerHTML += '<option value="' + f + '">Fecha ' + f + '</option>';
+    });
+  }).catch(e => {
+    console.error('Error loading admin data:', e);
+  });
+}
+
+function adminCrearFecha(){
+  const fechaEl = document.getElementById('adm-fecha');
+  const canchaEl = document.getElementById('adm-cancha');
+  const fecha = fechaEl ? fechaEl.value.trim() : '';
+  const canchaId = canchaEl ? canchaEl.value.trim() : '';
+  const jugadores = [...document.querySelectorAll('#adm-jugadores-list input:checked')].map(i => i.value);
+  const dobles = [...document.querySelectorAll('#adm-dobles-list input:checked')].map(i => i.value);
+
+  console.log('[Crear Fecha] fecha:', fecha, 'cancha:', canchaId, 'jugadores:', jugadores);
+
+  const msg = document.getElementById('adm-crear-msg');
+  msg.style.display = 'none';
+
+  if(!fecha){
+    msg.className = 'adm-msg err';
+    msg.textContent = 'Falta el número de fecha';
+    msg.style.display = 'block';
+    return;
+  }
+  if(!canchaId){
+    msg.className = 'adm-msg err';
+    msg.textContent = 'Falta seleccionar cancha';
+    msg.style.display = 'block';
+    return;
+  }
+  if(!jugadores.length){
+    msg.className = 'adm-msg err';
+    msg.textContent = 'Marcá al menos un jugador';
+    msg.style.display = 'block';
+    return;
+  }
+
+  msg.className = 'adm-msg';
+  msg.textContent = 'Creando...';
+  msg.style.display = 'block';
+
+  ngtApiPost({
+    action: 'crearFecha',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+    canchaId: canchaId,
+    jugadores: jugadores,
+    dobles: dobles,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok';
+      msg.textContent = '✓ Fecha creada — ' + r.added + ' tarjetas agregadas' + (r.skipped > 0 ? ' (' + r.skipped + ' ya existían)' : '');
+      // Reset form
+      document.getElementById('adm-fecha').value = '';
+      document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
+      document.querySelectorAll('#adm-dobles-list input:checked').forEach(i => i.checked = false);
+      // Refresh fechas list
+      setTimeout(loadAdminData, 500);
+    } else {
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r.error || 'Error desconocido');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+function admTab(name, btn){
+  document.querySelectorAll('.adm-tab').forEach(t => t.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('adm-crear').style.display = name === 'crear' ? 'block' : 'none';
+  document.getElementById('adm-matches').style.display = name === 'matches' ? 'block' : 'none';
+}
+
+
+// Cache of players in the currently selected fecha
+let MATCH_FECHA_JUGS = [];
+
+function loadMatchJugadores(){
+  const fecha = document.getElementById('adm-match-fecha').value;
+  const list = document.getElementById('adm-matches-list');
+  list.innerHTML = '';
+  if(!fecha){ MATCH_FECHA_JUGS = []; return; }
+  ngtApiGet('jugadoresEnFecha', { fecha: fecha }).then(r => {
+    if(r.ok){
+      MATCH_FECHA_JUGS = r.data || [];
+    }
+  });
+}
+
+function fmtNameForAdm(full){
+  const COMPOUND = ['LAVALLE COBO','MARTINEZ FANO','RODRIGUEZ NAZAR','DE SAINT LEGER'];
+  const n = (full || '').trim();
+  const up = n.toUpperCase();
+  const comp = COMPOUND.find(c => up.startsWith(c));
+  let ap, nm;
+  if(comp){
+    ap = comp;
+    const rest = n.slice(comp.length).trim();
+    nm = rest ? rest.charAt(0).toUpperCase() + rest.slice(1).toLowerCase() : '';
+  } else {
+    const parts = n.split(' ');
+    ap = (parts[0]||'').toUpperCase();
+    nm = parts.slice(1).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  }
+  return ap + (nm ? ' ' + nm : '');
+}
+
+function adminAddMatch(){
+  const list = document.getElementById('adm-matches-list');
+  if(!MATCH_FECHA_JUGS.length){
+    alert('Primero seleccioná una fecha con jugadores cargados');
+    return;
+  }
+  const opts = MATCH_FECHA_JUGS.map(j =>
+    '<option value="' + j.matricula + '">' + fmtNameForAdm(j.nombre) + '</option>'
+  ).join('');
+  const row = document.createElement('div');
+  row.className = 'adm-match-row';
+  row.innerHTML =
+    '<select class="adm-m-j1"><option value="">Jugador A</option>' + opts + '</select>' +
+    '<span class="vs">VS</span>' +
+    '<select class="adm-m-j2"><option value="">Jugador B</option>' + opts + '</select>' +
+    '<button class="adm-match-rm" onclick="this.parentElement.remove()" title="Quitar">✕</button>';
+  list.appendChild(row);
+}
+
+function adminGuardarMatches(){
+  const fecha = document.getElementById('adm-match-fecha').value;
+  const msg = document.getElementById('adm-match-msg');
+  msg.style.display = 'none';
+
+  if(!fecha){
+    msg.className = 'adm-msg err';
+    msg.textContent = 'Seleccioná una fecha';
+    msg.style.display = 'block';
+    return;
+  }
+
+  const matches = [];
+  document.querySelectorAll('#adm-matches-list .adm-match-row').forEach(row => {
+    const j1 = row.querySelector('.adm-m-j1').value;
+    const j2 = row.querySelector('.adm-m-j2').value;
+    if(j1 && j2 && j1 !== j2){
+      matches.push({ j1: j1, j2: j2 });
+    }
+  });
+
+  if(!matches.length){
+    msg.className = 'adm-msg err';
+    msg.textContent = 'Agregá al menos un partido válido';
+    msg.style.display = 'block';
+    return;
+  }
+
+  msg.className = 'adm-msg';
+  msg.textContent = 'Guardando...';
+  msg.style.display = 'block';
+
+  ngtApiPost({
+    action: 'cargarMatches',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+    matches: matches,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok';
+      msg.textContent = '✓ ' + r.count + ' matches guardados';
+      document.getElementById('adm-matches-list').innerHTML = '';
+    } else {
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+// Auto-login si hay sesión guardada
+window.addEventListener('load', function(){
+  const saved = sessionStorage.getItem('ngt_admin_key');
+  if(saved){
+    ngtApiGet('loginAdmin', { key: saved }).then(r => {
+      if(r.ok){
+        ADMIN_KEY_OK = saved;
+        showAdminPanel();
+      } else {
+        sessionStorage.removeItem('ngt_admin_key');
+      }
+    });
+  }
+});
+
+
+
+// ══════════ MI TARJETA ══════════
+let MIT_PLAYER = null;
+let MIT_FECHA = null;         // current fecha being edited
+let MIT_CANCHA = null;        // cancha info (with pares)
+let MIT_SCORES = [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null];
+let MIT_CUR_HOLE = 0;         // hole currently in modal (0-indexed)
+
+function mitLogin(){
+  const mat = document.getElementById('mit-mat-input').value.trim();
+  const errBox = document.getElementById('mit-login-error');
+  errBox.style.display = 'none';
+  if(!mat){
+    errBox.textContent = 'Ingresá tu matrícula';
+    errBox.style.display = 'block';
+    return;
+  }
+  ngtApiGet('login', { matricula: mat }).then(r => {
+    if(r.ok && r.player){
+      MIT_PLAYER = r.player;
+      sessionStorage.setItem('ngt_player_mat', mat);
+      showMitFechas();
+    } else {
+      errBox.textContent = 'Matrícula no encontrada';
+      errBox.style.display = 'block';
+    }
+  }).catch(e => {
+    errBox.textContent = 'Error: ' + e.message;
+    errBox.style.display = 'block';
+  });
+}
+
+function mitLogout(){
+  MIT_PLAYER = null;
+  sessionStorage.removeItem('ngt_player_mat');
+  document.getElementById('mit-login').style.display = 'block';
+  document.getElementById('mit-fechas').style.display = 'none';
+  document.getElementById('mit-score').style.display = 'none';
+  document.getElementById('mit-mat-input').value = '';
+}
+
+function showMitFechas(){
+  document.getElementById('mit-login').style.display = 'none';
+  document.getElementById('mit-score').style.display = 'none';
+  document.getElementById('mit-fechas').style.display = 'block';
+
+  document.getElementById('mit-greeting').textContent = '👤 ' + fmtNameForAdm(MIT_PLAYER.nombre);
+  document.getElementById('mit-fechas-list').innerHTML = 'Cargando...';
+
+  ngtApiGet('misFechas', { matricula: MIT_PLAYER.matricula }).then(r => {
+    const fechas = (r && r.data) || [];
+    const list = document.getElementById('mit-fechas-list');
+    if(!fechas.length){
+      list.innerHTML = '<div class="s dim" style="text-align:center;padding:24px;">No tenés fechas cargadas todavía</div>';
+      return;
+    }
+    let html = '';
+    fechas.forEach(f => {
+      const hasScore = f.hcp && f.hcp !== '';
+      const stat = hasScore ? '✓ HCP cargado: ' + f.hcp : '• Pendiente de cargar';
+      html += '<div class="mit-fecha-card" onclick="openMitScore(\''+f.fecha+'\', \''+(f.cancha||'').replace(/\'/g,"\\\'")+'\')">' +
+        '<div class="mit-fecha-num">F' + f.fecha + '</div>' +
+        '<div class="mit-fecha-info">' +
+          '<div class="mit-fecha-cancha">' + (f.cancha || 'Sin cancha') + '</div>' +
+          '<div class="mit-fecha-stat">' + stat + '</div>' +
+        '</div>' +
+        '<div class="mit-fecha-arrow">›</div>' +
+      '</div>';
+    });
+    list.innerHTML = html;
+  });
+}
+
+function openMitScore(fecha, cancha){
+  MIT_FECHA = fecha;
+  document.getElementById('mit-fechas').style.display = 'none';
+  document.getElementById('mit-score').style.display = 'block';
+  document.getElementById('mit-score-title').textContent = 'Fecha ' + fecha + ' · ' + cancha;
+  document.getElementById('mit-hcp').value = '';
+  document.getElementById('mit-ld').checked = false;
+  document.getElementById('mit-ba').checked = false;
+  MIT_SCORES = [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null];
+
+  // Load cancha pares + existing tarjeta
+  Promise.all([
+    ngtApiGet('canchaPares', { cancha: cancha }),
+    ngtApiGet('tarjeta', { fecha: fecha, matricula: MIT_PLAYER.matricula })
+  ]).then(results => {
+    MIT_CANCHA = (results[0] && results[0].data) || null;
+    const tj = (results[1] && results[1].data) || null;
+    if(tj){
+      if(tj.hcp !== '' && tj.hcp !== null) document.getElementById('mit-hcp').value = tj.hcp;
+      if(tj.ld === 1 || tj.ld === true || tj.ld === '1') document.getElementById('mit-ld').checked = true;
+      if(tj.ba === 1 || tj.ba === true || tj.ba === '1') document.getElementById('mit-ba').checked = true;
+      if(Array.isArray(tj.scores)){
+        for(let i = 0; i < 18; i++){
+          const v = tj.scores[i];
+          if(v !== '' && v !== null && v !== undefined) MIT_SCORES[i] = parseInt(v) || null;
+        }
+      }
+    }
+    renderHolesGrid();
+  });
+}
+
+function mitBackToFechas(){
+  showMitFechas();
+}
+
+function renderHolesGrid(){
+  const grid = document.getElementById('mit-holes');
+  const pares = (MIT_CANCHA && MIT_CANCHA.pares) || [];
+  let html = '';
+  for(let h = 0; h < 18; h++){
+    const score = MIT_SCORES[h];
+    const par = pares[h];
+    let cls = 'hole-circle';
+    if(score !== null){
+      cls += ' filled';
+      if(par){
+        const diff = score - par;
+        if(diff <= -2) cls += ' eagle';
+        else if(diff === -1) cls += ' birdie';
+        else if(diff === 0) cls += ' par';
+        else if(diff === 1) cls += ' bogey';
+        else cls += ' double';
+      }
+    }
+    html += '<div class="hole-cell">' +
+      '<span class="hole-num">Hoyo ' + (h+1) + '</span>' +
+      '<div class="' + cls + '" onclick="openScoreModal(' + h + ')">' +
+        (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
+        (score !== null ? '<span class="hole-score">' + score + '</span>' : '') +
+      '</div>' +
+    '</div>';
+  }
+  grid.innerHTML = html;
+}
+
+// Score modal
+function openScoreModal(hole){
+  MIT_CUR_HOLE = hole;
+  const pares = (MIT_CANCHA && MIT_CANCHA.pares) || [];
+  const par = pares[hole];
+  document.getElementById('sm-hoyo').textContent = 'Hoyo ' + (hole+1);
+  document.getElementById('sm-par').textContent = par ? 'Par ' + par : '';
+  document.getElementById('sm-big').textContent = MIT_SCORES[hole] !== null ? MIT_SCORES[hole] : '–';
+  document.getElementById('score-modal').style.display = 'flex';
+}
+
+function smSet(v){
+  MIT_SCORES[MIT_CUR_HOLE] = v;
+  document.getElementById('sm-big').textContent = v !== null ? v : '–';
+  renderHolesGrid();
+}
+
+function smClose(e){
+  if(e && e.target && e.target.id !== 'score-modal' && !e.target.classList.contains('sm-close')) return;
+  document.getElementById('score-modal').style.display = 'none';
+}
+
+function mitGuardar(){
+  const hcp = document.getElementById('mit-hcp').value.trim();
+  const ld = document.getElementById('mit-ld').checked ? 1 : 0;
+  const ba = document.getElementById('mit-ba').checked ? 1 : 0;
+
+  const msg = document.getElementById('mit-save-msg');
+  msg.style.display = 'none';
+
+  if(!hcp){
+    msg.className = 'adm-msg err';
+    msg.textContent = 'Ingresá tu HCP de juego';
+    msg.style.display = 'block';
+    return;
+  }
+
+  // Convert nulls to '' so the backend doesn't overwrite with junk
+  const scores = MIT_SCORES.map(s => s === null ? '' : s);
+
+  msg.className = 'adm-msg';
+  msg.textContent = 'Guardando...';
+  msg.style.display = 'block';
+
+  ngtApiPost({
+    action: 'cargarTarjeta',
+    matricula: MIT_PLAYER.matricula,
+    fecha: MIT_FECHA,
+    hcp: hcp,
+    scores: scores,
+    ld: ld,
+    ba: ba,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok';
+      msg.textContent = '✓ Tarjeta guardada';
+    } else {
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+// Allow Enter in matricula input to log in
+document.addEventListener('DOMContentLoaded', function(){
+  const mitInp = document.getElementById('mit-mat-input');
+  if(mitInp){
+    mitInp.addEventListener('keypress', function(e){
+      if(e.key === 'Enter') mitLogin();
+    });
+  }
+});
+
+// Auto-login player if session saved
+window.addEventListener('load', function(){
+  const savedMat = sessionStorage.getItem('ngt_player_mat');
+  if(savedMat){
+    ngtApiGet('login', { matricula: savedMat }).then(r => {
+      if(r.ok && r.player){
+        MIT_PLAYER = r.player;
+      } else {
+        sessionStorage.removeItem('ngt_player_mat');
+      }
+    });
+  }
+});
+
 loadLB();
 </script>
 </body>
