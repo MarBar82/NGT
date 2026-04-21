@@ -445,23 +445,36 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .mit-fecha-stat{font-size:11px;color:var(--g4);font-family:'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;margin-top:2px;}
 .mit-fecha-arrow{color:var(--g3);font-size:20px;}
 
-/* 18 Holes grid */
-.holes-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:4px 0;}
+/* 9 Holes grid (Ida/Vuelta split) */
+.holes-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:6px;padding:4px 0;}
 @media(max-width:680px){
-  .holes-grid{grid-template-columns:repeat(4,1fr);gap:6px;}
+  .holes-grid{grid-template-columns:repeat(5,1fr);gap:4px;}
 }
+.nine-title{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--navy);margin-top:14px;margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid var(--red);}
+.nine-total{display:flex;justify-content:space-between;align-items:center;background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;padding:8px 14px;border-radius:3px;margin-top:8px;}
+.nine-total span{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
+.nine-total-val{font-size:20px !important;font-weight:800;color:var(--gold) !important;letter-spacing:0 !important;}
+
+/* Summary box */
+.mit-summary{background:var(--off);border:var(--border);border-radius:3px;padding:14px 18px;margin-top:18px;}
+.mit-sum-row{display:flex;justify-content:space-between;align-items:center;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--g4);letter-spacing:.06em;text-transform:uppercase;padding:6px 0;border-bottom:1px solid var(--g2);}
+.mit-sum-row:last-child{border-bottom:none;}
+.mit-sum-val{font-size:20px;color:var(--navy);font-weight:800;letter-spacing:0;text-transform:none;}
+.mit-sum-net{margin-top:4px;padding-top:10px;border-top:2px solid var(--g3) !important;}
+.mit-sum-net span:first-child{color:var(--red);font-size:14px;font-weight:800;}
+.mit-sum-net .mit-sum-val{font-size:28px;color:var(--red);}
 .hole-cell{display:flex;flex-direction:column;align-items:center;gap:3px;}
 .hole-num{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--g4);text-transform:uppercase;}
 .hole-circle{
-  width:56px;height:56px;border-radius:50%;
+  width:48px;height:48px;border-radius:50%;
   background:var(--white);border:2px solid var(--g2);
   display:flex;align-items:center;justify-content:center;
   position:relative;cursor:pointer;transition:.12s;
   font-family:'Barlow Condensed',sans-serif;
 }
 .hole-circle:hover{border-color:var(--navy);transform:scale(1.05);}
-.hole-par-bg{position:absolute;font-size:32px;font-weight:800;color:rgba(0,35,75,.12);pointer-events:none;line-height:1;}
-.hole-score{position:relative;z-index:2;font-size:24px;font-weight:800;color:var(--navy);line-height:1;}
+.hole-par-bg{position:absolute;font-size:26px;font-weight:800;color:rgba(0,35,75,.12);pointer-events:none;line-height:1;}
+.hole-score{position:relative;z-index:2;font-size:20px;font-weight:800;color:var(--navy);line-height:1;}
 .hole-circle.filled{border-color:var(--navy);background:var(--off);}
 .hole-circle.eagle{background:#fef3c7;border-color:#c9a84c;}  /* 2 under par */
 .hole-circle.birdie{background:#e8f5e9;border-color:#16a34a;}  /* under par */
@@ -474,18 +487,33 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .mit-bonus-chk{display:flex;align-items:center;gap:10px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;color:var(--navy);}
 .mit-bonus-chk input{transform:scale(1.2);}
 
-/* Score modal */
+/* Score modal — telephone-style keypad */
 .sm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;}
-.sm-box{background:var(--white);border-radius:6px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:340px;width:100%;overflow:hidden;}
+.sm-box{background:var(--white);border-radius:6px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:320px;width:100%;overflow:hidden;}
 .sm-hdr{background:var(--navy);color:#fff;padding:14px 18px;text-align:center;border-bottom:3px solid var(--red);}
 .sm-hoyo{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;letter-spacing:.06em;}
 .sm-par{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-top:2px;}
 .sm-big{text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:56px;font-weight:800;color:var(--navy);padding:14px 0;}
-.sm-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px;}
-.sm-nums button{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;color:var(--navy);background:var(--off);border:1px solid var(--g2);border-radius:4px;padding:12px;cursor:pointer;transition:.1s;}
-.sm-nums button:hover{background:var(--navy);color:#fff;}
-.sm-nums button.sm-clear{background:#fee;color:var(--red);}
-.sm-nums button.sm-close{background:var(--red);color:#fff;grid-column:span 2;}
+.sm-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:12px;}
+.sm-keypad button{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--navy);background:var(--off);border:1px solid var(--g2);border-radius:6px;padding:16px 8px;cursor:pointer;transition:.1s;min-height:54px;}
+.sm-keypad button:hover{background:var(--navy);color:#fff;}
+.sm-keypad button.sm-clear{background:#fee;color:var(--red);}
+.sm-keypad button.sm-more{background:var(--red);color:#fff;font-size:16px;}
+.sm-keypad button.sm-more:hover{background:#a30c25;}
+
+/* Confirm modal */
+.confirm-box{max-width:360px;}
+.confirm-body{padding:18px;}
+.confirm-text{text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:16px;color:var(--navy);font-weight:600;margin-bottom:14px;}
+.confirm-stats{background:var(--off);border-radius:4px;padding:10px 14px;}
+.confirm-stats .mit-sum-row{padding:4px 0;}
+.confirm-warn{text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;color:var(--g4);margin-top:14px;font-style:italic;}
+.confirm-actions{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--g2);}
+.confirm-cancel,.confirm-ok{padding:14px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;border:none;cursor:pointer;}
+.confirm-cancel{background:var(--white);color:var(--g4);}
+.confirm-cancel:hover{background:var(--off);color:var(--navy);}
+.confirm-ok{background:var(--red);color:#fff;}
+.confirm-ok:hover{background:#a30c25;}
 </style>
 </head>
 <body>
@@ -720,12 +748,19 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
         <div class="adm-row" style="margin-bottom:16px;">
           <div class="adm-field">
             <label class="adm-label">HCP de juego</label>
-            <input type="number" id="mit-hcp" class="adm-input" min="0" max="54" placeholder="Tu hcp">
+            <input type="number" id="mit-hcp" class="adm-input" min="0" max="54" placeholder="Tu hcp" oninput="updateSummary()">
           </div>
         </div>
 
         <label class="adm-label">Scores por Hoyo — tocá un círculo para anotar</label>
-        <div class="holes-grid" id="mit-holes"></div>
+
+        <div class="nine-title">IDA · Hoyos 1-9</div>
+        <div class="holes-grid" id="mit-holes-ida"></div>
+        <div class="nine-total"><span>Total IDA</span><span class="nine-total-val" id="total-ida">–</span></div>
+
+        <div class="nine-title">VUELTA · Hoyos 10-18</div>
+        <div class="holes-grid" id="mit-holes-vta"></div>
+        <div class="nine-total"><span>Total VUELTA</span><span class="nine-total-val" id="total-vta">–</span></div>
 
         <div class="mit-bonus">
           <label class="mit-bonus-chk">
@@ -734,9 +769,18 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
           <label class="mit-bonus-chk">
             <input type="checkbox" id="mit-ba"><span>🎯 Gané el Best Approach</span>
           </label>
+          <label class="mit-bonus-chk" id="mit-doble-wrap" style="display:none;">
+            <input type="checkbox" id="mit-doble"><span>✨ Usar puntos dobles esta fecha</span>
+          </label>
         </div>
 
-        <button class="adm-btn-primary" onclick="mitGuardar()" style="margin-top:18px;">Guardar Tarjeta</button>
+        <div class="mit-summary">
+          <div class="mit-sum-row"><span>GROSS</span><span class="mit-sum-val" id="sum-gross">–</span></div>
+          <div class="mit-sum-row"><span>HCP de juego</span><span class="mit-sum-val" id="sum-hcp">–</span></div>
+          <div class="mit-sum-row mit-sum-net"><span>NETO</span><span class="mit-sum-val" id="sum-neto">–</span></div>
+        </div>
+
+        <button class="adm-btn-primary" onclick="mitFirmarTarjeta()" style="margin-top:18px;">✍ Firmar Tarjeta</button>
         <div id="mit-save-msg" class="adm-msg" style="display:none;"></div>
       </div>
     </div>
@@ -753,19 +797,56 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
       <div class="sm-par" id="sm-par">Par 4</div>
     </div>
     <div class="sm-big" id="sm-big">–</div>
-    <div class="sm-nums">
-      <button onclick="smSet(1)">1</button>
-      <button onclick="smSet(2)">2</button>
-      <button onclick="smSet(3)">3</button>
-      <button onclick="smSet(4)">4</button>
-      <button onclick="smSet(5)">5</button>
-      <button onclick="smSet(6)">6</button>
-      <button onclick="smSet(7)">7</button>
-      <button onclick="smSet(8)">8</button>
-      <button onclick="smSet(9)">9</button>
-      <button onclick="smSet(10)">10</button>
-      <button class="sm-clear" onclick="smSet(null)">✕</button>
-      <button class="sm-close" onclick="smClose()">OK</button>
+    <div class="sm-keypad" id="sm-keypad-low">
+      <button onclick="smSetAndClose(1)">1</button>
+      <button onclick="smSetAndClose(2)">2</button>
+      <button onclick="smSetAndClose(3)">3</button>
+      <button onclick="smSetAndClose(4)">4</button>
+      <button onclick="smSetAndClose(5)">5</button>
+      <button onclick="smSetAndClose(6)">6</button>
+      <button onclick="smSetAndClose(7)">7</button>
+      <button onclick="smSetAndClose(8)">8</button>
+      <button onclick="smSetAndClose(9)">9</button>
+      <button class="sm-clear" onclick="smClear()">✕</button>
+      <button onclick="smSetAndClose(0)">0</button>
+      <button class="sm-more" onclick="smShowHigh()">10+</button>
+    </div>
+    <div class="sm-keypad" id="sm-keypad-high" style="display:none;">
+      <button onclick="smSetAndClose(10)">10</button>
+      <button onclick="smSetAndClose(11)">11</button>
+      <button onclick="smSetAndClose(12)">12</button>
+      <button onclick="smSetAndClose(13)">13</button>
+      <button onclick="smSetAndClose(14)">14</button>
+      <button onclick="smSetAndClose(15)">15</button>
+      <button onclick="smSetAndClose(16)">16</button>
+      <button onclick="smSetAndClose(17)">17</button>
+      <button onclick="smSetAndClose(18)">18</button>
+      <button onclick="smSetAndClose(19)">19</button>
+      <button onclick="smSetAndClose(20)">20</button>
+      <button class="sm-more" onclick="smShowLow()">‹ 1-9</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Confirm Firmar Tarjeta modal -->
+<div id="confirm-modal" class="sm-overlay" style="display:none;" onclick="confirmClose(event)">
+  <div class="sm-box confirm-box" onclick="event.stopPropagation()">
+    <div class="sm-hdr">
+      <div class="sm-hoyo">✍ Firmar Tarjeta</div>
+    </div>
+    <div class="confirm-body">
+      <p class="confirm-text">¿Confirmás los siguientes datos?</p>
+      <div class="confirm-stats">
+        <div class="mit-sum-row"><span>Gross</span><span class="mit-sum-val" id="cfm-gross">–</span></div>
+        <div class="mit-sum-row"><span>HCP</span><span class="mit-sum-val" id="cfm-hcp">–</span></div>
+        <div class="mit-sum-row mit-sum-net"><span>NETO</span><span class="mit-sum-val" id="cfm-neto">–</span></div>
+      </div>
+      <div class="confirm-warn">Una vez firmada, solo el admin puede modificar.</div>
+    </div>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" onclick="confirmClose()">Cancelar</button>
+      <button class="confirm-ok" onclick="mitGuardar()">✍ Firmar</button>
     </div>
   </div>
 </div>
@@ -2133,15 +2214,24 @@ function openMitScore(fecha, cancha){
   document.getElementById('mit-hcp').value = '';
   document.getElementById('mit-ld').checked = false;
   document.getElementById('mit-ba').checked = false;
+  document.getElementById('mit-doble').checked = false;
+  document.getElementById('mit-doble-wrap').style.display = 'none';
   MIT_SCORES = [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null];
 
-  // Load cancha pares + existing tarjeta
+  // Load cancha pares + existing tarjeta + doble availability
   Promise.all([
     ngtApiGet('canchaPares', { cancha: cancha }),
-    ngtApiGet('tarjeta', { fecha: fecha, matricula: MIT_PLAYER.matricula })
+    ngtApiGet('tarjeta', { fecha: fecha, matricula: MIT_PLAYER.matricula }),
+    ngtApiGet('dobleDisponible', { matricula: MIT_PLAYER.matricula })
   ]).then(results => {
     MIT_CANCHA = (results[0] && results[0].data) || null;
     const tj = (results[1] && results[1].data) || null;
+    const dob = (results[2] && results[2].data) || {};
+
+    if(dob.tieneDoble){
+      document.getElementById('mit-doble-wrap').style.display = 'flex';
+    }
+
     if(tj){
       if(tj.hcp !== '' && tj.hcp !== null) document.getElementById('mit-hcp').value = tj.hcp;
       if(tj.ld === 1 || tj.ld === true || tj.ld === '1') document.getElementById('mit-ld').checked = true;
@@ -2161,34 +2251,68 @@ function mitBackToFechas(){
   showMitFechas();
 }
 
-function renderHolesGrid(){
-  const grid = document.getElementById('mit-holes');
+function renderHoleHtml(h){
   const pares = (MIT_CANCHA && MIT_CANCHA.pares) || [];
-  let html = '';
-  for(let h = 0; h < 18; h++){
-    const score = MIT_SCORES[h];
-    const par = pares[h];
-    let cls = 'hole-circle';
-    if(score !== null){
-      cls += ' filled';
-      if(par){
-        const diff = score - par;
-        if(diff <= -2) cls += ' eagle';
-        else if(diff === -1) cls += ' birdie';
-        else if(diff === 0) cls += ' par';
-        else if(diff === 1) cls += ' bogey';
-        else cls += ' double';
-      }
+  const score = MIT_SCORES[h];
+  const par = pares[h];
+  let cls = 'hole-circle';
+  if(score !== null){
+    cls += ' filled';
+    if(par){
+      const diff = score - par;
+      if(diff <= -2) cls += ' eagle';
+      else if(diff === -1) cls += ' birdie';
+      else if(diff === 0) cls += ' par';
+      else if(diff === 1) cls += ' bogey';
+      else cls += ' double';
     }
-    html += '<div class="hole-cell">' +
-      '<span class="hole-num">Hoyo ' + (h+1) + '</span>' +
-      '<div class="' + cls + '" onclick="openScoreModal(' + h + ')">' +
-        (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
-        (score !== null ? '<span class="hole-score">' + score + '</span>' : '') +
-      '</div>' +
-    '</div>';
   }
-  grid.innerHTML = html;
+  return '<div class="hole-cell">' +
+    '<span class="hole-num">H ' + (h+1) + '</span>' +
+    '<div class="' + cls + '" onclick="openScoreModal(' + h + ')">' +
+      (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
+      (score !== null ? '<span class="hole-score">' + score + '</span>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+function renderHolesGrid(){
+  // Ida: holes 0-8
+  let idaHtml = '';
+  for(let h = 0; h < 9; h++) idaHtml += renderHoleHtml(h);
+  document.getElementById('mit-holes-ida').innerHTML = idaHtml;
+
+  // Vuelta: holes 9-17
+  let vtaHtml = '';
+  for(let h = 9; h < 18; h++) vtaHtml += renderHoleHtml(h);
+  document.getElementById('mit-holes-vta').innerHTML = vtaHtml;
+
+  updateSummary();
+}
+
+function sumScores(from, to){
+  let s = 0, hasAny = false;
+  for(let i = from; i < to; i++){
+    if(MIT_SCORES[i] !== null && MIT_SCORES[i] !== undefined){
+      s += MIT_SCORES[i];
+      hasAny = true;
+    }
+  }
+  return hasAny ? s : null;
+}
+
+function updateSummary(){
+  const ida = sumScores(0, 9);
+  const vta = sumScores(9, 18);
+  const gross = (ida !== null && vta !== null) ? (ida + vta) : null;
+  const hcp = parseInt(document.getElementById('mit-hcp').value) || 0;
+  const neto = gross !== null ? gross - hcp : null;
+
+  document.getElementById('total-ida').textContent = ida !== null ? ida : '–';
+  document.getElementById('total-vta').textContent = vta !== null ? vta : '–';
+  document.getElementById('sum-gross').textContent = gross !== null ? gross : '–';
+  document.getElementById('sum-hcp').textContent = document.getElementById('mit-hcp').value || '–';
+  document.getElementById('sum-neto').textContent = neto !== null ? neto : '–';
 }
 
 // Score modal
@@ -2199,25 +2323,44 @@ function openScoreModal(hole){
   document.getElementById('sm-hoyo').textContent = 'Hoyo ' + (hole+1);
   document.getElementById('sm-par').textContent = par ? 'Par ' + par : '';
   document.getElementById('sm-big').textContent = MIT_SCORES[hole] !== null ? MIT_SCORES[hole] : '–';
+  document.getElementById('sm-keypad-low').style.display = 'grid';
+  document.getElementById('sm-keypad-high').style.display = 'none';
   document.getElementById('score-modal').style.display = 'flex';
 }
 
-function smSet(v){
+function smSetAndClose(v){
   MIT_SCORES[MIT_CUR_HOLE] = v;
-  document.getElementById('sm-big').textContent = v !== null ? v : '–';
+  document.getElementById('sm-big').textContent = v;
   renderHolesGrid();
+  // Small delay so user sees the value briefly before modal closes
+  setTimeout(function(){ smClose(); }, 150);
+}
+
+function smClear(){
+  MIT_SCORES[MIT_CUR_HOLE] = null;
+  document.getElementById('sm-big').textContent = '–';
+  renderHolesGrid();
+  setTimeout(function(){ smClose(); }, 150);
+}
+
+function smShowHigh(){
+  document.getElementById('sm-keypad-low').style.display = 'none';
+  document.getElementById('sm-keypad-high').style.display = 'grid';
+}
+
+function smShowLow(){
+  document.getElementById('sm-keypad-low').style.display = 'grid';
+  document.getElementById('sm-keypad-high').style.display = 'none';
 }
 
 function smClose(e){
-  if(e && e.target && e.target.id !== 'score-modal' && !e.target.classList.contains('sm-close')) return;
+  if(e && e.target && e.target.id !== 'score-modal') return;
   document.getElementById('score-modal').style.display = 'none';
 }
 
-function mitGuardar(){
+// Confirm modal
+function mitFirmarTarjeta(){
   const hcp = document.getElementById('mit-hcp').value.trim();
-  const ld = document.getElementById('mit-ld').checked ? 1 : 0;
-  const ba = document.getElementById('mit-ba').checked ? 1 : 0;
-
   const msg = document.getElementById('mit-save-msg');
   msg.style.display = 'none';
 
@@ -2228,12 +2371,43 @@ function mitGuardar(){
     return;
   }
 
-  // Convert nulls to '' so the backend doesn't overwrite with junk
-  const scores = MIT_SCORES.map(s => s === null ? '' : s);
+  const ida = sumScores(0, 9);
+  const vta = sumScores(9, 18);
+  if(ida === null || vta === null){
+    msg.className = 'adm-msg err';
+    msg.textContent = 'Tenés hoyos sin cargar — completá los 18';
+    msg.style.display = 'block';
+    return;
+  }
 
+  const gross = ida + vta;
+  const neto = gross - (parseInt(hcp) || 0);
+  document.getElementById('cfm-gross').textContent = gross;
+  document.getElementById('cfm-hcp').textContent = hcp;
+  document.getElementById('cfm-neto').textContent = neto;
+  document.getElementById('confirm-modal').style.display = 'flex';
+}
+
+function confirmClose(e){
+  if(e && e.target && e.target.id !== 'confirm-modal') return;
+  document.getElementById('confirm-modal').style.display = 'none';
+}
+
+function mitGuardar(){
+  // Called from the confirm modal OK
+  const hcp = document.getElementById('mit-hcp').value.trim();
+  const ld = document.getElementById('mit-ld').checked ? 1 : 0;
+  const ba = document.getElementById('mit-ba').checked ? 1 : 0;
+  const doble = document.getElementById('mit-doble').checked ? 1 : 0;
+
+  document.getElementById('confirm-modal').style.display = 'none';
+
+  const msg = document.getElementById('mit-save-msg');
   msg.className = 'adm-msg';
   msg.textContent = 'Guardando...';
   msg.style.display = 'block';
+
+  const scores = MIT_SCORES.map(s => s === null ? '' : s);
 
   ngtApiPost({
     action: 'cargarTarjeta',
@@ -2243,10 +2417,13 @@ function mitGuardar(){
     scores: scores,
     ld: ld,
     ba: ba,
+    usarDoble: doble,
   }).then(r => {
     if(r.ok){
       msg.className = 'adm-msg ok';
-      msg.textContent = '✓ Tarjeta guardada';
+      let txt = '✓ Tarjeta firmada y guardada';
+      if(r.dobleMsg) txt += ' — ' + r.dobleMsg;
+      msg.textContent = txt;
     } else {
       msg.className = 'adm-msg err';
       msg.textContent = '✗ ' + (r.error || 'Error');
