@@ -2223,21 +2223,48 @@ function loadFechaParaEditar(){
   const form = document.getElementById('adm-edit-form');
   if(!fecha){ form.style.display = 'none'; return; }
 
-  // Get fecha detail
-  ngtApiGet('fechaDetalle', { fecha: fecha }).then(r => {
-    const det = (r && r.data) || {};
+  // Show a loading hint in the form
+  document.getElementById('adm-edit-jugs').innerHTML = 'Cargando...';
+  document.getElementById('adm-edit-dobles').innerHTML = 'Cargando...';
+  form.style.display = 'block';
+
+  // Fetch EVERYTHING needed fresh — don't rely on cached globals
+  Promise.all([
+    ngtApiGet('fechaDetalle', { fecha: fecha }),
+    ngtApiGet('jugadores'),
+    ngtApiGet('canchas'),
+    ngtApiGet('jugadoresConDoble'),
+  ]).then(results => {
+    const det = (results[0] && results[0].data) || {};
+    const jugadores = (results[1] && results[1].data) || [];
+    const canchas = (results[2] && results[2].data) || [];
+    const disponibles = (results[3] && results[3].data) || [];
+
+    ADM_JUGADORES = jugadores;
+    ADM_CANCHAS = canchas;
+    window.ADM_DOBLES_DISP = disponibles;
+
+    console.log('[Editar Fecha] detalle:', det);
+    console.log('[Editar Fecha] jugadores in fecha:', det.jugadores);
+    console.log('[Editar Fecha] dobles in fecha:', det.dobles);
+
     const curMatriculas = (det.jugadores || []).map(j => String(j.matricula));
     const curDobles = (det.dobles || []).map(String);
     const curCancha = det.cancha || '';
 
-    // Set cancha select — try to match by name to ID
-    const canchaMatch = ADM_CANCHAS.find(c => c.nombre === curCancha);
-    document.getElementById('adm-edit-cancha').value = canchaMatch ? canchaMatch.id : '';
+    // Populate cancha select
+    const cs = document.getElementById('adm-edit-cancha');
+    let canchaOpts = '<option value="">Seleccionar...</option>';
+    canchas.forEach(c => {
+      const sel = c.nombre === curCancha ? 'selected' : '';
+      canchaOpts += '<option value="' + c.id + '" ' + sel + '>' + c.nombre + '</option>';
+    });
+    cs.innerHTML = canchaOpts;
 
-    // Render jugadores checkboxes with current selection
+    // Render jugadores checkboxes with current selection checked
     const jl = document.getElementById('adm-edit-jugs');
     let jugHtml = '';
-    ADM_JUGADORES.forEach(j => {
+    jugadores.forEach(j => {
       const checked = curMatriculas.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
       const lbl = formatPlayerLabel(j.nombre);
       jugHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-jug" value="' + j.matricula + '" id="ejug-' + j.matricula + '" ' + checked + '><label for="ejug-' + j.matricula + '">' + lbl + '</label></div>';
@@ -2245,15 +2272,13 @@ function loadFechaParaEditar(){
     jl.innerHTML = jugHtml;
 
     // Render dobles — include anyone currently marked OR who has it available
-    // (so you can uncheck mistakes, plus add new)
     const dl = document.getElementById('adm-edit-dobles');
     let dobHtml = '';
-    const disponibles = window.ADM_DOBLES_DISP || [];
     const eligibleForDoble = new Set([...disponibles.map(String), ...curDobles]);
     if(!eligibleForDoble.size){
       dobHtml = '<div class="s dim" style="padding:10px;">No hay jugadores disponibles para doble</div>';
     } else {
-      ADM_JUGADORES.forEach(j => {
+      jugadores.forEach(j => {
         if(!eligibleForDoble.has(String(j.matricula))) return;
         const checked = curDobles.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
         const lbl = formatPlayerLabel(j.nombre);
@@ -2262,8 +2287,10 @@ function loadFechaParaEditar(){
     }
     dl.innerHTML = dobHtml;
 
-    document.getElementById('adm-edit-form').style.display = 'block';
     document.getElementById('adm-edit-msg').style.display = 'none';
+  }).catch(e => {
+    console.error('Error loadFechaParaEditar:', e);
+    document.getElementById('adm-edit-jugs').innerHTML = '<div class="adm-msg err">Error: ' + e.message + '</div>';
   });
 }
 
