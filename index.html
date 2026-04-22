@@ -872,8 +872,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   <div id="admin-panel" style="display:none;">
     <div class="adm-tabs">
       <button class="adm-tab on" onclick="admTab('crear', this)">Crear Fecha</button>
-      <button class="adm-tab" onclick="admTab('editar', this)">Editar Fecha</button>
-      <button class="adm-tab" onclick="admTab('matches', this)">Cargar Matches</button>
+      <button class="adm-tab" onclick="admTab('editar', this)">Gestionar Fecha</button>
       <button class="adm-tab" onclick="adminLogout()" style="margin-left:auto;color:var(--g4);">Salir</button>
     </div>
 
@@ -909,56 +908,54 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
     </div>
 
 
-    <!-- Editar Fecha -->
+    <!-- Gestionar Fecha (antes: Editar Fecha) -->
     <div class="adm-section" id="adm-editar" style="display:none;">
-      <div class="adm-card">
-        <div class="adm-card-hdr">✏️ Editar Fecha Existente</div>
-        <div class="adm-card-body">
 
-          <label class="adm-label">Seleccionar Fecha</label>
+      <div class="adm-card">
+        <div class="adm-card-hdr">📅 Seleccionar Fecha a Gestionar</div>
+        <div class="adm-card-body">
           <select id="adm-edit-fecha-sel" class="adm-input" onchange="loadFechaParaEditar()">
             <option value="">Seleccionar...</option>
           </select>
-
-          <div id="adm-edit-form" style="display:none;">
-            <div class="adm-row" style="margin-top:14px;">
-              <div class="adm-field">
-                <label class="adm-label">Cancha</label>
-                <select id="adm-edit-cancha" class="adm-input"></select>
-              </div>
-            </div>
-
-            <label class="adm-label">Jugadores que disputan la fecha</label>
-            <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
-
-            <label class="adm-label" style="margin-top:14px;">Puntos dobles (Stableford × 2)</label>
-            <div id="adm-edit-dobles" class="adm-jugs">Cargando...</div>
-
-            <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Cambios</button>
-            <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
-          </div>
         </div>
       </div>
+
+      <!-- DATOS: jugadores / cancha / dobles -->
+      <div class="adm-card" id="adm-edit-data-card" style="display:none;">
+        <div class="adm-card-hdr">👥 Datos de la Fecha</div>
+        <div class="adm-card-body">
+          <div class="adm-row">
+            <div class="adm-field">
+              <label class="adm-label">Cancha</label>
+              <select id="adm-edit-cancha" class="adm-input"></select>
+            </div>
+          </div>
+
+          <label class="adm-label">Jugadores que disputan</label>
+          <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
+
+          <label class="adm-label" style="margin-top:14px;">Puntos dobles (Stableford × 2)</label>
+          <div id="adm-edit-dobles" class="adm-jugs">Cargando...</div>
+
+          <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Datos</button>
+          <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- MATCHES: ver, agregar, borrar, editar -->
+      <div class="adm-card" id="adm-edit-matches-card" style="display:none;">
+        <div class="adm-card-hdr">⚔ Matches de la Fecha</div>
+        <div class="adm-card-body">
+          <div id="adm-mgr-matches-list"></div>
+          <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
+
+          <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
+          <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+
     </div>
 
-    <!-- Cargar Matches -->
-    <div class="adm-section" id="adm-matches" style="display:none;">
-      <div class="adm-card">
-        <div class="adm-card-hdr">⚔ Cargar Matches</div>
-        <div class="adm-card-body">
-          <label class="adm-label">Fecha</label>
-          <select id="adm-match-fecha" class="adm-input" onchange="loadMatchJugadores()">
-            <option value="">Cargando...</option>
-          </select>
-
-          <label class="adm-label" style="margin-top:14px;">Partidos (jugador A vs jugador B)</label>
-          <div id="adm-matches-list"></div>
-          <button class="adm-btn-secondary" onclick="adminAddMatch()">+ Agregar partido</button>
-
-          <button class="adm-btn-primary" onclick="adminGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
-          <div id="adm-match-msg" class="adm-msg" style="display:none;"></div>
-        </div>
-      </div>
     </div>
 
   </div>
@@ -1990,12 +1987,6 @@ function loadAdminData(){
     }
     dl.innerHTML = dobHtml;
 
-    // Fechas para matches
-    const mfs = document.getElementById('adm-match-fecha');
-    mfs.innerHTML = '<option value="">Seleccionar fecha...</option>';
-    fechas.forEach(f => {
-      mfs.innerHTML += '<option value="' + f + '">Fecha ' + f + '</option>';
-    });
   }).catch(e => {
     console.error('Error loading admin data:', e);
   });
@@ -2065,15 +2056,24 @@ function adminCrearFecha(){
   }).then(r => {
     if(r.ok){
       msg.className = 'adm-msg ok';
-      msg.textContent = '✓ Fecha creada — ' + r.added + ' tarjetas agregadas' + (r.skipped > 0 ? ' (' + r.skipped + ' ya existían)' : '');
+      msg.textContent = '✓ Fecha creada — ' + r.added + ' tarjetas agregadas. Ahora cargá los matches.';
+      const createdFecha = fecha;
       // Reset form
       document.getElementById('adm-fecha').value = '';
       document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
       document.querySelectorAll('#adm-dobles-list input:checked').forEach(i => i.checked = false);
-      // Redirect to Leader Board after 1.5s
+      // Switch to Gestionar Fecha tab and preselect this fecha
       setTimeout(function(){
-        const lbBtn = document.querySelector('.subnav .snb');
-        if(lbBtn) pg('lb', lbBtn);
+        const tabs = document.querySelectorAll('.adm-tab');
+        admTab('editar', tabs[1]);
+        // Wait for fechas to populate then select
+        setTimeout(function(){
+          const sel = document.getElementById('adm-edit-fecha-sel');
+          if(sel){
+            sel.value = createdFecha;
+            loadFechaParaEditar();
+          }
+        }, 600);
       }, 1500);
     } else {
       msg.className = 'adm-msg err';
@@ -2087,10 +2087,9 @@ function adminCrearFecha(){
 
 function admTab(name, btn){
   document.querySelectorAll('.adm-tab').forEach(t => t.classList.remove('on'));
-  btn.classList.add('on');
+  if(btn) btn.classList.add('on');
   document.getElementById('adm-crear').style.display = name === 'crear' ? 'block' : 'none';
   document.getElementById('adm-editar').style.display = name === 'editar' ? 'block' : 'none';
-  document.getElementById('adm-matches').style.display = name === 'matches' ? 'block' : 'none';
   if(name === 'editar') populateEditFechaSelect();
 }
 
@@ -2205,6 +2204,126 @@ function adminGuardarMatches(){
 
 
 
+
+
+// ══ GESTIONAR MATCHES (dentro de Gestionar Fecha) ══
+let MGR_FECHA_JUGS = [];
+let MGR_FECHA = null;
+
+function loadMatchesForGestion(fecha){
+  MGR_FECHA = fecha;
+  const msg = document.getElementById('adm-mgr-match-msg');
+  if(msg) msg.style.display = 'none';
+
+  Promise.all([
+    ngtApiGet('jugadoresEnFecha', { fecha: fecha }),
+    ngtApiGet('matchesForFecha', { fecha: fecha }),
+  ]).then(results => {
+    MGR_FECHA_JUGS = (results[0] && results[0].data) || [];
+    const matches = (results[1] && results[1].data) || [];
+    renderMgrMatches(matches);
+  });
+}
+
+function renderMgrMatches(matches){
+  const list = document.getElementById('adm-mgr-matches-list');
+  list.innerHTML = '';
+  if(!matches.length){
+    list.innerHTML = '<div class="s dim" style="padding:10px 0;">No hay matches cargados. Agregá uno con el botón de abajo.</div>';
+    return;
+  }
+  matches.forEach(m => {
+    addMgrMatchRow(m.j1 || '', m.j2 || '');
+  });
+}
+
+function mgrAddMatch(){
+  if(!MGR_FECHA_JUGS.length){
+    alert('Primero seleccioná una fecha con jugadores cargados');
+    return;
+  }
+  addMgrMatchRow('', '');
+}
+
+function addMgrMatchRow(pre_j1, pre_j2){
+  const list = document.getElementById('adm-mgr-matches-list');
+  // Remove "sin matches" placeholder if present
+  if(list.innerHTML.indexOf('No hay matches') >= 0) list.innerHTML = '';
+
+  const opts = MGR_FECHA_JUGS.map(j => {
+    const sel1 = j.matricula === pre_j1 ? ' selected' : '';
+    return '<option value="' + j.matricula + '"' + sel1 + '>' + fmtNameForAdm(j.nombre) + '</option>';
+  }).join('');
+  const opts2 = MGR_FECHA_JUGS.map(j => {
+    const sel2 = j.matricula === pre_j2 ? ' selected' : '';
+    return '<option value="' + j.matricula + '"' + sel2 + '>' + fmtNameForAdm(j.nombre) + '</option>';
+  }).join('');
+
+  const row = document.createElement('div');
+  row.className = 'adm-match-row';
+  row.innerHTML =
+    '<select class="mgr-m-j1"><option value="">Jugador A</option>' + opts + '</select>' +
+    '<span class="vs">VS</span>' +
+    '<select class="mgr-m-j2"><option value="">Jugador B</option>' + opts2 + '</select>' +
+    '<button class="adm-match-rm" onclick="this.parentElement.remove()" title="Quitar">✕</button>';
+  list.appendChild(row);
+}
+
+function mgrGuardarMatches(){
+  const fecha = MGR_FECHA;
+  const msg = document.getElementById('adm-mgr-match-msg');
+  msg.style.display = 'none';
+
+  if(!fecha){
+    msg.className = 'adm-msg err';
+    msg.textContent = 'No hay fecha seleccionada';
+    msg.style.display = 'block';
+    return;
+  }
+
+  const matches = [];
+  let hasInvalid = false;
+  document.querySelectorAll('#adm-mgr-matches-list .adm-match-row').forEach(row => {
+    const j1 = row.querySelector('.mgr-m-j1').value;
+    const j2 = row.querySelector('.mgr-m-j2').value;
+    if(j1 && j2 && j1 !== j2){
+      matches.push({ j1: j1, j2: j2 });
+    } else if(j1 || j2){
+      hasInvalid = true;
+    }
+  });
+
+  if(hasInvalid){
+    msg.className = 'adm-msg err';
+    msg.textContent = 'Hay partidos incompletos o con el mismo jugador dos veces';
+    msg.style.display = 'block';
+    return;
+  }
+
+  msg.className = 'adm-msg';
+  msg.textContent = 'Guardando matches...';
+  msg.style.display = 'block';
+
+  ngtApiPost({
+    action: 'editarMatches',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+    matches: matches,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok';
+      const ch = r.changes || {};
+      msg.textContent = '✓ ' + (ch.added || matches.length) + ' match(es) guardados' + (ch.cleared ? ' (' + ch.cleared + ' anteriores reemplazados)' : '');
+    } else {
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
 // ══ EDITAR FECHA ══
 function populateEditFechaSelect(){
   ngtApiGet('fechas').then(r => {
@@ -2220,13 +2339,22 @@ function populateEditFechaSelect(){
 
 function loadFechaParaEditar(){
   const fecha = document.getElementById('adm-edit-fecha-sel').value;
-  const form = document.getElementById('adm-edit-form');
-  if(!fecha){ form.style.display = 'none'; return; }
+  const dataCard = document.getElementById('adm-edit-data-card');
+  const matchCard = document.getElementById('adm-edit-matches-card');
+  if(!fecha){
+    if(dataCard) dataCard.style.display = 'none';
+    if(matchCard) matchCard.style.display = 'none';
+    return;
+  }
 
-  // Show a loading hint in the form
+  // Show a loading hint + open both cards
   document.getElementById('adm-edit-jugs').innerHTML = 'Cargando...';
   document.getElementById('adm-edit-dobles').innerHTML = 'Cargando...';
-  form.style.display = 'block';
+  if(dataCard) dataCard.style.display = 'block';
+  if(matchCard) matchCard.style.display = 'block';
+
+  // Load matches for this fecha
+  loadMatchesForGestion(fecha);
 
   // Fetch EVERYTHING needed fresh — don't rely on cached globals
   Promise.all([
@@ -2331,11 +2459,6 @@ function adminEditarFecha(){
       if(ch.doblesSet && ch.doblesSet.length) txt += ' · +' + ch.doblesSet.length + ' doble(s)';
       if(ch.doblesCleared && ch.doblesCleared.length) txt += ' · -' + ch.doblesCleared.length + ' doble(s)';
       msg.textContent = txt;
-      // Redirect to Leader Board after 1.5s
-      setTimeout(function(){
-        const lbBtn = document.querySelector('.subnav .snb');
-        if(lbBtn) pg('lb', lbBtn);
-      }, 1500);
     } else {
       msg.className = 'adm-msg err';
       msg.textContent = '✗ ' + (r.error || 'Error');
