@@ -514,6 +514,19 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .confirm-cancel:hover{background:var(--off);color:var(--navy);}
 .confirm-ok{background:var(--red);color:#fff;}
 .confirm-ok:hover{background:#a30c25;}
+
+/* CREAR FECHA WIZARD */
+.adm-steps{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:0 4px;}
+.adm-step{display:flex;align-items:center;gap:8px;opacity:.5;transition:.2s;}
+.adm-step.on{opacity:1;}
+.adm-step-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--g3);color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;}
+.adm-step.on .adm-step-num{background:var(--red);}
+.adm-step-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);}
+.adm-step-bar{flex:1;height:2px;background:var(--g2);}
+.adm-s2-summary{background:var(--off);padding:10px 14px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--navy);border-left:3px solid var(--red);}
+.adm-btn-row{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-top:18px;}
+.adm-btn-ghost{background:none;border:1px solid var(--g3);color:var(--g4);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:11px;border-radius:3px;cursor:pointer;}
+.adm-btn-ghost:hover{border-color:var(--navy);color:var(--navy);}
 </style>
 </head>
 <body>
@@ -876,10 +889,19 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
       <button class="adm-tab" onclick="adminLogout()" style="margin-left:auto;color:var(--g4);">Salir</button>
     </div>
 
-    <!-- Crear Fecha -->
+    <!-- Crear Fecha (wizard 2 pasos) -->
     <div class="adm-section" id="adm-crear">
-      <div class="adm-card">
-        <div class="adm-card-hdr">📅 Crear Nueva Fecha</div>
+
+      <!-- Paso indicator -->
+      <div class="adm-steps">
+        <div class="adm-step on" id="step-ind-1"><span class="adm-step-num">1</span><span class="adm-step-lbl">Datos</span></div>
+        <div class="adm-step-bar"></div>
+        <div class="adm-step" id="step-ind-2"><span class="adm-step-num">2</span><span class="adm-step-lbl">Matches</span></div>
+      </div>
+
+      <!-- PASO 1: datos -->
+      <div class="adm-card" id="step-1">
+        <div class="adm-card-hdr">📅 Paso 1 · Datos de la Fecha</div>
         <div class="adm-card-body">
 
           <div class="adm-row">
@@ -901,10 +923,28 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
           <label class="adm-label" style="margin-top:14px;">Puntos dobles (Stableford × 2) — opcional</label>
           <div id="adm-dobles-list" class="adm-jugs">Cargando...</div>
 
-          <button class="adm-btn-primary" onclick="adminCrearFecha()" style="margin-top:18px;">Crear Fecha</button>
+          <button class="adm-btn-primary" onclick="wizPaso1Next()" style="margin-top:18px;">Siguiente · Matches →</button>
           <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
         </div>
       </div>
+
+      <!-- PASO 2: matches -->
+      <div class="adm-card" id="step-2" style="display:none;">
+        <div class="adm-card-hdr">⚔ Paso 2 · Matches de la Fecha</div>
+        <div class="adm-card-body">
+          <div class="adm-s2-summary" id="adm-s2-summary"></div>
+          <label class="adm-label" style="margin-top:10px;">Partidos (jugador A vs jugador B)</label>
+          <div id="wiz-matches-list"></div>
+          <button class="adm-btn-secondary" onclick="wizAddMatch()">+ Agregar match</button>
+
+          <div class="adm-btn-row">
+            <button class="adm-btn-ghost" onclick="wizPaso1Back()">← Volver</button>
+            <button class="adm-btn-primary" onclick="wizCrearTodo()">✓ Crear Fecha</button>
+          </div>
+          <div id="adm-s2-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+
     </div>
 
 
@@ -1857,7 +1897,7 @@ document.addEventListener('DOMContentLoaded', setTbHeight);
 
 
 // ══════════ ADMIN ══════════
-const NGT_API = 'https://script.google.com/macros/s/AKfycbw2npRNhtCpXKFl_jYjYPTRCwlrHQFQs5nlFKridU4RTEgsWIulsdfg95fL0IBgjM1W/exec';
+const NGT_API = 'https://script.google.com/macros/s/AKfycbzkilEmUDg60VqPD_rTmpOl77IwuSF15bRIrIFaGUp_DVIAHo4Mid4zT2diJgX4uqiv/exec';
 
 let ADMIN_KEY_OK = '';
 let ADM_JUGADORES = [];
@@ -2010,7 +2050,11 @@ function formatPlayerLabel(nombreCompleto){
   return '<span class="ap">' + ap + '</span>' + (nm ? ' ' + nm : '');
 }
 
-function adminCrearFecha(){
+// Old adminCrearFecha replaced by wizard flow — see wizPaso1Next / wizCrearTodo below
+// ══ CREAR FECHA WIZARD ══
+let WIZ_PASO1_DATA = null;
+
+function wizPaso1Next(){
   const fechaEl = document.getElementById('adm-fecha');
   const canchaEl = document.getElementById('adm-cancha');
   const fecha = fechaEl ? fechaEl.value.trim() : '';
@@ -2018,72 +2062,163 @@ function adminCrearFecha(){
   const jugadores = [...document.querySelectorAll('#adm-jugadores-list input:checked')].map(i => i.value);
   const dobles = [...document.querySelectorAll('#adm-dobles-list input:checked')].map(i => i.value);
 
-  console.log('[Crear Fecha] fecha:', fecha, 'cancha:', canchaId, 'jugadores:', jugadores);
-
   const msg = document.getElementById('adm-crear-msg');
   msg.style.display = 'none';
 
   if(!fecha){
-    msg.className = 'adm-msg err';
-    msg.textContent = 'Falta el número de fecha';
-    msg.style.display = 'block';
-    return;
+    msg.className = 'adm-msg err'; msg.textContent = 'Falta el número de fecha'; msg.style.display = 'block'; return;
   }
   if(!canchaId){
-    msg.className = 'adm-msg err';
-    msg.textContent = 'Falta seleccionar cancha';
-    msg.style.display = 'block';
-    return;
+    msg.className = 'adm-msg err'; msg.textContent = 'Falta seleccionar cancha'; msg.style.display = 'block'; return;
   }
   if(!jugadores.length){
+    msg.className = 'adm-msg err'; msg.textContent = 'Marcá al menos un jugador'; msg.style.display = 'block'; return;
+  }
+
+  // Save data for step 2
+  WIZ_PASO1_DATA = { fecha, canchaId, jugadores, dobles };
+
+  // Build player list for matches step using local ADM_JUGADORES
+  const jugsInFecha = ADM_JUGADORES.filter(j => jugadores.indexOf(String(j.matricula)) >= 0);
+  const canchaName = (ADM_CANCHAS.find(c => String(c.id) === canchaId) || {}).nombre || '';
+
+  // Show step 2
+  document.getElementById('step-1').style.display = 'none';
+  document.getElementById('step-2').style.display = 'block';
+  document.getElementById('step-ind-1').classList.remove('on');
+  document.getElementById('step-ind-2').classList.add('on');
+
+  document.getElementById('adm-s2-summary').innerHTML =
+    '<b>Fecha ' + fecha + '</b> · ' + canchaName + ' · ' + jugadores.length + ' jugadores' +
+    (dobles.length ? ' · ' + dobles.length + ' con dobles' : '');
+
+  document.getElementById('wiz-matches-list').innerHTML = '';
+  document.getElementById('adm-s2-msg').style.display = 'none';
+
+  // Store for wizAddMatch
+  window.WIZ_JUGS = jugsInFecha;
+}
+
+function wizPaso1Back(){
+  document.getElementById('step-1').style.display = 'block';
+  document.getElementById('step-2').style.display = 'none';
+  document.getElementById('step-ind-1').classList.add('on');
+  document.getElementById('step-ind-2').classList.remove('on');
+}
+
+function wizAddMatch(){
+  const list = document.getElementById('wiz-matches-list');
+  const jugs = window.WIZ_JUGS || [];
+  if(!jugs.length){ alert('No hay jugadores en la fecha'); return; }
+
+  const opts = jugs.map(j =>
+    '<option value="' + j.matricula + '">' + fmtNameForAdm(j.nombre) + '</option>'
+  ).join('');
+  const row = document.createElement('div');
+  row.className = 'adm-match-row';
+  row.innerHTML =
+    '<select class="wiz-m-j1"><option value="">Jugador A</option>' + opts + '</select>' +
+    '<span class="vs">VS</span>' +
+    '<select class="wiz-m-j2"><option value="">Jugador B</option>' + opts + '</select>' +
+    '<button class="adm-match-rm" onclick="this.parentElement.remove()" title="Quitar">✕</button>';
+  list.appendChild(row);
+}
+
+function wizCrearTodo(){
+  if(!WIZ_PASO1_DATA){ alert('Falta el paso 1'); return; }
+
+  const msg = document.getElementById('adm-s2-msg');
+  msg.style.display = 'none';
+
+  // Collect matches (can be 0 — matches are optional; admin can add them later in Gestionar Fecha)
+  const matches = [];
+  let hasInvalid = false;
+  document.querySelectorAll('#wiz-matches-list .adm-match-row').forEach(row => {
+    const j1 = row.querySelector('.wiz-m-j1').value;
+    const j2 = row.querySelector('.wiz-m-j2').value;
+    if(j1 && j2 && j1 !== j2){
+      matches.push({ j1: j1, j2: j2 });
+    } else if(j1 || j2){
+      hasInvalid = true;
+    }
+  });
+  if(hasInvalid){
     msg.className = 'adm-msg err';
-    msg.textContent = 'Marcá al menos un jugador';
+    msg.textContent = 'Hay partidos incompletos. Completá ambos jugadores o quitalos.';
     msg.style.display = 'block';
     return;
   }
 
   msg.className = 'adm-msg';
-  msg.textContent = 'Creando...';
+  msg.textContent = 'Creando fecha...';
   msg.style.display = 'block';
 
+  // Step A: crear fecha (tarjetas + dobles)
   ngtApiPost({
     action: 'crearFecha',
     adminKey: ADMIN_KEY_OK,
-    fecha: fecha,
-    canchaId: canchaId,
-    jugadores: jugadores,
-    dobles: dobles,
+    fecha: WIZ_PASO1_DATA.fecha,
+    canchaId: WIZ_PASO1_DATA.canchaId,
+    jugadores: WIZ_PASO1_DATA.jugadores,
+    dobles: WIZ_PASO1_DATA.dobles,
   }).then(r => {
-    if(r.ok){
-      msg.className = 'adm-msg ok';
-      msg.textContent = '✓ Fecha creada — ' + r.added + ' tarjetas agregadas. Ahora cargá los matches.';
-      const createdFecha = fecha;
-      // Reset form
-      document.getElementById('adm-fecha').value = '';
-      document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
-      document.querySelectorAll('#adm-dobles-list input:checked').forEach(i => i.checked = false);
-      // Switch to Gestionar Fecha tab and preselect this fecha
-      setTimeout(function(){
-        const tabs = document.querySelectorAll('.adm-tab');
-        admTab('editar', tabs[1]);
-        // Wait for fechas to populate then select
-        setTimeout(function(){
-          const sel = document.getElementById('adm-edit-fecha-sel');
-          if(sel){
-            sel.value = createdFecha;
-            loadFechaParaEditar();
-          }
-        }, 600);
-      }, 1500);
-    } else {
+    if(!r.ok){
       msg.className = 'adm-msg err';
-      msg.textContent = '✗ ' + (r.error || 'Error desconocido');
+      msg.textContent = '✗ Error creando fecha: ' + (r.error || 'desconocido');
+      return;
     }
+    // Step B: cargar matches si hay
+    if(!matches.length){
+      finalizarWizard(r);
+      return;
+    }
+    msg.textContent = 'Cargando matches...';
+    ngtApiPost({
+      action: 'cargarMatches',
+      adminKey: ADMIN_KEY_OK,
+      fecha: WIZ_PASO1_DATA.fecha,
+      matches: matches,
+    }).then(rm => {
+      if(!rm.ok){
+        msg.className = 'adm-msg err';
+        msg.textContent = 'Fecha creada, pero error en matches: ' + (rm.error || '');
+        return;
+      }
+      finalizarWizard(r, rm);
+    }).catch(e => {
+      msg.className = 'adm-msg err';
+      msg.textContent = 'Fecha creada, error en matches: ' + e.message;
+    });
   }).catch(e => {
     msg.className = 'adm-msg err';
     msg.textContent = '✗ Error: ' + e.message;
   });
 }
+
+function finalizarWizard(rFecha, rMatches){
+  const msg = document.getElementById('adm-s2-msg');
+  msg.className = 'adm-msg ok';
+  let txt = '✓ Fecha creada — ' + rFecha.added + ' tarjetas';
+  if(rMatches) txt += ' + ' + rMatches.count + ' matches';
+  msg.textContent = txt;
+
+  // Reset wizard
+  setTimeout(function(){
+    document.getElementById('adm-fecha').value = '';
+    document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
+    document.querySelectorAll('#adm-dobles-list input:checked').forEach(i => i.checked = false);
+    document.getElementById('wiz-matches-list').innerHTML = '';
+    WIZ_PASO1_DATA = null;
+    wizPaso1Back();
+    // Refresh admin data
+    loadAdminData();
+    // Redirect to Leader Board
+    const lbBtn = document.querySelector('.subnav .snb');
+    if(lbBtn) pg('lb', lbBtn);
+  }, 1800);
+}
+
+
 
 function admTab(name, btn){
   document.querySelectorAll('.adm-tab').forEach(t => t.classList.remove('on'));
