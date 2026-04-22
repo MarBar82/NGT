@@ -455,6 +455,11 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .nine-total span{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
 .nine-total-val{font-size:20px !important;font-weight:800;color:var(--gold) !important;letter-spacing:0 !important;}
 
+
+.mit-bonus-chk.disabled{opacity:.55;cursor:not-allowed;background:var(--off);padding:6px 10px;border-radius:3px;border:1px dashed var(--g3);}
+.mit-bonus-chk.disabled input{cursor:not-allowed;}
+.mit-bonus-chk.disabled span{color:var(--g4);font-style:italic;font-size:13px;}
+
 /* Summary box */
 .mit-summary{background:var(--off);border:var(--border);border-radius:3px;padding:14px 18px;margin-top:18px;}
 .mit-sum-row{display:flex;justify-content:space-between;align-items:center;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--g4);letter-spacing:.06em;text-transform:uppercase;padding:6px 0;border-bottom:1px solid var(--g2);}
@@ -781,9 +786,6 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
           </label>
           <label class="mit-bonus-chk">
             <input type="checkbox" id="mit-ba"><span>🎯 Gané el Best Approach</span>
-          </label>
-          <label class="mit-bonus-chk" id="mit-doble-wrap" style="display:none;">
-            <input type="checkbox" id="mit-doble"><span>✨ Usar puntos dobles esta fecha</span>
           </label>
         </div>
 
@@ -2699,30 +2701,35 @@ function openMitScore(fecha, cancha){
   document.getElementById('mit-score').style.display = 'block';
   document.getElementById('mit-score-title').textContent = 'Fecha ' + fecha + ' · ' + cancha;
   document.getElementById('mit-hcp').value = '';
-  document.getElementById('mit-ld').checked = false;
-  document.getElementById('mit-ba').checked = false;
-  document.getElementById('mit-doble').checked = false;
-  document.getElementById('mit-doble-wrap').style.display = 'none';
+
+  // Reset LD/BA state
+  const ldInput = document.getElementById('mit-ld');
+  const baInput = document.getElementById('mit-ba');
+  const ldLabel = ldInput.parentElement.querySelector('span');
+  const baLabel = baInput.parentElement.querySelector('span');
+  ldInput.checked = false; ldInput.disabled = false;
+  baInput.checked = false; baInput.disabled = false;
+  ldInput.parentElement.classList.remove('disabled');
+  baInput.parentElement.classList.remove('disabled');
+  ldLabel.textContent = '💪 Gané el Long Drive';
+  baLabel.textContent = '🎯 Gané el Best Approach';
+
   MIT_SCORES = [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null];
 
-  // Load cancha pares + existing tarjeta + doble availability
+  // Load cancha pares + existing tarjeta + bonus winners
   Promise.all([
     ngtApiGet('canchaPares', { cancha: cancha }),
     ngtApiGet('tarjeta', { fecha: fecha, matricula: MIT_PLAYER.matricula }),
-    ngtApiGet('dobleDisponible', { matricula: MIT_PLAYER.matricula })
+    ngtApiGet('bonusWinners', { fecha: fecha })
   ]).then(results => {
     MIT_CANCHA = (results[0] && results[0].data) || null;
     const tj = (results[1] && results[1].data) || null;
-    const dob = (results[2] && results[2].data) || {};
-
-    if(dob.tieneDoble){
-      document.getElementById('mit-doble-wrap').style.display = 'flex';
-    }
+    const bw = (results[2] && results[2].data) || {};
 
     if(tj){
       if(tj.hcp !== '' && tj.hcp !== null) document.getElementById('mit-hcp').value = tj.hcp;
-      if(tj.ld === 1 || tj.ld === true || tj.ld === '1') document.getElementById('mit-ld').checked = true;
-      if(tj.ba === 1 || tj.ba === true || tj.ba === '1') document.getElementById('mit-ba').checked = true;
+      if(tj.ld === 1 || tj.ld === true || tj.ld === '1') ldInput.checked = true;
+      if(tj.ba === 1 || tj.ba === true || tj.ba === '1') baInput.checked = true;
       if(Array.isArray(tj.scores)){
         for(let i = 0; i < 18; i++){
           const v = tj.scores[i];
@@ -2730,6 +2737,22 @@ function openMitScore(fecha, cancha){
         }
       }
     }
+
+    // Disable LD/BA checkboxes if someone else already won
+    const myMat = String(MIT_PLAYER.matricula);
+    if(bw.ldWinner && String(bw.ldWinner.matricula) !== myMat){
+      ldInput.checked = false;
+      ldInput.disabled = true;
+      ldInput.parentElement.classList.add('disabled');
+      ldLabel.textContent = '💪 Long Drive · Ganado por ' + bw.ldWinner.apodo;
+    }
+    if(bw.baWinner && String(bw.baWinner.matricula) !== myMat){
+      baInput.checked = false;
+      baInput.disabled = true;
+      baInput.parentElement.classList.add('disabled');
+      baLabel.textContent = '🎯 Best Approach · Ganado por ' + bw.baWinner.apodo;
+    }
+
     renderHolesGrid();
   });
 }
@@ -2885,7 +2908,6 @@ function mitGuardar(){
   const hcp = document.getElementById('mit-hcp').value.trim();
   const ld = document.getElementById('mit-ld').checked ? 1 : 0;
   const ba = document.getElementById('mit-ba').checked ? 1 : 0;
-  const doble = document.getElementById('mit-doble').checked ? 1 : 0;
 
   document.getElementById('confirm-modal').style.display = 'none';
 
@@ -2904,13 +2926,10 @@ function mitGuardar(){
     scores: scores,
     ld: ld,
     ba: ba,
-    usarDoble: doble,
   }).then(r => {
     if(r.ok){
       msg.className = 'adm-msg ok';
-      let txt = '✓ Tarjeta firmada y guardada';
-      if(r.dobleMsg) txt += ' — ' + r.dobleMsg;
-      msg.textContent = txt;
+      msg.textContent = '✓ Tarjeta firmada y guardada';
       setTimeout(function(){
         const lbBtn = document.querySelector('.subnav .snb');
         if(lbBtn) pg('lb', lbBtn);
