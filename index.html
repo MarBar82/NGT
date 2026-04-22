@@ -1090,8 +1090,10 @@ function golpesCell(val){
 function dobleCell(doble,pd){
   const d=String(doble).trim().toUpperCase();
   const uso=d==='SI'||d==='S'||d==='V'||d==='VERDADERO'||d==='TRUE'||d==='YES';
-  if(uso&&pd&&pd!=='0')return `<span class="doble-yes">✓ ${pd}</span>`;
-  if(uso)return '<span class="doble-yes">✓</span>';
+  const pdNum = parseFloat(String(pd || '').replace(',','.'));
+  const hasPts = !isNaN(pdNum) && pdNum !== 0;
+  if(hasPts) return `<span class="doble-yes">✓ ${pdNum}</span>`;
+  if(uso) return '<span class="doble-yes">✓</span>';
   return '<span class="s dim">–</span>';
 }
 
@@ -1899,7 +1901,7 @@ document.addEventListener('DOMContentLoaded', setTbHeight);
 
 
 // ══════════ ADMIN ══════════
-const NGT_API = 'https://script.google.com/macros/s/AKfycbzkilEmUDg60VqPD_rTmpOl77IwuSF15bRIrIFaGUp_DVIAHo4Mid4zT2diJgX4uqiv/exec';
+const NGT_API = 'https://script.google.com/macros/s/AKfycbyIbhULvVIRemKLsPMsIMBWlr8CGeiZkp66Menwl9Gh5DcQlyhjitcPLxjRkO6ww80W/exec';
 
 let ADMIN_KEY_OK = '';
 let ADM_JUGADORES = [];
