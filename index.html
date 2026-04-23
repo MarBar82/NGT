@@ -462,6 +462,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
 
 /* Stableford per hole + totals */
+.hcp-hint{font-size:10px;color:var(--red);font-weight:700;margin-left:6px;letter-spacing:0;text-transform:none;}
 .hole-stb{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;color:var(--red);letter-spacing:.02em;margin-top:2px;line-height:1;}
 .hole-stb.empty{color:transparent;user-select:none;}
 .nine-total-split{display:flex;align-items:center;gap:10px;}
@@ -619,7 +620,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
         <div class="adm-row" style="margin-bottom:16px;">
           <div class="adm-field">
-            <label class="adm-label">HCP de juego</label>
+            <label class="adm-label">HCP de juego <span class="hcp-hint" id="mit-hcp-hint"></span></label>
             <input type="number" id="mit-hcp" class="adm-input" min="0" max="54" placeholder="Tu hcp" oninput="updateSummary()">
           </div>
         </div>
@@ -2703,12 +2704,19 @@ function sumScores(from, to){
   return hasAny ? s : null;
 }
 
-// Calculate stableford points for a single hole based on score, par, hole index, and player HCP
+// Convert game HCP to 85% (rounded) — used for stableford calculation
+function hcp85(gameHcp){
+  if(gameHcp === null || gameHcp === undefined || gameHcp === '' || isNaN(gameHcp)) return 0;
+  return Math.round(parseFloat(gameHcp) * 0.85);
+}
+
+// Calculate stableford points for a single hole based on score, par, hole index, and player HCP (de juego)
 function calcStablefordHoyo(score, par, indice, hcp){
   if(score === null || score === undefined || !par || !indice) return null;
-  if(hcp === null || hcp === undefined || isNaN(hcp)) hcp = 0;
+  // Convert game HCP to 85%
+  const hcp85val = hcp85(hcp);
   // Golpes adicionales que recibe el jugador en este hoyo según índice de dificultad
-  const extras = Math.floor((hcp + 18 - indice) / 18);
+  const extras = Math.floor((hcp85val + 18 - indice) / 18);
   const netoDiff = score - par - extras; // diferencia neta con el par ajustado
   // Tabla stableford:
   if(netoDiff <= -3) return 5;
@@ -2736,8 +2744,17 @@ function updateSummary(){
   const ida = sumScores(0, 9);
   const vta = sumScores(9, 18);
   const gross = (ida !== null && vta !== null) ? (ida + vta) : null;
-  const hcp = parseInt(document.getElementById('mit-hcp').value) || 0;
+  const hcpVal = document.getElementById('mit-hcp').value;
+  const hcp = parseInt(hcpVal) || 0;
+  const hcp85val = hcp85(hcp);
   const neto = gross !== null ? gross - hcp : null;
+
+  // Update 85% hint
+  const hint = document.getElementById('mit-hcp-hint');
+  if(hint){
+    if(hcpVal && !isNaN(hcp)) hint.textContent = '· Stableford: ' + hcp85val + ' (85%)';
+    else hint.textContent = '';
+  }
 
   // Stableford totals
   const stbIda = sumStableford(0, 9);
