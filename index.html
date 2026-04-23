@@ -545,8 +545,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   <div class="snb-drop">
     <button class="snb snb-has-drop" onclick="toggleFechasDrop(event)" id="fechas-btn">Fechas ▾</button>
     <div class="snb-drop-menu" id="fechas-menu">
-      <button onclick="pg('f1', document.getElementById('fechas-btn')); closeFechasDrop();">Fecha 1</button>
-      <button onclick="pg('f2', document.getElementById('fechas-btn')); closeFechasDrop();">Fecha 2</button>
+      <div id="fechas-menu-items"><button disabled>Cargando...</button></div>
     </div>
   </div>
   <button class="snb" onclick="pg('match',this)">Match</button>
@@ -564,162 +563,6 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   </div>
   <div class="lb-wrap">
     <div id="lb-body"><div class="lb-status"><div class="spinner"></div>Conectando con Google Sheets...</div></div>
-  </div>
-</div>
-</div>
-
-<!-- ════ FECHA 1 ════ -->
-<div class="pg" id="pg-f1">
-<div class="wrap">
-
-  <div class="f2-info-card">
-    <div class="f2-info-item">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="2"/><path d="M4 2l12 5-12 5"/><path d="M2 22h20" opacity=".35"/></svg>
-      <div class="f2-info-body"><span class="f2-info-lbl">Cancha</span><span class="f2-info-val">Everlinks G.C.</span></div>
-    </div>
-    <div class="f2-info-sep"></div>
-    <div class="f2-info-item">
-      <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="9" r="1" fill="currentColor"/><circle cx="13" cy="8" r="1" fill="currentColor"/><circle cx="16" cy="11" r="1" fill="currentColor"/><circle cx="15" cy="15" r="1" fill="currentColor"/><circle cx="11" cy="15" r="1" fill="currentColor"/><circle cx="8" cy="13" r="1" fill="currentColor"/></svg>
-      <div class="f2-info-body"><span class="f2-info-lbl">Modalidad</span><span class="f2-info-val">Stableford + Match</span></div>
-    </div>
-  </div>
-
-  <div class="f1-awards">
-    <div class="f1-award-item">
-      <span class="f1-award-icon">🎯</span>
-      <div class="f1-award-body">
-        <span class="f1-award-label">Best Approach</span>
-        <span class="f1-award-winner"><span class="rc-apellido">OLIVERIO</span> Manuel</span>
-      </div>
-    </div>
-    <div class="f1-award-divider"></div>
-    <div class="f1-award-item">
-      <span class="f1-award-icon">💪</span>
-      <div class="f1-award-body">
-        <span class="f1-award-label">Long Drive</span>
-        <span class="f1-award-winner"><span class="rc-apellido">OLIVERIO</span> Manuel</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="two-col">
-
-    <div class="card">
-      <div class="card-hdr"><div class="card-hdr-title">Stableford</div></div>
-      <div class="card-scroll">      <div class="stb-scroll">
-      <table class="stb">
-        <thead><tr>
-          <th class="c" style="width:32px">Pos</th>
-          <th>Jugador</th>
-          <th class="c" style="width:1%;white-space:nowrap;">Hcp</th>
-          <th class="c" style="width:1%;white-space:nowrap;">STB</th>
-        </tr></thead>
-        <tbody>
-          <tr><td class="c"><span class="pos-dot d1"></span></td><td><span class="plyr-name" style="font-size:13px">OLIVERIO</span> <span class="plyr-first" style="font-size:13px">Manuel</span></td><td class="c"><span class="s">9</span></td><td class="c"><span class="s big">37</span></td></tr>
-          <tr><td class="c"><span class="pos-dot d2"></span></td><td><span class="plyr-name" style="font-size:13px">OBIGLIO</span> <span class="plyr-first" style="font-size:13px">Jose</span></td><td class="c"><span class="s">9</span></td><td class="c"><span class="s big">36</span></td></tr>
-          <tr><td class="c"><span class="pos-dot d3"></span></td><td><span class="plyr-name" style="font-size:13px">PAZ</span> <span class="plyr-first" style="font-size:13px">Luis</span></td><td class="c"><span class="s">6</span></td><td class="c"><span class="s big">35</span></td></tr>
-          <tr><td class="c"><span class="s dim">4</span></td><td><span class="plyr-name" style="font-size:13px">IRIBARNE</span> <span class="plyr-first" style="font-size:13px">Santiago</span></td><td class="c"><span class="s">15</span></td><td class="c"><span class="s big">32</span></td></tr>
-          <tr><td class="c"><span class="s dim">5</span></td><td><span class="plyr-name" style="font-size:13px">BARCHI</span> <span class="plyr-first" style="font-size:13px">Marcos</span></td><td class="c"><span class="s">16</span></td><td class="c"><span class="s big">32</span></td></tr>
-          <tr><td class="c"><span class="s dim">6</span></td><td><span class="plyr-name" style="font-size:13px">SOJO</span> <span class="plyr-first" style="font-size:13px">Pablo</span></td><td class="c"><span class="s">23</span></td><td class="c"><span class="s big">32</span></td></tr>
-          <tr><td class="c"><span class="s dim">7</span></td><td><span class="plyr-name" style="font-size:13px">RODRIGUEZ NAZAR</span> <span class="plyr-first" style="font-size:13px">Jose</span></td><td class="c"><span class="s">31</span></td><td class="c"><span class="s big">32</span></td></tr>
-          <tr><td class="c"><span class="s dim">8</span></td><td><span class="plyr-name" style="font-size:13px">MARTINEZ FANO</span> <span class="plyr-first" style="font-size:13px">Diego</span></td><td class="c"><span class="s">17</span></td><td class="c"><span class="s big">30</span></td></tr>
-          <tr><td class="c"><span class="s dim">9</span></td><td><span class="plyr-name" style="font-size:13px">RECONDO</span> <span class="plyr-first" style="font-size:13px">Maximo</span></td><td class="c"><span class="s">23</span></td><td class="c"><span class="s big">25</span></td></tr>
-          <tr><td class="c"><span class="s dim">10</span></td><td><span class="plyr-name" style="font-size:13px">RUETE</span> <span class="plyr-first" style="font-size:13px">Marcos</span></td><td class="c"><span class="s">26</span></td><td class="c"><span class="s big">24</span></td></tr>
-          <tr><td class="c"><span class="s dim">11</span></td><td><span class="plyr-name" style="font-size:13px">DE SAINT LEGER</span> <span class="plyr-first" style="font-size:13px">Pierre</span></td><td class="c"><span class="s">20</span></td><td class="c"><span class="s big">18</span></td></tr>
-          <tr><td class="c"><span class="s dim">12</span></td><td><span class="plyr-name" style="font-size:13px">BIEDMA</span> <span class="plyr-first" style="font-size:13px">Juanse</span></td><td class="c"><span class="s">29</span></td><td class="c"><span class="s big">17</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">HARISPE</span> <span class="plyr-first" style="font-size:13px">Patricio</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">VIDAL</span> <span class="plyr-first" style="font-size:13px">Alejandro</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">BARILATTI</span> <span class="plyr-first" style="font-size:13px">Javier</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">LAVALLE COBO</span> <span class="plyr-first" style="font-size:13px">Joaquin</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">CENTENO</span> <span class="plyr-first" style="font-size:13px">Angel</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
-          <tr style="opacity:.4"><td class="c">–</td><td><span class="plyr-name" style="font-size:13px">PORRAS</span> <span class="plyr-first" style="font-size:13px">Martin</span></td><td class="c">–</td><td class="c"><span class="dns">DNS</span></td></tr>
-        </tbody>
-      </table>
-      </div></div>
-    </div>
-
-    <div class="rc-card">
-      <div class="rc-hdr"><div class="rc-hdr-title">⚔ Match Play</div></div>
-      <div class="rc-list">
-        <div class="rc-match"><div class="rc-left win"><span class="rc-name win"><span class="rc-apellido">BARCHI</span> Marcos</span></div><div class="rc-center cleft"><span class="rc-score">2&1</span><span class="rc-mnum-c">Match 1</span></div><div class="rc-right lose"><span class="rc-name lose"><span class="rc-apellido">RECONDO</span> Maximo</span></div></div>
-        <div class="rc-match"><div class="rc-left draw"><span class="rc-name draw"><span class="rc-apellido">MARTINEZ FANO</span> Diego</span></div><div class="rc-center cdraw"><span class="rc-score draw">AS</span><span class="rc-mnum-c draw">Match 2</span></div><div class="rc-right draw"><span class="rc-name draw"><span class="rc-apellido">BARCHI</span> Marcos</span></div></div>
-        <div class="rc-match"><div class="rc-left win"><span class="rc-name win"><span class="rc-apellido">OLIVERIO</span> Manuel</span></div><div class="rc-center cleft"><span class="rc-score">5&4</span><span class="rc-mnum-c">Match 3</span></div><div class="rc-right lose"><span class="rc-name lose"><span class="rc-apellido">MARTINEZ FANO</span> Diego</span></div></div>
-        <div class="rc-match"><div class="rc-left win"><span class="rc-name win"><span class="rc-apellido">OLIVERIO</span> Manuel</span></div><div class="rc-center cleft"><span class="rc-score">6&4</span><span class="rc-mnum-c">Match 4</span></div><div class="rc-right lose"><span class="rc-name lose"><span class="rc-apellido">RECONDO</span> Maximo</span></div></div>
-        <div class="rc-match"><div class="rc-left win"><span class="rc-name win"><span class="rc-apellido">OBIGLIO</span> Jose</span></div><div class="rc-center cleft"><span class="rc-score">7&5</span><span class="rc-mnum-c">Match 5</span></div><div class="rc-right lose"><span class="rc-name lose"><span class="rc-apellido">BIEDMA</span> Juanse</span></div></div>
-        <div class="rc-match"><div class="rc-left win"><span class="rc-name win"><span class="rc-apellido">OBIGLIO</span> Jose</span></div><div class="rc-center cleft"><span class="rc-score">2&1</span><span class="rc-mnum-c">Match 6</span></div><div class="rc-right lose"><span class="rc-name lose"><span class="rc-apellido">PAZ</span> Luis</span></div></div>
-        <div class="rc-match"><div class="rc-left win"><span class="rc-name win"><span class="rc-apellido">SOJO</span> Pablo</span></div><div class="rc-center cleft"><span class="rc-score">1UP</span><span class="rc-mnum-c">Match 7</span></div><div class="rc-right lose"><span class="rc-name lose"><span class="rc-apellido">PAZ</span> Luis</span></div></div>
-        <div class="rc-match"><div class="rc-left win"><span class="rc-name win"><span class="rc-apellido">SOJO</span> Pablo</span></div><div class="rc-center cleft"><span class="rc-score">5&3</span><span class="rc-mnum-c">Match 8</span></div><div class="rc-right lose"><span class="rc-name lose"><span class="rc-apellido">BIEDMA</span> Juanse</span></div></div>
-        <div class="rc-match"><div class="rc-left win"><span class="rc-name win"><span class="rc-apellido">IRIBARNE</span> Santiago</span></div><div class="rc-center cleft"><span class="rc-score">3&2</span><span class="rc-mnum-c">Match 9</span></div><div class="rc-right lose"><span class="rc-name lose"><span class="rc-apellido">RUETE</span> Marcos</span></div></div>
-        <div class="rc-match"><div class="rc-left win"><span class="rc-name win"><span class="rc-apellido">RODRIGUEZ NAZAR</span> Jose</span></div><div class="rc-center cleft"><span class="rc-score">4&3</span><span class="rc-mnum-c">Match 10</span></div><div class="rc-right lose"><span class="rc-name lose"><span class="rc-apellido">RUETE</span> Marcos</span></div></div>
-        <div class="rc-match"><div class="rc-left win"><span class="rc-name win"><span class="rc-apellido">RODRIGUEZ NAZAR</span> Jose</span></div><div class="rc-center cleft"><span class="rc-score">4&3</span><span class="rc-mnum-c">Match 11</span></div><div class="rc-right lose"><span class="rc-name lose"><span class="rc-apellido">DE SAINT LEGER</span> Pierre</span></div></div>
-        <div class="rc-match"><div class="rc-left win"><span class="rc-name win"><span class="rc-apellido">IRIBARNE</span> Santiago</span></div><div class="rc-center cleft"><span class="rc-score">4&3</span><span class="rc-mnum-c">Match 12</span></div><div class="rc-right lose"><span class="rc-name lose"><span class="rc-apellido">DE SAINT LEGER</span> Pierre</span></div></div>
-      </div>
-    </div>
-
-  </div>
-</div>
-</div>
-
-<!-- ════ FECHA 2 ════ -->
-<div class="pg" id="pg-f2">
-<div class="wrap">
-
-  <div class="f2-info-card">
-    <div class="f2-info-item">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="2"/><path d="M4 2l12 5-12 5"/><path d="M2 22h20" opacity=".35"/></svg>
-      <div class="f2-info-body"><span class="f2-info-lbl">Cancha</span><span class="f2-info-val"><a href="https://maps.app.goo.gl/mW8563S1CQkNNoyu5" target="_blank" style="color:var(--navy);text-decoration:none;">Campo Chico GC</a></span></div>
-    </div>
-    <div class="f2-info-sep"></div>
-    <div class="f2-info-item">
-      <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="9" r="1" fill="currentColor"/><circle cx="13" cy="8" r="1" fill="currentColor"/><circle cx="16" cy="11" r="1" fill="currentColor"/><circle cx="15" cy="15" r="1" fill="currentColor"/><circle cx="11" cy="15" r="1" fill="currentColor"/><circle cx="8" cy="13" r="1" fill="currentColor"/></svg>
-      <div class="f2-info-body"><span class="f2-info-lbl">Modalidad</span><span class="f2-info-val">Stableford + Match</span></div>
-    </div>
-  </div>
-
-  <div class="f1-awards">
-    <div class="f1-award-item">
-      <span class="f1-award-icon">🎯</span>
-      <div class="f1-award-body">
-        <span class="f1-award-label">Best Approach</span>
-        <span class="f1-award-winner"><span class="rc-apellido">PAZ</span> Luis</span>
-      </div>
-    </div>
-    <div class="f1-award-divider"></div>
-    <div class="f1-award-item">
-      <span class="f1-award-icon">💪</span>
-      <div class="f1-award-body">
-        <span class="f1-award-label">Long Drive</span>
-        <span class="f1-award-winner"><span class="rc-apellido">VIDAL</span> Alejandro</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="two-col">
-
-    <div class="card">
-      <div class="card-hdr"><div class="card-hdr-title">Stableford</div></div>
-      <div class="stb-scroll">
-      <table class="stb">
-        <thead><tr>
-          <th class="c" style="width:32px">Pos</th>
-          <th>Jugador</th>
-          <th class="c" style="width:1%;white-space:nowrap;">Hcp</th>
-          <th class="c" style="width:1%;white-space:nowrap;">STB</th>
-        </tr></thead>
-        <tbody id="f2-stb-body">
-          <tr><td colspan="4" class="c"><div class="lb-status"><div class="spinner"></div>Cargando...</div></td></tr>
-        </tbody>
-      </table>
-      </div>
-    </div>
-
-    <div class="rc-card">
-      <div class="rc-hdr"><div class="rc-hdr-title">⚔ Match Play</div></div>
-      <div class="rc-list" id="f2-match-body">
-        <div class="lb-status"><div class="spinner"></div>Cargando...</div>
-      </div>
-    </div>
-
   </div>
 </div>
 </div>
@@ -1000,6 +843,15 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
     </div>
 
+  </div>
+</div>
+</div>
+
+<!-- ════ FECHA DINÁMICA ════ -->
+<div class="pg" id="pg-fecha">
+<div class="wrap">
+  <div id="fecha-content">
+    <div class="lb-status"><div class="spinner"></div>Cargando fecha...</div>
   </div>
 </div>
 </div>
@@ -1883,7 +1735,7 @@ function pg(id,btn){
   if(id==='hist')loadHist();
   if(id==='match')loadMatch();
   if(id==='mit'){ if(MIT_PLAYER) showMitFechas(); else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; } }
-  if(id==='f2')loadF2();
+  if(id && id.indexOf('fecha-')===0){ loadFechaDinamica(id.substring(6)); }
 }
 
 function setTbHeight(){
@@ -2968,6 +2820,281 @@ window.addEventListener('load', function(){
       }
     });
   }
+});
+
+
+// ══════════ FECHAS DINÁMICAS ══════════
+function loadFechasMenu(){
+  ngtApiGet('fechasConEstado').then(r => {
+    const data = (r && r.data) || [];
+    const container = document.getElementById('fechas-menu-items');
+    if(!container) return;
+    if(!data.length){
+      container.innerHTML = '<button disabled>Sin fechas todavía</button>';
+      return;
+    }
+    let html = '';
+    data.forEach(f => {
+      const lbl = f.completa
+        ? 'Fecha ' + f.fecha
+        : 'Fecha ' + f.fecha + ' <span style="opacity:.6;font-size:10px;">(en curso · ' + f.firmadas + '/' + f.jugadores + ')</span>';
+      html += '<button onclick="pg(\'fecha-' + f.fecha + '\', document.getElementById(\'fechas-btn\')); closeFechasDrop();">' + lbl + '</button>';
+    });
+    container.innerHTML = html;
+  }).catch(e => {
+    console.error('loadFechasMenu error:', e);
+    const container = document.getElementById('fechas-menu-items');
+    if(container) container.innerHTML = '<button disabled>Error</button>';
+  });
+}
+
+const FECHA_CACHE = {};
+
+function loadFechaDinamica(num){
+  if(!num) return;
+  const container = document.getElementById('fecha-content');
+  container.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando Fecha ' + num + '...</div>';
+
+  ngtApiGet('fechaResultados', { fecha: num }).then(r => {
+    if(!r || !r.ok || !r.data){
+      container.innerHTML = '<div class="lb-error">No se pudo cargar la fecha.</div>';
+      return;
+    }
+    FECHA_CACHE[num] = r.data;
+    renderFechaDinamica(r.data);
+  }).catch(e => {
+    container.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+  });
+}
+
+function renderFechaDinamica(data){
+  const container = document.getElementById('fecha-content');
+
+  // ─── HEADER: info card ───
+  const canchaName = data.cancha || 'Sin cancha';
+  let html = '<div class="f2-info-card">' +
+    '<div class="f2-info-item">' +
+      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="2"/><path d="M4 2l12 5-12 5"/><path d="M2 22h20" opacity=".35"/></svg>' +
+      '<div class="f2-info-body"><span class="f2-info-lbl">Fecha ' + data.fecha + ' · Cancha</span><span class="f2-info-val">' + canchaName + '</span></div>' +
+    '</div>' +
+    '<div class="f2-info-sep"></div>' +
+    '<div class="f2-info-item">' +
+      '<svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="9" r="1" fill="currentColor"/><circle cx="13" cy="8" r="1" fill="currentColor"/><circle cx="16" cy="11" r="1" fill="currentColor"/><circle cx="15" cy="15" r="1" fill="currentColor"/><circle cx="11" cy="15" r="1" fill="currentColor"/><circle cx="8" cy="13" r="1" fill="currentColor"/></svg>' +
+      '<div class="f2-info-body"><span class="f2-info-lbl">Modalidad</span><span class="f2-info-val">' + (data.modalidad || 'Stableford + Match') + '</span></div>' +
+    '</div>' +
+  '</div>';
+
+  // ─── BONUS WINNERS (BA + LD) ───
+  const baW = data.baWinner;
+  const ldW = data.ldWinner;
+  const baTxt = baW ? fmtHistName(baW.nombre) : '<span style="opacity:.5;">—</span>';
+  const ldTxt = ldW ? fmtHistName(ldW.nombre) : '<span style="opacity:.5;">—</span>';
+  html += '<div class="f1-awards">' +
+    '<div class="f1-award-item">' +
+      '<span class="f1-award-icon">🎯</span>' +
+      '<div class="f1-award-body">' +
+        '<span class="f1-award-label">Best Approach</span>' +
+        '<span class="f1-award-winner">' + baTxt + '</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="f1-award-divider"></div>' +
+    '<div class="f1-award-item">' +
+      '<span class="f1-award-icon">💪</span>' +
+      '<div class="f1-award-body">' +
+        '<span class="f1-award-label">Long Drive</span>' +
+        '<span class="f1-award-winner">' + ldTxt + '</span>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+
+  // ─── TWO COL: Stableford + Match ───
+  html += '<div class="two-col">';
+
+  // Stableford
+  html += '<div class="card">' +
+    '<div class="card-hdr"><div class="card-hdr-title">Stableford</div></div>' +
+    '<div class="stb-scroll">' +
+    '<table class="stb">' +
+      '<thead><tr>' +
+        '<th class="c" style="width:32px">Pos</th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">STB</th>' +
+      '</tr></thead>' +
+      '<tbody>';
+
+  const stb = data.stableford || [];
+  if(!stb.length){
+    html += '<tr><td colspan="4" class="c"><span class="s dim">Sin datos de Stableford todavía</span></td></tr>';
+  } else {
+    stb.forEach((row, i) => {
+      const pos = i + 1;
+      let posCell = '';
+      if(pos === 1) posCell = '<span class="pos-dot d1"></span>';
+      else if(pos === 2) posCell = '<span class="pos-dot d2"></span>';
+      else if(pos === 3) posCell = '<span class="pos-dot d3"></span>';
+      else posCell = '<span class="s dim">' + pos + '</span>';
+
+      const nombreHtml = fmtHistName(row.nombre);
+      const hcpTxt = (row.hcp === '' || row.hcp === null || row.hcp === undefined) ? '–' : row.hcp;
+
+      html += '<tr>' +
+        '<td class="c">' + posCell + '</td>' +
+        '<td>' + nombreHtml + '</td>' +
+        '<td class="c"><span class="s">' + hcpTxt + '</span></td>' +
+        '<td class="c"><span class="s big">' + row.stb + '</span></td>' +
+      '</tr>';
+    });
+  }
+
+  html += '</tbody></table></div></div>';
+
+  // Match Play
+  html += '<div class="rc-card">' +
+    '<div class="rc-hdr"><div class="rc-hdr-title">⚔ Match Play</div></div>' +
+    '<div class="rc-list">';
+
+  const matches = data.matches || [];
+  if(!matches.length){
+    html += '<div class="s dim" style="padding:20px;text-align:center;">Sin matches todavía</div>';
+  } else {
+    // For each match pair we need the actual hole-by-hole scores to compute the result.
+    // Fetch them from the MATCH sheet via gviz (the Match section already does this).
+    // For simplicity here: we render with the jugador names + "—" for result, and trigger
+    // a separate fetch to fill in the resultados.
+    matches.forEach((m, i) => {
+      html += '<div class="rc-match" data-match-idx="' + i + '">' +
+        '<div class="rc-left pending"><span class="rc-name pending">' + fmtHistName(m.j1Name) + '</span></div>' +
+        '<div class="rc-center cdraw"><span class="rc-score draw" id="fd-res-' + i + '">–</span><span class="rc-mnum-c draw">Match ' + (i+1) + '</span></div>' +
+        '<div class="rc-right pending"><span class="rc-name pending">' + fmtHistName(m.j2Name) + '</span></div>' +
+      '</div>';
+    });
+  }
+
+  html += '</div></div>';
+
+  html += '</div>'; // close two-col
+
+  container.innerHTML = html;
+
+  // Now fetch detailed match scores to compute results
+  if(matches.length){
+    loadMatchResultsForFecha(data.fecha, matches);
+  }
+}
+
+function loadMatchResultsForFecha(fecha, matches){
+  // Load MATCH sheet data via gviz (same pattern as the live Match section)
+  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+    '/gviz/tq?tqx=out:json;responseHandler:fechaMatchScoresCallback' +
+    '&sheet=' + encodeURIComponent('MATCH') +
+    '&range=D2:X' +
+    '&headers=0' +
+    '&_=' + Date.now();
+
+  window.__PENDING_FECHA = { fecha: String(fecha), matches: matches };
+
+  const old = document.getElementById('fecha-match-script');
+  if(old) old.remove();
+  const s = document.createElement('script');
+  s.id = 'fecha-match-script'; s.src = url;
+  s.onerror = function(){};
+  document.head.appendChild(s);
+}
+
+function fechaMatchScoresCallback(response){
+  try {
+    const pending = window.__PENDING_FECHA;
+    if(!pending) return;
+
+    // Build list of pairs (same logic as live Match section) but only for our fecha
+    const rows = response.table.rows || [];
+    // MATCH range D2:X → col0=jugador(D), cols1..=E..X
+    // Actually D2:X means D, E, F, ... X → 21 cols. col0=D=Jugador, col1=E=HCP, col2..col19=H1..H18, col20=X=Resultado
+    const allRows = [];
+    rows.forEach(r => {
+      const line = [];
+      if(r.c) r.c.forEach(c => {
+        let val = (c && c.v !== null && c.v !== undefined) ? String(c.v) : '';
+        val = val.replace(/<[^>]*>/g, '').trim();
+        line.push(val);
+      });
+      allRows.push(line);
+    });
+
+    // Also need col B (fecha) — but the range is D:X. We need a separate fetch for B.
+    // Alternative: match by j1Name/j2Name in the matches array — since matches for this fecha
+    // have unique player pairings within the fecha and we know the names.
+
+    // Build pairs from allRows
+    const pairs = [];
+    for(let i = 0; i < allRows.length - 1; i += 2){
+      const rA = allRows[i];
+      const rB = allRows[i+1];
+      if(!rA || !rB) continue;
+      const nameA = (rA[0]||'').trim();
+      const nameB = (rB[0]||'').trim();
+      if(!nameA || !nameB) continue;
+      pairs.push({ nameA: nameA, nameB: nameB, rowA: rA, rowB: rB });
+    }
+
+    // For each match in pending.matches, find the pair in pairs with same names
+    pending.matches.forEach((m, idx) => {
+      const found = pairs.find(p => p.nameA === m.j1Name && p.nameB === m.j2Name);
+      if(!found) return;
+      const res = calcMatchResult(found.rowA, found.rowB);
+
+      const matchEl = document.querySelector('[data-match-idx="' + idx + '"]');
+      if(!matchEl) return;
+      const leftEl = matchEl.querySelector('.rc-left');
+      const rightEl = matchEl.querySelector('.rc-right');
+      const leftName = matchEl.querySelector('.rc-left .rc-name');
+      const rightName = matchEl.querySelector('.rc-right .rc-name');
+      const centerEl = matchEl.querySelector('.rc-center');
+      const scoreEl = matchEl.querySelector('.rc-score');
+      const mnumEl = matchEl.querySelector('.rc-mnum-c');
+
+      // Reset classes
+      leftEl.className = 'rc-left';
+      rightEl.className = 'rc-right';
+      leftName.className = 'rc-name';
+      rightName.className = 'rc-name';
+      centerEl.className = 'rc-center';
+      scoreEl.className = 'rc-score';
+      mnumEl.className = 'rc-mnum-c';
+
+      let leftState, rightState, centerClass, scoreClass, mnumClass;
+      if(res.winner === 'draw'){
+        leftState = 'draw'; rightState = 'draw';
+        centerClass = 'cdraw'; scoreClass = 'rc-score draw'; mnumClass = 'rc-mnum-c draw';
+      } else if(res.winner === 'A'){
+        leftState = 'win'; rightState = 'lose';
+        centerClass = 'cleft'; scoreClass = 'rc-score'; mnumClass = 'rc-mnum-c';
+      } else if(res.winner === 'B'){
+        leftState = 'lose'; rightState = 'win';
+        centerClass = 'cright'; scoreClass = 'rc-score'; mnumClass = 'rc-mnum-c';
+      } else {
+        leftState = 'pending'; rightState = 'pending';
+        centerClass = 'cdraw'; scoreClass = 'rc-score draw'; mnumClass = 'rc-mnum-c draw';
+      }
+
+      leftEl.classList.add(leftState);
+      rightEl.classList.add(rightState);
+      leftName.classList.add(leftState);
+      rightName.classList.add(rightState);
+      centerEl.classList.add(centerClass);
+      scoreEl.className = scoreClass;
+      mnumEl.className = mnumClass;
+      scoreEl.textContent = res.resultStr;
+    });
+  } catch(e){
+    console.error('fechaMatchScoresCallback error:', e);
+  }
+}
+
+// Load fechas menu when admin/login completes or on initial load
+window.addEventListener('load', function(){
+  setTimeout(loadFechasMenu, 400);
 });
 
 loadLB();
