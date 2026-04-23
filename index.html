@@ -1728,14 +1728,25 @@ document.addEventListener('click', function(e){
 function pg(id,btn){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.snb').forEach(b=>b.classList.remove('on'));
-  document.getElementById('pg-'+id).classList.add('on');
-  btn.classList.add('on');
+
+  // Dynamic fecha routing: id like "fecha-3" → use the single "pg-fecha" page
+  let pageId = id;
+  let fechaNum = null;
+  if(id && id.indexOf('fecha-')===0){
+    fechaNum = id.substring(6);
+    pageId = 'fecha';
+  }
+
+  const pageEl = document.getElementById('pg-'+pageId);
+  if(pageEl) pageEl.classList.add('on');
+  if(btn) btn.classList.add('on');
   window.scrollTo(0,0);
+
   if(id==='lb')loadLB();
   if(id==='hist')loadHist();
   if(id==='match')loadMatch();
   if(id==='mit'){ if(MIT_PLAYER) showMitFechas(); else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; } }
-  if(id && id.indexOf('fecha-')===0){ loadFechaDinamica(id.substring(6)); }
+  if(fechaNum) loadFechaDinamica(fechaNum);
 }
 
 function setTbHeight(){
