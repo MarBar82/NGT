@@ -349,7 +349,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .match-fecha{color:var(--gold);}
 
 /* Grid: left(names+hcp fixed) | scroll(holes) | right(Rdo fixed) */
-.mc-grid{display:grid;grid-template-columns:auto 1fr auto;font-family:'Barlow Condensed',sans-serif;align-items:stretch;}
+.mc-grid{display:flex;flex-direction:row;align-items:stretch;font-family:'Barlow Condensed',sans-serif;}
 
 .mc-left-tbl,.mc-right-tbl,.mc-holes-tbl{border-collapse:collapse;}
 .mc-left-tbl thead tr,.mc-right-tbl thead tr,.mc-holes-tbl thead tr{background:var(--g1);}
@@ -362,7 +362,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .mc-td-name{padding:5px 12px;font-size:12px;white-space:nowrap;color:var(--navy);min-width:140px;}
 .mc-td-hcp{padding:5px 10px;font-size:12px;font-weight:600;color:var(--text);text-align:center;border-left:1px solid var(--g2);}
 
-.mc-holes-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;}
+.mc-holes-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;flex:0 1 auto;}
 .mc-holes-tbl{width:max-content;}
 .mc-holes-tbl thead th{text-align:center;min-width:30px;padding:7px 4px !important;}
 .mc-holes-tbl tbody td{padding:5px 4px;text-align:center;font-size:12px;font-weight:600;color:var(--text);min-width:30px;}
@@ -459,6 +459,17 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .mit-bonus-chk.disabled{opacity:.55;cursor:not-allowed;background:var(--off);padding:6px 10px;border-radius:3px;border:1px dashed var(--g3);}
 .mit-bonus-chk.disabled input{cursor:not-allowed;}
 .mit-bonus-chk.disabled span{color:var(--g4);font-style:italic;font-size:13px;}
+
+
+/* Stableford per hole + totals */
+.hole-stb{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;color:var(--red);letter-spacing:.02em;margin-top:2px;line-height:1;}
+.hole-stb.empty{color:transparent;user-select:none;}
+.nine-total-split{display:flex;align-items:center;gap:10px;}
+.nt-label{font-size:10px !important;letter-spacing:.08em !important;opacity:.75;}
+.nine-total-stb{color:#fef3c7 !important;}
+.mit-sum-stb{background:#fffaf0;margin:4px -4px;padding:6px 4px !important;border-radius:2px;}
+.mit-sum-stb span:first-child{color:var(--red) !important;font-weight:800 !important;}
+.mit-sum-stb .mit-sum-val{color:var(--red);}
 
 /* Summary box */
 .mit-summary{background:var(--off);border:var(--border);border-radius:3px;padding:14px 18px;margin-top:18px;}
@@ -617,11 +628,11 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
         <div class="nine-title">IDA · Hoyos 1-9</div>
         <div class="holes-grid" id="mit-holes-ida"></div>
-        <div class="nine-total"><span>Total IDA</span><span class="nine-total-val" id="total-ida">–</span></div>
+        <div class="nine-total"><span>Total IDA</span><span class="nine-total-split"><span class="nt-label">Golpes</span><span class="nine-total-val" id="total-ida">–</span><span class="nt-label">Stableford</span><span class="nine-total-val nine-total-stb" id="total-ida-stb">–</span></span></div>
 
         <div class="nine-title">VUELTA · Hoyos 10-18</div>
         <div class="holes-grid" id="mit-holes-vta"></div>
-        <div class="nine-total"><span>Total VUELTA</span><span class="nine-total-val" id="total-vta">–</span></div>
+        <div class="nine-total"><span>Total VUELTA</span><span class="nine-total-split"><span class="nt-label">Golpes</span><span class="nine-total-val" id="total-vta">–</span><span class="nt-label">Stableford</span><span class="nine-total-val nine-total-stb" id="total-vta-stb">–</span></span></div>
 
         <div class="mit-bonus">
           <label class="mit-bonus-chk">
@@ -635,6 +646,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
         <div class="mit-summary">
           <div class="mit-sum-row"><span>GROSS</span><span class="mit-sum-val" id="sum-gross">–</span></div>
           <div class="mit-sum-row"><span>HCP de juego</span><span class="mit-sum-val" id="sum-hcp">–</span></div>
+          <div class="mit-sum-row mit-sum-stb"><span>STABLEFORD</span><span class="mit-sum-val" id="sum-stb">–</span></div>
           <div class="mit-sum-row mit-sum-net"><span>NETO</span><span class="mit-sum-val" id="sum-neto">–</span></div>
         </div>
 
@@ -698,6 +710,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
       <div class="confirm-stats">
         <div class="mit-sum-row"><span>Gross</span><span class="mit-sum-val" id="cfm-gross">–</span></div>
         <div class="mit-sum-row"><span>HCP</span><span class="mit-sum-val" id="cfm-hcp">–</span></div>
+        <div class="mit-sum-row mit-sum-stb"><span>Stableford</span><span class="mit-sum-val" id="cfm-stb">–</span></div>
         <div class="mit-sum-row mit-sum-net"><span>NETO</span><span class="mit-sum-val" id="cfm-neto">–</span></div>
       </div>
       <div class="confirm-warn">Una vez firmada, solo el admin puede modificar.</div>
@@ -2632,8 +2645,12 @@ function mitBackToFechas(){
 
 function renderHoleHtml(h){
   const pares = (MIT_CANCHA && MIT_CANCHA.pares) || [];
+  const indices = (MIT_CANCHA && MIT_CANCHA.indices) || [];
   const score = MIT_SCORES[h];
   const par = pares[h];
+  const indice = indices[h];
+  const hcp = parseInt(document.getElementById('mit-hcp').value) || 0;
+
   let cls = 'hole-circle';
   if(score !== null){
     cls += ' filled';
@@ -2646,12 +2663,18 @@ function renderHoleHtml(h){
       else cls += ' double';
     }
   }
+
+  // Stableford points for this hole
+  const stb = calcStablefordHoyo(score, par, indice, hcp);
+  const stbLabel = stb !== null ? '<span class="hole-stb">' + stb + ' pts</span>' : '<span class="hole-stb empty">&nbsp;</span>';
+
   return '<div class="hole-cell">' +
     '<span class="hole-num">H ' + (h+1) + '</span>' +
     '<div class="' + cls + '" onclick="openScoreModal(' + h + ')">' +
       (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
       (score !== null ? '<span class="hole-score">' + score + '</span>' : '') +
     '</div>' +
+    stbLabel +
   '</div>';
 }
 
@@ -2680,6 +2703,35 @@ function sumScores(from, to){
   return hasAny ? s : null;
 }
 
+// Calculate stableford points for a single hole based on score, par, hole index, and player HCP
+function calcStablefordHoyo(score, par, indice, hcp){
+  if(score === null || score === undefined || !par || !indice) return null;
+  if(hcp === null || hcp === undefined || isNaN(hcp)) hcp = 0;
+  // Golpes adicionales que recibe el jugador en este hoyo según índice de dificultad
+  const extras = Math.floor((hcp + 18 - indice) / 18);
+  const netoDiff = score - par - extras; // diferencia neta con el par ajustado
+  // Tabla stableford:
+  if(netoDiff <= -3) return 5;
+  if(netoDiff === -2) return 4;
+  if(netoDiff === -1) return 3;
+  if(netoDiff === 0) return 2;
+  if(netoDiff === 1) return 1;
+  return 0;
+}
+
+function sumStableford(from, to){
+  const pares = (MIT_CANCHA && MIT_CANCHA.pares) || [];
+  const indices = (MIT_CANCHA && MIT_CANCHA.indices) || [];
+  const hcp = parseInt(document.getElementById('mit-hcp').value) || 0;
+  let sum = 0;
+  let any = false;
+  for(let i = from; i < to; i++){
+    const stb = calcStablefordHoyo(MIT_SCORES[i], pares[i], indices[i], hcp);
+    if(stb !== null){ sum += stb; any = true; }
+  }
+  return any ? sum : null;
+}
+
 function updateSummary(){
   const ida = sumScores(0, 9);
   const vta = sumScores(9, 18);
@@ -2687,11 +2739,25 @@ function updateSummary(){
   const hcp = parseInt(document.getElementById('mit-hcp').value) || 0;
   const neto = gross !== null ? gross - hcp : null;
 
+  // Stableford totals
+  const stbIda = sumStableford(0, 9);
+  const stbVta = sumStableford(9, 18);
+  const stbTotal = (stbIda !== null && stbVta !== null) ? (stbIda + stbVta) : null;
+
+  // Totals boxes show both score and stableford
   document.getElementById('total-ida').textContent = ida !== null ? ida : '–';
   document.getElementById('total-vta').textContent = vta !== null ? vta : '–';
+  const ei = document.getElementById('total-ida-stb');
+  const ev = document.getElementById('total-vta-stb');
+  if(ei) ei.textContent = stbIda !== null ? stbIda : '–';
+  if(ev) ev.textContent = stbVta !== null ? stbVta : '–';
+
   document.getElementById('sum-gross').textContent = gross !== null ? gross : '–';
   document.getElementById('sum-hcp').textContent = document.getElementById('mit-hcp').value || '–';
   document.getElementById('sum-neto').textContent = neto !== null ? neto : '–';
+
+  const es = document.getElementById('sum-stb');
+  if(es) es.textContent = stbTotal !== null ? stbTotal : '–';
 }
 
 // Score modal
@@ -2761,8 +2827,12 @@ function mitFirmarTarjeta(){
 
   const gross = ida + vta;
   const neto = gross - (parseInt(hcp) || 0);
+  const stbIda = sumStableford(0, 9);
+  const stbVta = sumStableford(9, 18);
+  const stbTotal = (stbIda !== null && stbVta !== null) ? (stbIda + stbVta) : null;
   document.getElementById('cfm-gross').textContent = gross;
   document.getElementById('cfm-hcp').textContent = hcp;
+  document.getElementById('cfm-stb').textContent = stbTotal !== null ? stbTotal : '–';
   document.getElementById('cfm-neto').textContent = neto;
   document.getElementById('confirm-modal').style.display = 'flex';
 }
