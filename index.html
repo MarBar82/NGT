@@ -1714,7 +1714,11 @@ function loadMatch(){
 
 function toggleFechasDrop(e){
   e.stopPropagation();
-  document.getElementById('fechas-menu').classList.toggle('open');
+  const menu = document.getElementById('fechas-menu');
+  const isOpening = !menu.classList.contains('open');
+  menu.classList.toggle('open');
+  // Refresh list every time the dropdown opens — picks up new fechas without reload
+  if(isOpening && typeof loadFechasMenu === 'function') loadFechasMenu();
 }
 function closeFechasDrop(){
   document.getElementById('fechas-menu').classList.remove('open');
