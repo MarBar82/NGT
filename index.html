@@ -518,6 +518,231 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .sm-keypad button.sm-more{background:var(--red);color:#fff;font-size:16px;}
 .sm-keypad button.sm-more:hover{background:#a30c25;}
 
+/* ══════════ HOME ══════════ */
+.home-hero{
+  position:relative;
+  min-height:calc(100vh - 106px); /* topbar + subnav */
+  background:linear-gradient(180deg, var(--navy) 0%, #001a37 60%, #00122a 100%);
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:40px 20px 60px;
+  overflow:hidden;
+}
+.home-bg-logo{
+  position:absolute; inset:0;
+  background-image:url('./logo.png');
+  background-repeat:no-repeat;
+  background-position:center 48%;
+  background-size:min(520px, 85vw);
+  opacity:0.045;
+  pointer-events:none;
+  filter:drop-shadow(0 0 40px rgba(201,168,76,.3));
+}
+.home-hero::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:radial-gradient(circle at 50% 40%, rgba(201,168,76,.12) 0%, transparent 55%);
+  pointer-events:none;
+}
+.home-hero::after{
+  content:'';
+  position:absolute; left:0; right:0; top:0;
+  height:2px;
+  background:linear-gradient(90deg, transparent 0%, var(--gold) 30%, var(--red) 70%, transparent 100%);
+}
+.home-content{
+  position:relative;
+  z-index:2;
+  width:100%;
+  max-width:720px;
+  text-align:center;
+}
+.home-eyebrow{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.34em;
+  text-transform:uppercase;
+  color:var(--gold);
+  margin-bottom:24px;
+  position:relative;
+  display:inline-block;
+  padding:0 32px;
+}
+.home-eyebrow::before,.home-eyebrow::after{
+  content:'';
+  position:absolute; top:50%;
+  width:22px; height:1px;
+  background:var(--gold);
+  opacity:.6;
+}
+.home-eyebrow::before{ left:0; }
+.home-eyebrow::after{ right:0; }
+
+.home-countdown{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  margin-bottom:28px;
+  font-family:'Barlow Condensed',sans-serif;
+}
+.hc-box{
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(201,168,76,.22);
+  border-radius:8px;
+  padding:14px 10px 10px;
+  min-width:82px;
+  backdrop-filter:blur(6px);
+  box-shadow:0 4px 20px rgba(0,0,0,.25);
+}
+.hc-num{
+  font-size:52px;
+  font-weight:800;
+  color:#fff;
+  line-height:1;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:.02em;
+  text-shadow:0 2px 12px rgba(201,168,76,.3);
+}
+.hc-lbl{
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:var(--gold);
+  margin-top:6px;
+  opacity:.9;
+}
+.hc-sep{
+  font-size:32px;
+  font-weight:300;
+  color:rgba(201,168,76,.5);
+  padding-bottom:20px;
+}
+
+.home-fecha-info{
+  margin-bottom:36px;
+  padding:18px 24px;
+  background:rgba(255,255,255,.03);
+  border-left:3px solid var(--red);
+  border-radius:0 4px 4px 0;
+  display:inline-block;
+}
+.hfi-num{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:24px;
+  font-weight:800;
+  letter-spacing:.06em;
+  color:#fff;
+  margin-bottom:4px;
+  text-transform:uppercase;
+}
+.hfi-detail{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:14px;
+  font-weight:500;
+  color:rgba(255,255,255,.75);
+  letter-spacing:.04em;
+}
+.hfi-cancha{ color:var(--gold); font-weight:700; }
+.hfi-sep{ margin:0 10px; opacity:.4; }
+.hfi-date{ text-transform:capitalize; }
+
+.home-actions{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:10px;
+  max-width:420px;
+  margin:0 auto;
+}
+.home-btn{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:14px 18px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:6px;
+  color:#fff;
+  font-family:'Barlow Condensed',sans-serif;
+  cursor:pointer;
+  transition:all .18s ease;
+  text-align:left;
+  backdrop-filter:blur(4px);
+}
+.home-btn:hover{
+  background:rgba(255,255,255,.1);
+  border-color:rgba(201,168,76,.4);
+  transform:translateY(-1px);
+  box-shadow:0 6px 20px rgba(0,0,0,.25);
+}
+.home-btn-primary{
+  background:linear-gradient(135deg, var(--red) 0%, #a30c25 100%);
+  border-color:var(--red);
+  box-shadow:0 4px 16px rgba(200,16,46,.35);
+}
+.home-btn-primary:hover{
+  background:linear-gradient(135deg, #d81b39 0%, #c8102e 100%);
+  border-color:var(--red);
+  box-shadow:0 6px 22px rgba(200,16,46,.5);
+}
+.home-btn-admin{
+  background:rgba(255,255,255,.02);
+  border-color:rgba(255,255,255,.08);
+  opacity:.85;
+}
+.home-btn-admin:hover{
+  opacity:1;
+  background:rgba(255,255,255,.06);
+}
+.hb-icon{
+  font-size:28px;
+  width:44px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+}
+.hb-txt{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  flex:1;
+}
+.hb-title{
+  font-size:16px;
+  font-weight:700;
+  letter-spacing:.04em;
+}
+.hb-sub{
+  font-size:11px;
+  font-weight:500;
+  letter-spacing:.08em;
+  opacity:.7;
+  text-transform:uppercase;
+}
+
+@media(max-width:540px){
+  .hc-box{ min-width:64px; padding:10px 6px 8px; }
+  .hc-num{ font-size:38px; }
+  .hc-lbl{ font-size:9px; letter-spacing:.18em; }
+  .hc-sep{ font-size:22px; padding-bottom:16px; }
+  .hfi-num{ font-size:20px; }
+  .hfi-detail{ font-size:13px; }
+  .hfi-detail .hfi-sep{ display:none; }
+  .hfi-detail{ display:flex; flex-direction:column; gap:2px; }
+  .home-eyebrow{ font-size:11px; letter-spacing:.28em; }
+}
+
+/* Home TORNEO FINALIZADO state */
+.home-finished .hfi-num::before{ content:'🏁 '; }
+
+/* ══════════ end HOME ══════════ */
+
 /* Confirm modal */
 .confirm-box{max-width:360px;}
 .confirm-body{padding:18px;}
@@ -553,7 +778,8 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   <div class="tb-brand">Numa Golf Tour XIV<span class="tb-yr">&nbsp;·&nbsp;2026</span></div>
 </div>
 <div class="subnav">
-  <button class="snb on" onclick="pg('lb',this)">Leader Board</button>
+  <button class="snb on" onclick="pg('home',this)" id="home-btn">🏠 Inicio</button>
+  <button class="snb" onclick="pg('lb',this)">Leader Board</button>
   <div class="snb-drop">
     <button class="snb snb-has-drop" onclick="toggleFechasDrop(event)" id="fechas-btn">Fechas ▾</button>
     <div class="snb-drop-menu" id="fechas-menu">
@@ -566,8 +792,54 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   <button class="snb snb-admin" onclick="pg('admin',this)" title="Admin">⚙</button>
 </div>
 
+<!-- ════ HOME ════ -->
+<div class="pg on" id="pg-home">
+  <div class="home-hero">
+    <div class="home-bg-logo"></div>
+    <div class="home-content">
+
+      <div class="home-eyebrow">Próxima Fecha</div>
+
+      <div class="home-countdown" id="home-countdown">
+        <div class="hc-box"><div class="hc-num" id="hc-days">–</div><div class="hc-lbl">Días</div></div>
+        <div class="hc-sep">:</div>
+        <div class="hc-box"><div class="hc-num" id="hc-hours">–</div><div class="hc-lbl">Hs</div></div>
+        <div class="hc-sep">:</div>
+        <div class="hc-box"><div class="hc-num" id="hc-mins">–</div><div class="hc-lbl">Min</div></div>
+        <div class="hc-sep">:</div>
+        <div class="hc-box"><div class="hc-num" id="hc-secs">–</div><div class="hc-lbl">Seg</div></div>
+      </div>
+
+      <div class="home-fecha-info" id="home-fecha-info">
+        <div class="hfi-num" id="hfi-num">Fecha —</div>
+        <div class="hfi-detail">
+          <span class="hfi-cancha" id="hfi-cancha">Cargando...</span>
+          <span class="hfi-sep">·</span>
+          <span class="hfi-date" id="hfi-date">—</span>
+        </div>
+      </div>
+
+      <div class="home-actions">
+        <button class="home-btn home-btn-primary" onclick="pg('lb', document.querySelectorAll('.subnav .snb')[1])">
+          <span class="hb-icon">🏆</span>
+          <span class="hb-txt"><span class="hb-title">Ver Torneo</span><span class="hb-sub">Leaderboard, Fechas, Match</span></span>
+        </button>
+        <button class="home-btn" onclick="pg('mit', document.querySelectorAll('.subnav .snb')[5])">
+          <span class="hb-icon">📋</span>
+          <span class="hb-txt"><span class="hb-title">Cargar Tarjeta</span><span class="hb-sub">Ingresá tus scores</span></span>
+        </button>
+        <button class="home-btn home-btn-admin" onclick="pg('admin', document.querySelectorAll('.subnav .snb-admin')[0])">
+          <span class="hb-icon">⚙</span>
+          <span class="hb-txt"><span class="hb-title">Crear Fecha</span><span class="hb-sub">Admin</span></span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- ════ LEADER BOARD ════ -->
-<div class="pg on" id="pg-lb">
+<div class="pg" id="pg-lb">
 <div class="wrap" style="padding:0 16px 16px 16px;">
   <div class="lb-topbar">
     <div class="sync-time" id="sync-time"></div>
@@ -1760,6 +2032,7 @@ function pg(id,btn){
   if(btn) btn.classList.add('on');
   window.scrollTo(0,0);
 
+  if(id==='home')loadHome();
   if(id==='lb')loadLB();
   if(id==='hist')loadHist();
   if(id==='match')loadMatch();
@@ -3199,6 +3472,81 @@ window.addEventListener('load', function(){
   setTimeout(loadFechasMenu, 400);
 });
 
+// ══════════ HOME ══════════
+let HOME_TARGET_MS = null;
+let HOME_TICK_INTERVAL = null;
+
+function loadHome(){
+  ngtApiGet('proximaFecha').then(r => {
+    const data = (r && r.data) || null;
+    const numEl = document.getElementById('hfi-num');
+    const canchaEl = document.getElementById('hfi-cancha');
+    const dateEl = document.getElementById('hfi-date');
+    const hero = document.querySelector('.home-hero');
+
+    if(!data){
+      if(numEl) numEl.textContent = 'Sin fechas';
+      if(canchaEl) canchaEl.textContent = 'Próximamente';
+      if(dateEl) dateEl.textContent = '—';
+      HOME_TARGET_MS = null;
+      tickCountdown();
+      return;
+    }
+
+    const dateObj = new Date(data.fecha);
+    HOME_TARGET_MS = dateObj.getTime();
+
+    if(numEl) numEl.textContent = 'Fecha ' + (data.fechaNum || '—');
+    if(canchaEl) canchaEl.textContent = data.cancha || 'Cancha a definir';
+    if(dateEl) dateEl.textContent = data.fechaDisplay || dateObj.toLocaleDateString();
+
+    if(hero){
+      if(data.isPast) hero.classList.add('home-finished');
+      else hero.classList.remove('home-finished');
+    }
+
+    tickCountdown();
+    if(!HOME_TICK_INTERVAL) HOME_TICK_INTERVAL = setInterval(tickCountdown, 1000);
+  }).catch(e => {
+    console.error('loadHome error:', e);
+    const canchaEl = document.getElementById('hfi-cancha');
+    if(canchaEl) canchaEl.textContent = 'Error de conexión';
+  });
+}
+
+function tickCountdown(){
+  const dEl = document.getElementById('hc-days');
+  const hEl = document.getElementById('hc-hours');
+  const mEl = document.getElementById('hc-mins');
+  const sEl = document.getElementById('hc-secs');
+  if(!dEl || !hEl || !mEl || !sEl) return;
+
+  if(!HOME_TARGET_MS){
+    dEl.textContent = '–'; hEl.textContent = '–'; mEl.textContent = '–'; sEl.textContent = '–';
+    return;
+  }
+
+  let diff = HOME_TARGET_MS - Date.now();
+  if(diff <= 0){
+    dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
+    return;
+  }
+  const days = Math.floor(diff / (1000*60*60*24));
+  diff -= days * 86400000;
+  const hours = Math.floor(diff / (1000*60*60));
+  diff -= hours * 3600000;
+  const mins = Math.floor(diff / (1000*60));
+  diff -= mins * 60000;
+  const secs = Math.floor(diff / 1000);
+
+  dEl.textContent = String(days).padStart(2,'0');
+  hEl.textContent = String(hours).padStart(2,'0');
+  mEl.textContent = String(mins).padStart(2,'0');
+  sEl.textContent = String(secs).padStart(2,'0');
+}
+
+// Load home data right away (home is the default landing page)
+loadHome();
 loadLB();
 </script>
 </body>
