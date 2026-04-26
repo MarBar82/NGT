@@ -774,6 +774,189 @@ body.home-mode{
 
 /* ══════════ end HOME ══════════ */
 
+/* ══════════ FECHA EN CURSO ══════════ */
+.enc-hero{
+  background:linear-gradient(135deg, #c8102e 0%, #a30c25 100%);
+  color:#fff;
+  border-radius:6px;
+  padding:14px 18px;
+  margin-bottom:14px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  box-shadow:0 4px 16px rgba(200,16,46,.25);
+  position:relative;
+  overflow:hidden;
+}
+.enc-hero::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(135deg, transparent 50%, rgba(255,255,255,.08) 100%);
+  pointer-events:none;
+}
+.enc-live-dot{
+  width:12px;
+  height:12px;
+  border-radius:50%;
+  background:#fff;
+  box-shadow:0 0 0 4px rgba(255,255,255,.3);
+  animation:enc-pulse 1.4s ease-in-out infinite;
+  flex-shrink:0;
+  position:relative;
+}
+@keyframes enc-pulse{
+  0%, 100% { box-shadow:0 0 0 0 rgba(255,255,255,.5); transform:scale(1); }
+  50%      { box-shadow:0 0 0 8px rgba(255,255,255,0); transform:scale(1.05); }
+}
+.enc-hero-info{flex:1;font-family:'Barlow Condensed',sans-serif;position:relative;}
+.enc-hero-title{font-size:14px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;line-height:1;}
+.enc-hero-sub{font-size:13px;font-weight:500;letter-spacing:.04em;margin-top:4px;opacity:.92;}
+.enc-hero-stat{
+  font-family:'Barlow Condensed',sans-serif;
+  text-align:center;
+  background:rgba(255,255,255,.12);
+  padding:6px 14px;
+  border-radius:4px;
+  border:1px solid rgba(255,255,255,.2);
+  position:relative;
+}
+.enc-hero-stat span{font-size:18px;font-weight:800;line-height:1;}
+.enc-stat-sep{margin:0 1px;opacity:.6;}
+.enc-stat-lbl{font-size:9px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;opacity:.85;margin-top:3px;}
+
+.enc-tabs{
+  display:flex;
+  gap:4px;
+  margin-bottom:14px;
+  border-bottom:2px solid var(--g2);
+}
+.enc-tab{
+  background:none;
+  border:none;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--g4);
+  padding:10px 14px;
+  cursor:pointer;
+  border-bottom:3px solid transparent;
+  margin-bottom:-2px;
+  flex:1;
+}
+.enc-tab.on{color:var(--navy);border-bottom-color:var(--red);}
+.enc-tab:hover{color:var(--navy);}
+
+/* Stableford live table */
+.lvt{width:100%;border-collapse:collapse;font-family:'Barlow Condensed',sans-serif;}
+.lvt th{
+  text-align:left;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--g4);
+  padding:8px 6px;
+  border-bottom:2px solid var(--g2);
+  background:var(--off);
+}
+.lvt td{padding:9px 6px;border-bottom:1px solid var(--g1);font-size:14px;color:var(--text);vertical-align:middle;}
+.lvt tr:last-child td{border-bottom:none;}
+.lvt .lvt-pos{
+  width:32px;text-align:center;font-weight:800;color:var(--g4);
+}
+.lvt .lvt-pos.p1{color:#c9a84c;}
+.lvt .lvt-pos.p2{color:#9aa0ac;}
+.lvt .lvt-pos.p3{color:#cd7f32;}
+.lvt .lvt-name{font-weight:700;color:var(--navy);}
+.lvt .lvt-name .lvt-apo{color:var(--red);font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:13px;margin-right:5px;}
+.lvt .lvt-stb{
+  text-align:center;font-weight:800;font-size:18px;color:var(--navy);width:1%;white-space:nowrap;padding:0 12px;
+}
+.lvt .lvt-hoy{
+  text-align:center;font-size:12px;color:var(--g4);width:1%;white-space:nowrap;padding:0 8px;font-weight:600;
+}
+.lvt .lvt-hoy strong{color:var(--navy);font-weight:800;}
+.lvt .lvt-status{width:1%;text-align:center;padding:0 6px;}
+.lvt .lvt-status .firmada{color:#16a34a;font-size:14px;}
+.lvt .lvt-status .pending{color:var(--g3);font-size:14px;}
+.lvt tr.row-firmada{background:rgba(22,163,74,.04);}
+
+/* Match live cards */
+.enc-match-card{
+  border:var(--border);
+  border-radius:4px;
+  padding:12px 14px;
+  margin-bottom:10px;
+  background:var(--white);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  font-family:'Barlow Condensed',sans-serif;
+}
+.enc-match-side{flex:1;font-weight:700;color:var(--navy);}
+.enc-match-side.right{text-align:right;}
+.enc-match-side .apo{color:var(--red);font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:12px;display:block;margin-bottom:2px;}
+.enc-match-side .name{font-size:13px;color:var(--text);font-weight:600;}
+.enc-match-vs{
+  text-align:center;
+  font-size:13px;
+  font-weight:800;
+  color:var(--g4);
+  background:var(--off);
+  padding:6px 12px;
+  border-radius:3px;
+  min-width:64px;
+}
+.enc-match-vs.cwin-l{background:var(--red);color:#fff;}
+.enc-match-vs.cwin-r{background:var(--navy);color:#fff;}
+.enc-match-vs.cdraw{background:var(--g2);color:var(--navy);}
+.enc-match-side.win .name{color:var(--navy);font-weight:800;}
+.enc-match-side.lose{opacity:.55;}
+
+/* Banner del home cuando hay fecha en curso */
+.home-live-banner{
+  display:none;
+  margin-bottom:18px;
+  background:linear-gradient(135deg, var(--red) 0%, #a30c25 100%);
+  border-radius:6px;
+  padding:14px 18px;
+  cursor:pointer;
+  border:none;
+  width:100%;
+  max-width:420px;
+  margin-left:auto;
+  margin-right:auto;
+  color:#fff;
+  font-family:'Barlow Condensed',sans-serif;
+  text-align:left;
+  align-items:center;
+  gap:14px;
+  box-shadow:0 6px 20px rgba(200,16,46,.4);
+  transition:all .18s ease;
+}
+.home-live-banner.on{display:flex;}
+.home-live-banner:hover{transform:translateY(-1px);box-shadow:0 8px 26px rgba(200,16,46,.55);}
+.home-live-banner .enc-live-dot{margin-right:0;}
+.home-live-banner-info{flex:1;}
+.home-live-banner-title{font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;line-height:1;}
+.home-live-banner-sub{font-size:14px;font-weight:600;letter-spacing:.04em;margin-top:4px;opacity:.95;}
+.home-live-banner-arrow{font-size:22px;opacity:.7;}
+
+/* Subnav button quando hay fecha en curso — efecto rojo destacado */
+.snb.live{
+  background:var(--red) !important;
+  color:#fff !important;
+}
+.snb.live::before{
+  content:'🔴 ';
+  font-size:11px;
+  margin-right:2px;
+}
+/* ══════════ end FECHA EN CURSO ══════════ */
+
 /* Confirm modal */
 .confirm-box{max-width:360px;}
 .confirm-body{padding:18px;}
@@ -819,7 +1002,7 @@ body.home-mode{
   </div>
   <button class="snb" onclick="pg('match',this)">Match</button>
   <button class="snb" onclick="pg('hist',this)">Historia</button>
-  <button class="snb" onclick="pg('mit',this)">Mi Tarjeta</button>
+  <button class="snb" onclick="pg('mit',this)" id="enc-tab-btn">Cargar Tarjeta</button>
   <button class="snb snb-admin" onclick="pg('admin',this)" title="Admin">⚙</button>
 </div>
 
@@ -856,6 +1039,14 @@ body.home-mode{
       </div>
 
       <div class="home-actions">
+        <button class="home-live-banner" id="home-live-banner" onclick="goToFechaEnCurso()">
+          <div class="enc-live-dot"></div>
+          <div class="home-live-banner-info">
+            <div class="home-live-banner-title">EN CURSO</div>
+            <div class="home-live-banner-sub" id="home-live-banner-sub">Fecha — · Cancha</div>
+          </div>
+          <div class="home-live-banner-arrow">›</div>
+        </button>
         <button class="home-btn home-btn-primary" onclick="pg('lb', document.querySelectorAll('.subnav .snb')[1])">
           <span class="hb-icon">🏆</span>
           <span class="hb-txt"><span class="hb-title">Ver Torneo</span><span class="hb-sub">Leaderboard, Fechas, Match</span></span>
@@ -887,14 +1078,55 @@ body.home-mode{
 </div>
 </div>
 
-<!-- ════ MI TARJETA ════ -->
+<!-- ════ FECHA EN CURSO (antes Mi Tarjeta) ════ -->
 <div class="pg" id="pg-mit">
 <div class="wrap" style="max-width:680px;padding:16px;">
+
+  <!-- Header de Fecha en Curso (visible solo si hay fecha activa) -->
+  <div id="enc-header" style="display:none;">
+    <div class="enc-hero">
+      <div class="enc-live-dot"></div>
+      <div class="enc-hero-info">
+        <div class="enc-hero-title"><span id="enc-fecha-num">Fecha —</span> · EN CURSO</div>
+        <div class="enc-hero-sub"><span id="enc-cancha-name">—</span></div>
+      </div>
+      <div class="enc-hero-stat"><span id="enc-firmados">0</span><span class="enc-stat-sep">/</span><span id="enc-total">0</span><div class="enc-stat-lbl">Firmadas</div></div>
+    </div>
+
+    <div class="enc-tabs">
+      <button class="enc-tab on" onclick="encTab('stb', this)">📊 Stableford</button>
+      <button class="enc-tab" onclick="encTab('match', this)">⚔ Match</button>
+      <button class="enc-tab" onclick="encTab('mi', this)">📋 Mi Tarjeta</button>
+    </div>
+  </div>
+
+  <!-- TAB STABLEFORD -->
+  <div id="enc-tab-stb" class="enc-section">
+    <div class="adm-card">
+      <div class="adm-card-hdr">📊 Tabla en Vivo · Stableford</div>
+      <div class="adm-card-body">
+        <div id="enc-stb-list">Cargando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB MATCH -->
+  <div id="enc-tab-match" class="enc-section" style="display:none;">
+    <div class="adm-card">
+      <div class="adm-card-hdr">⚔ Match Play · Resultados Parciales</div>
+      <div class="adm-card-body">
+        <div id="enc-match-list">Cargando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB MI TARJETA -->
+  <div id="enc-tab-mi" class="enc-section" style="display:none;">
 
   <!-- Login screen (matricula only) -->
   <div id="mit-login">
     <div class="adm-card">
-      <div class="adm-card-hdr">👤 Mi Tarjeta · Acceso</div>
+      <div class="adm-card-hdr">👤 Cargar Tarjeta · Acceso</div>
       <div class="adm-card-body">
         <label class="adm-label">Matrícula</label>
         <input type="tel" id="mit-mat-input" class="adm-input" placeholder="Ej: 60803" autocomplete="off">
@@ -961,6 +1193,19 @@ body.home-mode{
 
         <button class="adm-btn-primary" onclick="mitFirmarTarjeta()" style="margin-top:18px;">✍ Firmar Tarjeta</button>
         <div id="mit-save-msg" class="adm-msg" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /enc-tab-mi -->
+
+  <!-- Mensaje cuando no hay fecha en curso -->
+  <div id="enc-empty" style="display:none;">
+    <div class="adm-card">
+      <div class="adm-card-hdr">📋 Sin Fecha Activa</div>
+      <div class="adm-card-body" style="text-align:center;padding:40px 20px;">
+        <div style="font-size:48px;margin-bottom:14px;opacity:.4;">⛳</div>
+        <p style="font-family:'Barlow Condensed',sans-serif;color:var(--g4);font-size:15px;line-height:1.5;">No hay ninguna fecha en curso en este momento.<br>Cuando el admin cree una nueva fecha, aparecerá acá.</p>
       </div>
     </div>
   </div>
@@ -2079,7 +2324,24 @@ function pg(id,btn){
   if(id==='lb')loadLB();
   if(id==='hist')loadHist();
   if(id==='match')loadMatch();
-  if(id==='mit'){ if(MIT_PLAYER) showMitFechas(); else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; } }
+  if(id==='mit'){
+    // Re-load fecha en curso state first
+    loadFechaEnCurso();
+    // Default tab to Stableford and load it
+    setTimeout(function(){
+      if(ENC_FECHA){
+        // Activate stableford tab
+        document.querySelectorAll('.enc-tab').forEach(t => t.classList.remove('on'));
+        const stbBtn = document.querySelector('.enc-tab');
+        if(stbBtn) stbBtn.classList.add('on');
+        showEncTab('stb');
+        loadEncStableford();
+      } else {
+        // No fecha en curso → still allow login flow if user wants
+        if(MIT_PLAYER) showMitFechas(); else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; }
+      }
+    }, 200);
+  }
   if(fechaNum) loadFechaDinamica(fechaNum);
 }
 
@@ -3515,11 +3777,270 @@ window.addEventListener('load', function(){
   setTimeout(loadFechasMenu, 400);
 });
 
-// ══════════ HOME ══════════
-let HOME_TARGET_MS = null;
-let HOME_TICK_INTERVAL = null;
+// ══════════ FECHA EN CURSO ══════════
+let ENC_FECHA = null;       // { fecha, cancha, totalJugadores, firmados } or null
+let ENC_CUR_TAB = 'stb';    // active sub-tab
 
-function loadHome(){
+function loadFechaEnCurso(){
+  // Called from home/lb load and refreshes
+  ngtApiGet('fechaEnCurso').then(r => {
+    const data = (r && r.data) || null;
+    ENC_FECHA = data;
+    updateEncUI();
+  }).catch(e => {
+    console.error('loadFechaEnCurso error:', e);
+  });
+}
+
+function updateEncUI(){
+  const banner = document.getElementById('home-live-banner');
+  const subnavBtn = document.getElementById('enc-tab-btn');
+  const headerEl = document.getElementById('enc-header');
+  const emptyEl = document.getElementById('enc-empty');
+  const tabStb = document.getElementById('enc-tab-stb');
+  const tabMatch = document.getElementById('enc-tab-match');
+  const tabMi = document.getElementById('enc-tab-mi');
+
+  if(!ENC_FECHA){
+    // No fecha en curso
+    if(banner) banner.classList.remove('on');
+    if(subnavBtn){
+      subnavBtn.classList.remove('live');
+      subnavBtn.textContent = 'Cargar Tarjeta';
+    }
+    if(headerEl) headerEl.style.display = 'none';
+    if(tabStb) tabStb.style.display = 'none';
+    if(tabMatch) tabMatch.style.display = 'none';
+    if(tabMi) tabMi.style.display = 'none';
+    if(emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+
+  // Hay fecha en curso
+  const f = ENC_FECHA;
+  const canchaShort = f.cancha ? f.cancha.split('-')[0].trim() : 'Cancha';
+
+  if(banner){
+    banner.classList.add('on');
+    const sub = document.getElementById('home-live-banner-sub');
+    if(sub) sub.textContent = 'Fecha ' + f.fecha + ' · ' + canchaShort;
+  }
+  if(subnavBtn){
+    subnavBtn.classList.add('live');
+    subnavBtn.textContent = 'Fecha ' + f.fecha + ' · ' + canchaShort;
+  }
+  if(headerEl){
+    headerEl.style.display = 'block';
+    document.getElementById('enc-fecha-num').textContent = 'Fecha ' + f.fecha;
+    document.getElementById('enc-cancha-name').textContent = f.cancha || 'Cancha a definir';
+    document.getElementById('enc-firmados').textContent = f.firmados;
+    document.getElementById('enc-total').textContent = f.totalJugadores;
+  }
+  if(emptyEl) emptyEl.style.display = 'none';
+  // Sections visibility based on current tab
+  showEncTab(ENC_CUR_TAB);
+}
+
+function showEncTab(name){
+  ENC_CUR_TAB = name;
+  const tabStb = document.getElementById('enc-tab-stb');
+  const tabMatch = document.getElementById('enc-tab-match');
+  const tabMi = document.getElementById('enc-tab-mi');
+  if(tabStb) tabStb.style.display = (name === 'stb') ? 'block' : 'none';
+  if(tabMatch) tabMatch.style.display = (name === 'match') ? 'block' : 'none';
+  if(tabMi) tabMi.style.display = (name === 'mi') ? 'block' : 'none';
+}
+
+function encTab(name, btn){
+  document.querySelectorAll('.enc-tab').forEach(t => t.classList.remove('on'));
+  if(btn) btn.classList.add('on');
+  showEncTab(name);
+
+  if(name === 'stb') loadEncStableford();
+  if(name === 'match') loadEncMatches();
+}
+
+function goToFechaEnCurso(){
+  // Navigate to mit page (which is now Fecha en Curso)
+  const btn = document.getElementById('enc-tab-btn');
+  pg('mit', btn);
+}
+
+// Stableford Live Table
+function loadEncStableford(){
+  if(!ENC_FECHA) return;
+  const list = document.getElementById('enc-stb-list');
+  if(!list) return;
+  list.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando tabla...</div>';
+  ngtApiGet('tablaEnVivo', { fecha: ENC_FECHA.fecha }).then(r => {
+    const data = (r && r.data) || null;
+    if(!data || !data.jugadores || !data.jugadores.length){
+      list.innerHTML = '<div class="s dim" style="padding:20px;text-align:center;">Sin datos cargados todavía</div>';
+      return;
+    }
+    let html = '<table class="lvt"><thead><tr>' +
+      '<th class="c" style="width:32px">#</th>' +
+      '<th>Jugador</th>' +
+      '<th class="c">Hoyos</th>' +
+      '<th class="c">Stb</th>' +
+      '<th class="c" style="width:30px"></th>' +
+    '</tr></thead><tbody>';
+
+    data.jugadores.forEach((j, i) => {
+      const pos = i + 1;
+      let posCls = 'lvt-pos';
+      if(pos === 1) posCls += ' p1';
+      else if(pos === 2) posCls += ' p2';
+      else if(pos === 3) posCls += ' p3';
+
+      const apo = j.apodo || '';
+      const nombreFmt = fmtHistName(j.nombre || '');
+      const nameHtml = (apo ? '<span class="lvt-apo">' + apo + '</span>' : '') + nombreFmt;
+
+      const rowCls = j.firmada ? 'row-firmada' : '';
+      const statusIcon = j.firmada
+        ? '<span class="firmada" title="Firmada">✓</span>'
+        : '<span class="pending" title="Pendiente">○</span>';
+
+      const hoyosTxt = '<strong>' + j.holesPlayed + '</strong>/18';
+
+      html += '<tr class="' + rowCls + '">' +
+        '<td class="' + posCls + '">' + pos + '</td>' +
+        '<td class="lvt-name">' + nameHtml + '</td>' +
+        '<td class="lvt-hoy">' + hoyosTxt + '</td>' +
+        '<td class="lvt-stb">' + j.stableford + '</td>' +
+        '<td class="lvt-status">' + statusIcon + '</td>' +
+      '</tr>';
+    });
+
+    html += '</tbody></table>';
+    list.innerHTML = html;
+  }).catch(e => {
+    list.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+  });
+}
+
+// Match Live
+function loadEncMatches(){
+  if(!ENC_FECHA) return;
+  const list = document.getElementById('enc-match-list');
+  if(!list) return;
+  list.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando matches...</div>';
+  // Reuse the existing endpoint that returns matches for a fecha
+  ngtApiGet('fechaResultados', { fecha: ENC_FECHA.fecha }).then(r => {
+    const data = (r && r.data) || null;
+    if(!data || !data.matches || !data.matches.length){
+      list.innerHTML = '<div class="s dim" style="padding:20px;text-align:center;">No hay matches cargados todavía</div>';
+      return;
+    }
+    let html = '';
+    data.matches.forEach((m, i) => {
+      // Render the match row — for live, we just show players (no result calc here)
+      // Live result calculation would require fetching the hole-by-hole scores from MATCH sheet
+      // We can do a lighter version: just show "vs" with no result (gets calculated in next iteration if needed)
+      const j1 = m.j1Name || m.j1 || '';
+      const j2 = m.j2Name || m.j2 || '';
+
+      html += '<div class="enc-match-card" data-match-idx="' + i + '">' +
+        '<div class="enc-match-side"><span class="apo">' + j1 + '</span></div>' +
+        '<div class="enc-match-vs cdraw" id="enc-mvs-' + i + '">VS</div>' +
+        '<div class="enc-match-side right"><span class="apo">' + j2 + '</span></div>' +
+      '</div>';
+    });
+    list.innerHTML = html;
+
+    // Now fetch detailed match scores from MATCH sheet via gviz (same approach as renderFechaDinamica)
+    loadMatchResultsForFechaInCurso(ENC_FECHA.fecha, data.matches);
+  }).catch(e => {
+    list.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+  });
+}
+
+function loadMatchResultsForFechaInCurso(fecha, matches){
+  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+    '/gviz/tq?tqx=out:json;responseHandler:encMatchScoresCallback' +
+    '&sheet=' + encodeURIComponent('MATCH') +
+    '&range=D2:X' +
+    '&headers=0' +
+    '&_=' + Date.now();
+  window.__ENC_PENDING = { fecha: String(fecha), matches: matches };
+  const old = document.getElementById('enc-match-script');
+  if(old) old.remove();
+  const s = document.createElement('script');
+  s.id = 'enc-match-script'; s.src = url;
+  s.onerror = function(){};
+  document.head.appendChild(s);
+}
+
+function encMatchScoresCallback(response){
+  try {
+    const pending = window.__ENC_PENDING;
+    if(!pending) return;
+    const rows = response.table.rows || [];
+    const allRows = [];
+    rows.forEach(r => {
+      const line = [];
+      if(r.c) r.c.forEach(c => {
+        let val = (c && c.v !== null && c.v !== undefined) ? String(c.v) : '';
+        val = val.replace(/<[^>]*>/g, '').trim();
+        line.push(val);
+      });
+      allRows.push(line);
+    });
+
+    const pairs = [];
+    for(let i = 0; i < allRows.length - 1; i += 2){
+      const rA = allRows[i];
+      const rB = allRows[i+1];
+      if(!rA || !rB) continue;
+      const nameA = (rA[0]||'').trim();
+      const nameB = (rB[0]||'').trim();
+      if(!nameA || !nameB) continue;
+      pairs.push({ nameA: nameA, nameB: nameB, rowA: rA, rowB: rB });
+    }
+
+    pending.matches.forEach((m, idx) => {
+      const found = pairs.find(p => p.nameA === m.j1Name && p.nameB === m.j2Name);
+      if(!found) return;
+      const res = calcMatchResult(found.rowA, found.rowB);
+
+      const card = document.querySelector('[data-match-idx="' + idx + '"]');
+      if(!card) return;
+      const sides = card.querySelectorAll('.enc-match-side');
+      const vsEl = card.querySelector('.enc-match-vs');
+
+      if(!sides[0] || !sides[1] || !vsEl) return;
+
+      sides[0].classList.remove('win','lose','draw');
+      sides[1].classList.remove('win','lose','draw');
+      vsEl.classList.remove('cwin-l','cwin-r','cdraw');
+
+      if(res.winner === 'A'){
+        sides[0].classList.add('win');
+        sides[1].classList.add('lose');
+        vsEl.classList.add('cwin-l');
+        vsEl.textContent = res.resultStr;
+      } else if(res.winner === 'B'){
+        sides[0].classList.add('lose');
+        sides[1].classList.add('win');
+        vsEl.classList.add('cwin-r');
+        vsEl.textContent = res.resultStr;
+      } else if(res.winner === 'draw'){
+        sides[0].classList.add('draw');
+        sides[1].classList.add('draw');
+        vsEl.classList.add('cdraw');
+        vsEl.textContent = res.resultStr;
+      } else {
+        vsEl.classList.add('cdraw');
+        vsEl.textContent = res.resultStr || 'VS';
+      }
+    });
+  } catch(e){
+    console.error('encMatchScoresCallback error:', e);
+  }
+}
+
+
   ngtApiGet('proximaFecha').then(r => {
     const data = (r && r.data) || null;
     const numEl = document.getElementById('hfi-num');
@@ -3591,6 +4112,7 @@ function tickCountdown(){
 // Load home data right away (home is the default landing page)
 document.body.classList.add('home-mode');
 loadHome();
+loadFechaEnCurso();
 loadLB();
 </script>
 </body>
