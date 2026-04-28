@@ -774,6 +774,208 @@ body.home-mode{
 
 /* ══════════ end HOME ══════════ */
 
+/* ══════════ PERFILES ══════════ */
+/* Hero / identidad */
+/* Picker filtrable */
+.perf-picker-list{
+  margin-top:12px;
+  max-height:360px;
+  overflow-y:auto;
+  border:1px solid var(--g2);
+  border-radius:3px;
+  background:var(--white);
+}
+.perf-pick-row{
+  display:flex;
+  width:100%;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 14px;
+  background:var(--white);
+  border:none;
+  border-bottom:1px solid var(--g1);
+  cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:13px;
+  text-align:left;
+  transition:background .12s ease;
+}
+.perf-pick-row:last-child{border-bottom:none;}
+.perf-pick-row:hover{background:var(--off);}
+.perf-pick-row.on{background:rgba(200,16,46,.08);border-left:3px solid var(--red);padding-left:11px;}
+.perf-pick-name{flex:1;color:var(--text);font-weight:600;}
+.perf-pick-debut{
+  font-size:10px;
+  color:var(--g4);
+  font-weight:500;
+  letter-spacing:.06em;
+  white-space:nowrap;
+}
+
+.perf-hero{
+  background:linear-gradient(135deg, var(--navy) 0%, #001a37 100%);
+  color:#fff;
+  border-radius:6px;
+  padding:18px 20px;
+  margin-bottom:14px;
+  position:relative;
+  overflow:hidden;
+}
+.perf-hero::before{
+  content:'';position:absolute;left:0;right:0;top:0;height:3px;
+  background:linear-gradient(90deg, var(--gold) 0%, var(--red) 100%);
+}
+.perf-hero-apo{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:30px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--gold);line-height:1;margin-bottom:4px;
+}
+.perf-hero-name{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:14px;font-weight:500;letter-spacing:.06em;
+  color:rgba(255,255,255,.85);text-transform:uppercase;margin-bottom:14px;
+}
+.perf-hero-stats{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+  border-top:1px solid rgba(255,255,255,.12);padding-top:12px;
+}
+.perf-hero-stat{text-align:center;font-family:'Barlow Condensed',sans-serif;}
+.perf-hero-stat-num{font-size:22px;font-weight:800;color:#fff;line-height:1;}
+.perf-hero-stat-lbl{font-size:9px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-top:4px;}
+
+/* Cifras key cards */
+.perf-cifras{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px;
+}
+.perf-cifra{
+  background:var(--white);border:var(--border);border-radius:4px;
+  padding:14px 14px;position:relative;overflow:hidden;
+}
+.perf-cifra::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--red);
+}
+.perf-cifra-lbl{
+  font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--g4);margin-bottom:4px;
+}
+.perf-cifra-val{
+  font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:800;
+  color:var(--navy);line-height:1;
+}
+.perf-cifra-meta{
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;
+  color:var(--g4);margin-top:4px;letter-spacing:.02em;
+}
+
+/* Bloques */
+.perf-block{
+  background:var(--white);border:var(--border);border-radius:4px;
+  padding:14px 16px;margin-bottom:14px;
+}
+.perf-block-hdr{
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:800;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--navy);
+  border-bottom:2px solid var(--g2);padding-bottom:8px;margin-bottom:12px;
+}
+
+/* Distribución de hoyos: barras horizontales */
+.perf-bars{display:flex;flex-direction:column;gap:7px;}
+.perf-bar-row{display:grid;grid-template-columns:90px 1fr 50px;gap:10px;align-items:center;}
+.perf-bar-lbl{
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--text);
+}
+.perf-bar-track{
+  height:14px;background:var(--g1);border-radius:3px;overflow:hidden;position:relative;
+}
+.perf-bar-fill{
+  height:100%;background:var(--navy);border-radius:3px;transition:width .3s ease;
+}
+.perf-bar-fill.alb{background:#9333ea;}
+.perf-bar-fill.eag{background:#c9a84c;}
+.perf-bar-fill.bir{background:#16a34a;}
+.perf-bar-fill.par{background:#2563eb;}
+.perf-bar-fill.bog{background:#f59e0b;}
+.perf-bar-fill.dbl{background:#ea580c;}
+.perf-bar-fill.tri{background:#dc2626;}
+.perf-bar-val{
+  font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;
+  color:var(--navy);text-align:right;
+}
+
+/* Logros */
+.perf-logros{display:flex;gap:10px;flex-wrap:wrap;}
+.perf-logro{
+  flex:1;min-width:120px;text-align:center;padding:10px 8px;
+  background:var(--off);border-radius:3px;border:1px solid var(--g2);
+  font-family:'Barlow Condensed',sans-serif;
+}
+.perf-logro-num{font-size:24px;font-weight:800;color:var(--navy);line-height:1;}
+.perf-logro-lbl{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);margin-top:5px;}
+.perf-logro.gold .perf-logro-num{color:#c9a84c;}
+.perf-logro.silver .perf-logro-num{color:#9aa0ac;}
+.perf-logro.bronze .perf-logro-num{color:#cd7f32;}
+.perf-podios-detail{
+  margin-top:10px;font-family:'Barlow Condensed',sans-serif;font-size:11px;
+  color:var(--g4);text-align:center;letter-spacing:.04em;
+}
+.perf-podio-item{display:inline-block;margin:0 6px;}
+.perf-podio-item .y{color:var(--navy);font-weight:700;}
+
+/* Canchas */
+.perf-cancha-list{font-family:'Barlow Condensed',sans-serif;}
+.perf-cancha-row{
+  display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;
+  padding:7px 0;border-bottom:1px solid var(--g1);
+}
+.perf-cancha-row:last-child{border-bottom:none;}
+.perf-cancha-name{font-size:13px;font-weight:700;color:var(--navy);}
+.perf-cancha-veces{font-size:11px;color:var(--g4);font-weight:600;}
+.perf-cancha-prom{font-size:14px;font-weight:800;color:var(--red);min-width:48px;text-align:right;}
+
+/* Eclectic table */
+.perf-ecl-pick{margin-bottom:12px;}
+.perf-ecl-table{
+  width:100%;border-collapse:collapse;
+  font-family:'Barlow Condensed',sans-serif;
+}
+.perf-ecl-table th,.perf-ecl-table td{padding:6px 4px;text-align:center;}
+.perf-ecl-table th{
+  font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--g4);background:var(--off);border-bottom:2px solid var(--g2);
+}
+.perf-ecl-table .lbl{
+  text-align:left;font-size:11px;font-weight:700;color:var(--g4);
+  text-transform:uppercase;letter-spacing:.06em;width:50px;
+}
+.perf-ecl-hoyo{font-size:11px;font-weight:600;color:var(--g4);}
+.perf-ecl-par{font-size:13px;font-weight:600;color:var(--text);}
+.perf-ecl-score{font-size:14px;font-weight:800;color:var(--navy);}
+.perf-ecl-score.eagle{color:#c9a84c;}
+.perf-ecl-score.birdie{color:#16a34a;}
+.perf-ecl-score.par{color:#2563eb;}
+.perf-ecl-score.bogey{color:#f59e0b;}
+.perf-ecl-score.dbl{color:#ea580c;}
+.perf-ecl-score.tri{color:#dc2626;}
+.perf-ecl-totals{
+  margin-top:12px;display:flex;justify-content:space-between;
+  background:var(--navy);color:#fff;padding:10px 14px;border-radius:3px;
+  font-family:'Barlow Condensed',sans-serif;
+}
+.perf-ecl-totals .lbl{font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);}
+.perf-ecl-totals .num{font-size:22px;font-weight:800;line-height:1;}
+
+@media(max-width:540px){
+  .perf-cifras{grid-template-columns:1fr 1fr;}
+  .perf-cifra-val{font-size:24px;}
+  .perf-hero-apo{font-size:24px;}
+  .perf-bar-row{grid-template-columns:70px 1fr 40px;}
+  .perf-ecl-table .perf-ecl-hoyo{font-size:10px;}
+  .perf-ecl-table .lbl{font-size:10px;width:42px;}
+}
+/* ══════════ end PERFILES ══════════ */
+
 /* Confirm modal */
 .confirm-box{max-width:360px;}
 .confirm-body{padding:18px;}
@@ -819,7 +1021,8 @@ body.home-mode{
   </div>
   <button class="snb" onclick="pg('match',this)">Match</button>
   <button class="snb" onclick="pg('hist',this)">Historia</button>
-  <button class="snb" onclick="pg('mit',this)">Mi Tarjeta</button>
+  <button class="snb" onclick="pg('perf',this)">Perfiles</button>
+  <button class="snb" onclick="pg('mit',this)">Cargar Tarjeta</button>
   <button class="snb snb-admin" onclick="pg('admin',this)" title="Admin">⚙</button>
 </div>
 
@@ -884,6 +1087,27 @@ body.home-mode{
   <div class="lb-wrap">
     <div id="lb-body"><div class="lb-status"><div class="spinner"></div>Conectando con Google Sheets...</div></div>
   </div>
+</div>
+</div>
+
+<!-- ════ PERFILES ════ -->
+<div class="pg" id="pg-perf">
+<div class="wrap" style="max-width:780px;padding:16px;">
+
+  <!-- Player picker -->
+  <div class="adm-card" style="margin-bottom:14px;">
+    <div class="adm-card-hdr">👤 Perfil de Jugador</div>
+    <div class="adm-card-body">
+      <label class="adm-label">Buscar jugador</label>
+      <input type="text" id="perf-search" class="adm-input" placeholder="Escribí un nombre o apodo..." oninput="perfFilterPicker(this.value)" autocomplete="off">
+      <div id="perf-picker-list" class="perf-picker-list">
+        <div class="s dim" style="padding:14px;text-align:center;">Cargando jugadores...</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="perf-content"></div>
+
 </div>
 </div>
 
@@ -2078,6 +2302,7 @@ function pg(id,btn){
   if(id==='home')loadHome();
   if(id==='lb')loadLB();
   if(id==='hist')loadHist();
+  if(id==='perf')loadPerfPicker();
   if(id==='match')loadMatch();
   if(id==='mit'){ if(MIT_PLAYER) showMitFechas(); else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; } }
   if(fechaNum) loadFechaDinamica(fechaNum);
@@ -3514,6 +3739,324 @@ function fechaMatchScoresCallback(response){
 window.addEventListener('load', function(){
   setTimeout(loadFechasMenu, 400);
 });
+
+// ══════════ PERFILES ══════════
+let PERF_JUGADORES = null;
+let PERF_CACHE = {};
+
+// JUGADORES en NGT DB tienen formato "MARCOS BARCHI" (nombre primero).
+// fmtHistName() espera apellido primero. Hacemos un wrapper que invierte para los compuestos conocidos.
+const COMPOUND_NAMES_FRONT = ['MARTINEZ FANO', 'RODRIGUEZ NAZAR', 'LAVALLE COBO', 'DE SAINT LEGER', 'CHILLADO BIAUS', 'PEREZ RIBA'];
+
+function perfFmtName(nombreFull){
+  if(!nombreFull) return '';
+  const up = nombreFull.toUpperCase().trim();
+  // Detectar apellido compuesto al final
+  let comp = COMPOUND_NAMES_FRONT.find(c => up.endsWith(c));
+  let apellido, nombre;
+  if(comp){
+    apellido = comp;
+    nombre = up.slice(0, up.length - comp.length).trim();
+  } else {
+    const parts = up.split(' ');
+    apellido = parts[parts.length - 1];
+    nombre = parts.slice(0, -1).join(' ');
+  }
+  // Devolver con formato "APELLIDO Nombre" para reusar fmtHistName
+  const reordered = apellido + (nombre ? ' ' + nombre : '');
+  return fmtHistName(reordered);
+}
+
+function loadPerfPicker(){
+  if(PERF_JUGADORES){ renderPerfPicker(); return; }
+  ngtApiGet('jugadoresHist').then(r => {
+    const list = (r && r.data) || [];
+    list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+    PERF_JUGADORES = list;
+    renderPerfPicker();
+  }).catch(e => {
+    const cont = document.getElementById('perf-picker-list');
+    if(cont) cont.innerHTML = '<div class="lb-error">Error cargando jugadores</div>';
+  });
+}
+
+function renderPerfPicker(filter){
+  const cont = document.getElementById('perf-picker-list');
+  if(!cont || !PERF_JUGADORES) return;
+  const f = (filter || '').toUpperCase().trim();
+  // Sin filtro mostramos los 5 más relevantes (los más recientes en debut) o nada
+  // Mejor: mostramos siempre toda la lista pero ordenada alfabéticamente.
+  const filtered = f
+    ? PERF_JUGADORES.filter(j => (j.nombre || '').toUpperCase().indexOf(f) >= 0)
+    : PERF_JUGADORES;
+
+  if(!filtered.length){
+    cont.innerHTML = '<div class="s dim" style="padding:14px;text-align:center;">Sin resultados</div>';
+    return;
+  }
+
+  let html = '';
+  filtered.forEach(j => {
+    const nameHtml = perfFmtName(j.nombre);
+    const debut = j.anioDebut ? '<span class="perf-pick-debut">desde ' + j.anioDebut + '</span>' : '';
+    html += '<button class="perf-pick-row" onclick="selectPerf(\'' + j.matricula + '\', this)">' +
+      '<span class="perf-pick-name">' + nameHtml + '</span>' +
+      debut +
+    '</button>';
+  });
+  cont.innerHTML = html;
+}
+
+function perfFilterPicker(value){
+  renderPerfPicker(value);
+}
+
+function selectPerf(matricula, btn){
+  // Highlight selection visually
+  document.querySelectorAll('.perf-pick-row.on').forEach(b => b.classList.remove('on'));
+  if(btn) btn.classList.add('on');
+  loadPerfil(matricula);
+  // Scroll to perfil content
+  setTimeout(() => {
+    const el = document.getElementById('perf-content');
+    if(el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 200);
+}
+
+function loadPerfil(matricula){
+  if(!matricula){ document.getElementById('perf-content').innerHTML = ''; return; }
+  const cont = document.getElementById('perf-content');
+  cont.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando perfil...</div>';
+
+  if(PERF_CACHE[matricula]){
+    renderPerfil(PERF_CACHE[matricula]);
+    return;
+  }
+
+  ngtApiGet('jugadorPerfil', { matricula: matricula }).then(r => {
+    if(!r || !r.ok || !r.data || !r.data.ok){
+      cont.innerHTML = '<div class="lb-error">No se pudo cargar el perfil.</div>';
+      return;
+    }
+    PERF_CACHE[matricula] = r.data;
+    renderPerfil(r.data);
+  }).catch(e => {
+    cont.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+  });
+}
+
+function renderPerfil(data){
+  const cont = document.getElementById('perf-content');
+  const id = data.identidad || {};
+  const cif = data.cifras || {};
+  const g = data.golpes || {};
+  const b = data.bonus || {};
+  const c = data.campeones || { p1:0, p2:0, p3:0, podios:[] };
+
+  // ── HERO ──
+  const apoFmt = perfFmtName(id.nombre);
+  // Extract just the apodo (the bold red part)
+  const tmp = document.createElement('div');
+  tmp.innerHTML = apoFmt;
+  const apoSpan = tmp.querySelector('.hist-ap');
+  const nameSpan = tmp.querySelector('.hist-nm');
+  const apo = apoSpan ? apoSpan.textContent : '';
+  const nombre = nameSpan ? nameSpan.textContent : '';
+
+  let html = '<div class="perf-hero">' +
+    '<div class="perf-hero-apo">' + (apo || id.nombre) + '</div>' +
+    '<div class="perf-hero-name">' + (nombre || '') + '</div>' +
+    '<div class="perf-hero-stats">' +
+      '<div class="perf-hero-stat"><div class="perf-hero-stat-num">' + (id.anioDebut || '—') + '</div><div class="perf-hero-stat-lbl">Debut</div></div>' +
+      '<div class="perf-hero-stat"><div class="perf-hero-stat-num">' + (id.edicionesJugadas || 0) + '</div><div class="perf-hero-stat-lbl">Ediciones</div></div>' +
+      '<div class="perf-hero-stat"><div class="perf-hero-stat-num">' + (id.fechasJugadas || 0) + '</div><div class="perf-hero-stat-lbl">Fechas</div></div>' +
+    '</div>' +
+  '</div>';
+
+  // ── CIFRAS CLAVE ──
+  const ms = cif.mejorStableford;
+  const mg = cif.mejorGross;
+  const ps = cif.promedioStableford;
+  const ha = cif.hcpActual;
+
+  html += '<div class="perf-cifras">' +
+    '<div class="perf-cifra"><div class="perf-cifra-lbl">Mejor Stableford</div><div class="perf-cifra-val">' + (ms ? ms.stb : '—') + '</div>' +
+      (ms ? '<div class="perf-cifra-meta">' + (ms.cancha || '') + ' · ' + (ms.anio || '') + '</div>' : '<div class="perf-cifra-meta">Sin datos</div>') +
+    '</div>' +
+    '<div class="perf-cifra"><div class="perf-cifra-lbl">Mejor Gross</div><div class="perf-cifra-val">' + (mg ? mg.gross : '—') + '</div>' +
+      (mg ? '<div class="perf-cifra-meta">' + (mg.cancha || '') + ' · ' + (mg.anio || '') + '</div>' : '<div class="perf-cifra-meta">Sin datos</div>') +
+    '</div>' +
+    '<div class="perf-cifra"><div class="perf-cifra-lbl">Promedio Stableford</div><div class="perf-cifra-val">' + (ps !== null && ps !== undefined ? ps : '—') + '</div><div class="perf-cifra-meta">Histórico</div></div>' +
+    '<div class="perf-cifra"><div class="perf-cifra-lbl">HCP Actual</div><div class="perf-cifra-val">' + (ha !== null && ha !== undefined ? ha : '—') + '</div><div class="perf-cifra-meta">de juego</div></div>' +
+  '</div>';
+
+  // ── DISTRIBUCIÓN DE HOYOS ──
+  const totalHoyos = (g.albatros||0) + (g.aguilas||0) + (g.birdies||0) + (g.pares||0) + (g.bogeys||0) + (g.dobles||0) + (g.triples||0);
+  const maxBar = Math.max(g.albatros||0, g.aguilas||0, g.birdies||0, g.pares||0, g.bogeys||0, g.dobles||0, g.triples||0, 1);
+  function bar(label, val, cls){
+    const w = Math.round(((val||0) / maxBar) * 100);
+    return '<div class="perf-bar-row">' +
+      '<div class="perf-bar-lbl">' + label + '</div>' +
+      '<div class="perf-bar-track"><div class="perf-bar-fill ' + cls + '" style="width:' + w + '%;"></div></div>' +
+      '<div class="perf-bar-val">' + (val || 0) + '</div>' +
+    '</div>';
+  }
+
+  html += '<div class="perf-block">' +
+    '<div class="perf-block-hdr">⛳ Distribución de Hoyos · Total ' + totalHoyos + '</div>' +
+    '<div class="perf-bars">' +
+      bar('Albatros', g.albatros, 'alb') +
+      bar('Águilas', g.aguilas, 'eag') +
+      bar('Birdies', g.birdies, 'bir') +
+      bar('Pares', g.pares, 'par') +
+      bar('Bogeys', g.bogeys, 'bog') +
+      bar('Dobles', g.dobles, 'dbl') +
+      bar('Triples+', g.triples, 'tri') +
+    '</div>' +
+  '</div>';
+
+  // ── LOGROS ──
+  let podiosDetail = '';
+  if(c.podios && c.podios.length){
+    const grouped = c.podios.slice().sort((a,b) => (a.anio||0) - (b.anio||0));
+    podiosDetail = '<div class="perf-podios-detail">' + grouped.map(p =>
+      '<span class="perf-podio-item"><span class="y">' + p.anio + ':</span> ' + (p.pos === 1 ? '🥇' : p.pos === 2 ? '🥈' : '🥉') + '</span>'
+    ).join('') + '</div>';
+  }
+
+  html += '<div class="perf-block">' +
+    '<div class="perf-block-hdr">🏆 Logros</div>' +
+    '<div class="perf-logros">' +
+      '<div class="perf-logro gold"><div class="perf-logro-num">' + (c.p1||0) + '</div><div class="perf-logro-lbl">🥇 Campeón</div></div>' +
+      '<div class="perf-logro silver"><div class="perf-logro-num">' + (c.p2||0) + '</div><div class="perf-logro-lbl">🥈 Subcampeón</div></div>' +
+      '<div class="perf-logro bronze"><div class="perf-logro-num">' + (c.p3||0) + '</div><div class="perf-logro-lbl">🥉 Tercero</div></div>' +
+      '<div class="perf-logro"><div class="perf-logro-num">' + (b.ldGanados||0) + '</div><div class="perf-logro-lbl">💪 Long Drives</div></div>' +
+      '<div class="perf-logro"><div class="perf-logro-num">' + (b.baGanados||0) + '</div><div class="perf-logro-lbl">🎯 Best Approaches</div></div>' +
+    '</div>' +
+    podiosDetail +
+  '</div>';
+
+  // ── CANCHAS ──
+  const cmj = data.canchaMasJugada;
+  const top = data.canchasTopStableford || [];
+
+  let canchasHtml = '';
+  if(cmj){
+    canchasHtml += '<div class="perf-cancha-row" style="background:var(--off);padding:8px;border-radius:3px;margin-bottom:8px;border-bottom:none;">' +
+      '<div class="perf-cancha-name">⭐ Más Jugada · ' + cmj.nombre + '</div>' +
+      '<div class="perf-cancha-veces">' + cmj.veces + ' veces</div>' +
+      '<div></div>' +
+    '</div>';
+  }
+  if(top.length){
+    canchasHtml += '<div class="perf-block-hdr" style="font-size:10px;margin-top:8px;border-bottom:none;padding-bottom:4px;">Top Stableford Promedio (mín. 3 rondas)</div>';
+    top.forEach((t, i) => {
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+      canchasHtml += '<div class="perf-cancha-row">' +
+        '<div class="perf-cancha-name">' + medal + ' ' + t.nombre + '</div>' +
+        '<div class="perf-cancha-veces">' + t.veces + ' rondas</div>' +
+        '<div class="perf-cancha-prom">' + t.promedio + '</div>' +
+      '</div>';
+    });
+  }
+  if(!cmj && !top.length) canchasHtml = '<div class="s dim">Sin datos de canchas</div>';
+
+  html += '<div class="perf-block">' +
+    '<div class="perf-block-hdr">🏌 Canchas</div>' +
+    '<div class="perf-cancha-list">' + canchasHtml + '</div>' +
+  '</div>';
+
+  // ── ECLECTIC ──
+  const cj = data.canchasJugadas || [];
+  let ecOptions = '<option value="">— Seleccioná una cancha —</option>';
+  cj.forEach(c => {
+    ecOptions += '<option value="' + c.id + '">' + c.nombre + ' (' + c.veces + ')</option>';
+  });
+
+  html += '<div class="perf-block">' +
+    '<div class="perf-block-hdr">🃏 Tarjeta Eclectic por Cancha</div>' +
+    '<div class="perf-ecl-pick">' +
+      '<select class="adm-input" onchange="loadEclectic(\'' + id.matricula + '\', this.value)">' + ecOptions + '</select>' +
+    '</div>' +
+    '<div id="perf-ecl-result"><div class="s dim" style="text-align:center;padding:14px;">Elegí una cancha para ver tu mejor score histórico hoyo por hoyo</div></div>' +
+  '</div>';
+
+  cont.innerHTML = html;
+}
+
+function loadEclectic(matricula, canchaId){
+  const out = document.getElementById('perf-ecl-result');
+  if(!canchaId){ out.innerHTML = '<div class="s dim" style="text-align:center;padding:14px;">Elegí una cancha</div>'; return; }
+  out.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando...</div>';
+  ngtApiGet('jugadorEclectic', { matricula: matricula, cancha: canchaId }).then(r => {
+    const data = (r && r.data) || null;
+    if(!data || !data.ok){
+      out.innerHTML = '<div class="lb-error">No se pudo cargar la tarjeta</div>';
+      return;
+    }
+    renderEclectic(data);
+  }).catch(e => {
+    out.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+  });
+}
+
+function renderEclectic(data){
+  const out = document.getElementById('perf-ecl-result');
+  const pares = data.pares || [];
+  const ecl = data.eclectic || [];
+
+  function scoreClass(score, par){
+    if(score === null || !par) return '';
+    const d = score - par;
+    if(d <= -2) return 'eagle';
+    if(d === -1) return 'birdie';
+    if(d === 0) return 'par';
+    if(d === 1) return 'bogey';
+    if(d === 2) return 'dbl';
+    return 'tri';
+  }
+
+  function nine(from, to, lbl){
+    let h = '<table class="perf-ecl-table"><thead><tr><th class="lbl">' + lbl + '</th>';
+    for(let i = from; i < to; i++) h += '<th><div class="perf-ecl-hoyo">H' + (i+1) + '</div></th>';
+    h += '<th><div class="perf-ecl-hoyo">Tot</div></th></tr></thead><tbody>';
+    // Par row
+    h += '<tr><td class="lbl">Par</td>';
+    let parTot = 0;
+    for(let i = from; i < to; i++){
+      const p = pares[i];
+      h += '<td><span class="perf-ecl-par">' + (p || '—') + '</span></td>';
+      if(p) parTot += p;
+    }
+    h += '<td><span class="perf-ecl-par">' + parTot + '</span></td></tr>';
+    // Score row
+    h += '<tr><td class="lbl">Mejor</td>';
+    let scoreTot = 0;
+    let allOk = true;
+    for(let i = from; i < to; i++){
+      const s = ecl[i];
+      const cls = scoreClass(s, pares[i]);
+      h += '<td><span class="perf-ecl-score ' + cls + '">' + (s !== null ? s : '—') + '</span></td>';
+      if(s !== null) scoreTot += s;
+      else allOk = false;
+    }
+    h += '<td><span class="perf-ecl-score">' + (allOk ? scoreTot : '—') + '</span></td></tr>';
+    h += '</tbody></table>';
+    return h;
+  }
+
+  let html = '<div style="overflow-x:auto;">' + nine(0, 9, 'IDA') + '</div>';
+  html += '<div style="overflow-x:auto;margin-top:10px;">' + nine(9, 18, 'VUELTA') + '</div>';
+
+  // Totales
+  html += '<div class="perf-ecl-totals">' +
+    '<div><div class="lbl">Rondas usadas</div><div class="num">' + data.rondas + '</div></div>' +
+    '<div style="text-align:right;"><div class="lbl">Total Eclectic</div><div class="num">' + (data.total !== null ? data.total : '—') + '</div></div>' +
+  '</div>';
+
+  out.innerHTML = html;
+}
+// ══════════ end PERFILES ══════════
 
 // ══════════ HOME ══════════
 let HOME_TARGET_MS = null;
