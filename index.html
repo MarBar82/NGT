@@ -821,28 +821,68 @@ body.home-mode{
   margin-bottom:14px;
   position:relative;
   overflow:hidden;
+  display:flex;
+  align-items:center;
+  gap:18px;
 }
 .perf-hero::before{
   content:'';position:absolute;left:0;right:0;top:0;height:3px;
   background:linear-gradient(90deg, var(--gold) 0%, var(--red) 100%);
 }
+.perf-hero-photo{
+  width:90px;
+  height:90px;
+  border-radius:50%;
+  overflow:hidden;
+  flex-shrink:0;
+  border:2px solid var(--gold);
+  background:rgba(255,255,255,.05);
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+.perf-hero-photo img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.perf-hero-photo img.is-fallback{
+  object-fit:contain;
+  padding:14px;
+  opacity:.7;
+}
+.perf-hero-info{flex:1;min-width:0;}
 .perf-hero-apo{
   font-family:'Barlow Condensed',sans-serif;
-  font-size:30px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;
+  font-size:26px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
   color:var(--gold);line-height:1;margin-bottom:4px;
 }
 .perf-hero-name{
   font-family:'Barlow Condensed',sans-serif;
-  font-size:14px;font-weight:500;letter-spacing:.06em;
-  color:rgba(255,255,255,.85);text-transform:uppercase;margin-bottom:14px;
+  font-size:13px;font-weight:500;letter-spacing:.06em;
+  color:rgba(255,255,255,.85);text-transform:uppercase;margin-bottom:12px;
 }
 .perf-hero-stats{
   display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
-  border-top:1px solid rgba(255,255,255,.12);padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.12);padding-top:10px;
 }
 .perf-hero-stat{text-align:center;font-family:'Barlow Condensed',sans-serif;}
-.perf-hero-stat-num{font-size:22px;font-weight:800;color:#fff;line-height:1;}
-.perf-hero-stat-lbl{font-size:9px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-top:4px;}
+.perf-hero-stat-num{font-size:20px;font-weight:800;color:#fff;line-height:1;}
+.perf-hero-stat-lbl{font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-top:3px;}
+
+@media(max-width:480px){
+  .perf-hero{padding:14px;gap:12px;}
+  .perf-hero-photo{width:72px;height:72px;}
+  .perf-hero-apo{font-size:22px;letter-spacing:.1em;}
+  .perf-hero-name{font-size:12px;margin-bottom:8px;}
+  .perf-hero-stat-num{font-size:18px;}
+}
+
+/* Picker card collapses to a single line after selecting a player */
+.adm-card.perf-collapsed .adm-card-body{display:none;}
+.adm-card.perf-collapsed .adm-card-hdr{cursor:pointer;}
+.adm-card.perf-collapsed .adm-card-hdr::after{content:' ▾';opacity:.6;font-size:11px;}
+.adm-card.perf-collapsed{cursor:pointer;}
+.adm-card.perf-collapsed:hover .adm-card-hdr{background:rgba(255,255,255,.04);}
 
 /* Cifras key cards */
 .perf-cifras{
@@ -901,8 +941,40 @@ body.home-mode{
 .perf-bar-fill.tri{background:#dc2626;}
 .perf-bar-val{
   font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;
-  color:var(--navy);text-align:right;
+  color:var(--navy);text-align:right;display:flex;flex-direction:column;align-items:flex-end;line-height:1;
 }
+.perf-bar-pct{font-size:9px;font-weight:600;color:var(--g4);margin-top:3px;letter-spacing:.04em;}
+
+/* Block header hint (count chip) */
+.perf-block-hint{
+  font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--g4);
+  margin-left:6px;text-transform:none;
+}
+
+/* Rondas bajo par */
+.perf-rbp-list{font-family:'Barlow Condensed',sans-serif;}
+.perf-rbp-row{
+  display:flex;align-items:center;gap:14px;padding:8px 0;border-bottom:1px solid var(--g1);
+}
+.perf-rbp-row:last-child{border-bottom:none;}
+.perf-rbp-diff{
+  font-size:24px;font-weight:800;color:var(--red);
+  min-width:54px;text-align:center;line-height:1;
+  background:rgba(200,16,46,.08);padding:8px 6px;border-radius:3px;
+  letter-spacing:-.02em;
+}
+.perf-rbp-info{flex:1;min-width:0;}
+.perf-rbp-cancha{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px;}
+.perf-rbp-meta{font-size:11px;color:var(--g4);font-weight:500;letter-spacing:.02em;}
+
+/* Cancha más jugada chip */
+.perf-cancha-most{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:12px;color:var(--g4);text-align:center;
+  padding:8px 10px;background:var(--off);border-radius:3px;
+  margin-bottom:14px;letter-spacing:.04em;
+}
+.perf-cancha-most strong{color:var(--navy);font-weight:800;}
 
 /* Logros */
 .perf-logros{display:flex;gap:10px;flex-wrap:wrap;}
@@ -923,7 +995,7 @@ body.home-mode{
 .perf-podio-item{display:inline-block;margin:0 6px;}
 .perf-podio-item .y{color:var(--navy);font-weight:700;}
 
-/* Canchas */
+/* Canchas (legacy, mantengo por si reuso) */
 .perf-cancha-list{font-family:'Barlow Condensed',sans-serif;}
 .perf-cancha-row{
   display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;
@@ -1095,9 +1167,9 @@ body.home-mode{
 <div class="wrap" style="max-width:780px;padding:16px;">
 
   <!-- Player picker -->
-  <div class="adm-card" style="margin-bottom:14px;">
+  <div class="adm-card" style="margin-bottom:14px;" onclick="if(this.classList.contains('perf-collapsed')){this.classList.remove('perf-collapsed');event.stopPropagation();}">
     <div class="adm-card-hdr">👤 Perfil de Jugador</div>
-    <div class="adm-card-body">
+    <div class="adm-card-body" onclick="event.stopPropagation();">
       <label class="adm-label">Buscar jugador</label>
       <input type="text" id="perf-search" class="adm-input" placeholder="Escribí un nombre o apodo..." oninput="perfFilterPicker(this.value)" autocomplete="off">
       <div id="perf-picker-list" class="perf-picker-list">
@@ -3768,6 +3840,13 @@ function perfFmtName(nombreFull){
 }
 
 function loadPerfPicker(){
+  // Make sure picker is expanded when entering this page
+  const pickerCard = document.querySelector('#pg-perf .adm-card');
+  if(pickerCard) pickerCard.classList.remove('perf-collapsed');
+  // Clear previous content
+  const cont = document.getElementById('perf-content');
+  if(cont) cont.innerHTML = '';
+
   if(PERF_JUGADORES){ renderPerfPicker(); return; }
   ngtApiGet('jugadoresHist').then(r => {
     const list = (r && r.data) || [];
@@ -3853,9 +3932,14 @@ function renderPerfil(data){
   const b = data.bonus || {};
   const c = data.campeones || { p1:0, p2:0, p3:0, podios:[] };
 
-  // ── HERO ──
+  // Hide picker card after selection (collapse to a "change player" link)
+  const pickerCard = document.querySelector('#pg-perf .adm-card');
+  if(pickerCard){
+    pickerCard.classList.add('perf-collapsed');
+  }
+
+  // ── HERO con FOTO ──
   const apoFmt = perfFmtName(id.nombre);
-  // Extract just the apodo (the bold red part)
   const tmp = document.createElement('div');
   tmp.innerHTML = apoFmt;
   const apoSpan = tmp.querySelector('.hist-ap');
@@ -3863,59 +3947,26 @@ function renderPerfil(data){
   const apo = apoSpan ? apoSpan.textContent : '';
   const nombre = nameSpan ? nameSpan.textContent : '';
 
+  // Photo URL: try /fotos/{matricula}.jpg, fallback to logo.png
+  const photoUrl = './fotos/' + id.matricula + '.jpg';
+  const fallbackUrl = './logo.png';
+
   let html = '<div class="perf-hero">' +
-    '<div class="perf-hero-apo">' + (apo || id.nombre) + '</div>' +
-    '<div class="perf-hero-name">' + (nombre || '') + '</div>' +
-    '<div class="perf-hero-stats">' +
-      '<div class="perf-hero-stat"><div class="perf-hero-stat-num">' + (id.anioDebut || '—') + '</div><div class="perf-hero-stat-lbl">Debut</div></div>' +
-      '<div class="perf-hero-stat"><div class="perf-hero-stat-num">' + (id.edicionesJugadas || 0) + '</div><div class="perf-hero-stat-lbl">Ediciones</div></div>' +
-      '<div class="perf-hero-stat"><div class="perf-hero-stat-num">' + (id.fechasJugadas || 0) + '</div><div class="perf-hero-stat-lbl">Fechas</div></div>' +
+    '<div class="perf-hero-photo">' +
+      '<img src="' + photoUrl + '" onerror="this.onerror=null;this.src=\'' + fallbackUrl + '\';this.classList.add(\'is-fallback\');" alt="">' +
+    '</div>' +
+    '<div class="perf-hero-info">' +
+      '<div class="perf-hero-apo">' + (apo || id.nombre) + '</div>' +
+      '<div class="perf-hero-name">' + (nombre || '') + '</div>' +
+      '<div class="perf-hero-stats">' +
+        '<div class="perf-hero-stat"><div class="perf-hero-stat-num">' + (id.anioDebut || '—') + '</div><div class="perf-hero-stat-lbl">Debut</div></div>' +
+        '<div class="perf-hero-stat"><div class="perf-hero-stat-num">' + (id.edicionesJugadas || 0) + '</div><div class="perf-hero-stat-lbl">Ediciones</div></div>' +
+        '<div class="perf-hero-stat"><div class="perf-hero-stat-num">' + (id.fechasJugadas || 0) + '</div><div class="perf-hero-stat-lbl">Fechas</div></div>' +
+      '</div>' +
     '</div>' +
   '</div>';
 
-  // ── CIFRAS CLAVE ──
-  const ms = cif.mejorStableford;
-  const mg = cif.mejorGross;
-  const ps = cif.promedioStableford;
-  const ha = cif.hcpActual;
-
-  html += '<div class="perf-cifras">' +
-    '<div class="perf-cifra"><div class="perf-cifra-lbl">Mejor Stableford</div><div class="perf-cifra-val">' + (ms ? ms.stb : '—') + '</div>' +
-      (ms ? '<div class="perf-cifra-meta">' + (ms.cancha || '') + ' · ' + (ms.anio || '') + '</div>' : '<div class="perf-cifra-meta">Sin datos</div>') +
-    '</div>' +
-    '<div class="perf-cifra"><div class="perf-cifra-lbl">Mejor Gross</div><div class="perf-cifra-val">' + (mg ? mg.gross : '—') + '</div>' +
-      (mg ? '<div class="perf-cifra-meta">' + (mg.cancha || '') + ' · ' + (mg.anio || '') + '</div>' : '<div class="perf-cifra-meta">Sin datos</div>') +
-    '</div>' +
-    '<div class="perf-cifra"><div class="perf-cifra-lbl">Promedio Stableford</div><div class="perf-cifra-val">' + (ps !== null && ps !== undefined ? ps : '—') + '</div><div class="perf-cifra-meta">Histórico</div></div>' +
-    '<div class="perf-cifra"><div class="perf-cifra-lbl">HCP Actual</div><div class="perf-cifra-val">' + (ha !== null && ha !== undefined ? ha : '—') + '</div><div class="perf-cifra-meta">de juego</div></div>' +
-  '</div>';
-
-  // ── DISTRIBUCIÓN DE HOYOS ──
-  const totalHoyos = (g.albatros||0) + (g.aguilas||0) + (g.birdies||0) + (g.pares||0) + (g.bogeys||0) + (g.dobles||0) + (g.triples||0);
-  const maxBar = Math.max(g.albatros||0, g.aguilas||0, g.birdies||0, g.pares||0, g.bogeys||0, g.dobles||0, g.triples||0, 1);
-  function bar(label, val, cls){
-    const w = Math.round(((val||0) / maxBar) * 100);
-    return '<div class="perf-bar-row">' +
-      '<div class="perf-bar-lbl">' + label + '</div>' +
-      '<div class="perf-bar-track"><div class="perf-bar-fill ' + cls + '" style="width:' + w + '%;"></div></div>' +
-      '<div class="perf-bar-val">' + (val || 0) + '</div>' +
-    '</div>';
-  }
-
-  html += '<div class="perf-block">' +
-    '<div class="perf-block-hdr">⛳ Distribución de Hoyos · Total ' + totalHoyos + '</div>' +
-    '<div class="perf-bars">' +
-      bar('Albatros', g.albatros, 'alb') +
-      bar('Águilas', g.aguilas, 'eag') +
-      bar('Birdies', g.birdies, 'bir') +
-      bar('Pares', g.pares, 'par') +
-      bar('Bogeys', g.bogeys, 'bog') +
-      bar('Dobles', g.dobles, 'dbl') +
-      bar('Triples+', g.triples, 'tri') +
-    '</div>' +
-  '</div>';
-
-  // ── LOGROS ──
+  // ── LOGROS (primero, según pedido del usuario) ──
   let podiosDetail = '';
   if(c.podios && c.podios.length){
     const grouped = c.podios.slice().sort((a,b) => (a.anio||0) - (b.anio||0));
@@ -3936,35 +3987,84 @@ function renderPerfil(data){
     podiosDetail +
   '</div>';
 
-  // ── CANCHAS ──
-  const cmj = data.canchaMasJugada;
-  const top = data.canchasTopStableford || [];
+  // ── CIFRAS CLAVE ──
+  const ms = cif.mejorStableford;
+  const mg = cif.mejorGross;
+  const mn = cif.mejorNeto;
+  const mh = cif.mejorHcp;
+  const ha = cif.hcpActual;
 
-  let canchasHtml = '';
-  if(cmj){
-    canchasHtml += '<div class="perf-cancha-row" style="background:var(--off);padding:8px;border-radius:3px;margin-bottom:8px;border-bottom:none;">' +
-      '<div class="perf-cancha-name">⭐ Más Jugada · ' + cmj.nombre + '</div>' +
-      '<div class="perf-cancha-veces">' + cmj.veces + ' veces</div>' +
-      '<div></div>' +
+  html += '<div class="perf-cifras">' +
+    '<div class="perf-cifra"><div class="perf-cifra-lbl">Mejor Stableford</div><div class="perf-cifra-val">' + (ms ? ms.stb : '—') + '</div>' +
+      (ms ? '<div class="perf-cifra-meta">' + (ms.cancha || '') + ' · ' + (ms.anio || '') + '</div>' : '<div class="perf-cifra-meta">Sin datos</div>') +
+    '</div>' +
+    '<div class="perf-cifra"><div class="perf-cifra-lbl">Mejor Gross</div><div class="perf-cifra-val">' + (mg ? mg.gross : '—') + '</div>' +
+      (mg ? '<div class="perf-cifra-meta">' + (mg.cancha || '') + ' · ' + (mg.anio || '') + '</div>' : '<div class="perf-cifra-meta">Sin datos</div>') +
+    '</div>' +
+    '<div class="perf-cifra"><div class="perf-cifra-lbl">Mejor Neto</div><div class="perf-cifra-val">' + (mn ? mn.neto : '—') + '</div>' +
+      (mn ? '<div class="perf-cifra-meta">' + (mn.cancha || '') + ' · ' + (mn.anio || '') + '</div>' : '<div class="perf-cifra-meta">Sin datos</div>') +
+    '</div>' +
+    '<div class="perf-cifra"><div class="perf-cifra-lbl">Mejor HCP Histórico</div><div class="perf-cifra-val">' + (mh ? mh.hcp : '—') + '</div>' +
+      (mh ? '<div class="perf-cifra-meta">' + (mh.cancha || '') + ' · ' + (mh.anio || '') + '</div>' : '<div class="perf-cifra-meta">Sin datos</div>') +
+    '</div>' +
+    '<div class="perf-cifra"><div class="perf-cifra-lbl">HCP Actual</div><div class="perf-cifra-val">' + (ha !== null && ha !== undefined ? ha : '—') + '</div><div class="perf-cifra-meta">de juego</div></div>' +
+  '</div>';
+
+  // ── DISTRIBUCIÓN DE HOYOS (con porcentaje) ──
+  const totalHoyos = (g.albatros||0) + (g.aguilas||0) + (g.birdies||0) + (g.pares||0) + (g.bogeys||0) + (g.dobles||0) + (g.triples||0);
+  const maxBar = Math.max(g.albatros||0, g.aguilas||0, g.birdies||0, g.pares||0, g.bogeys||0, g.dobles||0, g.triples||0, 1);
+  function bar(label, val, cls){
+    const v = val || 0;
+    const w = Math.round((v / maxBar) * 100);
+    const pct = totalHoyos > 0 ? Math.round((v / totalHoyos) * 1000) / 10 : 0;
+    return '<div class="perf-bar-row">' +
+      '<div class="perf-bar-lbl">' + label + '</div>' +
+      '<div class="perf-bar-track"><div class="perf-bar-fill ' + cls + '" style="width:' + w + '%;"></div></div>' +
+      '<div class="perf-bar-val">' + v + '<span class="perf-bar-pct">' + pct + '%</span></div>' +
     '</div>';
   }
-  if(top.length){
-    canchasHtml += '<div class="perf-block-hdr" style="font-size:10px;margin-top:8px;border-bottom:none;padding-bottom:4px;">Top Stableford Promedio (mín. 3 rondas)</div>';
-    top.forEach((t, i) => {
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
-      canchasHtml += '<div class="perf-cancha-row">' +
-        '<div class="perf-cancha-name">' + medal + ' ' + t.nombre + '</div>' +
-        '<div class="perf-cancha-veces">' + t.veces + ' rondas</div>' +
-        '<div class="perf-cancha-prom">' + t.promedio + '</div>' +
-      '</div>';
-    });
-  }
-  if(!cmj && !top.length) canchasHtml = '<div class="s dim">Sin datos de canchas</div>';
 
   html += '<div class="perf-block">' +
-    '<div class="perf-block-hdr">🏌 Canchas</div>' +
-    '<div class="perf-cancha-list">' + canchasHtml + '</div>' +
+    '<div class="perf-block-hdr">⛳ Distribución de Hoyos · Total ' + totalHoyos + '</div>' +
+    '<div class="perf-bars">' +
+      bar('Albatros', g.albatros, 'alb') +
+      bar('Águilas', g.aguilas, 'eag') +
+      bar('Birdies', g.birdies, 'bir') +
+      bar('Pares', g.pares, 'par') +
+      bar('Bogeys', g.bogeys, 'bog') +
+      bar('Dobles', g.dobles, 'dbl') +
+      bar('Triples+', g.triples, 'tri') +
+    '</div>' +
   '</div>';
+
+  // ── RONDAS BAJO PAR (reemplaza Canchas top stableford) ──
+  const rbp = data.rondasBajoPar || [];
+  let rbpHtml = '';
+  if(rbp.length){
+    rbp.forEach((r, i) => {
+      const diffStr = r.diff < 0 ? r.diff : ('+' + r.diff);
+      rbpHtml += '<div class="perf-rbp-row">' +
+        '<div class="perf-rbp-diff">' + diffStr + '</div>' +
+        '<div class="perf-rbp-info">' +
+          '<div class="perf-rbp-cancha">' + (r.cancha || '') + '</div>' +
+          '<div class="perf-rbp-meta">Neto ' + r.neto + ' · Gross ' + r.gross + ' · HCP ' + r.hcp + ' · Par ' + r.par + ' · ' + (r.anio || '') + '</div>' +
+        '</div>' +
+      '</div>';
+    });
+  } else {
+    rbpHtml = '<div class="s dim" style="padding:12px;text-align:center;">Sin rondas bajo par registradas todavía</div>';
+  }
+
+  html += '<div class="perf-block">' +
+    '<div class="perf-block-hdr">⚡ Rondas Bajo Par <span class="perf-block-hint">' + rbp.length + ' total</span></div>' +
+    '<div class="perf-rbp-list">' + rbpHtml + '</div>' +
+  '</div>';
+
+  // ── CANCHA MÁS JUGADA (referencia chica al final) ──
+  const cmj = data.canchaMasJugada;
+  if(cmj){
+    html += '<div class="perf-cancha-most">⭐ Cancha más jugada: <strong>' + cmj.nombre + '</strong> · ' + cmj.veces + ' veces</div>';
+  }
 
   // ── ECLECTIC ──
   const cj = data.canchasJugadas || [];
