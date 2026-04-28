@@ -72,6 +72,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .mov-dn{color:var(--red);font-weight:700;font-size:13px;white-space:nowrap;}
 .mov-eq{color:var(--g3);font-size:13px;}
 .plyr-name{font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;color:var(--navy);white-space:nowrap;}
+.lb-clickable-name{cursor:pointer;display:inline-block;border-bottom:1px dashed transparent;transition:border-color .15s ease;}
+.lb-clickable-name:hover{border-bottom-color:var(--red);}
+.lb-clickable-name:hover .plyr-name{color:var(--red);}
 .plyr-first{font-family:'Oswald',sans-serif;font-size:14px;font-weight:400;color:var(--navy);margin-left:4px;white-space:nowrap;}
 .plyr-nick{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:var(--g4);margin-left:5px;}
 .s{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;color:var(--text);}
@@ -940,10 +943,11 @@ body.home-mode{
 .perf-bar-fill.dbl{background:#ea580c;}
 .perf-bar-fill.tri{background:#dc2626;}
 .perf-bar-val{
-  font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;
-  color:var(--navy);text-align:right;display:flex;flex-direction:column;align-items:flex-end;line-height:1;
+  font-family:'Barlow Condensed',sans-serif;text-align:right;
+  display:flex;flex-direction:column;align-items:flex-end;line-height:1;
 }
-.perf-bar-pct{font-size:9px;font-weight:600;color:var(--g4);margin-top:3px;letter-spacing:.04em;}
+.perf-bar-pct-main{font-size:16px;font-weight:800;color:var(--navy);letter-spacing:.01em;}
+.perf-bar-num-sec{font-size:10px;font-weight:600;color:var(--g4);margin-top:3px;letter-spacing:.04em;}
 
 /* Block header hint (count chip) */
 .perf-block-hint{
@@ -951,12 +955,16 @@ body.home-mode{
   margin-left:6px;text-transform:none;
 }
 
-/* Rondas bajo par */
+/* Rondas bajo par — ahora son botones clickeables */
 .perf-rbp-list{font-family:'Barlow Condensed',sans-serif;}
-.perf-rbp-row{
-  display:flex;align-items:center;gap:14px;padding:8px 0;border-bottom:1px solid var(--g1);
+button.perf-rbp-row{
+  display:flex;align-items:center;gap:14px;padding:8px;border-bottom:1px solid var(--g1);
+  width:100%;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;
+  text-align:left;font-family:'Barlow Condensed',sans-serif;color:var(--text);
+  border-radius:0;transition:background .12s ease;
 }
-.perf-rbp-row:last-child{border-bottom:none;}
+button.perf-rbp-row:last-child{border-bottom:none;}
+button.perf-rbp-row:hover{background:var(--off);}
 .perf-rbp-diff{
   font-size:24px;font-weight:800;color:var(--red);
   min-width:54px;text-align:center;line-height:1;
@@ -966,8 +974,89 @@ body.home-mode{
 .perf-rbp-info{flex:1;min-width:0;}
 .perf-rbp-cancha{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px;}
 .perf-rbp-meta{font-size:11px;color:var(--g4);font-weight:500;letter-spacing:.02em;}
+.perf-rbp-arrow{font-size:24px;color:var(--g3);font-weight:300;line-height:1;}
 
-/* Cancha más jugada chip */
+/* ── Símbolos de score estilo golf ── */
+.sc-sym{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:14px;font-weight:800;color:var(--navy);
+  position:relative;
+}
+.sc-sym.empty{color:var(--g3);font-weight:500;}
+/* Birdie: círculo simple */
+.sc-sym.sc-birdie{
+  border:1.5px solid var(--red);border-radius:50%;
+  color:var(--red);
+}
+/* Águila/Albatros: doble círculo concéntrico */
+.sc-sym.sc-eagle{
+  border:1.5px solid var(--red);border-radius:50%;
+  color:var(--red);
+  box-shadow:inset 0 0 0 3px #fff, inset 0 0 0 4.5px var(--red);
+}
+/* Bogey: cuadrado simple */
+.sc-sym.sc-bogey{
+  border:1.5px solid var(--navy);
+  color:var(--navy);
+}
+/* Doble bogey o más: doble cuadrado concéntrico */
+.sc-sym.sc-double{
+  border:1.5px solid var(--navy);
+  color:var(--navy);
+  box-shadow:inset 0 0 0 3px #fff, inset 0 0 0 4.5px var(--navy);
+}
+
+/* Modal de ronda bajo par */
+.ronda-modal{
+  position:fixed;inset:0;z-index:9999;display:none;align-items:flex-start;justify-content:center;
+  padding:20px 12px;overflow-y:auto;
+  opacity:0;transition:opacity .2s ease;
+}
+.ronda-modal.open{display:flex;opacity:1;}
+.ronda-modal-bg{
+  position:absolute;inset:0;background:rgba(0,18,42,.7);backdrop-filter:blur(4px);
+}
+.ronda-modal-box{
+  position:relative;background:#fff;border-radius:6px;max-width:680px;width:100%;
+  padding:18px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.4);
+  border-top:3px solid var(--red);
+  margin:auto;
+}
+.ronda-modal-close{
+  position:absolute;top:6px;right:8px;background:none;border:none;
+  font-size:28px;color:var(--g4);cursor:pointer;line-height:1;padding:4px 10px;
+  font-family:'Barlow Condensed',sans-serif;font-weight:300;
+}
+.ronda-modal-close:hover{color:var(--navy);}
+.ronda-modal-hdr{display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-right:36px;font-family:'Barlow Condensed',sans-serif;}
+.ronda-modal-diff{
+  font-size:30px;font-weight:800;color:var(--red);
+  min-width:64px;text-align:center;line-height:1;
+  background:rgba(200,16,46,.1);padding:10px 8px;border-radius:4px;letter-spacing:-.02em;
+}
+.ronda-modal-info{flex:1;min-width:0;}
+.ronda-modal-cancha{font-size:16px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;}
+.ronda-modal-meta{font-size:12px;color:var(--g4);font-weight:500;letter-spacing:.02em;}
+.ronda-modal-card{margin-bottom:12px;}
+.ronda-modal-legend{
+  display:flex;flex-wrap:wrap;gap:10px 14px;justify-content:center;
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;color:var(--g4);
+  padding:10px 4px 4px;border-top:1px solid var(--g1);
+  letter-spacing:.04em;
+}
+.leg-item{display:flex;align-items:center;gap:6px;}
+.leg-sym{width:22px;height:22px;font-size:11px;}
+
+@media(max-width:540px){
+  .ronda-modal-box{padding:14px 12px 10px;}
+  .ronda-modal-cancha{font-size:14px;}
+  .ronda-modal-diff{font-size:24px;min-width:54px;}
+  .leg-item{font-size:10px;}
+}
+
+/* Cancha más jugada chip (legacy, ya no se usa pero CSS lo dejo) */
 .perf-cancha-most{
   font-family:'Barlow Condensed',sans-serif;
   font-size:12px;color:var(--g4);text-align:center;
@@ -1024,11 +1113,6 @@ body.home-mode{
 .perf-ecl-hoyo{font-size:11px;font-weight:600;color:var(--g4);}
 .perf-ecl-par{font-size:13px;font-weight:600;color:var(--text);}
 .perf-ecl-score{font-size:14px;font-weight:800;color:var(--navy);}
-.perf-ecl-score.eagle{color:#c9a84c;}
-.perf-ecl-score.birdie{color:#16a34a;}
-.perf-ecl-score.par{color:#2563eb;}
-.perf-ecl-score.bogey{color:#f59e0b;}
-.perf-ecl-score.dbl{color:#ea580c;}
 .perf-ecl-score.tri{color:#dc2626;}
 .perf-ecl-totals{
   margin-top:12px;display:flex;justify-content:space-between;
@@ -1628,7 +1712,7 @@ function gvizCallback(response){
       const ptsHtml=pts&&pts!=='-'&&pts!=='0'?`<span class="s" style="color:var(--red);">${pts}</span>`:'<span class="s dim">–</span>';
       const pbHtml=pb&&pb!=='0'&&pb!=='-'?`<span class="s bonus">+${pb}</span>`:'<span class="s dim">–</span>';
       html+=`<tr><td class="c">${posCell(pos,i)}</td><td class="c">${mov}</td>
-        <td>${fmtName(nombre)}${bonusEmojis(nombre)}</td>
+        <td><span class="lb-clickable-name" onclick="goToProfileFromName('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span>${bonusEmojis(nombre)}</td>
         <td class="c">${ptsHtml}</td><td class="c">${cell(stb)}</td>
         <td class="c">${cell(mch)}</td><td class="c">${pbHtml}</td>
         <td class="c">${cell(fjug)}</td><td class="c">${cell(fgan)}</td>
@@ -3966,7 +4050,7 @@ function renderPerfil(data){
     '</div>' +
   '</div>';
 
-  // ── LOGROS (primero, según pedido del usuario) ──
+  // ── LOGROS · PODIOS (primero) ──
   let podiosDetail = '';
   if(c.podios && c.podios.length){
     const grouped = c.podios.slice().sort((a,b) => (a.anio||0) - (b.anio||0));
@@ -3976,15 +4060,22 @@ function renderPerfil(data){
   }
 
   html += '<div class="perf-block">' +
-    '<div class="perf-block-hdr">🏆 Logros</div>' +
+    '<div class="perf-block-hdr">🏆 Podios</div>' +
     '<div class="perf-logros">' +
       '<div class="perf-logro gold"><div class="perf-logro-num">' + (c.p1||0) + '</div><div class="perf-logro-lbl">🥇 Campeón</div></div>' +
       '<div class="perf-logro silver"><div class="perf-logro-num">' + (c.p2||0) + '</div><div class="perf-logro-lbl">🥈 Subcampeón</div></div>' +
       '<div class="perf-logro bronze"><div class="perf-logro-num">' + (c.p3||0) + '</div><div class="perf-logro-lbl">🥉 Tercero</div></div>' +
+    '</div>' +
+    podiosDetail +
+  '</div>';
+
+  // ── LOGROS · LD / BA (segundo) ──
+  html += '<div class="perf-block">' +
+    '<div class="perf-block-hdr">🎯 Bonus Ganados</div>' +
+    '<div class="perf-logros">' +
       '<div class="perf-logro"><div class="perf-logro-num">' + (b.ldGanados||0) + '</div><div class="perf-logro-lbl">💪 Long Drives</div></div>' +
       '<div class="perf-logro"><div class="perf-logro-num">' + (b.baGanados||0) + '</div><div class="perf-logro-lbl">🎯 Best Approaches</div></div>' +
     '</div>' +
-    podiosDetail +
   '</div>';
 
   // ── CIFRAS CLAVE ──
@@ -4010,7 +4101,7 @@ function renderPerfil(data){
     '<div class="perf-cifra"><div class="perf-cifra-lbl">HCP Actual</div><div class="perf-cifra-val">' + (ha !== null && ha !== undefined ? ha : '—') + '</div><div class="perf-cifra-meta">de juego</div></div>' +
   '</div>';
 
-  // ── DISTRIBUCIÓN DE HOYOS (con porcentaje) ──
+  // ── DISTRIBUCIÓN DE GOLPES (% destacado en azul, nominal en gris) ──
   const totalHoyos = (g.albatros||0) + (g.aguilas||0) + (g.birdies||0) + (g.pares||0) + (g.bogeys||0) + (g.dobles||0) + (g.triples||0);
   const maxBar = Math.max(g.albatros||0, g.aguilas||0, g.birdies||0, g.pares||0, g.bogeys||0, g.dobles||0, g.triples||0, 1);
   function bar(label, val, cls){
@@ -4020,12 +4111,15 @@ function renderPerfil(data){
     return '<div class="perf-bar-row">' +
       '<div class="perf-bar-lbl">' + label + '</div>' +
       '<div class="perf-bar-track"><div class="perf-bar-fill ' + cls + '" style="width:' + w + '%;"></div></div>' +
-      '<div class="perf-bar-val">' + v + '<span class="perf-bar-pct">' + pct + '%</span></div>' +
+      '<div class="perf-bar-val">' +
+        '<span class="perf-bar-pct-main">' + pct + '%</span>' +
+        '<span class="perf-bar-num-sec">' + v + '</span>' +
+      '</div>' +
     '</div>';
   }
 
   html += '<div class="perf-block">' +
-    '<div class="perf-block-hdr">⛳ Distribución de Hoyos · Total ' + totalHoyos + '</div>' +
+    '<div class="perf-block-hdr">⛳ Distribución de Golpes <span class="perf-block-hint">' + totalHoyos + ' hoyos</span></div>' +
     '<div class="perf-bars">' +
       bar('Albatros', g.albatros, 'alb') +
       bar('Águilas', g.aguilas, 'eag') +
@@ -4037,19 +4131,22 @@ function renderPerfil(data){
     '</div>' +
   '</div>';
 
-  // ── RONDAS BAJO PAR (reemplaza Canchas top stableford) ──
+  // ── RONDAS BAJO PAR (clickeable → modal con tarjeta) ──
   const rbp = data.rondasBajoPar || [];
+  // Cache global de rondas para que el modal pueda leerlas
+  window.PERF_RBP_CACHE = rbp;
   let rbpHtml = '';
   if(rbp.length){
     rbp.forEach((r, i) => {
       const diffStr = r.diff < 0 ? r.diff : ('+' + r.diff);
-      rbpHtml += '<div class="perf-rbp-row">' +
+      rbpHtml += '<button class="perf-rbp-row" onclick="showRondaModal(' + i + ')">' +
         '<div class="perf-rbp-diff">' + diffStr + '</div>' +
         '<div class="perf-rbp-info">' +
           '<div class="perf-rbp-cancha">' + (r.cancha || '') + '</div>' +
           '<div class="perf-rbp-meta">Neto ' + r.neto + ' · Gross ' + r.gross + ' · HCP ' + r.hcp + ' · Par ' + r.par + ' · ' + (r.anio || '') + '</div>' +
         '</div>' +
-      '</div>';
+        '<div class="perf-rbp-arrow">›</div>' +
+      '</button>';
     });
   } else {
     rbpHtml = '<div class="s dim" style="padding:12px;text-align:center;">Sin rondas bajo par registradas todavía</div>';
@@ -4059,12 +4156,6 @@ function renderPerfil(data){
     '<div class="perf-block-hdr">⚡ Rondas Bajo Par <span class="perf-block-hint">' + rbp.length + ' total</span></div>' +
     '<div class="perf-rbp-list">' + rbpHtml + '</div>' +
   '</div>';
-
-  // ── CANCHA MÁS JUGADA (referencia chica al final) ──
-  const cmj = data.canchaMasJugada;
-  if(cmj){
-    html += '<div class="perf-cancha-most">⭐ Cancha más jugada: <strong>' + cmj.nombre + '</strong> · ' + cmj.veces + ' veces</div>';
-  }
 
   // ── ECLECTIC ──
   const cj = data.canchasJugadas || [];
@@ -4105,16 +4196,27 @@ function renderEclectic(data){
   const pares = data.pares || [];
   const ecl = data.eclectic || [];
 
-  function scoreClass(score, par){
-    if(score === null || !par) return '';
-    const d = score - par;
-    if(d <= -2) return 'eagle';
-    if(d === -1) return 'birdie';
-    if(d === 0) return 'par';
-    if(d === 1) return 'bogey';
-    if(d === 2) return 'dbl';
-    return 'tri';
-  }
+  let html = '<div class="perf-ecl-wrap">' + renderTarjeta18Hoyos(ecl, pares, 'Mejor') + '</div>';
+
+  // Totales
+  html += '<div class="perf-ecl-totals">' +
+    '<div><div class="lbl">Rondas usadas</div><div class="num">' + data.rondas + '</div></div>' +
+    '<div style="text-align:right;"><div class="lbl">Total Eclectic</div><div class="num">' + (data.total !== null ? data.total : '—') + '</div></div>' +
+  '</div>';
+
+  out.innerHTML = html;
+}
+
+/**
+ * Renderiza una tarjeta de 18 hoyos con notación golf clásica:
+ *   - Albatros/Águila (≤ -2): doble círculo
+ *   - Birdie (-1): círculo simple
+ *   - Par (0): sin marca
+ *   - Bogey (+1): cuadrado simple
+ *   - Doble bogey o más (+2 o más): doble cuadrado
+ */
+function renderTarjeta18Hoyos(scores, pares, scoreLabel){
+  scoreLabel = scoreLabel || 'Score';
 
   function nine(from, to, lbl){
     let h = '<table class="perf-ecl-table"><thead><tr><th class="lbl">' + lbl + '</th>';
@@ -4130,31 +4232,132 @@ function renderEclectic(data){
     }
     h += '<td><span class="perf-ecl-par">' + parTot + '</span></td></tr>';
     // Score row
-    h += '<tr><td class="lbl">Mejor</td>';
+    h += '<tr><td class="lbl">' + scoreLabel + '</td>';
     let scoreTot = 0;
     let allOk = true;
     for(let i = from; i < to; i++){
-      const s = ecl[i];
-      const cls = scoreClass(s, pares[i]);
-      h += '<td><span class="perf-ecl-score ' + cls + '">' + (s !== null ? s : '—') + '</span></td>';
-      if(s !== null) scoreTot += s;
+      const s = scores[i];
+      h += '<td>' + scoreSymbolHtml(s, pares[i]) + '</td>';
+      if(s !== null && s !== undefined) scoreTot += s;
       else allOk = false;
     }
-    h += '<td><span class="perf-ecl-score">' + (allOk ? scoreTot : '—') + '</span></td></tr>';
+    h += '<td>' + scoreSymbolHtml(allOk ? scoreTot : null, parTot, true) + '</td></tr>';
     h += '</tbody></table>';
     return h;
   }
 
-  let html = '<div style="overflow-x:auto;">' + nine(0, 9, 'IDA') + '</div>';
-  html += '<div style="overflow-x:auto;margin-top:10px;">' + nine(9, 18, 'VUELTA') + '</div>';
+  return '<div style="overflow-x:auto;">' + nine(0, 9, 'IDA') +
+         '</div><div style="overflow-x:auto;margin-top:10px;">' + nine(9, 18, 'VUELTA') + '</div>';
+}
 
-  // Totales
-  html += '<div class="perf-ecl-totals">' +
-    '<div><div class="lbl">Rondas usadas</div><div class="num">' + data.rondas + '</div></div>' +
-    '<div style="text-align:right;"><div class="lbl">Total Eclectic</div><div class="num">' + (data.total !== null ? data.total : '—') + '</div></div>' +
-  '</div>';
+/**
+ * Devuelve HTML para el símbolo de un score:
+ * isTotal = true para el total (no aplica simbología, solo número)
+ */
+function scoreSymbolHtml(score, par, isTotal){
+  if(score === null || score === undefined || score === '') return '<span class="sc-sym empty">—</span>';
+  if(isTotal){
+    return '<span class="sc-sym">' + score + '</span>';
+  }
+  if(!par) return '<span class="sc-sym">' + score + '</span>';
+  const d = score - par;
+  let wrapCls = 'sc-sym';
+  if(d <= -2) wrapCls += ' sc-eagle';        // doble círculo
+  else if(d === -1) wrapCls += ' sc-birdie'; // círculo simple
+  else if(d === 0) wrapCls += '';            // sin marca
+  else if(d === 1) wrapCls += ' sc-bogey';   // cuadrado simple
+  else if(d >= 2) wrapCls += ' sc-double';   // doble cuadrado
+  return '<span class="' + wrapCls + '">' + score + '</span>';
+}
 
-  out.innerHTML = html;
+/**
+ * Modal: muestra la tarjeta hoyo-por-hoyo de una ronda bajo par
+ */
+function showRondaModal(idx){
+  const cache = window.PERF_RBP_CACHE || [];
+  const r = cache[idx];
+  if(!r){ return; }
+  const fechaStr = r.fecha ? new Date(r.fecha).toLocaleDateString('es-AR') : (r.anio || '');
+  const diffStr = r.diff < 0 ? r.diff : ('+' + r.diff);
+
+  const tarjeta = renderTarjeta18Hoyos(r.scores || [], r.pares || [], 'Score');
+
+  const modal = document.getElementById('ronda-modal') || document.createElement('div');
+  modal.id = 'ronda-modal';
+  modal.className = 'ronda-modal';
+  modal.innerHTML = '<div class="ronda-modal-bg" onclick="closeRondaModal()"></div>' +
+    '<div class="ronda-modal-box">' +
+      '<button class="ronda-modal-close" onclick="closeRondaModal()">×</button>' +
+      '<div class="ronda-modal-hdr">' +
+        '<div class="ronda-modal-diff">' + diffStr + '</div>' +
+        '<div class="ronda-modal-info">' +
+          '<div class="ronda-modal-cancha">' + (r.cancha || '') + '</div>' +
+          '<div class="ronda-modal-meta">' + fechaStr + ' · Neto ' + r.neto + ' · Gross ' + r.gross + ' · HCP ' + r.hcp + ' · Par ' + r.par + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="ronda-modal-card">' + tarjeta + '</div>' +
+      '<div class="ronda-modal-legend">' +
+        '<span class="leg-item"><span class="sc-sym sc-eagle leg-sym">3</span> Águila/Albatros</span>' +
+        '<span class="leg-item"><span class="sc-sym sc-birdie leg-sym">3</span> Birdie</span>' +
+        '<span class="leg-item"><span class="sc-sym leg-sym">4</span> Par</span>' +
+        '<span class="leg-item"><span class="sc-sym sc-bogey leg-sym">5</span> Bogey</span>' +
+        '<span class="leg-item"><span class="sc-sym sc-double leg-sym">6</span> Doble+</span>' +
+      '</div>' +
+    '</div>';
+
+  if(!modal.parentNode) document.body.appendChild(modal);
+  setTimeout(() => modal.classList.add('open'), 10);
+}
+
+function closeRondaModal(){
+  const modal = document.getElementById('ronda-modal');
+  if(!modal) return;
+  modal.classList.remove('open');
+  setTimeout(() => { if(modal.parentNode) modal.parentNode.removeChild(modal); }, 200);
+}
+
+// Navigate from leaderboard click to player profile
+function goToProfileFromName(lbName){
+  // Need matricula. The LB displays the name as it comes from the SCORE sheet.
+  // We find the matching player in PERF_JUGADORES (loaded from jugadoresHist).
+  // If PERF_JUGADORES isn't loaded yet, load it first.
+  const findAndGo = () => {
+    if(!PERF_JUGADORES || !PERF_JUGADORES.length){
+      // Couldn't load — just navigate to perf page
+      const perfBtn = Array.from(document.querySelectorAll('.subnav .snb')).find(b => /Perfiles/i.test(b.textContent));
+      pg('perf', perfBtn || null);
+      return;
+    }
+    const target = String(lbName).toUpperCase().trim();
+    // Try multiple match strategies (LB has names in different formats)
+    let match = PERF_JUGADORES.find(j => (j.nombre || '').toUpperCase().trim() === target);
+    if(!match){
+      // Try matching by last name or first word
+      match = PERF_JUGADORES.find(j => {
+        const n = (j.nombre || '').toUpperCase();
+        // Check if any word from target appears in nombre
+        const words = target.split(/\s+/).filter(w => w.length >= 4);
+        return words.some(w => n.indexOf(w) >= 0);
+      });
+    }
+    const perfBtn = Array.from(document.querySelectorAll('.subnav .snb')).find(b => /Perfiles/i.test(b.textContent));
+    pg('perf', perfBtn || null);
+    if(match){
+      // Wait a beat for the page to render, then load the player profile
+      setTimeout(() => { selectPerf(match.matricula, null); }, 250);
+    }
+  };
+
+  if(!PERF_JUGADORES){
+    ngtApiGet('jugadoresHist').then(r => {
+      const list = (r && r.data) || [];
+      list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+      PERF_JUGADORES = list;
+      findAndGo();
+    }).catch(() => findAndGo());
+  } else {
+    findAndGo();
+  }
 }
 // ══════════ end PERFILES ══════════
 
