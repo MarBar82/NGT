@@ -911,6 +911,9 @@ body.home-mode{
   font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;
   color:var(--g4);margin-top:4px;letter-spacing:.02em;
 }
+/* HCP NGT card — distinct gold accent to mark the WHS-calculated number */
+.perf-cifra.perf-cifra-ngt::before{background:var(--gold);}
+.perf-cifra.perf-cifra-ngt .perf-cifra-val{color:var(--gold);}
 
 /* Bloques */
 .perf-block{
@@ -1462,9 +1465,19 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             </div>
             <div class="adm-field">
               <label class="adm-label">Cancha</label>
-              <select id="adm-cancha" class="adm-input">
+              <select id="adm-cancha" class="adm-input" onchange="loadColoresCancha()">
                 <option value="">Cargando...</option>
               </select>
+            </div>
+          </div>
+
+          <div class="adm-row">
+            <div class="adm-field">
+              <label class="adm-label">Color de Salidas</label>
+              <select id="adm-color-tee" class="adm-input">
+                <option value="BLANCAS">Blancas (default)</option>
+              </select>
+              <div class="adm-hint" id="adm-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
             </div>
           </div>
 
@@ -2668,11 +2681,54 @@ function formatPlayerLabel(nombreCompleto){
 // ══ CREAR FECHA WIZARD ══
 let WIZ_PASO1_DATA = null;
 
+// Load available tee colors for the selected course (from RATING sheet)
+function loadColoresCancha(){
+  const sel = document.getElementById('adm-cancha');
+  const colorSel = document.getElementById('adm-color-tee');
+  const hint = document.getElementById('adm-color-hint');
+  if(!sel || !colorSel) return;
+  const canchaId = sel.value.trim();
+  if(!canchaId){
+    colorSel.innerHTML = '<option value="BLANCAS">Blancas (default)</option>';
+    if(hint) hint.textContent = 'Seleccioná una cancha primero';
+    return;
+  }
+  if(hint) hint.textContent = 'Cargando colores...';
+  ngtApiGet('coloresCancha&canchaId=' + encodeURIComponent(canchaId)).then(r => {
+    const list = (r && r.data) || [];
+    if(!list.length){
+      colorSel.innerHTML = '<option value="BLANCAS">Blancas (default — sin rating cargado)</option>';
+      if(hint) hint.textContent = 'Esta cancha no tiene rating cargado en RATING. Default: Blancas.';
+      return;
+    }
+    // Build options sorted by typical order
+    const order = ['NEGRAS','AZULES','BLANCAS','DORADAS','ROJAS','AMARILLAS'];
+    list.sort((a,b) => {
+      const ia = order.indexOf(a.color); const ib = order.indexOf(b.color);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    let html = '';
+    list.forEach(c => {
+      html += '<option value="' + c.color + '">' + c.color + ' (R ' + c.rating + ' / S ' + c.slope + ')</option>';
+    });
+    colorSel.innerHTML = html;
+    // Default to BLANCAS if available
+    const blancas = list.find(c => c.color === 'BLANCAS');
+    if(blancas) colorSel.value = 'BLANCAS';
+    if(hint) hint.textContent = list.length + ' color(es) disponible(s)';
+  }).catch(e => {
+    colorSel.innerHTML = '<option value="BLANCAS">Blancas (default)</option>';
+    if(hint) hint.textContent = 'Error cargando colores · usando Blancas por default';
+  });
+}
+
 function wizPaso1Next(){
   const fechaEl = document.getElementById('adm-fecha');
   const canchaEl = document.getElementById('adm-cancha');
+  const colorEl = document.getElementById('adm-color-tee');
   const fecha = fechaEl ? fechaEl.value.trim() : '';
   const canchaId = canchaEl ? canchaEl.value.trim() : '';
+  const colorTee = (colorEl ? colorEl.value.trim() : '') || 'BLANCAS';
   const jugadores = [...document.querySelectorAll('#adm-jugadores-list input:checked')].map(i => i.value);
   const dobles = [...document.querySelectorAll('#adm-dobles-list input:checked')].map(i => i.value);
 
@@ -2690,7 +2746,7 @@ function wizPaso1Next(){
   }
 
   // Save data for step 2
-  WIZ_PASO1_DATA = { fecha, canchaId, jugadores, dobles };
+  WIZ_PASO1_DATA = { fecha, canchaId, colorTee, jugadores, dobles };
 
   // Build player list for matches step using local ADM_JUGADORES
   const jugsInFecha = ADM_JUGADORES.filter(j => jugadores.indexOf(String(j.matricula)) >= 0);
@@ -2773,6 +2829,7 @@ function wizCrearTodo(){
     adminKey: ADMIN_KEY_OK,
     fecha: WIZ_PASO1_DATA.fecha,
     canchaId: WIZ_PASO1_DATA.canchaId,
+    colorTee: WIZ_PASO1_DATA.colorTee,
     jugadores: WIZ_PASO1_DATA.jugadores,
     dobles: WIZ_PASO1_DATA.dobles,
   }).then(r => {
@@ -4116,6 +4173,14 @@ function renderPerfil(data){
   const mn = cif.mejorNeto;
   const mh = cif.mejorHcp;
   const ha = cif.hcpActual;
+  const hn = cif.hcpNGT;   // { hcpIndex, usedCount, totalCount, cardsConsidered }
+
+  let hcpNgtMeta;
+  if(hn){
+    hcpNgtMeta = 'Mejor ' + hn.usedCount + ' de últimas ' + hn.totalCount;
+  } else {
+    hcpNgtMeta = 'Insuficientes tarjetas';
+  }
 
   html += '<div class="perf-cifras">' +
     '<div class="perf-cifra"><div class="perf-cifra-lbl">Mejor Stableford</div><div class="perf-cifra-val">' + (ms ? ms.stb : '—') + '</div>' +
@@ -4131,6 +4196,7 @@ function renderPerfil(data){
       (mh ? '<div class="perf-cifra-meta">' + (mh.cancha || '') + ' · ' + (mh.anio || '') + '</div>' : '<div class="perf-cifra-meta">Sin datos</div>') +
     '</div>' +
     '<div class="perf-cifra"><div class="perf-cifra-lbl">HCP Actual</div><div class="perf-cifra-val">' + (ha !== null && ha !== undefined ? ha : '—') + '</div><div class="perf-cifra-meta">de juego</div></div>' +
+    '<div class="perf-cifra perf-cifra-ngt"><div class="perf-cifra-lbl">HCP NGT</div><div class="perf-cifra-val">' + (hn ? hn.hcpIndex.toFixed(1) : '—') + '</div><div class="perf-cifra-meta">' + hcpNgtMeta + '</div></div>' +
   '</div>';
 
   // ── DISTRIBUCIÓN DE GOLPES (% destacado en azul, nominal en gris) ──
