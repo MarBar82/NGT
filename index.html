@@ -398,6 +398,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .snb-drop-menu button:hover{background:var(--off);color:var(--red);}
 
 .bonus-emo{display:inline-block;margin-left:4px;font-size:12px;vertical-align:middle;filter:saturate(1.2);}
+.bonus-mult{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;color:var(--g4);margin-left:1px;vertical-align:baseline;}
 
 /* ADMIN */
 .snb-admin{font-size:16px;padding:0 12px;}
@@ -1683,8 +1684,14 @@ function bonusEmojis(nombre){
   const b = PLAYER_BONUSES[key];
   if(!b) return '';
   let out = '';
-  for(let i = 0; i < (b.ba||0); i++) out += '<span class="bonus-emo" title="Best Approach">🎯</span>';
-  for(let i = 0; i < (b.ld||0); i++) out += '<span class="bonus-emo" title="Long Drive">💪</span>';
+  const ba = b.ba || 0;
+  const ld = b.ld || 0;
+  if(ba > 0){
+    out += '<span class="bonus-emo" title="Best Approach">🎯' + (ba > 1 ? '<span class="bonus-mult">x' + ba + '</span>' : '') + '</span>';
+  }
+  if(ld > 0){
+    out += '<span class="bonus-emo" title="Long Drive">💪' + (ld > 1 ? '<span class="bonus-mult">x' + ld + '</span>' : '') + '</span>';
+  }
   return out;
 }
 
