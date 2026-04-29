@@ -956,25 +956,28 @@ body.home-mode{
 }
 
 /* Rondas bajo par — ahora son botones clickeables */
-.perf-rbp-list{font-family:'Barlow Condensed',sans-serif;}
+.perf-rbp-list{font-family:'Barlow Condensed',sans-serif;display:grid;grid-template-columns:1fr 1fr;gap:6px;}
 button.perf-rbp-row{
-  display:flex;align-items:center;gap:14px;padding:8px;border-bottom:1px solid var(--g1);
-  width:100%;background:none;border-left:none;border-right:none;border-top:none;cursor:pointer;
+  display:flex;align-items:center;gap:10px;padding:8px;
+  width:100%;background:var(--white);border:1px solid var(--g2);cursor:pointer;
   text-align:left;font-family:'Barlow Condensed',sans-serif;color:var(--text);
-  border-radius:0;transition:background .12s ease;
+  border-radius:3px;transition:background .12s ease, border-color .12s ease;
 }
-button.perf-rbp-row:last-child{border-bottom:none;}
-button.perf-rbp-row:hover{background:var(--off);}
+button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .perf-rbp-diff{
-  font-size:24px;font-weight:800;color:var(--red);
-  min-width:54px;text-align:center;line-height:1;
-  background:rgba(200,16,46,.08);padding:8px 6px;border-radius:3px;
+  font-size:20px;font-weight:800;color:var(--red);
+  min-width:42px;text-align:center;line-height:1;
+  background:rgba(200,16,46,.08);padding:6px 4px;border-radius:3px;
   letter-spacing:-.02em;
 }
 .perf-rbp-info{flex:1;min-width:0;}
-.perf-rbp-cancha{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px;}
-.perf-rbp-meta{font-size:11px;color:var(--g4);font-weight:500;letter-spacing:.02em;}
-.perf-rbp-arrow{font-size:24px;color:var(--g3);font-weight:300;line-height:1;}
+.perf-rbp-cancha{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:2px;line-height:1.15;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.perf-rbp-meta{font-size:10px;color:var(--g4);font-weight:500;letter-spacing:.01em;line-height:1.2;}
+.perf-rbp-arrow{display:none;}
+@media(max-width:520px){
+  .perf-rbp-list{grid-template-columns:1fr;}
+}
 
 /* ── Símbolos de score estilo golf ── */
 .sc-sym{
@@ -1652,14 +1655,31 @@ function dobleCell(doble,pd){
 }
 
 // ══ Bonus emojis per player (Best Approach + Long Drive wins) ══
-const PLAYER_BONUSES = {
-  'OLIVERIO MANUEL': { ba: 1, ld: 1 },
-  'PAZ LUIS':        { ba: 1, ld: 0 },
-  'VIDAL ALEJANDRO': { ba: 0, ld: 1 },
-};
+// Loaded dynamically from backend (bonusesAcum endpoint) which reads TARJETAS 2026.
+let PLAYER_BONUSES = {};   // keyed by NOMBRE uppercase (matches LB names)
+let PLAYER_BONUSES_LOADED = false;
+
+function loadPlayerBonuses(){
+  return ngtApiGet('bonusesAcum').then(r => {
+    PLAYER_BONUSES = {};
+    const totals = (r && r.data) || {};
+    Object.keys(totals).forEach(matricula => {
+      const t = totals[matricula];
+      // Index by both nombre and apodo so any LB display name matches
+      const nombre = String(t.nombre || '').toUpperCase().trim();
+      const apodo = String(t.apodo || '').toUpperCase().trim();
+      const entry = { ld: t.ld || 0, ba: t.ba || 0 };
+      if(nombre) PLAYER_BONUSES[nombre] = entry;
+      if(apodo) PLAYER_BONUSES[apodo] = entry;
+    });
+    PLAYER_BONUSES_LOADED = true;
+  }).catch(e => {
+    console.warn('loadPlayerBonuses failed:', e);
+  });
+}
 
 function bonusEmojis(nombre){
-  const key = nombre.trim().toUpperCase();
+  const key = String(nombre || '').trim().toUpperCase();
   const b = PLAYER_BONUSES[key];
   if(!b) return '';
   let out = '';
@@ -1730,11 +1750,14 @@ function gvizCallback(response){
 
 function loadLB(){
   document.getElementById('lb-body').innerHTML='<div class="lb-status"><div class="spinner"></div>Conectando...</div>';
-  const old=document.getElementById('gviz-script');if(old)old.remove();
-  const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json;responseHandler:gvizCallback&sheet='+encodeURIComponent(SHEET_NAME)+'&range='+encodeURIComponent(RANGE)+'&_='+Date.now();
-  const s=document.createElement('script');s.id='gviz-script';s.src=url;
-  s.onerror=()=>{document.getElementById('lb-body').innerHTML='<div class="lb-error">⚠ No se pudo conectar.<br><button onclick="loadLB()" style="margin-top:10px;font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;cursor:pointer;padding:6px 16px;border:1px solid var(--red);color:var(--red);background:none;border-radius:3px;">↻ Reintentar</button></div>';};
-  document.head.appendChild(s);
+  // Refrescar bonuses cada vez que se carga el LB (puede haber nuevas tarjetas firmadas)
+  loadPlayerBonuses().then(() => {
+    const old=document.getElementById('gviz-script');if(old)old.remove();
+    const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json;responseHandler:gvizCallback&sheet='+encodeURIComponent(SHEET_NAME)+'&range='+encodeURIComponent(RANGE)+'&_='+Date.now();
+    const s=document.createElement('script');s.id='gviz-script';s.src=url;
+    s.onerror=()=>{document.getElementById('lb-body').innerHTML='<div class="lb-error">⚠ No se pudo conectar.<br><button onclick="loadLB()" style="margin-top:10px;font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;cursor:pointer;padding:6px 16px;border:1px solid var(--red);color:var(--red);background:none;border-radius:3px;">↻ Reintentar</button></div>';};
+    document.head.appendChild(s);
+  });
 }
 
 
@@ -1802,11 +1825,13 @@ function buildHist(rows){
       anyRow = true;
 
       const isNew = r > prevLastIdx;
-      const rowAttr = isNew ? ' class="hist-new"' : '';
+      const n = parseInt(pos);
+      const isCut = (n >= 11);   // posición 11 o peor = afuera del corte
+      const isRed = isNew || isCut;
+      const rowAttr = isRed ? ' class="hist-new"' : '';
 
       let posHtml;
-      const n = parseInt(pos);
-      if(isNew){
+      if(isRed){
         posHtml = '<span class="hist-pos" style="color:var(--red);">' + (pos || '–') + '</span>';
       } else if(n === 1){
         posHtml = '<span class="pos-dot d1"></span><span class="hist-pos" style="color:var(--gold);">' + pos + '</span>';
@@ -4106,6 +4131,7 @@ function renderPerfil(data){
   const maxBar = Math.max(g.albatros||0, g.aguilas||0, g.birdies||0, g.pares||0, g.bogeys||0, g.dobles||0, g.triples||0, 1);
   function bar(label, val, cls){
     const v = val || 0;
+    if(v === 0) return '';   // ocultar si no tiene golpes de ese tipo
     const w = Math.round((v / maxBar) * 100);
     const pct = totalHoyos > 0 ? Math.round((v / totalHoyos) * 1000) / 10 : 0;
     return '<div class="perf-bar-row">' +
@@ -4143,9 +4169,8 @@ function renderPerfil(data){
         '<div class="perf-rbp-diff">' + diffStr + '</div>' +
         '<div class="perf-rbp-info">' +
           '<div class="perf-rbp-cancha">' + (r.cancha || '') + '</div>' +
-          '<div class="perf-rbp-meta">Neto ' + r.neto + ' · Gross ' + r.gross + ' · HCP ' + r.hcp + ' · Par ' + r.par + ' · ' + (r.anio || '') + '</div>' +
+          '<div class="perf-rbp-meta">Neto ' + r.neto + ' · Gross ' + r.gross + ' · ' + (r.anio || '') + '</div>' +
         '</div>' +
-        '<div class="perf-rbp-arrow">›</div>' +
       '</button>';
     });
   } else {
@@ -4316,43 +4341,44 @@ function closeRondaModal(){
   setTimeout(() => { if(modal.parentNode) modal.parentNode.removeChild(modal); }, 200);
 }
 
-// Navigate from leaderboard click to player profile
+// Navigate from leaderboard click to player profile.
+// LB names come from sheet 2026 NGT SCORE which use the same names as JUGADORES 2026.
+// We match strictly by apodo or full name to avoid false positives from substring matches.
+let LB_JUG_2026 = null;  // cached players from 2026 NGT
 function goToProfileFromName(lbName){
-  // Need matricula. The LB displays the name as it comes from the SCORE sheet.
-  // We find the matching player in PERF_JUGADORES (loaded from jugadoresHist).
-  // If PERF_JUGADORES isn't loaded yet, load it first.
   const findAndGo = () => {
-    if(!PERF_JUGADORES || !PERF_JUGADORES.length){
-      // Couldn't load — just navigate to perf page
-      const perfBtn = Array.from(document.querySelectorAll('.subnav .snb')).find(b => /Perfiles/i.test(b.textContent));
-      pg('perf', perfBtn || null);
-      return;
+    const target = String(lbName || '').toUpperCase().trim();
+    let matricula = null;
+    if(LB_JUG_2026){
+      // Strategy 1: exact match on apodo (e.g. "RACHO" → matricula 89837)
+      let m = LB_JUG_2026.find(j => (j.apodo || '').toUpperCase().trim() === target);
+      if(!m){
+        // Strategy 2: exact match on nombre completo (e.g. "MARCOS BARCHI")
+        m = LB_JUG_2026.find(j => (j.nombre || '').toUpperCase().trim() === target);
+      }
+      if(!m){
+        // Strategy 3: target STARTS WITH apodo+space or contains the full apodo as a word
+        m = LB_JUG_2026.find(j => {
+          const ap = (j.apodo || '').toUpperCase().trim();
+          if(!ap) return false;
+          return target === ap || target.indexOf(ap + ' ') === 0 || target.indexOf(' ' + ap) >= 0;
+        });
+      }
+      if(m) matricula = m.matricula;
     }
-    const target = String(lbName).toUpperCase().trim();
-    // Try multiple match strategies (LB has names in different formats)
-    let match = PERF_JUGADORES.find(j => (j.nombre || '').toUpperCase().trim() === target);
-    if(!match){
-      // Try matching by last name or first word
-      match = PERF_JUGADORES.find(j => {
-        const n = (j.nombre || '').toUpperCase();
-        // Check if any word from target appears in nombre
-        const words = target.split(/\s+/).filter(w => w.length >= 4);
-        return words.some(w => n.indexOf(w) >= 0);
-      });
-    }
+
     const perfBtn = Array.from(document.querySelectorAll('.subnav .snb')).find(b => /Perfiles/i.test(b.textContent));
     pg('perf', perfBtn || null);
-    if(match){
-      // Wait a beat for the page to render, then load the player profile
-      setTimeout(() => { selectPerf(match.matricula, null); }, 250);
+    if(matricula){
+      setTimeout(() => { selectPerf(matricula, null); }, 250);
+    } else {
+      console.warn('goToProfileFromName: no match for "' + lbName + '"');
     }
   };
 
-  if(!PERF_JUGADORES){
-    ngtApiGet('jugadoresHist').then(r => {
-      const list = (r && r.data) || [];
-      list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
-      PERF_JUGADORES = list;
+  if(!LB_JUG_2026){
+    ngtApiGet('jugadores').then(r => {
+      LB_JUG_2026 = (r && r.data) || [];
       findAndGo();
     }).catch(() => findAndGo());
   } else {
