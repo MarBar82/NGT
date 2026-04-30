@@ -400,6 +400,19 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .bonus-emo{display:inline-block;margin-left:4px;font-size:12px;vertical-align:middle;filter:saturate(1.2);}
 .bonus-mult{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;color:var(--g4);margin-left:1px;vertical-align:baseline;}
 
+/* Win % column */
+.lb-th-win{font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.06em;}
+.lb-td-win{padding:0 8px !important;}
+.win-pct{
+  display:inline-block;font-family:'Barlow Condensed',sans-serif;
+  font-size:13px;font-weight:800;letter-spacing:-.01em;
+  padding:2px 6px;border-radius:3px;line-height:1.2;
+  min-width:42px;text-align:center;
+}
+.win-pct.win-pct-hi{background:rgba(200,16,46,.12);color:var(--red);}
+.win-pct.win-pct-mid{background:var(--off);color:var(--navy);}
+.win-pct.win-pct-low{color:var(--g4);font-weight:600;}
+
 /* ADMIN */
 .snb-admin{font-size:16px;padding:0 12px;}
 .adm-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);margin-bottom:14px;}
@@ -1732,6 +1745,7 @@ function gvizCallback(response){
       <th class="c">F.Jug</th><th class="c">F.Gan</th>
       <th class="c">Hcp</th><th class="c">Pos.Ant</th><th class="c">Doble</th>
       <th class="c">Golpes</th><th class="c">Champ</th>
+      <th class="c lb-th-win" title="Probabilidad de ganar la temporada (Monte Carlo)">Win %</th>
     </tr></thead><tbody>`;
     rows.forEach((row,i)=>{
       const pos=v(row,0),nombre=v(row,1),movDir=v(row,2),movQty=v(row,3);
@@ -1751,6 +1765,7 @@ function gvizCallback(response){
         return `<span class="s dim">${q}</span>`;})();
       const ptsHtml=pts&&pts!=='-'&&pts!=='0'?`<span class="s" style="color:var(--red);">${pts}</span>`:'<span class="s dim">–</span>';
       const pbHtml=pb&&pb!=='0'&&pb!=='-'?`<span class="s bonus">+${pb}</span>`:'<span class="s dim">–</span>';
+      const winHtml = winCell(nombre);
       html+=`<tr><td class="c">${posCell(pos,i)}</td><td class="c">${mov}</td>
         <td><span class="lb-clickable-name" onclick="goToProfileFromName('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span>${bonusEmojis(nombre)}</td>
         <td class="c">${ptsHtml}</td><td class="c">${cell(stb)}</td>
@@ -1758,6 +1773,7 @@ function gvizCallback(response){
         <td class="c">${cell(fjug)}</td><td class="c">${cell(fgan)}</td>
         <td class="c">${cell(hcp)}</td><td class="c">${cell(posAnt)}</td><td class="c">${dobleCell(doble,pd)}</td>
         <td class="c">${golpesCell(golpes)}</td><td class="c"><span class="trophy">${champ||''}</span></td>
+        <td class="c lb-td-win">${winHtml}</td>
       </tr>`;
     });
     html+='</tbody></table>';
@@ -1765,11 +1781,73 @@ function gvizCallback(response){
     const now=new Date();
     document.getElementById('sync-time').textContent='Actualizado: '+now.toLocaleDateString('es-AR')+' '+now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     setTimeout(setTbHeight,50);
+    // If win probs arrived AFTER this render, update the cells
+    if(WIN_PROBS_LOADED) refreshWinPctCells();
   }catch(e){document.getElementById('lb-body').innerHTML='<div class="lb-error">Error: '+e.message+'</div>';console.error(e);}
+}
+
+// ══ Win % cells ══
+let WIN_PROBS = {};        // keyed by NOMBRE upper-trim → { winPct, top8Pct }
+let WIN_PROBS_LOADED = false;
+let WIN_PROBS_META = null; // { fechasJugadas, fechasRestantes, simulations, ... }
+
+function loadWinProbabilities(){
+  return ngtApiGet('winProbabilities').then(r => {
+    const d = (r && r.data) || null;
+    if(!d || !d.players){ WIN_PROBS_LOADED = false; return; }
+    WIN_PROBS = {};
+    WIN_PROBS_META = {
+      fechasJugadas: d.fechasJugadas,
+      fechasRestantes: d.fechasRestantes,
+      simulations: d.simulations,
+      tourAvg: d.tourAvg,
+    };
+    d.players.forEach(p => {
+      const k = String(p.nombre || '').toUpperCase().trim();
+      if(k) WIN_PROBS[k] = { winPct: p.winPct, top8Pct: p.top8Pct };
+    });
+    WIN_PROBS_LOADED = true;
+    refreshWinPctCells();
+  }).catch(e => {
+    console.warn('loadWinProbabilities failed:', e);
+    WIN_PROBS_LOADED = false;
+  });
+}
+
+// Build the inner HTML for a Win % cell given a player name
+function winCell(nombre){
+  if(!WIN_PROBS_LOADED) return '<span class="s dim">…</span>';
+  const k = String(nombre || '').toUpperCase().trim();
+  const p = WIN_PROBS[k];
+  if(!p) return '<span class="s dim">–</span>';
+  const v = p.winPct;
+  let cls = 'win-pct-low';
+  if(v >= 25) cls = 'win-pct-hi';
+  else if(v >= 10) cls = 'win-pct-mid';
+  const tooltip = 'Top 8: ' + (p.top8Pct||0).toFixed(1) + '%';
+  return '<span class="win-pct ' + cls + '" title="' + tooltip + '">' + v.toFixed(1) + '%</span>';
+}
+
+// After winProbs loads (or reloads), update the Win % cells in-place without re-rendering whole LB
+function refreshWinPctCells(){
+  const rows = document.querySelectorAll('#lb-body table.pga tbody tr');
+  rows.forEach(tr => {
+    const nameSpan = tr.querySelector('.lb-clickable-name');
+    if(!nameSpan) return;
+    // Get raw name from the onclick attr
+    const attr = nameSpan.getAttribute('onclick') || '';
+    const m = attr.match(/goToProfileFromName\('(.+?)'\)/);
+    if(!m) return;
+    const nombre = m[1].replace(/\\'/g, "'");
+    const td = tr.querySelector('td.lb-td-win');
+    if(td) td.innerHTML = winCell(nombre);
+  });
 }
 
 function loadLB(){
   document.getElementById('lb-body').innerHTML='<div class="lb-status"><div class="spinner"></div>Conectando...</div>';
+  // Load win probabilities in parallel (cells will fill in when ready)
+  loadWinProbabilities();
   // Refrescar bonuses cada vez que se carga el LB (puede haber nuevas tarjetas firmadas)
   loadPlayerBonuses().then(() => {
     const old=document.getElementById('gviz-script');if(old)old.remove();
