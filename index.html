@@ -2694,7 +2694,7 @@ function loadColoresCancha(){
     return;
   }
   if(hint) hint.textContent = 'Cargando colores...';
-  ngtApiGet('coloresCancha&canchaId=' + encodeURIComponent(canchaId)).then(r => {
+  ngtApiGet('coloresCancha', { canchaId: canchaId }).then(r => {
     const list = (r && r.data) || [];
     if(!list.length){
       colorSel.innerHTML = '<option value="BLANCAS">Blancas (default — sin rating cargado)</option>';
