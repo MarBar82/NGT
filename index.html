@@ -421,6 +421,61 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .win-pct.win-pct-mid{background:var(--off);color:var(--navy);}
 .win-pct.win-pct-low{color:var(--g4);font-weight:600;}
 
+/* Top 8 % column */
+.lb-th-top8{font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.06em;}
+.lb-td-top8{padding:0 8px !important;}
+.top8-pct{
+  display:inline-block;font-family:'Barlow Condensed',sans-serif;
+  font-size:13px;font-weight:800;letter-spacing:-.01em;
+  padding:2px 6px;border-radius:3px;line-height:1.2;
+  min-width:42px;text-align:center;
+}
+.top8-pct.top8-pct-hi{background:rgba(22,163,74,.12);color:#16a34a;}
+.top8-pct.top8-pct-mid{background:var(--off);color:var(--navy);}
+.top8-pct.top8-pct-low{color:var(--g4);font-weight:600;}
+
+/* Sticky first 4 columns: Pos, Mov, Jugador, Pts. Active when table scrolls horizontally. */
+.pga thead th.lb-col-pos,
+.pga tbody td.lb-col-pos {
+  position:sticky; left:0; z-index:3;
+  background:#fff;
+  box-shadow:none;
+}
+.pga thead th.lb-col-pos { background:#f0eeea; z-index:5; }
+.pga thead th.lb-col-mov,
+.pga tbody td.lb-col-mov {
+  position:sticky; z-index:3;
+  background:#fff;
+}
+.pga thead th.lb-col-mov { background:#f0eeea; z-index:5; }
+.pga thead th.lb-col-name,
+.pga tbody td.lb-col-name {
+  position:sticky; z-index:3;
+  background:#fff;
+}
+.pga thead th.lb-col-name { background:#f0eeea; z-index:5; }
+/* Pts is the 4th column → sticky too */
+.pga thead th.lb-col-num:nth-child(4),
+.pga tbody td.lb-col-num:nth-child(4) {
+  position:sticky; z-index:3;
+  background:#fff;
+  border-right:1px solid var(--g2);
+}
+.pga thead th.lb-col-num:nth-child(4) { background:#f0eeea; z-index:5; }
+.pga tbody tr:hover td.lb-col-pos,
+.pga tbody tr:hover td.lb-col-mov,
+.pga tbody tr:hover td.lb-col-name,
+.pga tbody tr:hover td.lb-col-num:nth-child(4) {
+  background:var(--off);
+}
+
+/* Compute left offsets via CSS variables — actual values set by JS after render
+   based on real measured widths. Initial guesses for first paint. */
+.pga th.lb-col-pos, .pga td.lb-col-pos { left:0; }
+.pga th.lb-col-mov, .pga td.lb-col-mov { left:54px; }
+.pga th.lb-col-name, .pga td.lb-col-name { left:90px; }
+.pga th.lb-col-num:nth-child(4), .pga td.lb-col-num:nth-child(4) { left:230px; }
+
 /* ADMIN */
 .snb-admin{font-size:16px;padding:0 12px;}
 .adm-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);margin-bottom:14px;}
@@ -1758,6 +1813,7 @@ function gvizCallback(response){
       <th class="c lb-col-num">Golpes</th>
       <th class="c lb-col-champ">Champ</th>
       <th class="c lb-th-win" title="Probabilidad de ganar la temporada (Monte Carlo)">Win %</th>
+      <th class="c lb-th-top8" title="Probabilidad de quedar entre los 8 con ventaja para la final">Top 8 %</th>
     </tr></thead><tbody>`;
     rows.forEach((row,i)=>{
       const pos=v(row,0),nombre=v(row,1),movDir=v(row,2),movQty=v(row,3);
@@ -1778,6 +1834,7 @@ function gvizCallback(response){
       const ptsHtml=pts&&pts!=='-'&&pts!=='0'?`<span class="s" style="color:var(--red);">${pts}</span>`:'<span class="s dim">–</span>';
       const pbHtml=pb&&pb!=='0'&&pb!=='-'?`<span class="s bonus">+${pb}</span>`:'<span class="s dim">–</span>';
       const winHtml = winCell(nombre);
+      const top8Html = top8Cell(nombre);
       html+=`<tr><td class="c lb-col-pos">${posCell(pos,i)}</td><td class="c lb-col-mov">${mov}</td>
         <td class="lb-col-name"><span class="lb-clickable-name" onclick="goToProfileFromName('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span>${bonusEmojis(nombre)}</td>
         <td class="c lb-col-num">${ptsHtml}</td><td class="c lb-col-num">${cell(stb)}</td>
@@ -1787,6 +1844,7 @@ function gvizCallback(response){
         <td class="c lb-col-num">${golpesCell(golpes)}</td>
         <td class="c lb-col-champ"><span class="trophy">${champ||''}</span></td>
         <td class="c lb-td-win">${winHtml}</td>
+        <td class="c lb-td-top8">${top8Html}</td>
       </tr>`;
     });
     html+='</tbody></table>';
@@ -1794,6 +1852,8 @@ function gvizCallback(response){
     const now=new Date();
     document.getElementById('sync-time').textContent='Actualizado: '+now.toLocaleDateString('es-AR')+' '+now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     setTimeout(setTbHeight,50);
+    // Recompute sticky column left offsets based on actual rendered widths
+    setTimeout(recomputeStickyOffsets, 60);
     // If win probs arrived AFTER this render, update the cells
     if(WIN_PROBS_LOADED) refreshWinPctCells();
   }catch(e){document.getElementById('lb-body').innerHTML='<div class="lb-error">Error: '+e.message+'</div>';console.error(e);}
@@ -1841,19 +1901,54 @@ function winCell(nombre){
   return '<span class="win-pct ' + cls + '" title="' + tooltip + '">' + v.toFixed(1) + '%</span>';
 }
 
-// After winProbs loads (or reloads), update the Win % cells in-place without re-rendering whole LB
+// Build the inner HTML for a Top 8 % cell
+function top8Cell(nombre){
+  if(!WIN_PROBS_LOADED) return '<span class="s dim">…</span>';
+  const k = String(nombre || '').toUpperCase().trim();
+  const p = WIN_PROBS[k];
+  if(!p) return '<span class="s dim">–</span>';
+  const v = p.top8Pct;
+  let cls = 'top8-pct-low';
+  if(v >= 75) cls = 'top8-pct-hi';
+  else if(v >= 35) cls = 'top8-pct-mid';
+  return '<span class="top8-pct ' + cls + '">' + v.toFixed(1) + '%</span>';
+}
+
+// Recompute sticky-column left offsets based on actual measured widths after render.
+// This keeps the first 4 columns frozen even when each varies in actual size.
+function recomputeStickyOffsets(){
+  const headRow = document.querySelector('#lb-body table.pga thead tr');
+  if(!headRow) return;
+  const ths = headRow.querySelectorAll('th');
+  if(ths.length < 4) return;
+  // Measure first 4 columns' widths
+  const w0 = ths[0].offsetWidth;
+  const w1 = ths[1].offsetWidth;
+  const w2 = ths[2].offsetWidth;
+  // Apply offsets: col0=0, col1=w0, col2=w0+w1, col3=w0+w1+w2
+  function setOffset(selector, leftPx){
+    document.querySelectorAll(selector).forEach(el => { el.style.left = leftPx + 'px'; });
+  }
+  setOffset('#lb-body table.pga th.lb-col-pos, #lb-body table.pga td.lb-col-pos', 0);
+  setOffset('#lb-body table.pga th.lb-col-mov, #lb-body table.pga td.lb-col-mov', w0);
+  setOffset('#lb-body table.pga th.lb-col-name, #lb-body table.pga td.lb-col-name', w0 + w1);
+  setOffset('#lb-body table.pga th.lb-col-num:nth-child(4), #lb-body table.pga td.lb-col-num:nth-child(4)', w0 + w1 + w2);
+}
+// Re-recompute on resize
+window.addEventListener('resize', () => { setTimeout(recomputeStickyOffsets, 100); });
 function refreshWinPctCells(){
   const rows = document.querySelectorAll('#lb-body table.pga tbody tr');
   rows.forEach(tr => {
     const nameSpan = tr.querySelector('.lb-clickable-name');
     if(!nameSpan) return;
-    // Get raw name from the onclick attr
     const attr = nameSpan.getAttribute('onclick') || '';
     const m = attr.match(/goToProfileFromName\('(.+?)'\)/);
     if(!m) return;
     const nombre = m[1].replace(/\\'/g, "'");
-    const td = tr.querySelector('td.lb-td-win');
-    if(td) td.innerHTML = winCell(nombre);
+    const tdWin = tr.querySelector('td.lb-td-win');
+    if(tdWin) tdWin.innerHTML = winCell(nombre);
+    const tdTop8 = tr.querySelector('td.lb-td-top8');
+    if(tdTop8) tdTop8.innerHTML = top8Cell(nombre);
   });
 }
 
