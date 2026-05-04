@@ -3716,8 +3716,21 @@ function openMitScore(fecha, cancha){
   MIT_SCORES = [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null];
 
   // Load cancha pares + existing tarjeta + bonus winners
+  // canchaPares are immutable for a given cancha — cache them in sessionStorage
+  // so that all subsequent fechas with the same cancha skip the round-trip.
+  const cpKey = 'ngt_cp_' + cancha;
+  const cpCached = sessionStorage.getItem(cpKey);
+  const canchaParesPromise = cpCached
+    ? Promise.resolve({ ok: true, data: JSON.parse(cpCached) })
+    : ngtApiGet('canchaPares', { cancha: cancha }).then(r => {
+        if(r && r.ok && r.data){
+          try { sessionStorage.setItem(cpKey, JSON.stringify(r.data)); } catch(e){}
+        }
+        return r;
+      });
+
   Promise.all([
-    ngtApiGet('canchaPares', { cancha: cancha }),
+    canchaParesPromise,
     ngtApiGet('tarjeta', { fecha: fecha, matricula: MIT_PLAYER.matricula }),
     ngtApiGet('bonusWinners', { fecha: fecha })
   ]).then(results => {
