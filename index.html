@@ -1607,7 +1607,17 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           <div class="adm-row">
             <div class="adm-field">
               <label class="adm-label">Cancha</label>
-              <select id="adm-edit-cancha" class="adm-input"></select>
+              <select id="adm-edit-cancha" class="adm-input" onchange="loadColoresCanchaEdit()"></select>
+            </div>
+          </div>
+
+          <div class="adm-row">
+            <div class="adm-field">
+              <label class="adm-label">Color de Salidas</label>
+              <select id="adm-edit-color-tee" class="adm-input">
+                <option value="BLANCAS">Blancas (default)</option>
+              </select>
+              <div class="adm-hint" id="adm-edit-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
             </div>
           </div>
 
@@ -2863,6 +2873,45 @@ function formatPlayerLabel(nombreCompleto){
   return '<span class="ap">' + ap + '</span>' + (nm ? ' ' + nm : '');
 }
 
+// Same as loadColoresCancha but for the Gestionar tab
+function loadColoresCanchaEdit(){
+  const sel = document.getElementById('adm-edit-cancha');
+  const colorSel = document.getElementById('adm-edit-color-tee');
+  const hint = document.getElementById('adm-edit-color-hint');
+  if(!sel || !colorSel) return;
+  const canchaId = sel.value.trim();
+  if(!canchaId){
+    colorSel.innerHTML = '<option value="BLANCAS">Blancas (default)</option>';
+    if(hint) hint.textContent = 'Seleccioná una cancha primero';
+    return;
+  }
+  if(hint) hint.textContent = 'Cargando colores...';
+  ngtApiGet('coloresCancha', { canchaId: canchaId }).then(r => {
+    const list = (r && r.data) || [];
+    if(!list.length){
+      colorSel.innerHTML = '<option value="BLANCAS">Blancas (default — sin rating cargado)</option>';
+      if(hint) hint.textContent = 'Esta cancha no tiene rating cargado en RATING. Default: Blancas.';
+      return;
+    }
+    const order = ['NEGRAS','AZULES','BLANCAS','DORADAS','ROJAS','AMARILLAS','AMARRILAS'];
+    list.sort((a,b) => {
+      const ia = order.indexOf(a.color); const ib = order.indexOf(b.color);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    let html = '';
+    list.forEach(c => {
+      html += '<option value="' + c.color + '">' + c.color + ' (R ' + c.rating + ' / S ' + c.slope + ')</option>';
+    });
+    colorSel.innerHTML = html;
+    const blancas = list.find(c => c.color === 'BLANCAS');
+    if(blancas) colorSel.value = 'BLANCAS';
+    if(hint) hint.textContent = list.length + ' color(es) disponible(s)';
+  }).catch(e => {
+    colorSel.innerHTML = '<option value="BLANCAS">Blancas (default)</option>';
+    if(hint) hint.textContent = 'Error cargando colores · usando Blancas por default';
+  });
+}
+
 // Old adminCrearFecha replaced by wizard flow — see wizPaso1Next / wizCrearTodo below
 // ══ CREAR FECHA WIZARD ══
 let WIZ_PASO1_DATA = null;
@@ -2888,7 +2937,7 @@ function loadColoresCancha(){
       return;
     }
     // Build options sorted by typical order
-    const order = ['NEGRAS','AZULES','BLANCAS','DORADAS','ROJAS','AMARILLAS'];
+    const order = ['NEGRAS','AZULES','BLANCAS','DORADAS','ROJAS','AMARILLAS','AMARRILAS'];
     list.sort((a,b) => {
       const ia = order.indexOf(a.color); const ib = order.indexOf(b.color);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
@@ -3381,6 +3430,29 @@ function loadFechaParaEditar(){
     });
     cs.innerHTML = canchaOpts;
 
+    // Trigger color load for the current cancha + preselect the saved color
+    if(cs.value){
+      loadColoresCanchaEdit();
+      // Preselect the color that was saved for this fecha (after the select populates)
+      const savedColor = String(det.colorTee || '').trim().toUpperCase();
+      if(savedColor){
+        setTimeout(() => {
+          const colorSel = document.getElementById('adm-edit-color-tee');
+          if(colorSel){
+            // Wait a beat for the options to populate
+            const tryPreselect = () => {
+              if(colorSel.querySelector('option[value="' + savedColor + '"]')){
+                colorSel.value = savedColor;
+              }
+            };
+            tryPreselect();
+            setTimeout(tryPreselect, 400);
+            setTimeout(tryPreselect, 1000);
+          }
+        }, 50);
+      }
+    }
+
     // Render jugadores checkboxes with current selection checked
     const jl = document.getElementById('adm-edit-jugs');
     let jugHtml = '';
@@ -3417,6 +3489,8 @@ function loadFechaParaEditar(){
 function adminEditarFecha(){
   const fecha = document.getElementById('adm-edit-fecha-sel').value;
   const canchaId = document.getElementById('adm-edit-cancha').value;
+  const colorEl = document.getElementById('adm-edit-color-tee');
+  const colorTee = (colorEl ? colorEl.value.trim() : '') || 'BLANCAS';
   const jugadores = [...document.querySelectorAll('.edit-jug:checked')].map(i => i.value);
   const dobles = [...document.querySelectorAll('.edit-dob:checked')].map(i => i.value);
 
@@ -3439,6 +3513,7 @@ function adminEditarFecha(){
     adminKey: ADMIN_KEY_OK,
     fecha: fecha,
     canchaId: canchaId || undefined,
+    colorTee: colorTee,
     jugadores: jugadores,
     dobles: dobles,
   }).then(r => {
