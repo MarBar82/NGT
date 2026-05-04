@@ -500,6 +500,19 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-error{background:#fee;color:#c8102e;padding:10px;border-radius:3px;font-size:13px;margin-top:10px;border-left:3px solid var(--red);}
 .adm-msg{padding:10px;border-radius:3px;font-size:13px;margin-top:10px;font-family:'Barlow Condensed',sans-serif;}
 .adm-msg.ok{background:#e8f5e9;color:#16a34a;border-left:3px solid #16a34a;}
+.mit-pending-spinner{
+  display:inline-block;width:10px;height:10px;border-radius:50%;
+  border:2px solid rgba(22,163,74,.25);border-top-color:#16a34a;
+  animation:mitspin .8s linear infinite;vertical-align:middle;
+}
+@keyframes mitspin{ to { transform:rotate(360deg); } }
+.adm-msg.mit-error-persistent{
+  font-weight:600;animation:errorpulse 2s ease-in-out 1;
+}
+@keyframes errorpulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(200,16,46,.3);}
+  50%{box-shadow:0 0 0 6px rgba(200,16,46,0);}
+}
 .adm-msg.err{background:#fee;color:#c8102e;border-left:3px solid var(--red);}
 .adm-tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:2px solid var(--g2);}
 .adm-tab{background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--g4);padding:10px 16px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;}
@@ -1979,13 +1992,58 @@ function loadLB(){
   loadWinProbabilities();
   // Refrescar bonuses cada vez que se carga el LB (puede haber nuevas tarjetas firmadas)
   loadPlayerBonuses().then(() => {
-    const old=document.getElementById('gviz-script');if(old)old.remove();
-    const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:json;responseHandler:gvizCallback&sheet='+encodeURIComponent(SHEET_NAME)+'&range='+encodeURIComponent(RANGE)+'&_='+Date.now();
-    const s=document.createElement('script');s.id='gviz-script';s.src=url;
-    s.onerror=()=>{document.getElementById('lb-body').innerHTML='<div class="lb-error">⚠ No se pudo conectar.<br><button onclick="loadLB()" style="margin-top:10px;font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;cursor:pointer;padding:6px 16px;border:1px solid var(--red);color:var(--red);background:none;border-radius:3px;">↻ Reintentar</button></div>';};
-    document.head.appendChild(s);
+    fetchLBData();
   });
+  // Start auto-refresh interval (paused when tab is hidden)
+  startLBAutoRefresh();
 }
+
+// Silent refresh — no spinner, just re-fetches data and re-renders the table.
+// Used by auto-refresh and after user actions like firmar tarjeta.
+function refreshLBSilent(){
+  loadPlayerBonuses();          // refresh bonus accumulators
+  loadWinProbabilities();       // refresh win % (cached server-side)
+  fetchLBData();                // re-fetch the LB itself
+}
+
+function fetchLBData(){
+  const old = document.getElementById('gviz-script');
+  if(old) old.remove();
+  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+    '/gviz/tq?tqx=out:json;responseHandler:gvizCallback&sheet=' +
+    encodeURIComponent(SHEET_NAME) + '&range=' + encodeURIComponent(RANGE) +
+    '&_=' + Date.now();
+  const s = document.createElement('script');
+  s.id = 'gviz-script';
+  s.src = url;
+  s.onerror = () => {
+    const body = document.getElementById('lb-body');
+    if(body && body.innerHTML.indexOf('lb-error') < 0 && body.innerHTML.indexOf('table') < 0){
+      body.innerHTML = '<div class="lb-error">⚠ No se pudo conectar.<br><button onclick="loadLB()" style="margin-top:10px;font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;cursor:pointer;padding:6px 16px;border:1px solid var(--red);color:var(--red);background:none;border-radius:3px;">↻ Reintentar</button></div>';
+    }
+  };
+  document.head.appendChild(s);
+}
+
+// Auto-refresh every 60 seconds while LB is visible. Pauses on hidden tab.
+let LB_REFRESH_INTERVAL = null;
+function startLBAutoRefresh(){
+  if(LB_REFRESH_INTERVAL) return;     // already running
+  LB_REFRESH_INTERVAL = setInterval(() => {
+    if(document.hidden) return;       // pause when tab is in background
+    if(!document.getElementById('pg-lb') || !document.getElementById('pg-lb').classList.contains('on')) return;
+    refreshLBSilent();
+  }, 60000);
+}
+// Stop is optional — letting it run is fine since the interval is cheap and gated.
+
+// Refresh the LB immediately when tab regains focus (so users see latest after switching back)
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden){
+    const lbPg = document.getElementById('pg-lb');
+    if(lbPg && lbPg.classList.contains('on')) refreshLBSilent();
+  }
+});
 
 
 
@@ -3926,11 +3984,18 @@ function mitGuardar(){
   document.getElementById('confirm-modal').style.display = 'none';
 
   const msg = document.getElementById('mit-save-msg');
-  msg.className = 'adm-msg';
-  msg.textContent = 'Guardando...';
+
+  // Optimistic UI — show immediate success feedback while the backend processes.
+  // The user sees confirmation right away even if the server is busy (e.g. 17 simultaneous saves).
+  msg.className = 'adm-msg ok pending-confirm';
+  msg.innerHTML = '✓ Tarjeta enviada · <span class="mit-pending-spinner"></span><span class="s dim" style="margin-left:6px;">guardando en el sheet...</span>';
   msg.style.display = 'block';
 
   const scores = MIT_SCORES.map(s => s === null ? '' : s);
+
+  // Disable navigation away while save is in flight (avoid the user closing the page mid-save)
+  const startedAt = Date.now();
+  let confirmed = false;
 
   ngtApiPost({
     action: 'cargarTarjeta',
@@ -3941,21 +4006,34 @@ function mitGuardar(){
     ld: ld,
     ba: ba,
   }).then(r => {
-    if(r.ok){
+    confirmed = true;
+    const elapsedSec = Math.round((Date.now() - startedAt) / 100) / 10;
+    if(r && r.ok){
       msg.className = 'adm-msg ok';
-      msg.textContent = '✓ Tarjeta firmada y guardada';
+      msg.innerHTML = '✓ Tarjeta guardada (' + elapsedSec + 's)';
+      // Navigate to leaderboard so the player sees their score reflected in the live LB
       setTimeout(function(){
         const lbBtn = document.querySelector('.subnav .snb');
         if(lbBtn) pg('lb', lbBtn);
-      }, 1500);
+      }, 1800);
     } else {
-      msg.className = 'adm-msg err';
-      msg.textContent = '✗ ' + (r.error || 'Error');
+      // Backend rejected — persistent error banner with retry guidance
+      msg.className = 'adm-msg err mit-error-persistent';
+      const errTxt = (r && r.error) || 'Error desconocido';
+      msg.innerHTML = '⚠ NO se guardó: ' + errTxt + '<br><span class="s dim">Volvé a apretar "Firmar" para reintentar. Si persiste, contactá al admin.</span>';
     }
   }).catch(e => {
-    msg.className = 'adm-msg err';
-    msg.textContent = '✗ Error: ' + e.message;
+    confirmed = true;
+    msg.className = 'adm-msg err mit-error-persistent';
+    msg.innerHTML = '⚠ NO se guardó (error de red): ' + e.message + '<br><span class="s dim">Volvé a apretar "Firmar" para reintentar. La tarjeta NO quedó guardada.</span>';
   });
+
+  // After 8 seconds with no response, warn the user the save is taking long but DON'T claim it failed
+  setTimeout(function(){
+    if(!confirmed && msg.classList.contains('pending-confirm')){
+      msg.innerHTML = '⏳ La fila está demorando (probablemente hay varios cargando al mismo tiempo)... <span class="s dim">no cierres esta pantalla.</span>';
+    }
+  }, 8000);
 }
 
 // Allow Enter in matricula input to log in
