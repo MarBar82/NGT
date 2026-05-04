@@ -734,32 +734,43 @@ body.home-mode{
 }
 
 .home-fecha-info{
-  margin-bottom:32px;
-  padding:16px 22px;
+  margin:0 auto 32px;
+  padding:18px 28px;
   background:rgba(255,255,255,.03);
   border-left:3px solid var(--red);
   border-radius:0 4px 4px 0;
-  display:inline-block;
+  display:block;
+  max-width:560px;
+  width:100%;
+  box-sizing:border-box;
+  text-align:center;
 }
 .hfi-num{
   font-family:'Barlow Condensed',sans-serif;
-  font-size:22px;
+  font-size:24px;
   font-weight:800;
-  letter-spacing:.06em;
+  letter-spacing:.08em;
   color:#fff;
-  margin-bottom:4px;
+  margin-bottom:6px;
   text-transform:uppercase;
 }
 .hfi-detail{
   font-family:'Barlow Condensed',sans-serif;
-  font-size:14px;
+  font-size:15px;
   font-weight:500;
-  color:rgba(255,255,255,.75);
+  color:rgba(255,255,255,.78);
   letter-spacing:.04em;
 }
 .hfi-cancha{ color:var(--gold); font-weight:700; }
 .hfi-sep{ margin:0 10px; opacity:.4; }
 .hfi-date{ text-transform:capitalize; }
+
+@media(max-width:480px){
+  .home-fecha-info{padding:14px 18px;max-width:none;}
+  .hfi-num{font-size:20px;}
+  .hfi-detail{font-size:13px;}
+  .hfi-sep{display:block;height:0;width:0;margin:4px 0;overflow:hidden;}
+}
 
 .home-actions{
   display:grid;
@@ -4747,7 +4758,20 @@ function loadHome(){
 
     if(numEl) numEl.textContent = 'Fecha ' + (data.fechaNum || '—');
     if(canchaEl) canchaEl.textContent = data.cancha || 'Cancha a definir';
-    if(dateEl) dateEl.textContent = data.fechaDisplay || dateObj.toLocaleDateString();
+    if(dateEl){
+      // Format in Spanish (Argentina) with weekday + day + month + year, e.g. "domingo 10 de mayo de 2026"
+      try {
+        const fmt = new Intl.DateTimeFormat('es-AR', {
+          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        });
+        let txt = fmt.format(dateObj);
+        // Capitalize first letter of weekday
+        txt = txt.charAt(0).toUpperCase() + txt.slice(1);
+        dateEl.textContent = txt;
+      } catch(e){
+        dateEl.textContent = data.fechaDisplay || dateObj.toLocaleDateString('es-AR');
+      }
+    }
 
     if(hero){
       if(data.isPast) hero.classList.add('home-finished');
