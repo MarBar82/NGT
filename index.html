@@ -3638,11 +3638,18 @@ function mitLogin(){
     errBox.style.display = 'block';
     return;
   }
-  ngtApiGet('login', { matricula: mat }).then(r => {
+
+  // OPTIMIZATION: fire login + misFechas in parallel. If the matricula is invalid,
+  // misFechas will simply return [] and we'll discard it. Saves one round-trip in the common case.
+  const loginPromise = ngtApiGet('login', { matricula: mat });
+  const fechasPromise = ngtApiGet('misFechas', { matricula: mat });
+
+  loginPromise.then(r => {
     if(r.ok && r.player){
       MIT_PLAYER = r.player;
       sessionStorage.setItem('ngt_player_mat', mat);
-      showMitFechas();
+      // Pass the already-in-flight promise so showMitFechas reuses it instead of refetching
+      showMitFechas(fechasPromise);
     } else {
       errBox.textContent = 'Matrícula no encontrada';
       errBox.style.display = 'block';
@@ -3662,7 +3669,7 @@ function mitLogout(){
   document.getElementById('mit-mat-input').value = '';
 }
 
-function showMitFechas(){
+function showMitFechas(preloadedPromise){
   document.getElementById('mit-login').style.display = 'none';
   document.getElementById('mit-score').style.display = 'none';
   document.getElementById('mit-fechas').style.display = 'block';
@@ -3670,13 +3677,24 @@ function showMitFechas(){
   document.getElementById('mit-greeting').textContent = '👤 ' + fmtNameForAdm(MIT_PLAYER.nombre);
   document.getElementById('mit-fechas-list').innerHTML = 'Cargando...';
 
-  ngtApiGet('misFechas', { matricula: MIT_PLAYER.matricula }).then(r => {
+  // Reuse the in-flight promise if mitLogin already started it. Otherwise fetch fresh.
+  const fechasPromise = preloadedPromise || ngtApiGet('misFechas', { matricula: MIT_PLAYER.matricula });
+
+  fechasPromise.then(r => {
     const fechas = (r && r.data) || [];
     const list = document.getElementById('mit-fechas-list');
     if(!fechas.length){
       list.innerHTML = '<div class="s dim" style="text-align:center;padding:24px;">No tenés fechas cargadas todavía</div>';
       return;
     }
+
+    // Cache pares from misFechas response into sessionStorage so openMitScore
+    // can render the holes grid instantly without waiting for canchaPares round-trip.
+    fechas.forEach(f => {
+      if(f.cancha && Array.isArray(f.pares) && f.pares.length === 18){
+        try { sessionStorage.setItem('ngt_cp_' + f.cancha, JSON.stringify({ nombre: f.cancha, pares: f.pares })); } catch(e){}
+      }
+    });
 
     // OPTIMIZATION: if there's only one pending (unsigned) fecha, skip the selector
     // and jump directly to the score screen. Saves one click and one fetch round-trip.
@@ -4939,10 +4957,11 @@ function tickCountdown(){
   sEl.textContent = String(secs).padStart(2,'0');
 }
 
-// Load home data right away (home is the default landing page)
+// Load home data right away (home is the default landing page).
+// We do NOT preload the leaderboard from boot — it's loaded on-demand when the user navigates to it
+// (see pg() routing at the top of this script). This saves 3 unnecessary API calls on home.
 document.body.classList.add('home-mode');
 loadHome();
-loadLB();
 </script>
 </body>
 </html>
