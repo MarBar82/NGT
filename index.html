@@ -4908,15 +4908,6 @@ function applyHomeData(data){
   if(!HOME_TICK_INTERVAL) HOME_TICK_INTERVAL = setInterval(tickCountdown, 1000);
 }
 
-    tickCountdown();
-    if(!HOME_TICK_INTERVAL) HOME_TICK_INTERVAL = setInterval(tickCountdown, 1000);
-  }).catch(e => {
-    console.error('loadHome error:', e);
-    const canchaEl = document.getElementById('hfi-cancha');
-    if(canchaEl) canchaEl.textContent = 'Error de conexión';
-  });
-}
-
 function tickCountdown(){
   const dEl = document.getElementById('hc-days');
   const hEl = document.getElementById('hc-hours');
