@@ -3677,6 +3677,16 @@ function showMitFechas(){
       list.innerHTML = '<div class="s dim" style="text-align:center;padding:24px;">No tenés fechas cargadas todavía</div>';
       return;
     }
+
+    // OPTIMIZATION: if there's only one pending (unsigned) fecha, skip the selector
+    // and jump directly to the score screen. Saves one click and one fetch round-trip.
+    const pending = fechas.filter(f => !f.hcp || f.hcp === '');
+    if(pending.length === 1){
+      const f = pending[0];
+      openMitScore(f.fecha, f.cancha || '');
+      return;
+    }
+
     let html = '';
     fechas.forEach(f => {
       const hasScore = f.hcp && f.hcp !== '';
@@ -3714,6 +3724,12 @@ function openMitScore(fecha, cancha){
   baLabel.textContent = '🎯 Gané el Best Approach';
 
   MIT_SCORES = [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null];
+
+  // OPTIMIZATION: render the 18-hole grid IMMEDIATELY with default pares (4×18).
+  // The actual pares from the cancha load in background and re-render once available.
+  // This makes the UI feel instant — the user can start typing scores while we wait.
+  MIT_CANCHA = { nombre: cancha, pares: [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4] };
+  renderHolesGrid();
 
   // Load cancha pares + existing tarjeta + bonus winners
   // canchaPares are immutable for a given cancha — cache them in sessionStorage
@@ -4828,46 +4844,69 @@ let HOME_TARGET_MS = null;
 let HOME_TICK_INTERVAL = null;
 
 function loadHome(){
+  // Show cached version instantly if available, then refresh from network in background.
+  // This makes the home countdown appear immediately on revisits.
+  const cached = sessionStorage.getItem('ngt_proximaFecha');
+  if(cached){
+    try { applyHomeData(JSON.parse(cached)); } catch(e){}
+  }
+
   ngtApiGet('proximaFecha').then(r => {
     const data = (r && r.data) || null;
-    const numEl = document.getElementById('hfi-num');
-    const canchaEl = document.getElementById('hfi-cancha');
-    const dateEl = document.getElementById('hfi-date');
-    const hero = document.querySelector('.home-hero');
-
-    if(!data){
-      if(numEl) numEl.textContent = 'Sin fechas';
-      if(canchaEl) canchaEl.textContent = 'Próximamente';
-      if(dateEl) dateEl.textContent = '—';
-      HOME_TARGET_MS = null;
-      tickCountdown();
-      return;
+    if(data){
+      try { sessionStorage.setItem('ngt_proximaFecha', JSON.stringify(data)); } catch(e){}
     }
-
-    const dateObj = new Date(data.fecha);
-    HOME_TARGET_MS = dateObj.getTime();
-
-    if(numEl) numEl.textContent = 'Fecha ' + (data.fechaNum || '—');
-    if(canchaEl) canchaEl.textContent = data.cancha || 'Cancha a definir';
-    if(dateEl){
-      // Format in Spanish (Argentina) with weekday + day + month + year, e.g. "domingo 10 de mayo de 2026"
-      try {
-        const fmt = new Intl.DateTimeFormat('es-AR', {
-          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-        });
-        let txt = fmt.format(dateObj);
-        // Capitalize first letter of weekday
-        txt = txt.charAt(0).toUpperCase() + txt.slice(1);
-        dateEl.textContent = txt;
-      } catch(e){
-        dateEl.textContent = data.fechaDisplay || dateObj.toLocaleDateString('es-AR');
-      }
+    applyHomeData(data);
+  }).catch(e => {
+    console.error('loadHome error:', e);
+    if(!cached){
+      const canchaEl = document.getElementById('hfi-cancha');
+      if(canchaEl) canchaEl.textContent = 'Error de conexión';
     }
+  });
+}
 
-    if(hero){
-      if(data.isPast) hero.classList.add('home-finished');
-      else hero.classList.remove('home-finished');
+function applyHomeData(data){
+  const numEl = document.getElementById('hfi-num');
+  const canchaEl = document.getElementById('hfi-cancha');
+  const dateEl = document.getElementById('hfi-date');
+  const hero = document.querySelector('.home-hero');
+
+  if(!data){
+    if(numEl) numEl.textContent = 'Sin fechas';
+    if(canchaEl) canchaEl.textContent = 'Próximamente';
+    if(dateEl) dateEl.textContent = '—';
+    HOME_TARGET_MS = null;
+    tickCountdown();
+    return;
+  }
+
+  const dateObj = new Date(data.fecha);
+  HOME_TARGET_MS = dateObj.getTime();
+
+  if(numEl) numEl.textContent = 'Fecha ' + (data.fechaNum || '—');
+  if(canchaEl) canchaEl.textContent = data.cancha || 'Cancha a definir';
+  if(dateEl){
+    try {
+      const fmt = new Intl.DateTimeFormat('es-AR', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      });
+      let txt = fmt.format(dateObj);
+      txt = txt.charAt(0).toUpperCase() + txt.slice(1);
+      dateEl.textContent = txt;
+    } catch(e){
+      dateEl.textContent = data.fechaDisplay || dateObj.toLocaleDateString('es-AR');
     }
+  }
+
+  if(hero){
+    if(data.isPast) hero.classList.add('home-finished');
+    else hero.classList.remove('home-finished');
+  }
+
+  tickCountdown();
+  if(!HOME_TICK_INTERVAL) HOME_TICK_INTERVAL = setInterval(tickCountdown, 1000);
+}
 
     tickCountdown();
     if(!HOME_TICK_INTERVAL) HOME_TICK_INTERVAL = setInterval(tickCountdown, 1000);
