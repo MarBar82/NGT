@@ -3688,11 +3688,13 @@ function showMitFechas(preloadedPromise){
       return;
     }
 
-    // Cache pares from misFechas response into sessionStorage so openMitScore
-    // can render the holes grid instantly without waiting for canchaPares round-trip.
+    // Cache pares + indices from misFechas response into sessionStorage so openMitScore
+    // can render the holes grid instantly with correct stableford calculation.
     fechas.forEach(f => {
       if(f.cancha && Array.isArray(f.pares) && f.pares.length === 18){
-        try { sessionStorage.setItem('ngt_cp_' + f.cancha, JSON.stringify({ nombre: f.cancha, pares: f.pares })); } catch(e){}
+        const cached = { nombre: f.cancha, pares: f.pares };
+        if(Array.isArray(f.indices) && f.indices.length === 18) cached.indices = f.indices;
+        try { sessionStorage.setItem('ngt_cp2_' + f.cancha, JSON.stringify(cached)); } catch(e){}
       }
     });
 
@@ -3743,19 +3745,25 @@ function openMitScore(fecha, cancha){
 
   MIT_SCORES = [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null];
 
-  // OPTIMIZATION: render the 18-hole grid IMMEDIATELY with default pares (4×18).
-  // The actual pares from the cancha load in background and re-render once available.
-  // This makes the UI feel instant — the user can start typing scores while we wait.
-  MIT_CANCHA = { nombre: cancha, pares: [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4] };
+  // Render the 18-hole grid as soon as possible. If we have the cancha cached (with pares+indices),
+  // use it — that gives correct stableford right away. Otherwise fall back to dummy par-4
+  // placeholders and re-render once the real data arrives.
+  const cpKey = 'ngt_cp2_' + cancha;
+  const cpCachedRaw = sessionStorage.getItem(cpKey);
+  let cpCached = null;
+  if(cpCachedRaw){
+    try { cpCached = JSON.parse(cpCachedRaw); } catch(e){}
+  }
+  if(cpCached && Array.isArray(cpCached.pares) && cpCached.pares.length === 18){
+    MIT_CANCHA = cpCached;
+  } else {
+    MIT_CANCHA = { nombre: cancha, pares: [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4], indices: [] };
+  }
   renderHolesGrid();
 
   // Load cancha pares + existing tarjeta + bonus winners
-  // canchaPares are immutable for a given cancha — cache them in sessionStorage
-  // so that all subsequent fechas with the same cancha skip the round-trip.
-  const cpKey = 'ngt_cp_' + cancha;
-  const cpCached = sessionStorage.getItem(cpKey);
-  const canchaParesPromise = cpCached
-    ? Promise.resolve({ ok: true, data: JSON.parse(cpCached) })
+  const canchaParesPromise = (cpCached && Array.isArray(cpCached.indices) && cpCached.indices.length === 18)
+    ? Promise.resolve({ ok: true, data: cpCached })   // fully cached, skip the round-trip entirely
     : ngtApiGet('canchaPares', { cancha: cancha }).then(r => {
         if(r && r.ok && r.data){
           try { sessionStorage.setItem(cpKey, JSON.stringify(r.data)); } catch(e){}
