@@ -37,23 +37,39 @@
     border:1px solid var(--g2);
     box-shadow:0 8px 30px rgba(0,0,0,.18);
   }
+
+  /* HEADER with logo */
   .hdr{
     background:var(--navy);
     color:var(--white);
-    padding:18px 18px 14px;
-    text-align:center;
+    padding:14px 18px;
     border-bottom:3px solid var(--red);
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .hdr-logo{
+    width:50px;
+    height:50px;
+    flex-shrink:0;
+    object-fit:contain;
+  }
+  .hdr-text{
+    flex:1;
+    text-align:center;
   }
   .hdr-tour{
     font-size:9px;letter-spacing:.32em;font-weight:700;
-    color:var(--gold);margin-bottom:4px;text-transform:uppercase;
+    color:var(--gold);margin-bottom:3px;text-transform:uppercase;
   }
   .hdr-fecha{
-    font-family:'Roboto Slab',serif;font-size:30px;font-weight:900;
+    font-family:'Roboto Slab',serif;font-size:26px;font-weight:900;
     letter-spacing:.06em;line-height:1;color:var(--white);
   }
-  .hdr-line{ width:42px;height:2px;background:var(--gold);margin:8px auto 0; }
+  .hdr-line{ width:42px;height:2px;background:var(--gold);margin:6px auto 0; }
+  .hdr-spacer{ width:50px; flex-shrink:0; }   /* balances logo for visual centering */
 
+  /* INFO BOXES */
   .info-boxes{
     padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;
     background:var(--off);border-bottom:1px solid var(--g2);
@@ -79,6 +95,7 @@
   }
   .info-value.fee{ color:var(--red);font-size:14px; }
 
+  /* LÍNEAS */
   .lineas{padding:12px 12px 8px;}
   .linea{ background:var(--white);border:1px solid var(--g2);margin-bottom:12px; }
   .linea-hdr{
@@ -95,19 +112,18 @@
   }
   .linea-body{padding:8px;}
 
-  /* Player: card estilo match con línea roja izquierda. Nombre izq, HCPs der. */
+  /* PLAYERS — grid columns ensure all separators align across cards */
   .players{ display:flex;flex-direction:column;gap:5px; }
   .player{
+    display:grid;
+    grid-template-columns:1fr 92px 92px;   /* fixed widths → separators line up perfectly */
     background:var(--white);
     border:1px solid var(--g2);
     border-left:3px solid var(--red);
-    display:flex;
-    align-items:stretch;
     overflow:hidden;
     min-height:38px;
   }
   .p-name{
-    flex:1;
     display:flex;
     align-items:center;
     padding:6px 12px;
@@ -116,29 +132,29 @@
     letter-spacing:.05em;
     color:var(--navy);
     text-transform:uppercase;
+    border-right:1px solid var(--g2);
   }
   .p-tee{
-    display:flex;
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
     align-items:center;
-    justify-content:center;
-    gap:5px;
-    padding:6px 11px;
+    justify-items:center;
+    padding:6px 8px;
     font-size:12.5px;
     font-weight:700;
     letter-spacing:.04em;
-    border-left:1px solid var(--g2);
-    min-width:78px;
   }
-  .p-tee.blancas{ background:var(--white); color:var(--navy); }
+  .p-tee.blancas{ background:var(--white); color:var(--navy); border-right:1px solid var(--g2); }
   .p-tee.azules{ background:var(--blue-bg); color:var(--navy); }
   .p-hcp{ font-weight:800;font-size:13px;color:var(--navy); }
-  .p-arrow{ color:var(--g4);font-size:10px;margin:0 2px; }
+  .p-arrow{ color:var(--g4);font-size:10px; }
+  .p-85-wrap{ display:flex;align-items:baseline;gap:2px; }
   .p-85{ font-weight:800;color:var(--red);font-size:13px; }
   .p-85-tag{
-    font-size:8px;color:var(--g4);font-weight:600;
-    letter-spacing:.06em;margin-left:1px;
+    font-size:8px;color:var(--g4);font-weight:600;letter-spacing:.06em;
   }
 
+  /* Match section */
   .sec-match{
     background:var(--g1);color:var(--navy);padding:6px 8px;
     font-size:10px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;
@@ -161,6 +177,7 @@
     margin:0 5px;letter-spacing:.06em;
   }
 
+  /* FOOTER */
   .ftr{
     background:var(--navy);color:var(--white);padding:10px;
     text-align:center;font-size:9px;letter-spacing:.2em;
@@ -172,12 +189,18 @@
 <body>
 <div class="card">
 
+  <!-- HEADER -->
   <div class="hdr">
-    <div class="hdr-tour">Numa Golf Tour · XIV · 2026</div>
-    <div class="hdr-fecha">FECHA 3</div>
-    <div class="hdr-line"></div>
+    <img src="logo.png" alt="NGT" class="hdr-logo" onerror="this.style.display='none'">
+    <div class="hdr-text">
+      <div class="hdr-tour">Numa Golf Tour · XIV · 2026</div>
+      <div class="hdr-fecha">FECHA 3</div>
+      <div class="hdr-line"></div>
+    </div>
+    <div class="hdr-spacer"></div>
   </div>
 
+  <!-- INFO BOXES -->
   <div class="info-boxes">
     <div class="info-box">
       <div class="info-icon">
@@ -246,18 +269,18 @@
         <div class="players">
           <div class="player">
             <div class="p-name">Bocha</div>
-            <div class="p-tee blancas"><span class="p-hcp">18</span><span class="p-arrow">→</span><span class="p-85">15</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">20</span><span class="p-arrow">→</span><span class="p-85">17</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">18</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">15</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">20</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">17</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Caco</div>
-            <div class="p-tee blancas"><span class="p-hcp">8</span><span class="p-arrow">→</span><span class="p-85">7</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">10</span><span class="p-arrow">→</span><span class="p-85">9</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">8</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">7</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">10</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">9</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Persa</div>
-            <div class="p-tee blancas"><span class="p-hcp">9</span><span class="p-arrow">→</span><span class="p-85">8</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">11</span><span class="p-arrow">→</span><span class="p-85">9</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">9</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">8</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">11</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">9</span><span class="p-85-tag">85%</span></span></div>
           </div>
         </div>
         <div class="sec-match">⚔ Match</div>
@@ -278,18 +301,18 @@
         <div class="players">
           <div class="player">
             <div class="p-name">Luis</div>
-            <div class="p-tee blancas"><span class="p-hcp">6</span><span class="p-arrow">→</span><span class="p-85">5</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">8</span><span class="p-arrow">→</span><span class="p-85">7</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">6</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">5</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">8</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">7</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Picho</div>
-            <div class="p-tee blancas"><span class="p-hcp">16</span><span class="p-arrow">→</span><span class="p-85">14</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">17</span><span class="p-arrow">→</span><span class="p-85">14</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">16</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">14</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">17</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">14</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Ruete</div>
-            <div class="p-tee blancas"><span class="p-hcp">32</span><span class="p-arrow">→</span><span class="p-85">27</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">33</span><span class="p-arrow">→</span><span class="p-85">28</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">32</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">27</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">33</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">28</span><span class="p-85-tag">85%</span></span></div>
           </div>
         </div>
         <div class="sec-match">⚔ Match</div>
@@ -310,18 +333,18 @@
         <div class="players">
           <div class="player">
             <div class="p-name">Marta</div>
-            <div class="p-tee blancas"><span class="p-hcp">20</span><span class="p-arrow">→</span><span class="p-85">17</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">22</span><span class="p-arrow">→</span><span class="p-85">19</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">20</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">17</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">22</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">19</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Trinche</div>
-            <div class="p-tee blancas"><span class="p-hcp">27</span><span class="p-arrow">→</span><span class="p-85">23</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">29</span><span class="p-arrow">→</span><span class="p-85">25</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">27</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">23</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">29</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">25</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Pierre</div>
-            <div class="p-tee blancas"><span class="p-hcp">23</span><span class="p-arrow">→</span><span class="p-85">20</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">25</span><span class="p-arrow">→</span><span class="p-85">21</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">23</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">20</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">25</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">21</span><span class="p-85-tag">85%</span></span></div>
           </div>
         </div>
         <div class="sec-match">⚔ Match</div>
@@ -342,23 +365,23 @@
         <div class="players">
           <div class="player">
             <div class="p-name">Polaco</div>
-            <div class="p-tee blancas"><span class="p-hcp">27</span><span class="p-arrow">→</span><span class="p-85">23</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">28</span><span class="p-arrow">→</span><span class="p-85">24</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">27</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">23</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">28</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">24</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Queque</div>
-            <div class="p-tee blancas"><span class="p-hcp">10</span><span class="p-arrow">→</span><span class="p-85">9</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">12</span><span class="p-arrow">→</span><span class="p-85">10</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">10</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">9</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">12</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">10</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Negro</div>
-            <div class="p-tee blancas"><span class="p-hcp">37</span><span class="p-arrow">→</span><span class="p-85">31</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">39</span><span class="p-arrow">→</span><span class="p-85">33</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">37</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">31</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">39</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">33</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Bebe</div>
-            <div class="p-tee blancas"><span class="p-hcp">19</span><span class="p-arrow">→</span><span class="p-85">16</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">21</span><span class="p-arrow">→</span><span class="p-85">18</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">19</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">16</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">21</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">18</span><span class="p-85-tag">85%</span></span></div>
           </div>
         </div>
         <div class="sec-match">⚔ Match</div>
@@ -380,23 +403,23 @@
         <div class="players">
           <div class="player">
             <div class="p-name">Uru</div>
-            <div class="p-tee blancas"><span class="p-hcp">33</span><span class="p-arrow">→</span><span class="p-85">28</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">35</span><span class="p-arrow">→</span><span class="p-85">30</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">33</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">28</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">35</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">30</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Racho</div>
-            <div class="p-tee blancas"><span class="p-hcp">19</span><span class="p-arrow">→</span><span class="p-85">16</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">21</span><span class="p-arrow">→</span><span class="p-85">18</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">19</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">16</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">21</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">18</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Pollo</div>
-            <div class="p-tee blancas"><span class="p-hcp">11</span><span class="p-arrow">→</span><span class="p-85">9</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">13</span><span class="p-arrow">→</span><span class="p-85">11</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">11</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">9</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">13</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">11</span><span class="p-85-tag">85%</span></span></div>
           </div>
           <div class="player">
             <div class="p-name">Juanse</div>
-            <div class="p-tee blancas"><span class="p-hcp">35</span><span class="p-arrow">→</span><span class="p-85">30</span><span class="p-85-tag">85%</span></div>
-            <div class="p-tee azules"><span class="p-hcp">36</span><span class="p-arrow">→</span><span class="p-85">31</span><span class="p-85-tag">85%</span></div>
+            <div class="p-tee blancas"><span class="p-hcp">35</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">30</span><span class="p-85-tag">85%</span></span></div>
+            <div class="p-tee azules"><span class="p-hcp">36</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">31</span><span class="p-85-tag">85%</span></span></div>
           </div>
         </div>
         <div class="sec-match">⚔ Match</div>

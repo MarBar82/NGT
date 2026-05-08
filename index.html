@@ -1340,18 +1340,8 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div class="hfc-label">Día</div>
             <div class="hfc-value" id="hfi-date">—</div>
           </div>
-          <div class="hfc-row hfc-row-falta" id="hfc-row-falta">
-            <div class="hfc-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
-              </svg>
-            </div>
-            <div class="hfc-label">Falta</div>
-            <div class="hfc-value" id="hfi-falta">—</div>
-          </div>
         </div>
-        <a id="hfi-ver" class="hfi-ver-btn" href="#" target="_blank" rel="noopener" style="display:none;">Ver Fecha →</a>
+        <a id="hfi-ver" class="hfi-ver-btn" href="#" style="display:none;">Ver Fecha →</a>
       </div>
 
       <div class="home-actions">
@@ -4979,48 +4969,13 @@ function applyHomeData(data){
     }
   }
 
+  // Tick once just to ensure consistent state (no-op now since Falta row is gone)
   tickCountdown();
-  if(!HOME_TICK_INTERVAL) HOME_TICK_INTERVAL = setInterval(tickCountdown, 30000);  // every 30s now (showing days/hours/mins, no seconds)
 }
 
 function tickCountdown(){
-  // Updates the "Falta" row in the new home-fecha-card design (replaces old countdown).
-  const faltaEl = document.getElementById('hfi-falta');
-  const rowFalta = document.getElementById('hfc-row-falta');
-  if(!faltaEl) return;
-
-  if(!HOME_TARGET_MS){
-    faltaEl.textContent = '—';
-    return;
-  }
-
-  let diff = HOME_TARGET_MS - Date.now();
-  if(diff <= 0){
-    faltaEl.textContent = '¡Hoy es la fecha!';
-    if(rowFalta) rowFalta.classList.add('today');
-    return;
-  }
-  if(rowFalta) rowFalta.classList.remove('today');
-
-  const days = Math.floor(diff / 86400000);
-  diff -= days * 86400000;
-  const hours = Math.floor(diff / 3600000);
-
-  let txt;
-  if(days >= 7){
-    const weeks = Math.floor(days / 7);
-    const remDays = days % 7;
-    txt = weeks + ' sem' + (weeks > 1 ? 's' : '') + (remDays > 0 ? ' ' + remDays + 'd' : '');
-  } else if(days > 0){
-    txt = days + ' día' + (days > 1 ? 's' : '');
-    if(hours > 0) txt += ' ' + hours + ' hs';
-  } else if(hours > 0){
-    txt = hours + ' hora' + (hours > 1 ? 's' : '');
-  } else {
-    const mins = Math.floor(diff / 60000);
-    txt = mins + ' min';
-  }
-  faltaEl.textContent = txt;
+  // No-op: the "Falta" countdown row was removed from the home fecha card.
+  // Keeping this function as a stub so existing callers don't break.
 }
 
 // Load home data right away (home is the default landing page).
