@@ -2888,27 +2888,25 @@ function showAdminPanel(){
   loadAdminData();
 }
 
-function loadAdminData(){
-  Promise.all([
-    ngtApiGet('jugadores'),
-    ngtApiGet('canchas'),
-    ngtApiGet('fechas'),
-    ngtApiGet('jugadoresConDoble'),  // matriculas with doble still AVAILABLE
-  ]).then(function(results){
-    ADM_JUGADORES = (results[0] && results[0].data) || [];
-    ADM_CANCHAS = (results[1] && results[1].data) || [];
-    const fechas = (results[2] && results[2].data) || [];
-    const doblesDisponibles = (results[3] && results[3].data) || [];
+// Map of { [canchaId]: [{color, rating, slope}] } — populated by loadAdminData, used by
+// loadColoresCancha / loadColoresCanchaEdit instantly (no extra API call needed).
+let ADM_COLORES_MAP = {};
+
+function applyAdminResults_(jugadores, canchas, fechas, doblesDisponibles){
+    ADM_JUGADORES = jugadores;
+    ADM_CANCHAS = canchas;
 
     // Save available dobles globally for access when editing
     window.ADM_DOBLES_DISP = doblesDisponibles;
 
     // Cancha select (crear)
     const cs = document.getElementById('adm-cancha');
-    cs.innerHTML = '<option value="">Seleccionar cancha...</option>';
-    ADM_CANCHAS.forEach(c => {
-      cs.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>';
-    });
+    if(cs){
+      cs.innerHTML = '<option value="">Seleccionar cancha...</option>';
+      ADM_CANCHAS.forEach(c => {
+        cs.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>';
+      });
+    }
 
     // Cancha select (editar)
     const csE = document.getElementById('adm-edit-cancha');
@@ -2921,26 +2919,69 @@ function loadAdminData(){
 
     // Jugadores checkboxes — ALL players available to select for the fecha
     const jl = document.getElementById('adm-jugadores-list');
-    let jugHtml = '';
-    ADM_JUGADORES.forEach(j => {
-      const lbl = formatPlayerLabel(j.nombre);
-      jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
-    });
-    jl.innerHTML = jugHtml;
+    if(jl){
+      let jugHtml = '';
+      ADM_JUGADORES.forEach(j => {
+        const lbl = formatPlayerLabel(j.nombre);
+        jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
+      });
+      jl.innerHTML = jugHtml;
+    }
 
     // Dobles checkboxes — ONLY players who still have doble available
     const dl = document.getElementById('adm-dobles-list');
-    let dobHtml = '';
-    if(!doblesDisponibles.length){
-      dobHtml = '<div class="s dim" style="padding:10px;">Todos los jugadores ya usaron sus puntos dobles</div>';
-    } else {
-      ADM_JUGADORES.forEach(j => {
-        if(doblesDisponibles.indexOf(String(j.matricula)) < 0) return;
-        const lbl = formatPlayerLabel(j.nombre);
-        dobHtml += '<div class="adm-jug-item"><input type="checkbox" id="dob-' + j.matricula + '" value="' + j.matricula + '"><label for="dob-' + j.matricula + '">' + lbl + '</label></div>';
-      });
+    if(dl){
+      let dobHtml = '';
+      if(!doblesDisponibles.length){
+        dobHtml = '<div class="s dim" style="padding:10px;">Todos los jugadores ya usaron sus puntos dobles</div>';
+      } else {
+        ADM_JUGADORES.forEach(j => {
+          if(doblesDisponibles.indexOf(String(j.matricula)) < 0) return;
+          const lbl = formatPlayerLabel(j.nombre);
+          dobHtml += '<div class="adm-jug-item"><input type="checkbox" id="dob-' + j.matricula + '" value="' + j.matricula + '"><label for="dob-' + j.matricula + '">' + lbl + '</label></div>';
+        });
+      }
+      dl.innerHTML = dobHtml;
     }
-    dl.innerHTML = dobHtml;
+}
+
+function loadAdminData(){
+  // Show cached data instantly (jugadores + canchas + colores change rarely)
+  try {
+    const cJugs = sessionStorage.getItem('ngt_adm_jugadores');
+    const cCanchas = sessionStorage.getItem('ngt_adm_canchas');
+    const cColores = sessionStorage.getItem('ngt_adm_colores');
+    if(cJugs && cCanchas){
+      applyAdminResults_(JSON.parse(cJugs), JSON.parse(cCanchas), [], []);
+      if(cColores) ADM_COLORES_MAP = JSON.parse(cColores);
+    }
+  } catch(e){}
+
+  // Always refresh from network (fechas + doblesDisponibles must be fresh; jugadores/canchas/colores update cache)
+  Promise.all([
+    ngtApiGet('jugadores'),
+    ngtApiGet('canchas'),
+    ngtApiGet('fechas'),
+    ngtApiGet('jugadoresConDoble'),
+    ngtApiGet('allColoresCancha'),
+  ]).then(function(results){
+    const jugadores        = (results[0] && results[0].data) || [];
+    const canchas          = (results[1] && results[1].data) || [];
+    const fechas           = (results[2] && results[2].data) || [];
+    const doblesDisponibles= (results[3] && results[3].data) || [];
+    const coloresMap       = (results[4] && results[4].data) || {};
+
+    // Update in-memory map (used by loadColoresCancha / loadColoresCanchaEdit instantly)
+    ADM_COLORES_MAP = coloresMap;
+
+    // Persist to sessionStorage for next panel open
+    try {
+      sessionStorage.setItem('ngt_adm_jugadores', JSON.stringify(jugadores));
+      sessionStorage.setItem('ngt_adm_canchas', JSON.stringify(canchas));
+      sessionStorage.setItem('ngt_adm_colores', JSON.stringify(coloresMap));
+    } catch(e){}
+
+    applyAdminResults_(jugadores, canchas, fechas, doblesDisponibles);
 
   }).catch(e => {
     console.error('Error loading admin data:', e);
@@ -2965,88 +3006,49 @@ function formatPlayerLabel(nombreCompleto){
   return '<span class="ap">' + ap + '</span>' + (nm ? ' ' + nm : '');
 }
 
+// Shared helper: populate a tee-color <select> from ADM_COLORES_MAP (no API call).
+function applyColoresCancha_(canchaId, colorSel, hint){
+  if(!canchaId){
+    colorSel.innerHTML = '<option value="BLANCAS">Blancas (default)</option>';
+    if(hint) hint.textContent = 'Seleccioná una cancha primero';
+    return;
+  }
+  const list = (ADM_COLORES_MAP && ADM_COLORES_MAP[canchaId]) || [];
+  if(!list.length){
+    colorSel.innerHTML = '<option value="BLANCAS">Blancas (default — sin rating cargado)</option>';
+    if(hint) hint.textContent = 'Sin rating cargado para esta cancha. Default: Blancas.';
+    return;
+  }
+  let html = '';
+  list.forEach(c => {
+    html += '<option value="' + c.color + '">' + c.color + ' (R ' + c.rating + ' / S ' + c.slope + ')</option>';
+  });
+  colorSel.innerHTML = html;
+  const blancas = list.find(c => c.color === 'BLANCAS');
+  if(blancas) colorSel.value = 'BLANCAS';
+  if(hint) hint.textContent = list.length + ' color(es) disponible(s)';
+}
+
 // Same as loadColoresCancha but for the Gestionar tab
 function loadColoresCanchaEdit(){
   const sel = document.getElementById('adm-edit-cancha');
   const colorSel = document.getElementById('adm-edit-color-tee');
   const hint = document.getElementById('adm-edit-color-hint');
   if(!sel || !colorSel) return;
-  const canchaId = sel.value.trim();
-  if(!canchaId){
-    colorSel.innerHTML = '<option value="BLANCAS">Blancas (default)</option>';
-    if(hint) hint.textContent = 'Seleccioná una cancha primero';
-    return;
-  }
-  if(hint) hint.textContent = 'Cargando colores...';
-  ngtApiGet('coloresCancha', { canchaId: canchaId }).then(r => {
-    const list = (r && r.data) || [];
-    if(!list.length){
-      colorSel.innerHTML = '<option value="BLANCAS">Blancas (default — sin rating cargado)</option>';
-      if(hint) hint.textContent = 'Esta cancha no tiene rating cargado en RATING. Default: Blancas.';
-      return;
-    }
-    const order = ['NEGRAS','AZULES','BLANCAS','DORADAS','ROJAS','AMARILLAS','AMARRILAS'];
-    list.sort((a,b) => {
-      const ia = order.indexOf(a.color); const ib = order.indexOf(b.color);
-      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-    });
-    let html = '';
-    list.forEach(c => {
-      html += '<option value="' + c.color + '">' + c.color + ' (R ' + c.rating + ' / S ' + c.slope + ')</option>';
-    });
-    colorSel.innerHTML = html;
-    const blancas = list.find(c => c.color === 'BLANCAS');
-    if(blancas) colorSel.value = 'BLANCAS';
-    if(hint) hint.textContent = list.length + ' color(es) disponible(s)';
-  }).catch(e => {
-    colorSel.innerHTML = '<option value="BLANCAS">Blancas (default)</option>';
-    if(hint) hint.textContent = 'Error cargando colores · usando Blancas por default';
-  });
+  applyColoresCancha_(sel.value.trim(), colorSel, hint);
 }
 
 // Old adminCrearFecha replaced by wizard flow — see wizPaso1Next / wizCrearTodo below
 // ══ CREAR FECHA WIZARD ══
 let WIZ_PASO1_DATA = null;
 
-// Load available tee colors for the selected course (from RATING sheet)
+// Load available tee colors for the selected course — reads from ADM_COLORES_MAP (no API call).
 function loadColoresCancha(){
   const sel = document.getElementById('adm-cancha');
   const colorSel = document.getElementById('adm-color-tee');
   const hint = document.getElementById('adm-color-hint');
   if(!sel || !colorSel) return;
-  const canchaId = sel.value.trim();
-  if(!canchaId){
-    colorSel.innerHTML = '<option value="BLANCAS">Blancas (default)</option>';
-    if(hint) hint.textContent = 'Seleccioná una cancha primero';
-    return;
-  }
-  if(hint) hint.textContent = 'Cargando colores...';
-  ngtApiGet('coloresCancha', { canchaId: canchaId }).then(r => {
-    const list = (r && r.data) || [];
-    if(!list.length){
-      colorSel.innerHTML = '<option value="BLANCAS">Blancas (default — sin rating cargado)</option>';
-      if(hint) hint.textContent = 'Esta cancha no tiene rating cargado en RATING. Default: Blancas.';
-      return;
-    }
-    // Build options sorted by typical order
-    const order = ['NEGRAS','AZULES','BLANCAS','DORADAS','ROJAS','AMARILLAS','AMARRILAS'];
-    list.sort((a,b) => {
-      const ia = order.indexOf(a.color); const ib = order.indexOf(b.color);
-      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-    });
-    let html = '';
-    list.forEach(c => {
-      html += '<option value="' + c.color + '">' + c.color + ' (R ' + c.rating + ' / S ' + c.slope + ')</option>';
-    });
-    colorSel.innerHTML = html;
-    // Default to BLANCAS if available
-    const blancas = list.find(c => c.color === 'BLANCAS');
-    if(blancas) colorSel.value = 'BLANCAS';
-    if(hint) hint.textContent = list.length + ' color(es) disponible(s)';
-  }).catch(e => {
-    colorSel.innerHTML = '<option value="BLANCAS">Blancas (default)</option>';
-    if(hint) hint.textContent = 'Error cargando colores · usando Blancas por default';
-  });
+  applyColoresCancha_(sel.value.trim(), colorSel, hint);
 }
 
 function wizPaso1Next(){
@@ -3128,20 +3130,10 @@ function wizCrearTodo(){
   msg.style.display = 'none';
 
   // Collect matches (can be 0 — matches are optional; admin can add them later in Gestionar Fecha)
-  const matches = [];
-  let hasInvalid = false;
-  document.querySelectorAll('#wiz-matches-list .adm-match-row').forEach(row => {
-    const j1 = row.querySelector('.wiz-m-j1').value;
-    const j2 = row.querySelector('.wiz-m-j2').value;
-    if(j1 && j2 && j1 !== j2){
-      matches.push({ j1: j1, j2: j2 });
-    } else if(j1 || j2){
-      hasInvalid = true;
-    }
-  });
-  if(hasInvalid){
+  const { matches, errors: matchErrors } = collectAndValidateMatches_('#wiz-matches-list', 'wiz-m-j1', 'wiz-m-j2');
+  if(matchErrors.length){
     msg.className = 'adm-msg err';
-    msg.textContent = 'Hay partidos incompletos. Completá ambos jugadores o quitalos.';
+    msg.textContent = matchErrors.join(' ');
     msg.style.display = 'block';
     return;
   }
@@ -3260,6 +3252,48 @@ function fmtNameForAdm(full){
   return ap + (nm ? ' ' + nm : '');
 }
 
+/**
+ * Shared match validator used by the three match-saving flows.
+ * @param {string} containerSel  CSS selector for the container holding .adm-match-row elements
+ * @param {string} cls1          CSS class of the "Jugador A" <select>
+ * @param {string} cls2          CSS class of the "Jugador B" <select>
+ * @returns {{ matches: Array, errors: string[] }}
+ */
+function collectAndValidateMatches_(containerSel, cls1, cls2){
+  const matches = [];
+  const errors = [];
+  const countMap = {};
+
+  document.querySelectorAll(containerSel + ' .adm-match-row').forEach(function(row, idx){
+    const j1 = row.querySelector('.' + cls1).value;
+    const j2 = row.querySelector('.' + cls2).value;
+    if(!j1 && !j2) return; // completely empty row — skip silently
+
+    if(!j1 || !j2){
+      errors.push('Partido ' + (idx + 1) + ': falta seleccionar un jugador.');
+      return;
+    }
+    if(j1 === j2){
+      errors.push('Partido ' + (idx + 1) + ': un jugador no puede enfrentarse a sí mismo.');
+      return;
+    }
+    matches.push({ j1: j1, j2: j2 });
+    countMap[j1] = (countMap[j1] || 0) + 1;
+    countMap[j2] = (countMap[j2] || 0) + 1;
+  });
+
+  // Max 2 matches per player per fecha
+  Object.keys(countMap).forEach(function(mat){
+    if(countMap[mat] > 2){
+      const jug = (ADM_JUGADORES || []).find(function(p){ return String(p.matricula) === mat; });
+      const name = jug ? (jug.apodo || jug.nombre.split(' ')[0]) : mat;
+      errors.push(name + ' aparece en más de 2 partidos (máximo 2 por fecha).');
+    }
+  });
+
+  return { matches: matches, errors: errors };
+}
+
 function adminAddMatch(){
   const list = document.getElementById('adm-matches-list');
   if(!MATCH_FECHA_JUGS.length){
@@ -3291,15 +3325,13 @@ function adminGuardarMatches(){
     return;
   }
 
-  const matches = [];
-  document.querySelectorAll('#adm-matches-list .adm-match-row').forEach(row => {
-    const j1 = row.querySelector('.adm-m-j1').value;
-    const j2 = row.querySelector('.adm-m-j2').value;
-    if(j1 && j2 && j1 !== j2){
-      matches.push({ j1: j1, j2: j2 });
-    }
-  });
-
+  const { matches, errors: matchErrors } = collectAndValidateMatches_('#adm-matches-list', 'adm-m-j1', 'adm-m-j2');
+  if(matchErrors.length){
+    msg.className = 'adm-msg err';
+    msg.textContent = matchErrors.join(' ');
+    msg.style.display = 'block';
+    return;
+  }
   if(!matches.length){
     msg.className = 'adm-msg err';
     msg.textContent = 'Agregá al menos un partido válido';
@@ -3414,21 +3446,10 @@ function mgrGuardarMatches(){
     return;
   }
 
-  const matches = [];
-  let hasInvalid = false;
-  document.querySelectorAll('#adm-mgr-matches-list .adm-match-row').forEach(row => {
-    const j1 = row.querySelector('.mgr-m-j1').value;
-    const j2 = row.querySelector('.mgr-m-j2').value;
-    if(j1 && j2 && j1 !== j2){
-      matches.push({ j1: j1, j2: j2 });
-    } else if(j1 || j2){
-      hasInvalid = true;
-    }
-  });
-
-  if(hasInvalid){
+  const { matches, errors: matchErrors } = collectAndValidateMatches_('#adm-mgr-matches-list', 'mgr-m-j1', 'mgr-m-j2');
+  if(matchErrors.length){
     msg.className = 'adm-msg err';
-    msg.textContent = 'Hay partidos incompletos o con el mismo jugador dos veces';
+    msg.textContent = matchErrors.join(' ');
     msg.style.display = 'block';
     return;
   }
