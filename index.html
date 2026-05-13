@@ -2050,6 +2050,9 @@ function refreshWinPctCells(){
     const tdTop8 = tr.querySelector('td.lb-td-top8');
     if(tdTop8) tdTop8.innerHTML = top8Cell(nombre);
   });
+  // Las celdas Win%/Top8% cambian de "…" a números → el layout de la tabla
+  // se redistribuye → hay que recalcular los offsets de las columnas sticky.
+  requestAnimationFrame(recomputeStickyOffsets);
 }
 
 function loadLB(){
