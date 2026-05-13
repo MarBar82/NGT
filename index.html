@@ -1298,13 +1298,21 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .tcard-circle{width:36px;height:36px;border-radius:50%;border:2px solid var(--g2);background:#f9f8f6;display:flex;align-items:center;justify-content:center;position:relative;}
 .tcard-circle .tc-par{position:absolute;top:2px;right:4px;font-size:8px;color:var(--g4);}
 .tcard-circle .tc-sc{font-size:15px;font-weight:700;color:var(--navy);}
-.tcard-circle.tc-eagle{background:#1a6b3c;border-color:#1a6b3c;}.tcard-circle.tc-eagle .tc-sc{color:#fff;}
+/* Eagle: círculo amarillo */
+.tcard-circle.tc-eagle{background:#f5c400;border-color:#e6b800;}.tcard-circle.tc-eagle .tc-sc{color:#333;}
+/* Birdie: círculo verde */
 .tcard-circle.tc-birdie{background:#2e7d32;border-color:#2e7d32;}.tcard-circle.tc-birdie .tc-sc{color:#fff;}
-.tcard-circle.tc-par{background:var(--navy);border-color:var(--navy);}.tcard-circle.tc-par .tc-sc{color:#fff;}
-.tcard-circle.tc-bogey{background:#f5f5f5;border-color:var(--g3);}
-.tcard-circle.tc-double{background:#fce8e8;border-color:var(--red);}
+/* Par: círculo blanco */
+.tcard-circle.tc-par{background:#fff;border-color:var(--g3);}.tcard-circle.tc-par .tc-sc{color:var(--navy);}
+/* Bogey: cuadrado celeste claro */
+.tcard-circle.tc-bogey{background:#b3e5fc;border-color:#81d4fa;border-radius:5px;}.tcard-circle.tc-bogey .tc-sc{color:#01579b;}
+/* Doble bogey: cuadrado celeste más oscuro */
+.tcard-circle.tc-double{background:#4fc3f7;border-color:#0288d1;border-radius:5px;}.tcard-circle.tc-double .tc-sc{color:#fff;}
+/* Triple bogey o más: cuadrado azul oscuro */
+.tcard-circle.tc-triple{background:#0277bd;border-color:#01579b;border-radius:5px;}.tcard-circle.tc-triple .tc-sc{color:#fff;}
 .tcard-circle.tc-empty{background:#f0eeea;border-color:#ddd;}
-.tcard-stb{font-size:9px;color:var(--g4);font-family:'Barlow Condensed',sans-serif;}
+/* Puntos stableford en rojo */
+.tcard-stb{font-size:9px;color:var(--red);font-family:'Barlow Condensed',sans-serif;font-weight:700;}
 .tcard-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
 .tcard-tot{background:var(--g1);border-radius:3px;padding:8px 10px;text-align:center;}
 .tcard-tot-lbl{font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--g4);display:block;}
@@ -5079,7 +5087,7 @@ function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
   const nameEl = document.getElementById('tcard-name');
   const subEl  = document.getElementById('tcard-sub');
   const bodyEl = document.getElementById('tcard-body');
-  if(nameEl) nameEl.textContent = fmtHistName ? fmtHistName(nombre) : nombre;
+  if(nameEl) nameEl.innerHTML = fmtHistName ? fmtHistName(nombre) : nombre;
   if(subEl)  subEl.textContent  = 'FECHA ' + fecha + (canchaId ? '' : '');
   if(bodyEl) bodyEl.innerHTML   = '<div class="lb-status"><div class="spinner"></div>Cargando tarjeta...</div>';
 
@@ -5123,11 +5131,12 @@ function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
         let cirCls = 'tcard-circle';
         if(sc !== null && par){
           const d = sc - par;
-          if(d <= -2) cirCls += ' tc-eagle';
+          if(d <= -2)      cirCls += ' tc-eagle';
           else if(d === -1) cirCls += ' tc-birdie';
           else if(d === 0)  cirCls += ' tc-par';
           else if(d === 1)  cirCls += ' tc-bogey';
-          else              cirCls += ' tc-double';
+          else if(d === 2)  cirCls += ' tc-double';
+          else              cirCls += ' tc-triple';
         } else {
           cirCls += ' tc-empty';
         }
@@ -5155,8 +5164,8 @@ function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
     const neto  = gross !== null ? gross - hcpVal : null;
     const stbT  = stbRange(0, 18);
 
-    let html = renderTcardNine(0, 9, 'IDA · Hoyos 1-9');
-    html += renderTcardNine(9, 18, 'VUELTA · Hoyos 10-18');
+    let html = renderTcardNine(0, 9, 'IDA');
+    html += renderTcardNine(9, 18, 'VUELTA');
     html += '<div class="tcard-totals">' +
       '<div class="tcard-tot"><span class="tcard-tot-lbl">Gross</span><span class="tcard-tot-val">' + (gross !== null ? gross : '–') + '</span></div>' +
       '<div class="tcard-tot"><span class="tcard-tot-lbl">Neto</span><span class="tcard-tot-val">' + (neto !== null ? neto : '–') + '</span></div>' +
