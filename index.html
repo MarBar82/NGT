@@ -67,7 +67,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 /* Column widths/padding — fit content tightly. Name column expands to fill. */
 .pga th.lb-col-pos,   .pga td.lb-col-pos   {width:48px;padding-left:10px;padding-right:6px;}
 .pga th.lb-col-mov,   .pga td.lb-col-mov   {width:32px;padding-left:4px;padding-right:4px;}
-.pga th.lb-col-name,  .pga td.lb-col-name  {width:auto;}
+.pga th.lb-col-name,  .pga td.lb-col-name  {width:auto;min-width:130px;}
 .pga th.lb-col-num,   .pga td.lb-col-num   {width:1%;padding-left:8px;padding-right:8px;}
 .pga th.lb-col-champ, .pga td.lb-col-champ {width:1%;padding-left:6px;padding-right:6px;}
 .pga th.lb-th-win,    .pga td.lb-td-win    {width:1%;padding-left:8px;padding-right:10px;}
@@ -1952,8 +1952,8 @@ function gvizCallback(response){
     const now=new Date();
     document.getElementById('sync-time').textContent='Actualizado: '+now.toLocaleDateString('es-AR')+' '+now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     setTimeout(setTbHeight,50);
-    // Recompute sticky column left offsets based on actual rendered widths
-    setTimeout(recomputeStickyOffsets, 60);
+    // Recompute sticky column left offsets after layout settles
+    requestAnimationFrame(function(){ requestAnimationFrame(recomputeStickyOffsets); });
     // If win probs arrived AFTER this render, update the cells
     if(WIN_PROBS_LOADED) refreshWinPctCells();
   }catch(e){document.getElementById('lb-body').innerHTML='<div class="lb-error">Error: '+e.message+'</div>';console.error(e);}
@@ -4206,27 +4206,35 @@ window.addEventListener('load', function(){
 
 
 // ══════════ FECHAS DINÁMICAS ══════════
+function applyFechasMenu(data){
+  const container = document.getElementById('fechas-menu-items');
+  if(!container || !data) return;
+  if(!data.length){ container.innerHTML = '<button disabled>Sin fechas todavía</button>'; return; }
+  let html = '';
+  data.forEach(f => {
+    const lbl = f.completa
+      ? 'Fecha ' + f.fecha
+      : 'Fecha ' + f.fecha + ' <span style="opacity:.6;font-size:10px;">(en curso · ' + f.firmados + '/' + f.totalJugadores + ')</span>';
+    html += '<button onclick="pg(\'fecha-' + f.fecha + '\', document.getElementById(\'fechas-btn\')); closeFechasDrop();">' + lbl + '</button>';
+  });
+  container.innerHTML = html;
+}
+
 function loadFechasMenu(){
+  // Muestra caché inmediatamente, actualiza en background
+  const cached = sessionStorage.getItem('ngt_fechasEstado');
+  if(cached){ try { applyFechasMenu(JSON.parse(cached)); } catch(e){} }
+
   ngtApiGet('fechasConEstado').then(r => {
     const data = (r && r.data) || [];
-    const container = document.getElementById('fechas-menu-items');
-    if(!container) return;
-    if(!data.length){
-      container.innerHTML = '<button disabled>Sin fechas todavía</button>';
-      return;
-    }
-    let html = '';
-    data.forEach(f => {
-      const lbl = f.completa
-        ? 'Fecha ' + f.fecha
-        : 'Fecha ' + f.fecha + ' <span style="opacity:.6;font-size:10px;">(en curso · ' + f.firmadas + '/' + f.jugadores + ')</span>';
-      html += '<button onclick="pg(\'fecha-' + f.fecha + '\', document.getElementById(\'fechas-btn\')); closeFechasDrop();">' + lbl + '</button>';
-    });
-    container.innerHTML = html;
+    try { sessionStorage.setItem('ngt_fechasEstado', JSON.stringify(data)); } catch(e){}
+    applyFechasMenu(data);
   }).catch(e => {
     console.error('loadFechasMenu error:', e);
-    const container = document.getElementById('fechas-menu-items');
-    if(container) container.innerHTML = '<button disabled>Error</button>';
+    if(!cached){
+      const container = document.getElementById('fechas-menu-items');
+      if(container) container.innerHTML = '<button disabled>Error</button>';
+    }
   });
 }
 
@@ -4494,10 +4502,8 @@ function fechaMatchScoresCallback(response){
   }
 }
 
-// Load fechas menu when admin/login completes or on initial load
-window.addEventListener('load', function(){
-  setTimeout(loadFechasMenu, 400);
-});
+// Nota: el menú de fechas se alimenta desde ngtInitData() al boot.
+// loadFechasMenu() queda disponible para forzar refresh manual si se necesita.
 
 // ══════════ PERFILES ══════════
 let PERF_JUGADORES = null;
@@ -4535,10 +4541,22 @@ function loadPerfPicker(){
   if(cont) cont.innerHTML = '';
 
   if(PERF_JUGADORES){ renderPerfPicker(); return; }
+  // sessionStorage cache: muestra la lista al instante en visitas repetidas
+  const cachedJH = sessionStorage.getItem('ngt_jugadoresHist');
+  if(cachedJH){
+    try {
+      const list = JSON.parse(cachedJH);
+      list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+      PERF_JUGADORES = list;
+      renderPerfPicker();
+      return; // ngtInitData() ya actualiza el cache en background
+    } catch(e){}
+  }
   ngtApiGet('jugadoresHist').then(r => {
     const list = (r && r.data) || [];
     list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
     PERF_JUGADORES = list;
+    try { sessionStorage.setItem('ngt_jugadoresHist', JSON.stringify(list)); } catch(e){}
     renderPerfPicker();
   }).catch(e => {
     const cont = document.getElementById('perf-picker-list');
@@ -4594,18 +4612,34 @@ function loadPerfil(matricula){
   const cont = document.getElementById('perf-content');
   cont.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando perfil...</div>';
 
-  if(PERF_CACHE[matricula]){
-    renderPerfil(PERF_CACHE[matricula]);
-    return;
+  // 1. Caché en memoria (this session)
+  if(PERF_CACHE[matricula]){ renderPerfil(PERF_CACHE[matricula]); return; }
+
+  // 2. sessionStorage cache (5 min TTL)
+  const perfKey = 'ngt_perf_' + matricula;
+  const perfCached = sessionStorage.getItem(perfKey);
+  if(perfCached){
+    try {
+      const pc = JSON.parse(perfCached);
+      if(pc && pc._ts && Date.now() - pc._ts < 300000){
+        PERF_CACHE[matricula] = pc;
+        renderPerfil(pc);
+        return;
+      }
+    } catch(e){}
   }
 
+  cont.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando perfil...</div>';
   ngtApiGet('jugadorPerfil', { matricula: matricula }).then(r => {
     if(!r || !r.ok || !r.data || !r.data.ok){
       cont.innerHTML = '<div class="lb-error">No se pudo cargar el perfil.</div>';
       return;
     }
-    PERF_CACHE[matricula] = r.data;
-    renderPerfil(r.data);
+    const d = r.data;
+    d._ts = Date.now();
+    PERF_CACHE[matricula] = d;
+    try { sessionStorage.setItem(perfKey, JSON.stringify(d)); } catch(e){}
+    renderPerfil(d);
   }).catch(e => {
     cont.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
   });
@@ -4979,25 +5013,30 @@ let HOME_TARGET_MS = null;
 let HOME_TICK_INTERVAL = null;
 
 function loadHome(){
-  // Show cached version instantly if available, then refresh from network in background.
-  // This makes the home countdown appear immediately on revisits.
+  // Muestra cache inmediatamente, refresca en background con initData
+  // (así también actualiza el menú de fechas sin costo extra)
   const cached = sessionStorage.getItem('ngt_proximaFecha');
-  if(cached){
-    try { applyHomeData(JSON.parse(cached)); } catch(e){}
-  }
+  if(cached){ try { applyHomeData(JSON.parse(cached)); } catch(e){} }
 
-  ngtApiGet('proximaFecha').then(r => {
-    const data = (r && r.data) || null;
-    if(data){
-      try { sessionStorage.setItem('ngt_proximaFecha', JSON.stringify(data)); } catch(e){}
+  ngtApiGet('initData').then(r => {
+    const d = (r && r.data) || {};
+    if(d.proximaFecha !== undefined){
+      applyHomeData(d.proximaFecha);
+      try { sessionStorage.setItem('ngt_proximaFecha', JSON.stringify(d.proximaFecha)); } catch(e){}
     }
-    applyHomeData(data);
+    if(d.fechasConEstado){
+      applyFechasMenu(d.fechasConEstado);
+      try { sessionStorage.setItem('ngt_fechasEstado', JSON.stringify(d.fechasConEstado)); } catch(e){}
+    }
+    if(d.jugadoresHist && !PERF_JUGADORES){
+      const list = d.jugadoresHist;
+      list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+      PERF_JUGADORES = list;
+      try { sessionStorage.setItem('ngt_jugadoresHist', JSON.stringify(list)); } catch(e){}
+    }
   }).catch(e => {
     console.error('loadHome error:', e);
-    if(!cached){
-      const canchaEl = document.getElementById('hfi-cancha');
-      if(canchaEl) canchaEl.textContent = 'Error de conexión';
-    }
+    if(!cached){ const el = document.getElementById('hfi-cancha'); if(el) el.textContent = 'Error de conexión'; }
   });
 }
 
@@ -5064,11 +5103,62 @@ function tickCountdown(){
   // Keeping this function as a stub so existing callers don't break.
 }
 
-// Load home data right away (home is the default landing page).
-// We do NOT preload the leaderboard from boot — it's loaded on-demand when the user navigates to it
-// (see pg() routing at the top of this script). This saves 3 unnecessary API calls on home.
+// ── BOOT: un solo round-trip al backend que alimenta home + menú fechas + lista perfiles ──
+// Antes: loadHome() (1 JSONP) + setTimeout(loadFechasMenu, 400) (1 JSONP extra)
+// Ahora: ngtInitData() (1 JSONP) → devuelve los tres conjuntos de datos juntos
+function ngtInitData(){
+  // Aplicar caches sessionStorage inmediatamente (visita repetida → pantalla al instante)
+  const cachedPF = sessionStorage.getItem('ngt_proximaFecha');
+  if(cachedPF){ try { applyHomeData(JSON.parse(cachedPF)); } catch(e){} }
+
+  const cachedFE = sessionStorage.getItem('ngt_fechasEstado');
+  if(cachedFE){ try { applyFechasMenu(JSON.parse(cachedFE)); } catch(e){} }
+
+  if(!PERF_JUGADORES){
+    const cachedJH = sessionStorage.getItem('ngt_jugadoresHist');
+    if(cachedJH){ try {
+      const list = JSON.parse(cachedJH);
+      list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+      PERF_JUGADORES = list;
+    } catch(e){} }
+  }
+
+  // Un solo JSONP al backend → proximaFecha + fechasConEstado + jugadoresHist
+  ngtApiGet('initData').then(r => {
+    const d = (r && r.data) || {};
+
+    // Home
+    if(d.proximaFecha !== undefined){
+      applyHomeData(d.proximaFecha);
+      try { sessionStorage.setItem('ngt_proximaFecha', JSON.stringify(d.proximaFecha)); } catch(e){}
+    }
+    // Menú de fechas
+    if(d.fechasConEstado){
+      applyFechasMenu(d.fechasConEstado);
+      try { sessionStorage.setItem('ngt_fechasEstado', JSON.stringify(d.fechasConEstado)); } catch(e){}
+    }
+    // Lista de jugadores para Perfiles
+    if(d.jugadoresHist && !PERF_JUGADORES){
+      const list = d.jugadoresHist;
+      list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+      PERF_JUGADORES = list;
+      try { sessionStorage.setItem('ngt_jugadoresHist', JSON.stringify(list)); } catch(e){}
+    }
+  }).catch(e => {
+    console.error('ngtInitData error:', e);
+    // Fallback: si initData falla, intentar solo proximaFecha
+    if(!cachedPF){
+      ngtApiGet('proximaFecha').then(r => {
+        const data = (r && r.data) || null;
+        if(data){ try { sessionStorage.setItem('ngt_proximaFecha', JSON.stringify(data)); } catch(e2){} }
+        applyHomeData(data);
+      }).catch(() => applyHomeData(null));
+    }
+  });
+}
+
 document.body.classList.add('home-mode');
-loadHome();
+ngtInitData();
 
 // ── TARJETA MODAL ──────────────────────────────────────────────────────────────
 function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
