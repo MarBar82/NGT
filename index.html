@@ -1863,8 +1863,28 @@ function loadPlayerBonuses(){
       if(apodo) PLAYER_BONUSES[apodo] = entry;
     });
     PLAYER_BONUSES_LOADED = true;
+    refreshBonusCells();
   }).catch(e => {
     console.warn('loadPlayerBonuses failed:', e);
+  });
+}
+
+function refreshBonusCells(){
+  document.querySelectorAll('#lb-body table.pga tbody tr').forEach(tr => {
+    const nameSpan = tr.querySelector('.lb-clickable-name');
+    if(!nameSpan) return;
+    const attr = nameSpan.getAttribute('onclick') || '';
+    const m = attr.match(/goToProfileFromName\('(.+?)'\)/);
+    if(!m) return;
+    const nombre = m[1].replace(/\\'/g, "'");
+    // Buscar o crear el contenedor de emojis (justo después del span del nombre)
+    let emojiSlot = tr.querySelector('.lb-bonus-slot');
+    if(!emojiSlot){
+      emojiSlot = document.createElement('span');
+      emojiSlot.className = 'lb-bonus-slot';
+      nameSpan.parentNode.insertBefore(emojiSlot, nameSpan.nextSibling);
+    }
+    emojiSlot.innerHTML = bonusEmojis(nombre);
   });
 }
 
@@ -1936,7 +1956,7 @@ function gvizCallback(response){
       const winHtml = winCell(nombre);
       const top8Html = top8Cell(nombre);
       html+=`<tr><td class="c lb-col-pos">${posCell(pos,i)}</td><td class="c lb-col-mov">${mov}</td>
-        <td class="lb-col-name"><span class="lb-clickable-name" onclick="goToProfileFromName('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span>${bonusEmojis(nombre)}</td>
+        <td class="lb-col-name"><span class="lb-clickable-name" onclick="goToProfileFromName('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span><span class="lb-bonus-slot">${bonusEmojis(nombre)}</span></td>
         <td class="c lb-col-num">${ptsHtml}</td><td class="c lb-col-num">${cell(stb)}</td>
         <td class="c lb-col-num">${cell(mch)}</td><td class="c lb-col-num">${pbHtml}</td>
         <td class="c lb-col-num">${cell(fjug)}</td><td class="c lb-col-num">${cell(fgan)}</td>
@@ -1958,8 +1978,9 @@ function gvizCallback(response){
     requestAnimationFrame(recomputeStickyOffsets);
     setTimeout(recomputeStickyOffsets, 300);
     setTimeout(recomputeStickyOffsets, 1200);
-    // If win probs arrived AFTER this render, update the cells
+    // Si los datos ya estaban cargados cuando llegó el render, actualizar las celdas
     if(WIN_PROBS_LOADED) refreshWinPctCells();
+    if(PLAYER_BONUSES_LOADED) refreshBonusCells();
   }catch(e){document.getElementById('lb-body').innerHTML='<div class="lb-error">Error: '+e.message+'</div>';console.error(e);}
 }
 
