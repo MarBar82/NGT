@@ -3780,7 +3780,7 @@ function showMitFechas(preloadedPromise){
       if(f.cancha && Array.isArray(f.pares) && f.pares.length === 18){
         const cached = { nombre: f.cancha, pares: f.pares };
         if(Array.isArray(f.indices) && f.indices.length === 18) cached.indices = f.indices;
-        try { sessionStorage.setItem('ngt_cp2_' + f.cancha, JSON.stringify(cached)); } catch(e){}
+        try { sessionStorage.setItem('ngt_cp3_' + f.cancha, JSON.stringify(cached)); } catch(e){}
       }
     });
 
@@ -3834,7 +3834,7 @@ function openMitScore(fecha, cancha){
   // Render the 18-hole grid as soon as possible. If we have the cancha cached (with pares+indices),
   // use it — that gives correct stableford right away. Otherwise fall back to dummy par-4
   // placeholders and re-render once the real data arrives.
-  const cpKey = 'ngt_cp2_' + cancha;
+  const cpKey = 'ngt_cp3_' + cancha;
   const cpCachedRaw = sessionStorage.getItem(cpKey);
   let cpCached = null;
   if(cpCachedRaw){
@@ -3969,11 +3969,14 @@ function hcp85(gameHcp){
 
 // Calculate stableford points for a single hole based on score, par, hole index, and player HCP (de juego)
 function calcStablefordHoyo(score, par, indice, hcp){
-  if(score === null || score === undefined || !par || !indice) return null;
+  if(score === null || score === undefined || score === '' || !par) return null;
   // Convert game HCP to 85%
   const hcp85val = hcp85(hcp);
-  // Golpes adicionales que recibe el jugador en este hoyo según índice de dificultad
-  const extras = Math.floor((hcp85val + 18 - indice) / 18);
+  // Golpes adicionales que recibe el jugador en este hoyo según índice de dificultad.
+  // Si no hay índice disponible, distribuimos el HCP de forma pareja como fallback.
+  const extras = indice
+    ? Math.floor((hcp85val + 18 - indice) / 18)
+    : Math.floor(hcp85val / 18);
   const netoDiff = score - par - extras; // diferencia neta con el par ajustado
   // Tabla stableford:
   if(netoDiff <= -3) return 5;
@@ -5098,7 +5101,7 @@ function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
   document.body.style.overflow = 'hidden';
 
   // Fetch tarjeta + canchaPares in parallel
-  const cpKey = 'ngt_cp2_' + canchaId;
+  const cpKey = 'ngt_cp3_' + canchaId;
   let cpCached = null;
   try { const raw = sessionStorage.getItem(cpKey); if(raw) cpCached = JSON.parse(raw); } catch(e){}
 
