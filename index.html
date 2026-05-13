@@ -1285,6 +1285,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .tcard-box{background:#fff;border-radius:4px;width:100%;max-width:580px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.35);margin:auto;}
 .tcard-hdr{background:var(--navy);color:#fff;padding:14px 16px 12px;display:flex;justify-content:space-between;align-items:flex-start;}
 .tcard-hdr-name{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:.04em;line-height:1.1;}
+.tcard-hdr-name .hist-ap,.tcard-hdr-name .hist-nm{color:#fff;}
 .tcard-hdr-sub{font-size:11px;opacity:.7;margin-top:2px;letter-spacing:.06em;}
 .tcard-close{background:none;border:none;color:#fff;font-size:22px;line-height:1;cursor:pointer;padding:0 0 0 12px;opacity:.8;}
 .tcard-close:hover{opacity:1;}
@@ -1298,21 +1299,23 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .tcard-circle{width:36px;height:36px;border-radius:50%;border:2px solid var(--g2);background:#f9f8f6;display:flex;align-items:center;justify-content:center;position:relative;}
 .tcard-circle .tc-par{position:absolute;top:2px;right:4px;font-size:8px;color:var(--g4);}
 .tcard-circle .tc-sc{font-size:15px;font-weight:700;color:var(--navy);}
-/* Eagle: círculo amarillo */
-.tcard-circle.tc-eagle{background:#f5c400;border-color:#e6b800;}.tcard-circle.tc-eagle .tc-sc{color:#333;}
-/* Birdie: círculo verde */
-.tcard-circle.tc-birdie{background:#2e7d32;border-color:#2e7d32;}.tcard-circle.tc-birdie .tc-sc{color:#fff;}
-/* Par: círculo blanco */
-.tcard-circle.tc-par{background:#fff;border-color:var(--g3);}.tcard-circle.tc-par .tc-sc{color:var(--navy);}
-/* Bogey: cuadrado celeste claro */
-.tcard-circle.tc-bogey{background:#b3e5fc;border-color:#81d4fa;border-radius:5px;}.tcard-circle.tc-bogey .tc-sc{color:#01579b;}
-/* Doble bogey: cuadrado celeste más oscuro */
-.tcard-circle.tc-double{background:#4fc3f7;border-color:#0288d1;border-radius:5px;}.tcard-circle.tc-double .tc-sc{color:#fff;}
+/* Eagle: círculo amarillo (igual al rojo pero amarillo) */
+.tcard-circle.tc-eagle{background:#f5c400;border-color:#f5c400;}.tcard-circle.tc-eagle .tc-sc{color:#333;}
+/* Birdie: círculo rojo */
+.tcard-circle.tc-birdie{background:var(--red);border-color:var(--red);}.tcard-circle.tc-birdie .tc-sc{color:#fff;}
+/* Par: sin fondo, solo el número */
+.tcard-circle.tc-par{background:transparent;border-color:transparent;box-shadow:none;}
+/* Bogey: cuadrado azul claro */
+.tcard-circle.tc-bogey{background:#74c0fc;border-color:#74c0fc;border-radius:5px;}.tcard-circle.tc-bogey .tc-sc{color:#fff;}
+/* Doble bogey: cuadrado azul medio */
+.tcard-circle.tc-double{background:#339af0;border-color:#339af0;border-radius:5px;}.tcard-circle.tc-double .tc-sc{color:#fff;}
 /* Triple bogey o más: cuadrado azul oscuro */
-.tcard-circle.tc-triple{background:#0277bd;border-color:#01579b;border-radius:5px;}.tcard-circle.tc-triple .tc-sc{color:#fff;}
+.tcard-circle.tc-triple{background:#1864ab;border-color:#1864ab;border-radius:5px;}.tcard-circle.tc-triple .tc-sc{color:#fff;}
 .tcard-circle.tc-empty{background:#f0eeea;border-color:#ddd;}
-/* Puntos stableford en rojo */
+/* Puntos stableford en rojo y negrita */
 .tcard-stb{font-size:9px;color:var(--red);font-family:'Barlow Condensed',sans-serif;font-weight:700;}
+/* Ocultar el par dentro del círculo en resultado par (sin fondo = no hace falta) */
+.tcard-circle.tc-par .tc-par{display:none;}
 .tcard-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
 .tcard-tot{background:var(--g1);border-radius:3px;padding:8px 10px;text-align:center;}
 .tcard-tot-lbl{font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--g4);display:block;}
