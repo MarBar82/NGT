@@ -1278,6 +1278,38 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .adm-btn-row{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-top:18px;}
 .adm-btn-ghost{background:none;border:1px solid var(--g3);color:var(--g4);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:11px;border-radius:3px;cursor:pointer;}
 .adm-btn-ghost:hover{border-color:var(--navy);color:var(--navy);}
+
+/* ── TARJETA MODAL ── */
+.tcard-overlay{position:fixed;inset:0;background:rgba(0,0,20,.72);z-index:900;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
+.tcard-overlay.hidden{display:none;}
+.tcard-box{background:#fff;border-radius:4px;width:100%;max-width:580px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.35);margin:auto;}
+.tcard-hdr{background:var(--navy);color:#fff;padding:14px 16px 12px;display:flex;justify-content:space-between;align-items:flex-start;}
+.tcard-hdr-name{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:.04em;line-height:1.1;}
+.tcard-hdr-sub{font-size:11px;opacity:.7;margin-top:2px;letter-spacing:.06em;}
+.tcard-close{background:none;border:none;color:#fff;font-size:22px;line-height:1;cursor:pointer;padding:0 0 0 12px;opacity:.8;}
+.tcard-close:hover{opacity:1;}
+.tcard-body{padding:16px;}
+.tcard-nine{margin-bottom:4px;}
+.tcard-nine-title{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--navy);margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid var(--red);}
+.tcard-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:5px;}
+@media(max-width:480px){.tcard-grid{grid-template-columns:repeat(5,1fr);gap:4px;}}
+.tcard-hole{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.tcard-hnum{font-size:9px;color:var(--g4);font-family:'Barlow Condensed',sans-serif;font-weight:700;}
+.tcard-circle{width:36px;height:36px;border-radius:50%;border:2px solid var(--g2);background:#f9f8f6;display:flex;align-items:center;justify-content:center;position:relative;}
+.tcard-circle .tc-par{position:absolute;top:2px;right:4px;font-size:8px;color:var(--g4);}
+.tcard-circle .tc-sc{font-size:15px;font-weight:700;color:var(--navy);}
+.tcard-circle.tc-eagle{background:#1a6b3c;border-color:#1a6b3c;}.tcard-circle.tc-eagle .tc-sc{color:#fff;}
+.tcard-circle.tc-birdie{background:#2e7d32;border-color:#2e7d32;}.tcard-circle.tc-birdie .tc-sc{color:#fff;}
+.tcard-circle.tc-par{background:var(--navy);border-color:var(--navy);}.tcard-circle.tc-par .tc-sc{color:#fff;}
+.tcard-circle.tc-bogey{background:#f5f5f5;border-color:var(--g3);}
+.tcard-circle.tc-double{background:#fce8e8;border-color:var(--red);}
+.tcard-circle.tc-empty{background:#f0eeea;border-color:#ddd;}
+.tcard-stb{font-size:9px;color:var(--g4);font-family:'Barlow Condensed',sans-serif;}
+.tcard-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
+.tcard-tot{background:var(--g1);border-radius:3px;padding:8px 10px;text-align:center;}
+.tcard-tot-lbl{font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--g4);display:block;}
+.tcard-tot-val{font-size:20px;font-weight:700;font-family:'Barlow Condensed',sans-serif;color:var(--navy);}
+.tcard-tot-stb{background:var(--navy);}.tcard-tot-stb .tcard-tot-lbl{color:rgba(255,255,255,.65);}.tcard-tot-stb .tcard-tot-val{color:#fff;}
 </style>
 </head>
 <body>
@@ -2011,12 +2043,11 @@ function refreshWinPctCells(){
 
 function loadLB(){
   document.getElementById('lb-body').innerHTML='<div class="lb-status"><div class="spinner"></div>Conectando...</div>';
-  // Load win probabilities in parallel (cells will fill in when ready)
+  // Run all three in parallel — don't gate LB on bonuses finishing first.
+  // gvizCallback renders the table; bonuses and win% fill their cells when ready.
   loadWinProbabilities();
-  // Refrescar bonuses cada vez que se carga el LB (puede haber nuevas tarjetas firmadas)
-  loadPlayerBonuses().then(() => {
-    fetchLBData();
-  });
+  loadPlayerBonuses();
+  fetchLBData();
   // Start auto-refresh interval (paused when tab is hidden)
   startLBAutoRefresh();
 }
@@ -4190,17 +4221,34 @@ const FECHA_CACHE = {};
 function loadFechaDinamica(num){
   if(!num) return;
   const container = document.getElementById('fecha-content');
-  container.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando Fecha ' + num + '...</div>';
+
+  // Show cached data instantly if available, then refresh silently in background
+  const cacheKey = 'ngt_fecha_' + num;
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if(cached){
+      const d = JSON.parse(cached);
+      FECHA_CACHE[num] = d;
+      renderFechaDinamica(d);
+    } else {
+      container.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando Fecha ' + num + '...</div>';
+    }
+  } catch(e){
+    container.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando Fecha ' + num + '...</div>';
+  }
 
   ngtApiGet('fechaResultados', { fecha: num }).then(r => {
     if(!r || !r.ok || !r.data){
-      container.innerHTML = '<div class="lb-error">No se pudo cargar la fecha.</div>';
+      if(!FECHA_CACHE[num])
+        container.innerHTML = '<div class="lb-error">No se pudo cargar la fecha.</div>';
       return;
     }
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(r.data)); } catch(e){}
     FECHA_CACHE[num] = r.data;
     renderFechaDinamica(r.data);
   }).catch(e => {
-    container.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+    if(!FECHA_CACHE[num])
+      container.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
   });
 }
 
@@ -4261,6 +4309,7 @@ function renderFechaDinamica(data){
       '<tbody>';
 
   const stb = data.stableford || [];
+  const canchaId = data.canchaId || '';
   if(!stb.length){
     html += '<tr><td colspan="4" class="c"><span class="s dim">Sin datos de Stableford todavía</span></td></tr>';
   } else {
@@ -4273,9 +4322,11 @@ function renderFechaDinamica(data){
       else posCell = '<span class="s dim">' + pos + '</span>';
 
       const nombreHtml = fmtHistName(row.nombre);
-      const hcpTxt = (row.hcp === '' || row.hcp === null || row.hcp === undefined) ? '–' : row.hcp;
+      // Show HCP at 85% (same basis used for stableford calculation)
+      const hcpTxt = (row.hcp === '' || row.hcp === null || row.hcp === undefined) ? '–' : hcp85(row.hcp);
 
-      html += '<tr>' +
+      html += '<tr style="cursor:pointer;" onclick="openTarjetaModal(\'' +
+        row.matricula + '\',' + row.hcp + ',\'' + data.fecha + '\',\'' + canchaId + '\',\'' + (row.nombre||'').replace(/'/g,"\\'") + '\')">' +
         '<td class="c">' + posCell + '</td>' +
         '<td>' + nombreHtml + '</td>' +
         '<td class="c"><span class="s">' + hcpTxt + '</span></td>' +
@@ -5004,6 +5055,125 @@ function tickCountdown(){
 // (see pg() routing at the top of this script). This saves 3 unnecessary API calls on home.
 document.body.classList.add('home-mode');
 loadHome();
+
+// ── TARJETA MODAL ──────────────────────────────────────────────────────────────
+function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
+  let overlay = document.getElementById('tcard-overlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'tcard-overlay';
+    overlay.className = 'tcard-overlay hidden';
+    overlay.innerHTML =
+      '<div class="tcard-box" id="tcard-box">' +
+        '<div class="tcard-hdr">' +
+          '<div><div class="tcard-hdr-name" id="tcard-name">—</div><div class="tcard-hdr-sub" id="tcard-sub"></div></div>' +
+          '<button class="tcard-close" onclick="closeTarjetaModal()">✕</button>' +
+        '</div>' +
+        '<div class="tcard-body" id="tcard-body"><div class="lb-status"><div class="spinner"></div>Cargando...</div></div>' +
+      '</div>';
+    overlay.addEventListener('click', function(e){ if(e.target === overlay) closeTarjetaModal(); });
+    document.body.appendChild(overlay);
+  }
+
+  // Set header
+  const nameEl = document.getElementById('tcard-name');
+  const subEl  = document.getElementById('tcard-sub');
+  const bodyEl = document.getElementById('tcard-body');
+  if(nameEl) nameEl.textContent = fmtHistName ? fmtHistName(nombre) : nombre;
+  if(subEl)  subEl.textContent  = 'FECHA ' + fecha + (canchaId ? '' : '');
+  if(bodyEl) bodyEl.innerHTML   = '<div class="lb-status"><div class="spinner"></div>Cargando tarjeta...</div>';
+
+  overlay.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+
+  // Fetch tarjeta + canchaPares in parallel
+  const cpKey = 'ngt_cp2_' + canchaId;
+  let cpCached = null;
+  try { const raw = sessionStorage.getItem(cpKey); if(raw) cpCached = JSON.parse(raw); } catch(e){}
+
+  const pTarjeta   = ngtApiGet('tarjeta', { fecha: fecha, matricula: matricula });
+  const pCancha    = cpCached
+    ? Promise.resolve({ ok: true, data: cpCached })
+    : ngtApiGet('canchaPares', { cancha: canchaId });
+
+  Promise.all([pTarjeta, pCancha]).then(function(res){
+    const tj = res[0] && res[0].data;
+    const cp = res[1] && res[1].data;
+
+    if(!tj){ if(bodyEl) bodyEl.innerHTML = '<div class="lb-error">No se encontró la tarjeta.</div>'; return; }
+
+    // Cache canchaPares for future use
+    if(cp && !cpCached){ try{ sessionStorage.setItem(cpKey, JSON.stringify(cp)); }catch(e){} }
+
+    const pares   = (cp && cp.pares)   || [];
+    const indices = (cp && cp.indices) || [];
+    const scores  = tj.scores || [];
+    const hcpVal  = parseFloat(hcp) || 0;
+
+    if(subEl) subEl.textContent = 'FECHA ' + fecha + ' · ' + (tj.cancha || '') + ' · HCP ' + hcpVal + ' (' + hcp85(hcpVal) + '% 85)';
+
+    function renderTcardNine(from, to, label){
+      let html = '<div class="tcard-nine"><div class="tcard-nine-title">' + label + '</div><div class="tcard-grid">';
+      for(let h = from; h < to; h++){
+        const sc  = (scores[h] !== undefined && scores[h] !== null && scores[h] !== '') ? parseInt(scores[h]) : null;
+        const par = pares[h]   || null;
+        const idx = indices[h] || null;
+        const stb = (sc !== null && par && idx) ? calcStablefordHoyo(sc, par, idx, hcpVal) : null;
+
+        let cirCls = 'tcard-circle';
+        if(sc !== null && par){
+          const d = sc - par;
+          if(d <= -2) cirCls += ' tc-eagle';
+          else if(d === -1) cirCls += ' tc-birdie';
+          else if(d === 0)  cirCls += ' tc-par';
+          else if(d === 1)  cirCls += ' tc-bogey';
+          else              cirCls += ' tc-double';
+        } else {
+          cirCls += ' tc-empty';
+        }
+
+        html += '<div class="tcard-hole">' +
+          '<span class="tcard-hnum">H' + (h+1) + '</span>' +
+          '<div class="' + cirCls + '">' +
+            (par ? '<span class="tc-par">' + par + '</span>' : '') +
+            (sc !== null ? '<span class="tc-sc">' + sc + '</span>' : '') +
+          '</div>' +
+          '<span class="tcard-stb">' + (stb !== null ? stb + 'p' : '–') + '</span>' +
+        '</div>';
+      }
+      html += '</div></div>';
+      return html;
+    }
+
+    // Totals
+    function sumRange(arr, from, to){ let s=0,any=false; for(let i=from;i<to;i++){if(arr[i]!==null&&arr[i]!==undefined&&arr[i]!==''){s+=parseInt(arr[i])||0;any=true;}} return any?s:null; }
+    function stbRange(from, to){ let s=0,any=false; for(let h=from;h<to;h++){const v=calcStablefordHoyo(parseInt(scores[h])||null,pares[h],indices[h],hcpVal);if(v!==null){s+=v;any=true;}} return any?s:null; }
+
+    const ida  = sumRange(scores, 0, 9);
+    const vta  = sumRange(scores, 9, 18);
+    const gross = (ida !== null && vta !== null) ? ida + vta : null;
+    const neto  = gross !== null ? gross - hcpVal : null;
+    const stbT  = stbRange(0, 18);
+
+    let html = renderTcardNine(0, 9, 'IDA · Hoyos 1-9');
+    html += renderTcardNine(9, 18, 'VUELTA · Hoyos 10-18');
+    html += '<div class="tcard-totals">' +
+      '<div class="tcard-tot"><span class="tcard-tot-lbl">Gross</span><span class="tcard-tot-val">' + (gross !== null ? gross : '–') + '</span></div>' +
+      '<div class="tcard-tot"><span class="tcard-tot-lbl">Neto</span><span class="tcard-tot-val">' + (neto !== null ? neto : '–') + '</span></div>' +
+      '<div class="tcard-tot tcard-tot-stb"><span class="tcard-tot-lbl">Stableford</span><span class="tcard-tot-val">' + (stbT !== null ? stbT : '–') + '</span></div>' +
+    '</div>';
+
+    if(bodyEl) bodyEl.innerHTML = html;
+  }).catch(function(e){
+    if(bodyEl) bodyEl.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+  });
+}
+
+function closeTarjetaModal(){
+  const overlay = document.getElementById('tcard-overlay');
+  if(overlay) overlay.classList.add('hidden');
+  document.body.style.overflow = '';
+}
 </script>
 </body>
 </html>

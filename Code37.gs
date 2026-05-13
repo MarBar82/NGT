@@ -720,7 +720,9 @@ function getTarjetaJugador_(fecha, matricula) {
       return {
         rowIndex: i + 2,
         fecha: f, matricula: m,
-        nombre: data[i][3], hcp: data[i][4], cancha: data[i][5],
+        nombre: data[i][3], hcp: data[i][4],
+        cancha: data[i][5],   // col F = cancha name
+        canchaId: data[i][6], // col G = cancha ID (needed for canchaPares lookup)
         scores: data[i].slice(7, 25),
         ld: data[i][25], ba: data[i][26],
       };
@@ -1556,17 +1558,19 @@ function getStablefordForFecha_(fecha) {
 function getFechaResultados_(fecha) {
   if (!fecha) return null;
 
-  // 1) Cancha — read from TARJETAS col F for any row of this fecha
+  // 1) Cancha name + ID — read from TARJETAS cols B,F,G for first matching row
   let cancha = '';
+  let canchaId = '';
   const shT = getSheet_(SHEETS.TARJETAS);
   if (shT) {
     const nextEmpty = findNextEmptyRow_(shT, 2);
     if (nextEmpty > 2) {
-      const data = shT.getRange(2, 2, nextEmpty - 2, 5).getValues(); // B,C,D,E,F
+      const data = shT.getRange(2, 2, nextEmpty - 2, 6).getValues(); // B–G
       for (let i = 0; i < data.length; i++) {
         const f = String(data[i][0] || '').trim();
         const c = String(data[i][4] || '').trim();
-        if (f === String(fecha) && c) { cancha = c; break; }
+        const id = String(data[i][5] || '').trim();
+        if (f === String(fecha) && c) { cancha = c; canchaId = id; break; }
       }
     }
   }
@@ -1583,6 +1587,7 @@ function getFechaResultados_(fecha) {
   return {
     fecha: String(fecha),
     cancha: cancha,
+    canchaId: canchaId,
     modalidad: 'Stableford + Match',
     ldWinner: bw.ldWinner,
     baWinner: bw.baWinner,
@@ -2874,7 +2879,7 @@ function doGet(e) {
       case 'canchaPares':      result = { ok: true, data: cachedRead_('cp_' + params.cancha, 1800, function(){ return getCanchaPares_(params.cancha); }) }; break;
       case 'fechas':           result = { ok: true, data: cachedRead_('fechas', 60, getFechasActivas_) }; break;
       case 'fechasConEstado':  result = { ok: true, data: getFechasConEstado_() }; break;
-      case 'fechaResultados':  result = { ok: true, data: getFechaResultados_(params.fecha) }; break;
+      case 'fechaResultados':  result = { ok: true, data: cachedRead_('fechaRes_' + params.fecha, 60, function(){ return getFechaResultados_(params.fecha); }) }; break;
       case 'fechaMeta':        result = { ok: true, data: getFechaMeta_(params.fecha) }; break;
       case 'jugadoresEnFecha': result = { ok: true, data: getJugadoresEnFecha_(params.fecha) }; break;
       case 'bonusWinners':     result = { ok: true, data: cachedRead_('bw_' + params.fecha, 30, function(){ return getBonusWinners_(params.fecha); }) }; break;
@@ -2887,7 +2892,7 @@ function doGet(e) {
       case 'dobleDisponible':  result = { ok: true, data: { tieneDoble: getJugadoresConDobleDisponible_().indexOf(String(params.matricula)) >= 0 } }; break;
       case 'jugadoresConDoble': result = { ok: true, data: cachedRead_('jugadoresConDoble', 60, getJugadoresConDobleDisponible_) }; break;
       case 'fechaDetalle':     result = { ok: true, data: getFechaDetalle_(params.fecha) }; break;
-      case 'tarjeta':          result = { ok: true, data: getTarjetaJugador_(params.fecha, params.matricula) }; break;
+      case 'tarjeta':          result = { ok: true, data: cachedRead_('tj_' + params.fecha + '_' + params.matricula, 60, function(){ return getTarjetaJugador_(params.fecha, params.matricula); }) }; break;
       case 'debugMatch':       result = { ok: true, data: debugMatch_() }; break;
       case 'debugDobles':      result = { ok: true, data: debugDobles_() }; break;
       case 'debugHcpCanchas':  result = { ok: true, data: debugHcpCanchas_() }; break;
