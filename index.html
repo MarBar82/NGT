@@ -1952,8 +1952,12 @@ function gvizCallback(response){
     const now=new Date();
     document.getElementById('sync-time').textContent='Actualizado: '+now.toLocaleDateString('es-AR')+' '+now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     setTimeout(setTbHeight,50);
-    // Recompute sticky column left offsets after layout settles
-    requestAnimationFrame(function(){ requestAnimationFrame(recomputeStickyOffsets); });
+    // Recompute sticky offsets en 3 momentos: inmediato, 300ms y 1200ms.
+    // Los primeros dos catches el caso más común; el de 1200ms cubre el
+    // cold-start de Apps Script donde Win%/Bonuses llegan muy tarde.
+    requestAnimationFrame(recomputeStickyOffsets);
+    setTimeout(recomputeStickyOffsets, 300);
+    setTimeout(recomputeStickyOffsets, 1200);
     // If win probs arrived AFTER this render, update the cells
     if(WIN_PROBS_LOADED) refreshWinPctCells();
   }catch(e){document.getElementById('lb-body').innerHTML='<div class="lb-error">Error: '+e.message+'</div>';console.error(e);}
