@@ -1268,16 +1268,15 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .adm-btn-ghost:hover{border-color:var(--navy);color:var(--navy);}
 
 /* ── TARJETA MODAL ── */
-.tcard-overlay{position:fixed;inset:0;background:rgba(0,0,20,.72);z-index:900;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
+.tcard-overlay{position:fixed;inset:0;background:rgba(0,18,42,.7);backdrop-filter:blur(4px);z-index:900;display:flex;align-items:flex-start;justify-content:center;padding:20px 12px;overflow-y:auto;}
 .tcard-overlay.hidden{display:none;}
-.tcard-box{background:#fff;border-radius:4px;width:100%;max-width:580px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.35);margin:auto;}
-.tcard-hdr{background:var(--navy);color:#fff;padding:14px 16px 12px;display:flex;justify-content:space-between;align-items:flex-start;}
-.tcard-hdr-name{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:.04em;line-height:1.1;}
-.tcard-hdr-name .hist-ap,.tcard-hdr-name .hist-nm{color:#fff;}
-.tcard-hdr-sub{font-size:11px;opacity:.7;margin-top:2px;letter-spacing:.06em;}
-.tcard-close{background:none;border:none;color:#fff;font-size:22px;line-height:1;cursor:pointer;padding:0 0 0 12px;opacity:.8;}
-.tcard-close:hover{opacity:1;}
-.tcard-body{padding:16px;}
+.tcard-box{position:relative;background:#fff;border-radius:6px;max-width:680px;width:100%;padding:18px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.4);margin:auto;}
+.tcard-close{position:absolute;top:6px;right:8px;background:none;border:none;font-size:28px;color:var(--g4);cursor:pointer;line-height:1;padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:300;}
+.tcard-close:hover{color:var(--navy);}
+.tcard-body{min-height:60px;}
+/* Número grande STB (caja navy, igual a ronda-modal-diff pero azul) */
+.tcard-stb-big{font-size:30px;font-weight:800;color:#fff;min-width:64px;text-align:center;line-height:1;background:var(--navy);padding:10px 8px;border-radius:4px;letter-spacing:-.02em;font-family:'Barlow Condensed',sans-serif;}
+@media(max-width:540px){.tcard-stb-big{font-size:24px;min-width:54px;}}
 .tcard-nine{margin-bottom:4px;}
 .tcard-nine-title{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--navy);margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid var(--red);}
 .tcard-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:5px;}
@@ -5190,24 +5189,15 @@ function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
     overlay.className = 'tcard-overlay hidden';
     overlay.innerHTML =
       '<div class="tcard-box" id="tcard-box">' +
-        '<div class="tcard-hdr">' +
-          '<div><div class="tcard-hdr-name" id="tcard-name">—</div><div class="tcard-hdr-sub" id="tcard-sub"></div></div>' +
-          '<button class="tcard-close" onclick="closeTarjetaModal()">✕</button>' +
-        '</div>' +
+        '<button class="tcard-close" onclick="closeTarjetaModal()">×</button>' +
         '<div class="tcard-body" id="tcard-body"><div class="lb-status"><div class="spinner"></div>Cargando...</div></div>' +
       '</div>';
     overlay.addEventListener('click', function(e){ if(e.target === overlay) closeTarjetaModal(); });
     document.body.appendChild(overlay);
   }
 
-  // Set header
-  const nameEl = document.getElementById('tcard-name');
-  const subEl  = document.getElementById('tcard-sub');
   const bodyEl = document.getElementById('tcard-body');
-  if(nameEl) nameEl.innerHTML = fmtHistName ? fmtHistName(nombre) : nombre;
-  if(subEl)  subEl.textContent  = 'FECHA ' + fecha + (canchaId ? '' : '');
-  if(bodyEl) bodyEl.innerHTML   = '<div class="lb-status"><div class="spinner"></div>Cargando tarjeta...</div>';
-
+  if(bodyEl) bodyEl.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando tarjeta...</div>';
   overlay.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 
@@ -5216,8 +5206,8 @@ function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
   let cpCached = null;
   try { const raw = sessionStorage.getItem(cpKey); if(raw) cpCached = JSON.parse(raw); } catch(e){}
 
-  const pTarjeta   = ngtApiGet('tarjeta', { fecha: fecha, matricula: matricula });
-  const pCancha    = cpCached
+  const pTarjeta = ngtApiGet('tarjeta', { fecha: fecha, matricula: matricula });
+  const pCancha  = cpCached
     ? Promise.resolve({ ok: true, data: cpCached })
     : ngtApiGet('canchaPares', { cancha: canchaId });
 
@@ -5234,8 +5224,6 @@ function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
     const indices = (cp && cp.indices) || [];
     const scores  = tj.scores || [];
     const hcpVal  = parseFloat(hcp) || 0;
-
-    if(subEl) subEl.textContent = 'FECHA ' + fecha + ' · ' + (tj.cancha || '') + ' · HCP ' + hcpVal + ' (' + hcp85(hcpVal) + '% 85)';
 
     // Render IDA/VUELTA table — mismo layout que perfiles ronda bajo par
     function renderTcardTable(from, to, label){
@@ -5262,19 +5250,19 @@ function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
       h += '<td>' + scoreSymbolHtml(scOk ? scoreTot : null, parTot, true) + '</td></tr>';
       // Stableford row
       h += '<tr><td class="lbl">STB</td>';
-      let stbTot = 0; let stbOk = true;
+      let stbNine = 0; let stbNineOk = true;
       for(let i = from; i < to; i++){
         const sc = (scores[i] !== undefined && scores[i] !== null && scores[i] !== '') ? parseInt(scores[i]) : null;
         const stb = (sc !== null) ? calcStablefordHoyo(sc, pares[i], indices[i], hcpVal) : null;
         h += '<td><span class="tcard-stb-tbl">' + (stb !== null ? stb : '–') + '</span></td>';
-        if(stb !== null) stbTot += stb; else stbOk = false;
+        if(stb !== null) stbNine += stb; else stbNineOk = false;
       }
-      h += '<td><span class="tcard-stb-tbl stb-tot">' + (stbOk ? stbTot : '–') + '</span></td></tr>';
+      h += '<td><span class="tcard-stb-tbl stb-tot">' + (stbNineOk ? stbNine : '–') + '</span></td></tr>';
       h += '</tbody></table>';
       return h;
     }
 
-    // Totals bar
+    // Totals
     function sumRange(arr, from, to){ let s=0,any=false; for(let i=from;i<to;i++){if(arr[i]!==null&&arr[i]!==undefined&&arr[i]!==''){s+=parseInt(arr[i])||0;any=true;}} return any?s:null; }
     function stbRange(from, to){ let s=0,any=false; for(let i=from;i<to;i++){const v=calcStablefordHoyo(parseInt(scores[i])||null,pares[i],indices[i],hcpVal);if(v!==null){s+=v;any=true;}} return any?s:null; }
 
@@ -5284,13 +5272,31 @@ function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
     const neto  = gross !== null ? gross - hcpVal : null;
     const stbT  = stbRange(0, 18);
 
-    let html = '<div style="overflow-x:auto;">' + renderTcardTable(0, 9, 'IDA') + '</div>';
-    html += '<div style="overflow-x:auto;margin-top:10px;">' + renderTcardTable(9, 18, 'VUELTA') + '</div>';
-    html += '<div class="tcard-totals">' +
-      '<div class="tcard-tot"><span class="tcard-tot-lbl">Gross</span><span class="tcard-tot-val">' + (gross !== null ? gross : '–') + '</span></div>' +
-      '<div class="tcard-tot"><span class="tcard-tot-lbl">Neto</span><span class="tcard-tot-val">' + (neto !== null ? neto : '–') + '</span></div>' +
-      '<div class="tcard-tot tcard-tot-stb"><span class="tcard-tot-lbl">Stableford</span><span class="tcard-tot-val">' + (stbT !== null ? stbT : '–') + '</span></div>' +
-    '</div>';
+    const nombreHtml = (typeof fmtHistName === 'function') ? fmtHistName(nombre) : nombre;
+
+    let html =
+      // Header: STB grande a la izquierda + nombre/info a la derecha (igual a ronda modal)
+      '<div class="ronda-modal-hdr" style="padding-right:36px;">' +
+        '<div class="tcard-stb-big">' + (stbT !== null ? stbT : '–') + '<div style="font-size:11px;font-weight:600;opacity:.7;margin-top:3px;letter-spacing:.06em;">STB</div></div>' +
+        '<div class="ronda-modal-info">' +
+          '<div class="ronda-modal-cancha">' + nombreHtml + '</div>' +
+          '<div class="ronda-modal-meta">' + (tj.cancha || '') + ' · Fecha ' + fecha + ' · HCP ' + hcpVal + ' (' + hcp85(hcpVal) + '% 85) · Gross ' + (gross !== null ? gross : '–') + ' · Neto ' + (neto !== null ? neto : '–') + '</div>' +
+        '</div>' +
+      '</div>' +
+      // Tablas IDA / VUELTA
+      '<div class="ronda-modal-card">' +
+        '<div style="overflow-x:auto;">' + renderTcardTable(0, 9, 'IDA') + '</div>' +
+        '<div style="overflow-x:auto;margin-top:10px;">' + renderTcardTable(9, 18, 'VUELTA') + '</div>' +
+      '</div>' +
+      // Leyenda
+      '<div class="ronda-modal-legend">' +
+        '<span class="leg-item"><span class="sc-sym sc-eagle leg-sym">3</span> Águila</span>' +
+        '<span class="leg-item"><span class="sc-sym sc-birdie leg-sym">3</span> Birdie</span>' +
+        '<span class="leg-item"><span class="sc-sym leg-sym">4</span> Par</span>' +
+        '<span class="leg-item"><span class="sc-sym sc-bogey leg-sym">5</span> Bogey</span>' +
+        '<span class="leg-item"><span class="sc-sym sc-double leg-sym">6</span> Doble</span>' +
+        '<span class="leg-item"><span class="sc-sym sc-triple leg-sym">7</span> Triple+</span>' +
+      '</div>';
 
     if(bodyEl) bodyEl.innerHTML = html;
   }).catch(function(e){
