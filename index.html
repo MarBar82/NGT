@@ -1105,28 +1105,16 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   position:relative;
 }
 .sc-sym.empty{color:var(--g3);font-weight:500;}
-/* Birdie: círculo simple */
-.sc-sym.sc-birdie{
-  border:1.5px solid var(--red);border-radius:50%;
-  color:var(--red);
-}
-/* Águila/Albatros: doble círculo concéntrico */
-.sc-sym.sc-eagle{
-  border:1.5px solid var(--red);border-radius:50%;
-  color:var(--red);
-  box-shadow:inset 0 0 0 3px #fff, inset 0 0 0 4.5px var(--red);
-}
-/* Bogey: cuadrado simple */
-.sc-sym.sc-bogey{
-  border:1.5px solid var(--navy);
-  color:var(--navy);
-}
-/* Doble bogey o más: doble cuadrado concéntrico */
-.sc-sym.sc-double{
-  border:1.5px solid var(--navy);
-  color:var(--navy);
-  box-shadow:inset 0 0 0 3px #fff, inset 0 0 0 4.5px var(--navy);
-}
+/* Birdie: círculo rojo sólido */
+.sc-sym.sc-birdie{background:var(--red);border-radius:50%;color:#fff;}
+/* Águila/Albatros: círculo amarillo sólido */
+.sc-sym.sc-eagle{background:#f5c400;border-radius:50%;color:#333;}
+/* Bogey: cuadrado azul claro */
+.sc-sym.sc-bogey{background:#74c0fc;border-radius:5px;color:#fff;}
+/* Doble bogey: cuadrado azul medio */
+.sc-sym.sc-double{background:#339af0;border-radius:5px;color:#fff;}
+/* Triple bogey o más: cuadrado azul oscuro */
+.sc-sym.sc-triple{background:#1864ab;border-radius:5px;color:#fff;}
 
 /* Modal de ronda bajo par */
 .ronda-modal{
@@ -1312,8 +1300,11 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 /* Triple bogey o más: cuadrado azul oscuro */
 .tcard-circle.tc-triple{background:#1864ab;border-color:#1864ab;border-radius:5px;}.tcard-circle.tc-triple .tc-sc{color:#fff;}
 .tcard-circle.tc-empty{background:#f0eeea;border-color:#ddd;}
-/* Puntos stableford en rojo y negrita */
+/* Puntos stableford en rojo y negrita (grid view – legacy) */
 .tcard-stb{font-size:9px;color:var(--red);font-family:'Barlow Condensed',sans-serif;font-weight:700;}
+/* Puntos stableford en tabla */
+.tcard-stb-tbl{font-size:12px;font-weight:700;color:var(--red);font-family:'Barlow Condensed',sans-serif;}
+.tcard-stb-tbl.stb-tot{color:var(--navy);}
 /* Ocultar el par dentro del círculo en resultado par (sin fondo = no hace falta) */
 .tcard-circle.tc-par .tc-par{display:none;}
 .tcard-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
@@ -4939,8 +4930,9 @@ function scoreSymbolHtml(score, par, isTotal){
   if(d <= -2) wrapCls += ' sc-eagle';        // doble círculo
   else if(d === -1) wrapCls += ' sc-birdie'; // círculo simple
   else if(d === 0) wrapCls += '';            // sin marca
-  else if(d === 1) wrapCls += ' sc-bogey';   // cuadrado simple
-  else if(d >= 2) wrapCls += ' sc-double';   // doble cuadrado
+  else if(d === 1) wrapCls += ' sc-bogey';   // cuadrado azul claro
+  else if(d === 2) wrapCls += ' sc-double';  // cuadrado azul medio
+  else             wrapCls += ' sc-triple';  // cuadrado azul oscuro
   return '<span class="' + wrapCls + '">' + score + '</span>';
 }
 
@@ -4971,11 +4963,12 @@ function showRondaModal(idx){
       '</div>' +
       '<div class="ronda-modal-card">' + tarjeta + '</div>' +
       '<div class="ronda-modal-legend">' +
-        '<span class="leg-item"><span class="sc-sym sc-eagle leg-sym">3</span> Águila/Albatros</span>' +
+        '<span class="leg-item"><span class="sc-sym sc-eagle leg-sym">3</span> Águila</span>' +
         '<span class="leg-item"><span class="sc-sym sc-birdie leg-sym">3</span> Birdie</span>' +
         '<span class="leg-item"><span class="sc-sym leg-sym">4</span> Par</span>' +
         '<span class="leg-item"><span class="sc-sym sc-bogey leg-sym">5</span> Bogey</span>' +
-        '<span class="leg-item"><span class="sc-sym sc-double leg-sym">6</span> Doble+</span>' +
+        '<span class="leg-item"><span class="sc-sym sc-double leg-sym">6</span> Doble</span>' +
+        '<span class="leg-item"><span class="sc-sym sc-triple leg-sym">7</span> Triple+</span>' +
       '</div>' +
     '</div>';
 
@@ -5244,52 +5237,55 @@ function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
 
     if(subEl) subEl.textContent = 'FECHA ' + fecha + ' · ' + (tj.cancha || '') + ' · HCP ' + hcpVal + ' (' + hcp85(hcpVal) + '% 85)';
 
-    function renderTcardNine(from, to, label){
-      let html = '<div class="tcard-nine"><div class="tcard-nine-title">' + label + '</div><div class="tcard-grid">';
-      for(let h = from; h < to; h++){
-        const sc  = (scores[h] !== undefined && scores[h] !== null && scores[h] !== '') ? parseInt(scores[h]) : null;
-        const par = pares[h]   || null;
-        const idx = indices[h] || null;
-        const stb = (sc !== null && par && idx) ? calcStablefordHoyo(sc, par, idx, hcpVal) : null;
-
-        let cirCls = 'tcard-circle';
-        if(sc !== null && par){
-          const d = sc - par;
-          if(d <= -2)      cirCls += ' tc-eagle';
-          else if(d === -1) cirCls += ' tc-birdie';
-          else if(d === 0)  cirCls += ' tc-par';
-          else if(d === 1)  cirCls += ' tc-bogey';
-          else if(d === 2)  cirCls += ' tc-double';
-          else              cirCls += ' tc-triple';
-        } else {
-          cirCls += ' tc-empty';
-        }
-
-        html += '<div class="tcard-hole">' +
-          '<span class="tcard-hnum">H' + (h+1) + '</span>' +
-          '<div class="' + cirCls + '">' +
-            (par ? '<span class="tc-par">' + par + '</span>' : '') +
-            (sc !== null ? '<span class="tc-sc">' + sc + '</span>' : '') +
-          '</div>' +
-          '<span class="tcard-stb">' + (stb !== null ? stb + 'p' : '–') + '</span>' +
-        '</div>';
+    // Render IDA/VUELTA table — mismo layout que perfiles ronda bajo par
+    function renderTcardTable(from, to, label){
+      let h = '<table class="perf-ecl-table"><thead><tr><th class="lbl">' + label + '</th>';
+      for(let i = from; i < to; i++) h += '<th><div class="perf-ecl-hoyo">H' + (i+1) + '</div></th>';
+      h += '<th><div class="perf-ecl-hoyo">Tot</div></th></tr></thead><tbody>';
+      // Par row
+      h += '<tr><td class="lbl">Par</td>';
+      let parTot = 0;
+      for(let i = from; i < to; i++){
+        const p = pares[i] || null;
+        h += '<td><span class="perf-ecl-par">' + (p || '—') + '</span></td>';
+        if(p) parTot += p;
       }
-      html += '</div></div>';
-      return html;
+      h += '<td><span class="perf-ecl-par">' + parTot + '</span></td></tr>';
+      // Score row
+      h += '<tr><td class="lbl">Score</td>';
+      let scoreTot = 0; let scOk = true;
+      for(let i = from; i < to; i++){
+        const sc = (scores[i] !== undefined && scores[i] !== null && scores[i] !== '') ? parseInt(scores[i]) : null;
+        h += '<td>' + scoreSymbolHtml(sc, pares[i]) + '</td>';
+        if(sc !== null) scoreTot += sc; else scOk = false;
+      }
+      h += '<td>' + scoreSymbolHtml(scOk ? scoreTot : null, parTot, true) + '</td></tr>';
+      // Stableford row
+      h += '<tr><td class="lbl">STB</td>';
+      let stbTot = 0; let stbOk = true;
+      for(let i = from; i < to; i++){
+        const sc = (scores[i] !== undefined && scores[i] !== null && scores[i] !== '') ? parseInt(scores[i]) : null;
+        const stb = (sc !== null) ? calcStablefordHoyo(sc, pares[i], indices[i], hcpVal) : null;
+        h += '<td><span class="tcard-stb-tbl">' + (stb !== null ? stb : '–') + '</span></td>';
+        if(stb !== null) stbTot += stb; else stbOk = false;
+      }
+      h += '<td><span class="tcard-stb-tbl stb-tot">' + (stbOk ? stbTot : '–') + '</span></td></tr>';
+      h += '</tbody></table>';
+      return h;
     }
 
-    // Totals
+    // Totals bar
     function sumRange(arr, from, to){ let s=0,any=false; for(let i=from;i<to;i++){if(arr[i]!==null&&arr[i]!==undefined&&arr[i]!==''){s+=parseInt(arr[i])||0;any=true;}} return any?s:null; }
-    function stbRange(from, to){ let s=0,any=false; for(let h=from;h<to;h++){const v=calcStablefordHoyo(parseInt(scores[h])||null,pares[h],indices[h],hcpVal);if(v!==null){s+=v;any=true;}} return any?s:null; }
+    function stbRange(from, to){ let s=0,any=false; for(let i=from;i<to;i++){const v=calcStablefordHoyo(parseInt(scores[i])||null,pares[i],indices[i],hcpVal);if(v!==null){s+=v;any=true;}} return any?s:null; }
 
-    const ida  = sumRange(scores, 0, 9);
-    const vta  = sumRange(scores, 9, 18);
+    const ida   = sumRange(scores, 0, 9);
+    const vta   = sumRange(scores, 9, 18);
     const gross = (ida !== null && vta !== null) ? ida + vta : null;
     const neto  = gross !== null ? gross - hcpVal : null;
     const stbT  = stbRange(0, 18);
 
-    let html = renderTcardNine(0, 9, 'IDA');
-    html += renderTcardNine(9, 18, 'VUELTA');
+    let html = '<div style="overflow-x:auto;">' + renderTcardTable(0, 9, 'IDA') + '</div>';
+    html += '<div style="overflow-x:auto;margin-top:10px;">' + renderTcardTable(9, 18, 'VUELTA') + '</div>';
     html += '<div class="tcard-totals">' +
       '<div class="tcard-tot"><span class="tcard-tot-lbl">Gross</span><span class="tcard-tot-val">' + (gross !== null ? gross : '–') + '</span></div>' +
       '<div class="tcard-tot"><span class="tcard-tot-lbl">Neto</span><span class="tcard-tot-val">' + (neto !== null ? neto : '–') + '</span></div>' +
