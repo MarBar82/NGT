@@ -1164,6 +1164,10 @@ function crearFecha_(params) {
  * matching STB sheet columns E-K.  Returns null if no scores present.
  */
 function calcStbBreakdown_(scores18, pares, indices, hcp) {
+  // E = HCP al 85% (igual que TARJETAS!E pero redondeado)
+  // F = bogeys (1pt), G = pares (2pt), H = birdies (3pt), I = águilas (4pt), J = albatros (5pt)
+  // K = F*1 + G*2 + H*3 + I*4 + J*5
+  const hcp85val = Math.round(parseFloat(hcp) * 0.85);
   const counts = [0, 0, 0, 0, 0, 0]; // index = stableford points (0..5)
   let any = false;
   for (let h = 0; h < 18; h++) {
@@ -1176,7 +1180,7 @@ function calcStbBreakdown_(scores18, pares, indices, hcp) {
   }
   if (!any) return null;
   const total = counts[1] + counts[2]*2 + counts[3]*3 + counts[4]*4 + counts[5]*5;
-  return { e: counts[0], f: counts[1], g: counts[2], h: counts[3], i: counts[4], j: counts[5], k: total };
+  return { e: hcp85val, f: counts[1], g: counts[2], h: counts[3], i: counts[4], j: counts[5], k: total };
 }
 
 function cargarTarjeta_(params) {
