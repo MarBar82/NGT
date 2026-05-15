@@ -531,36 +531,29 @@ function getMisFechas_(matricula) {
         });
       }
     }
-    // Read HCP CANCHAS for indices (try the same variations as getCanchaPares_)
-    const candidateNames = ['HCP CANCHAS', 'HCP Canchas', 'Hcp Canchas', 'hcp canchas', 'HCP_CANCHAS', 'INDICES'];
-    let shHcp = null;
-    for (let n = 0; n < candidateNames.length; n++) {
-      shHcp = getSheet_(candidateNames[n]);
-      if (shHcp) break;
-    }
-    if (!shHcp) {
-      const all = SpreadsheetApp.getActive().getSheets();
-      for (let i = 0; i < all.length; i++) {
-        const name = all[i].getName();
-        if (name.toUpperCase().indexOf('HCP') >= 0 && name.toUpperCase().indexOf('CANCHA') >= 0) {
-          shHcp = all[i];
-          break;
-        }
-      }
-    }
-    if (shHcp){
-      const lr = shHcp.getLastRow();
-      if (lr >= 2){
-        const idata = shHcp.getRange(2, 1, lr - 1, 20).getValues();
+    // Read indices from NGT DB CANCHAS (A=ID, B=NOMBRE, C=hoyo, D=PAR, E=ÍNDICE)
+    const shDb = getHistSheet_('CANCHAS');
+    if (shDb) {
+      const lr = shDb.getLastRow();
+      if (lr >= 2) {
+        const idata = shDb.getRange(2, 1, lr - 1, 5).getValues();
+        const canchaHoles = {};
         idata.forEach(r => {
-          const id = String(r[0] || '').trim();
-          const nom = String(r[1] || '').trim();
-          const upN = nom.toUpperCase();
-          const upI = id.toUpperCase();
-          if (canchasNeeded[upN] || canchasNeeded[upI]){
-            const indices = r.slice(2, 20).map(v => parseInt(v) || null);
-            indicesMap[upN] = indices;
-            indicesMap[upI] = indices;
+          const id = String(r[0] || '').trim().toUpperCase();
+          const nom = String(r[1] || '').trim().toUpperCase();
+          const hoyo = parseInt(r[2]);
+          const indice = parseInt(r[4]);
+          if (!hoyo || !indice) return;
+          const key = canchasNeeded[id] ? id : (canchasNeeded[nom] ? nom : null);
+          if (!key) return;
+          if (!canchaHoles[key]) canchaHoles[key] = [];
+          canchaHoles[key].push({ hoyo, indice });
+        });
+        Object.keys(canchaHoles).forEach(key => {
+          const holes = canchaHoles[key];
+          if (holes.length === 18) {
+            holes.sort((a, b) => a.hoyo - b.hoyo);
+            indicesMap[key] = holes.map(h => h.indice);
           }
         });
       }
@@ -603,36 +596,25 @@ function getCanchaPares_(canchaNombreOrId) {
   }
   if (!cancha) return null;
 
-  // Try to find the HCP CANCHAS sheet — name may have variations
-  const candidateNames = ['HCP CANCHAS', 'HCP Canchas', 'Hcp Canchas', 'hcp canchas', 'HCP_CANCHAS', 'INDICES'];
-  let shHcp = null;
-  for (let n = 0; n < candidateNames.length; n++) {
-    shHcp = getSheet_(candidateNames[n]);
-    if (shHcp) break;
-  }
-  // Also try to find by scanning all sheets for one that starts with HCP
-  if (!shHcp) {
-    const all = SpreadsheetApp.getActive().getSheets();
-    for (let i = 0; i < all.length; i++) {
-      const name = all[i].getName();
-      if (name.toUpperCase().indexOf('HCP') >= 0 && name.toUpperCase().indexOf('CANCHA') >= 0) {
-        shHcp = all[i];
-        break;
-      }
-    }
-  }
-
-  if (shHcp) {
-    const lr = shHcp.getLastRow();
+  // Read indices from NGT DB CANCHAS (A=ID, B=NOMBRE, C=hoyo, D=PAR, E=ÍNDICE)
+  const shDb = getHistSheet_('CANCHAS');
+  if (shDb) {
+    const lr = shDb.getLastRow();
     if (lr >= 2) {
-      const hcpData = shHcp.getRange(2, 1, lr - 1, 20).getValues();
-      for (let i = 0; i < hcpData.length; i++) {
-        const id = String(hcpData[i][0] || '').trim();
-        const nombre = String(hcpData[i][1] || '').trim();
+      const hcpData = shDb.getRange(2, 1, lr - 1, 5).getValues();
+      const holes = [];
+      hcpData.forEach(r => {
+        const id = String(r[0] || '').trim();
+        const nombre = String(r[1] || '').trim();
         if (id === cancha.id || nombre.toUpperCase() === cancha.nombre.toUpperCase()) {
-          cancha.indices = hcpData[i].slice(2, 20).map(v => parseInt(v) || null);
-          break;
+          const hoyo = parseInt(r[2]);
+          const indice = parseInt(r[4]);
+          if (hoyo >= 1 && hoyo <= 18 && indice) holes.push({ hoyo, indice });
         }
+      });
+      if (holes.length === 18) {
+        holes.sort((a, b) => a.hoyo - b.hoyo);
+        cancha.indices = holes.map(h => h.indice);
       }
     }
   }
@@ -922,11 +904,13 @@ function editarFecha_(params) {
 
   const changes = { removed: [], added: [], canchaUpdated: false, colorUpdated: false, doblesSet: [], doblesCleared: [], errors: [] };
 
-  // Step 1a: Update cancha for all existing rows
+  // Step 1a: Update cancha name (F) + cancha ID (G) para todos los rows existentes.
+  // Escribir ambas columnas juntas evita que G quede con el ID viejo si la fórmula
+  // fue sobreescrita previamente por cargarTarjeta_ (que hace batch E→AA).
   if (canchaName) {
     try {
       existingRows.forEach(er => {
-        sh.getRange(er.row, 6).setValue(canchaName);
+        sh.getRange(er.row, 6, 1, 2).setValues([[canchaName, canchaId]]); // F + G
       });
       changes.canchaUpdated = true;
     } catch (e) { changes.errors.push('cancha: ' + e.message); }
@@ -990,7 +974,7 @@ function editarFecha_(params) {
     try {
       sh.getRange(nextRow, 2).setValue(fecha);
       sh.getRange(nextRow, 3).setValue(mat);
-      if (canchaName) sh.getRange(nextRow, 6).setValue(canchaName);
+      if (canchaName) sh.getRange(nextRow, 6, 1, 2).setValues([[canchaName, canchaId]]); // F + G
       if (colorFinal) sh.getRange(nextRow, 33).setValue(colorFinal);   // AG = col 33
       nextRow++;
       changes.added.push(mat);
@@ -1005,7 +989,7 @@ function editarFecha_(params) {
       sh.getRange(nextRow, 2).setValue(fecha);
       sh.getRange(nextRow, 3).setValue(invMat);
       sh.getRange(nextRow, 4).setValue(nombre);
-      if (canchaName) sh.getRange(nextRow, 6).setValue(canchaName);
+      if (canchaName) sh.getRange(nextRow, 6, 1, 2).setValues([[canchaName, canchaId]]); // F + G
       if (colorFinal) sh.getRange(nextRow, 33).setValue(colorFinal);   // AG = col 33
       nextRow++;
       changes.added.push('INV:' + nombre);
@@ -1117,11 +1101,11 @@ function crearFecha_(params) {
   if (newJugMats.length) {
     const startJug = nextRow;
     sh.getRange(startJug, 2, newJugMats.length, 2)
-      .setValues(newJugMats.map(m => [fecha, m]));           // B-C
-    sh.getRange(startJug, 6, newJugMats.length, 1)
-      .setValues(newJugMats.map(() => [canchaName]));         // F
+      .setValues(newJugMats.map(m => [fecha, m]));                    // B-C
+    sh.getRange(startJug, 6, newJugMats.length, 2)
+      .setValues(newJugMats.map(() => [canchaName, canchaId]));        // F-G (nombre + ID estático)
     sh.getRange(startJug, 33, newJugMats.length, 1)
-      .setValues(newJugMats.map(() => [colorFinal]));         // AG
+      .setValues(newJugMats.map(() => [colorFinal]));                  // AG
     nextRow += newJugMats.length;
   }
 
@@ -1140,9 +1124,9 @@ function crearFecha_(params) {
     if (newInvRows.length) {
       const startInv = nextRow;
       sh.getRange(startInv, 2, newInvRows.length, 3)
-        .setValues(newInvRows.map(r => [fecha, r.mat, r.nombre])); // B-C-D
-      sh.getRange(startInv, 6, newInvRows.length, 1)
-        .setValues(newInvRows.map(() => [canchaName]));             // F
+        .setValues(newInvRows.map(r => [fecha, r.mat, r.nombre]));  // B-C-D
+      sh.getRange(startInv, 6, newInvRows.length, 2)
+        .setValues(newInvRows.map(() => [canchaName, canchaId]));   // F-G (nombre + ID estático)
       sh.getRange(startInv, 33, newInvRows.length, 1)
         .setValues(newInvRows.map(() => [colorFinal]));             // AG
       nextRow += newInvRows.length;
@@ -1235,9 +1219,10 @@ function cargarTarjeta_(params) {
   }
   if (rowIdx < 0) return { ok: false, error: 'No se encontró tarjeta' };
 
-  // Build a single 1×23 row covering E..AA (cols 5..27): hcp, cancha, id, H1..H18, LD, BA.
+  // Build a 1×27 row covering E..AE (cols 5..31): hcp, cancha, id, H1..H18, LD, BA, IDA, VTA, GROSS, NETO.
   // Preserve existing values for cols we shouldn't touch.
   // existingRow indices: 3=hcp, 4=cancha, 5=id, 6..23=H1..H18, 24=LD, 25=BA
+  // AB-AE (indices 23-26) computed below as static values — no sheet formula recalc.
   const newRow = new Array(23);
   newRow[0] = (hcp !== undefined && hcp !== null && hcp !== '') ? hcp : (existingRow[3] !== undefined ? existingRow[3] : '');
   newRow[1] = existingRow[4] !== undefined ? existingRow[4] : '';      // cancha (preserve)
@@ -1258,6 +1243,28 @@ function cargarTarjeta_(params) {
   else if (clearsBA) newRow[22] = '';
   else newRow[22] = existingRow[25] !== undefined ? existingRow[25] : '';
 
+  // ── Compute AB-AE as static values (replaces sheet formulas, avoids recalc cost) ──
+  // AB = IDA (sum H1-H9 = newRow[3..11])
+  // AC = VUELTA (sum H10-H18 = newRow[12..20])
+  // AD = GROSS = AB + AC
+  // AE = NETO  = AD - HCP (newRow[0])
+  let idaSum = 0, idaCount = 0;
+  for (let i = 3; i <= 11; i++) {
+    const v = parseFloat(newRow[i]);
+    if (!isNaN(v) && newRow[i] !== '') { idaSum += v; idaCount++; }
+  }
+  let vtaSum = 0, vtaCount = 0;
+  for (let i = 12; i <= 20; i++) {
+    const v = parseFloat(newRow[i]);
+    if (!isNaN(v) && newRow[i] !== '') { vtaSum += v; vtaCount++; }
+  }
+  const calcIda    = idaCount  > 0 ? idaSum           : '';
+  const calcVuelta = vtaCount  > 0 ? vtaSum           : '';
+  const calcGross  = (idaCount > 0 || vtaCount > 0)   ? (idaSum + vtaSum) : '';
+  const hcpNum     = parseFloat(newRow[0]);
+  const calcNeto   = (calcGross !== '' && !isNaN(hcpNum)) ? calcGross - hcpNum : '';
+  newRow.push(calcIda, calcVuelta, calcGross, calcNeto); // indices 23-26 → cols AB-AE
+
   // Acquire a script-level lock to serialize concurrent writes.
   // On Sundays all 17 players submit simultaneously; without this, writes can
   // interleave and corrupt rows or cause "Service error" quota failures.
@@ -1270,8 +1277,9 @@ function cargarTarjeta_(params) {
 
   let dobleMsg = null;
   try {
-    // Single batch write — replaces ~22 individual setValue calls with 1 round-trip.
-    sh.getRange(rowIdx, 5, 1, 23).setValues([newRow]);
+    // Single batch write — cols E..AE (5..31 = 27 cols).
+    // AB-AE computed above as static values; no more sheet formula recalculation.
+    sh.getRange(rowIdx, 5, 1, 27).setValues([newRow]);
 
     // Handle puntos dobles — if admin marked this player with doble for this fecha,
     // automatically copy the ST score from SCORE to col AU after firma.
@@ -2868,22 +2876,30 @@ function doGet(e) {
   let result;
   try {
     switch (action) {
-      case 'version':           result = { ok: true, version: 'v37-proximaFechaFix-lockService-matchValidation-batchCrearFecha' }; break;
+      case 'version':           result = { ok: true, version: 'v38-canchaIdFix-perfCache-initData' }; break;
+      // ── initData: un solo round-trip que carga todo lo necesario al arrancar ──
+      case 'initData': {
+        const iProx   = cachedRead_('proximaFecha',    300, getProximaFecha_);
+        const iFechas = cachedRead_('fechasConEstado', 120, getFechasConEstado_);
+        const iJugs   = cachedRead_('jugadoresHist',   300, getJugadoresHist_);
+        result = { ok: true, data: { proximaFecha: iProx, fechasConEstado: iFechas, jugadoresHist: iJugs } };
+        break;
+      }
       case 'jugadoresHist':     result = { ok: true, data: cachedRead_('jugadoresHist', 300, getJugadoresHist_) }; break;
-      case 'jugadorPerfil':     result = { ok: true, data: getJugadorPerfil_(params.matricula) }; break;
+      case 'jugadorPerfil':     result = { ok: true, data: cachedRead_('perf_' + params.matricula, 300, function(){ return getJugadorPerfil_(params.matricula); }) }; break;
       case 'jugadorEclectic':   result = { ok: true, data: getJugadorEclectic_(params.matricula, params.cancha) }; break;
       case 'debugGolpesVsTarjetas': result = { ok: true, data: debugGolpesVsTarjetas_(params.matricula) }; break;
       case 'proximaFecha':     result = { ok: true, data: cachedRead_('proximaFecha', 300, getProximaFecha_) }; break;
       case 'jugadores':        result = { ok: true, data: cachedRead_('jugadores', 300, getJugadores_) }; break;
       case 'canchas':          result = { ok: true, data: cachedRead_('canchas', 300, getCanchas_) }; break;
-      case 'canchaPares':      result = { ok: true, data: cachedRead_('cp_' + params.cancha, 1800, function(){ return getCanchaPares_(params.cancha); }) }; break;
+      case 'canchaPares':      result = { ok: true, data: cachedRead_('cp2_' + params.cancha, 1800, function(){ return getCanchaPares_(params.cancha); }) }; break;
       case 'fechas':           result = { ok: true, data: cachedRead_('fechas', 60, getFechasActivas_) }; break;
-      case 'fechasConEstado':  result = { ok: true, data: getFechasConEstado_() }; break;
-      case 'fechaResultados':  result = { ok: true, data: cachedRead_('fechaRes_' + params.fecha, 60, function(){ return getFechaResultados_(params.fecha); }) }; break;
+      case 'fechasConEstado':  result = { ok: true, data: cachedRead_('fechasConEstado', 120, getFechasConEstado_) }; break;
+      case 'fechaResultados':  result = { ok: true, data: cachedRead_('fechaRes_' + params.fecha, 300, function(){ return getFechaResultados_(params.fecha); }) }; break;
       case 'fechaMeta':        result = { ok: true, data: getFechaMeta_(params.fecha) }; break;
       case 'jugadoresEnFecha': result = { ok: true, data: getJugadoresEnFecha_(params.fecha) }; break;
       case 'bonusWinners':     result = { ok: true, data: cachedRead_('bw_' + params.fecha, 30, function(){ return getBonusWinners_(params.fecha); }) }; break;
-      case 'bonusesAcum':      result = { ok: true, data: getBonusesAcum_() }; break;
+      case 'bonusesAcum':      result = { ok: true, data: cachedRead_('bonusesAcum', 120, getBonusesAcum_) }; break;
       case 'coloresCancha':    result = { ok: true, data: cachedRead_('colores_' + params.canchaId, 300, function(){ return getColoresCancha_(params.canchaId); }) }; break;
       case 'allColoresCancha': result = { ok: true, data: cachedRead_('allColoresCancha', 300, getAllColoresCancha_) }; break;
       case 'winProbabilities': result = { ok: true, data: getWinProbabilitiesCached_() }; break;
