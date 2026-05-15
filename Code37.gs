@@ -1158,6 +1158,27 @@ function crearFecha_(params) {
   };
 }
 
+/**
+ * Calculate stableford point breakdown for 18 holes.
+ * Returns { e:count0pts, f:count1pt, g:count2pts, h:count3pts, i:count4pts, j:count5pts, k:total }
+ * matching STB sheet columns E-K.  Returns null if no scores present.
+ */
+function calcStbBreakdown_(scores18, pares, indices, hcp) {
+  const counts = [0, 0, 0, 0, 0, 0]; // index = stableford points (0..5)
+  let any = false;
+  for (let h = 0; h < 18; h++) {
+    const sc = (scores18[h] !== undefined && scores18[h] !== null && scores18[h] !== '')
+      ? parseInt(scores18[h]) : null;
+    if (sc === null || isNaN(sc)) continue;
+    any = true;
+    const pts = calcStablefordHole_(sc, pares[h] || null, indices[h] || null, hcp);
+    counts[pts !== null ? pts : 0]++;
+  }
+  if (!any) return null;
+  const total = counts[1] + counts[2]*2 + counts[3]*3 + counts[4]*4 + counts[5]*5;
+  return { e: counts[0], f: counts[1], g: counts[2], h: counts[3], i: counts[4], j: counts[5], k: total };
+}
+
 function cargarTarjeta_(params) {
   const { matricula, adminKey, fecha, hcp, scores, ld, ba, usarDoble } = params;
   let isAdmin = adminKey && checkAdmin_(adminKey);
@@ -1280,6 +1301,54 @@ function cargarTarjeta_(params) {
     // Single batch write — cols E..AE (5..31 = 27 cols).
     // AB-AE computed above as static values; no more sheet formula recalculation.
     sh.getRange(rowIdx, 5, 1, 27).setValues([newRow]);
+
+    // ── Write STB E-K + SCORE ST col as static values ──────────────────────
+    // Breaks the recalc chain: TARJETAS write → STB COUNTIFS → SCORE SUMIF.
+    // After this, STB and SCORE cells for this player/fecha are static numbers.
+    try {
+      const canchaId = existingRow[5]; // col G (canchaId, preserved in existingRow)
+      const cd = canchaId
+        ? cachedRead_('cp2_' + String(canchaId), 300, function(){ return getCanchaPares_(canchaId); })
+        : null;
+      const cpPares   = (cd && cd.pares)   || [];
+      const cpIndices = (cd && cd.indices) || [];
+      const stbBreak  = calcStbBreakdown_(newRow.slice(3, 21), cpPares, cpIndices, hcpNum);
+      if (stbBreak) {
+        // 1. Write STB!E:K — find row where B=fecha AND C=matricula
+        const stbSh = getSheet_('STB');
+        if (stbSh) {
+          const stbLast = stbSh.getLastRow();
+          if (stbLast >= 2) {
+            const stbBC = stbSh.getRange(2, 2, stbLast - 1, 2).getValues(); // cols B-C
+            let stbRow = -1;
+            const fStr = String(fecha), mStr = String(matricula);
+            for (let i = 0; i < stbBC.length; i++) {
+              if (String(stbBC[i][0]).trim() === fStr && String(stbBC[i][1]).trim() === mStr) {
+                stbRow = i + 2; break;
+              }
+            }
+            if (stbRow > 0) {
+              stbSh.getRange(stbRow, 5, 1, 7).setValues([[
+                stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
+                stbBreak.i, stbBreak.j, stbBreak.k
+              ]]);
+            }
+          }
+        }
+        // 2. Write SCORE ST column for this player/fecha (eliminates SUMIF on STB)
+        //    ST col formula: fecha n → col = 4*n + 1  (fecha1=E=5, fecha2=I=9, ...)
+        const scoreSh = getSheet_('SCORE');
+        if (scoreSh) {
+          const scoreRow = getScoreRowForMat_(matricula);
+          const stCol    = 4 * parseInt(fecha) + 1;
+          if (scoreRow > 0 && stCol >= 5 && stCol <= 48) {
+            scoreSh.getRange(scoreRow, stCol).setValue(stbBreak.k);
+          }
+        }
+      }
+    } catch (stbErr) {
+      // Non-fatal — STB/SCORE static write failure doesn't block tarjeta write
+    }
 
     // Handle puntos dobles — if admin marked this player with doble for this fecha,
     // automatically copy the ST score from SCORE to col AU after firma.
