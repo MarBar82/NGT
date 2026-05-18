@@ -447,40 +447,7 @@ function getFechasConEstado_() {
   return result;
 }
 
-/**
- * MAIN endpoint: get full results for a fecha.
- * Returns: cancha, bonus winners, stableford sorted list, matches
- */
-function getFechaResultados_(fecha) {
-  if (!fecha) return null;
-
-  const cancha = getCanchaForFecha_(fecha);
-  const bonus = getBonusWinners_(fecha);
-  const hcps = getHcpsForFecha_(fecha);
-  const stableford = getStableforFromSTB_(fecha);
-  const matches = getMatchesFullForFecha_(fecha);
-
-  // Decorate stableford with HCP
-  const stbWithHcp = stableford.map(s => ({
-    ...s,
-    hcp: hcps[s.matricula] !== undefined ? hcps[s.matricula] : null,
-  }));
-
-  const totalJugs = Object.keys(hcps).length;
-  const firmados = Object.values(hcps).filter(h => h !== null).length;
-
-  return {
-    fecha: fecha,
-    cancha: cancha,
-    ldWinner: bonus.ldWinner,
-    baWinner: bonus.baWinner,
-    stableford: stbWithHcp,
-    matches: matches,
-    totalJugadores: totalJugs,
-    firmados: firmados,
-    completa: totalJugs > 0 && firmados === totalJugs,
-  };
-}
+// getFechaResultados_ definida más abajo (versión optimizada — una lectura por sheet)
 
 function getMisFechas_(matricula) {
   // Returns fechas where this matricula has a row in TARJETAS, plus the pares + indices
@@ -1332,6 +1299,7 @@ function setBonusWinners_(params) {
 
   SpreadsheetApp.flush();
   audit_('SET_BONUS_WINNERS', 'admin', { fecha, ldMat, baMat });
+  try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
   return { ok: true };
 }
 
@@ -1853,6 +1821,8 @@ function cargarTarjeta_(params) {
   }
 
   audit_('CARGAR_TARJETA', isAdmin ? 'admin' : matricula, { fecha, matricula, hcp, scores, ld, ba, usarDoble, dobleMsg });
+  // Invalidate cached fecha results so next load reflects new tarjeta immediately
+  try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
   return { ok: true, dobleMsg: dobleMsg };
 }
 
@@ -2170,6 +2140,7 @@ function eliminarFecha_(params) {
 
   SpreadsheetApp.flush();
   audit_('ELIMINAR_FECHA', 'admin', { fecha, changes });
+  try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
   return { ok: true, changes: changes };
 }
 
@@ -2433,46 +2404,109 @@ function getStablefordForFecha_(fecha) {
 }
 
 /**
- * Get full resultados for a fecha: cancha, LD/BA winners, stableford ranking, matches
+ * Get full resultados for a fecha: cancha, LD/BA winners, stableford ranking, matches.
+ * Optimizado: una sola lectura de cada sheet (TARJETAS, STB, MATCH, JUGADORES).
  */
 function getFechaResultados_(fecha) {
   if (!fecha) return null;
+  const fStr = String(fecha);
 
-  // 1) Cancha name + ID — read from TARJETAS cols B,F,G for first matching row
-  let cancha = '';
-  let canchaId = '';
+  // ── JUGADORES: una sola lectura, reutilizada por STB y MATCH ─────────────
+  const jugs = getJugadores_();
+  const jugMap = {};
+  jugs.forEach(function(j) { jugMap[j.matricula] = j; });
+
+  // ── TARJETAS B:AA (26 cols) — una lectura para cancha + HCP + LD/BA ──────
+  // índices (0-based desde col B): 0=fecha,1=mat,2=nombre,3=hcp,4=cancha,5=canchaId,24=LD,25=BA
+  let cancha = '', canchaId = '';
+  const hcpMap = {};
+  let ldWinner = null, baWinner = null;
   const shT = getSheet_(SHEETS.TARJETAS);
   if (shT) {
     const nextEmpty = findNextEmptyRow_(shT, 2);
     if (nextEmpty > 2) {
-      const data = shT.getRange(2, 2, nextEmpty - 2, 6).getValues(); // B–G
-      for (let i = 0; i < data.length; i++) {
-        const f = String(data[i][0] || '').trim();
-        const c = String(data[i][4] || '').trim();
-        const id = String(data[i][5] || '').trim();
-        if (f === String(fecha) && c) { cancha = c; canchaId = id; break; }
+      const tData = shT.getRange(2, 2, nextEmpty - 2, 26).getValues();
+      for (let i = 0; i < tData.length; i++) {
+        const r = tData[i];
+        if (String(r[0] || '').trim() !== fStr) continue;
+        const m = String(r[1] || '').trim();
+        if (!m) continue;
+        if (!cancha) {
+          cancha = String(r[4] || '').trim();
+          canchaId = String(r[5] || '').trim();
+        }
+        hcpMap[m] = r[3];
+        if (!ldWinner && (r[24] === 1 || r[24] === true || String(r[24]) === '1')) {
+          const jug = jugMap[m];
+          ldWinner = { matricula: m, apodo: (jug && jug.apodo) || '', nombre: (jug && jug.nombre) || String(r[2] || '').trim() };
+        }
+        if (!baWinner && (r[25] === 1 || r[25] === true || String(r[25]) === '1')) {
+          const jug = jugMap[m];
+          baWinner = { matricula: m, apodo: (jug && jug.apodo) || '', nombre: (jug && jug.nombre) || String(r[2] || '').trim() };
+        }
       }
     }
   }
 
-  // 2) LD / BA winners — from existing function
-  const bw = getBonusWinners_(fecha);
+  // ── STB B:K (10 cols) — stableford ranking ───────────────────────────────
+  const stableford = [];
+  const shS = getSheet_('STB');
+  if (shS) {
+    const lastRow = shS.getLastRow();
+    if (lastRow >= 2) {
+      const sData = shS.getRange(2, 2, lastRow - 1, 10).getValues();
+      sData.forEach(function(row) {
+        if (String(row[0] || '').trim() !== fStr) return;
+        const m = String(row[1] || '').trim();
+        if (!m) return;
+        const stb = row[9]; // col K
+        if (stb === '' || stb === null || stb === undefined) return;
+        const jug = jugMap[m];
+        stableford.push({
+          matricula: m,
+          nombre: (jug && jug.nombre) || String(row[2] || '').trim(),
+          apodo:  (jug && jug.apodo)  || '',
+          stb:    parseFloat(stb) || 0,
+          hcp:    hcpMap[m] !== undefined ? hcpMap[m] : '',
+        });
+      });
+      stableford.sort(function(a, b) { return b.stb - a.stb; });
+    }
+  }
 
-  // 3) Stableford ranking
-  const stableford = getStablefordForFecha_(fecha);
-
-  // 4) Matches (raw pairs — frontend calcs result from scores like the live Match section does)
-  const matches = getMatchesForFecha_(fecha);
+  // ── MATCH B:D (3 cols) — pares de match ──────────────────────────────────
+  const matches = [];
+  const shM = getSheet_(SHEETS.MATCH);
+  if (shM) {
+    const nextEmpty = findNextEmptyRow_(shM, 4);
+    if (nextEmpty > 2) {
+      const mData = shM.getRange(2, 2, nextEmpty - 2, 3).getValues(); // B,C,D
+      for (let i = 0; i + 1 < mData.length; i += 2) {
+        const fA = String(mData[i][0]     || '').trim();
+        const fB = String(mData[i + 1][0] || '').trim();
+        if (fA !== fStr || fB !== fStr) continue;
+        const nameA = String(mData[i][2]     || '').trim();
+        const nameB = String(mData[i + 1][2] || '').trim();
+        if (!nameA || !nameB) continue;
+        matches.push({
+          rowA: i + 2, rowB: i + 3,
+          j1Name: nameA, j2Name: nameB,
+          j1: String(mData[i][1]     || '').trim(),
+          j2: String(mData[i + 1][1] || '').trim(),
+        });
+      }
+    }
+  }
 
   return {
-    fecha: String(fecha),
-    cancha: cancha,
+    fecha:    fStr,
+    cancha:   cancha,
     canchaId: canchaId,
     modalidad: 'Stableford + Match',
-    ldWinner: bw.ldWinner,
-    baWinner: bw.baWinner,
+    ldWinner: ldWinner,
+    baWinner: baWinner,
     stableford: stableford,
-    matches: matches,
+    matches:  matches,
   };
 }
 
