@@ -1882,6 +1882,143 @@ function resetFecha_(params) {
   return { ok: true, changes: changes };
 }
 
+/**
+ * eliminarFecha_ — Borra COMPLETAMENTE una fecha: elimina físicamente las filas de
+ * TARJETAS, MATCH, STB y PB correspondientes, y recalcula SCORE y LEADERBOARD
+ * para las fechas restantes. Equivale a "como si esa fecha nunca hubiera existido".
+ */
+function eliminarFecha_(params) {
+  const { adminKey, fecha } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha) return { ok: false, error: 'Falta fecha' };
+
+  const fStr = String(fecha);
+  const fecN = parseInt(fecha);
+  const changes = { tarjetas: 0, match: 0, stb: 0, pb: 0, score: 0 };
+
+  // Helper: delete rows (bottom to top) where col colIdx (1-based) === fStr
+  function deleteRowsForFecha(sh, colIdx) {
+    if (!sh) return 0;
+    const last = sh.getLastRow();
+    if (last < 2) return 0;
+    const vals = sh.getRange(2, colIdx, last - 1, 1).getValues();
+    let count = 0;
+    for (let i = vals.length - 1; i >= 0; i--) {
+      if (String(vals[i][0]).trim() === fStr) {
+        sh.deleteRow(i + 2);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  // ── 1. TARJETAS — eliminar filas ─────────────────────────────────────────
+  changes.tarjetas = deleteRowsForFecha(getSheet_(SHEETS.TARJETAS), 2); // col B = fecha
+
+  // ── 2. MATCH — eliminar filas ─────────────────────────────────────────────
+  changes.match = deleteRowsForFecha(getSheet_(SHEETS.MATCH), 2); // col B = fecha
+
+  // ── 3. STB — eliminar filas ──────────────────────────────────────────────
+  changes.stb = deleteRowsForFecha(getSheet_('STB'), 2); // col B = fecha
+
+  // ── 4. PB — eliminar filas ───────────────────────────────────────────────
+  changes.pb = deleteRowsForFecha(getSheet_('PB'), 2); // col B = fecha
+
+  // ── 5. SCORE — zerar cols de la fecha + recalcular AL:AS / C / D / LEADERBOARD ──
+  const scoreSh = getSheet_('SCORE');
+  if (scoreSh) {
+    // Leer E:AJ (32 cols = 8 fechas × 4) antes de limpiar
+    const allData = scoreSh.getRange(3, 5, 18, 32).getValues();
+
+    // Zerar en memoria las 4 cols de esta fecha
+    const b = 4 * (fecN - 1);
+    for (let i = 0; i < 18; i++) {
+      allData[i][b]     = 0;
+      allData[i][b + 1] = 0;
+      allData[i][b + 2] = 0;
+      allData[i][b + 3] = false;
+    }
+
+    // Limpiar esas cols en el sheet
+    const stCol = 4 * fecN + 1;
+    if (stCol >= 5 && stCol <= 48) {
+      scoreSh.getRange(3, stCol, 18, 4).clearContent();
+    }
+
+    // Recompute AL:AS, C, D para los 18 jugadores
+    const alValsAll = [], totalCs = [];
+    for (let i = 0; i < 18; i++) {
+      const als = [];
+      let total = 0;
+      for (let n = 0; n < 8; n++) {
+        const bn = 4 * n;
+        const st = Number(allData[i][bn])     || 0;
+        const ma = Number(allData[i][bn + 1]) || 0;
+        const pb = Number(allData[i][bn + 2]) || 0;
+        const db = (allData[i][bn + 3] === true || allData[i][bn + 3] === 1);
+        const al = st + ma + pb + (db ? st : 0);
+        als.push(al);
+        total += al;
+      }
+      alValsAll.push(als);
+      totalCs.push(total);
+    }
+
+    const allRanks = totalCs.map(function(ci, i) {
+      let rank = 1;
+      for (let j = 0; j < totalCs.length; j++) { if (totalCs[j] > ci) rank++; }
+      let cntBefore = 0;
+      for (let j = 0; j <= i; j++) { if (totalCs[j] === ci) cntBefore++; }
+      return rank + cntBefore - 1;
+    });
+
+    scoreSh.getRange(3, 38, 18, 8).setValues(alValsAll);
+    scoreSh.getRange(3,  3, 18, 1).setValues(totalCs.map(function(c){ return [c]; }));
+    scoreSh.getRange(3,  4, 18, 1).setValues(allRanks.map(function(r){ return [r]; }));
+    changes.score = 18;
+
+    // LEADERBOARD G, J, K, L, M
+    const lbSh = getSheet_('LEADERBOARD');
+    if (lbSh) {
+      const scoreNames = scoreSh.getRange(3, 2, 18, 1).getValues();
+      const stbTot = new Array(18), maTot = new Array(18), pbTot = new Array(18);
+      for (let i = 0; i < 18; i++) {
+        let st = 0, ma = 0, pb = 0;
+        for (let n = 0; n < 8; n++) {
+          st += Number(allData[i][4 * n])     || 0;
+          ma += Number(allData[i][4 * n + 1]) || 0;
+          pb += Number(allData[i][4 * n + 2]) || 0;
+        }
+        stbTot[i] = st; maTot[i] = ma; pbTot[i] = pb;
+      }
+
+      const gVals = [], jVals = [], kVals = [], lVals = [], mVals = [];
+      for (let r = 1; r <= 18; r++) {
+        const idx = allRanks.indexOf(r);
+        if (idx >= 0) {
+          gVals.push([String(scoreNames[idx][0] || '')]);
+          jVals.push([totalCs[idx]]);
+          kVals.push([stbTot[idx]]);
+          lVals.push([maTot[idx]]);
+          mVals.push([pbTot[idx]]);
+        } else {
+          gVals.push(['']); jVals.push([0]); kVals.push([0]);
+          lVals.push([0]);  mVals.push([0]);
+        }
+      }
+      lbSh.getRange(2,  7, 18, 1).setValues(gVals);
+      lbSh.getRange(2, 10, 18, 1).setValues(jVals);
+      lbSh.getRange(2, 11, 18, 1).setValues(kVals);
+      lbSh.getRange(2, 12, 18, 1).setValues(lVals);
+      lbSh.getRange(2, 13, 18, 1).setValues(mVals);
+    }
+  }
+
+  SpreadsheetApp.flush();
+  audit_('ELIMINAR_FECHA', 'admin', { fecha, changes });
+  return { ok: true, changes: changes };
+}
+
 function cargarMatches_(params) {
   const { adminKey, fecha, matches } = params;
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
@@ -3518,6 +3655,7 @@ function doPost(e) {
       case 'editarFecha':    result = editarFecha_(params); break;
       case 'cargarTarjeta':  result = cargarTarjeta_(params); break;
       case 'resetFecha':     result = resetFecha_(params); break;
+      case 'eliminarFecha':  result = eliminarFecha_(params); break;
       case 'cargarMatches':  result = cargarMatches_(params); break;
       case 'editarMatches':  result = editarMatches_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };

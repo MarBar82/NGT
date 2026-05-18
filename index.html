@@ -478,6 +478,18 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
 /* ADMIN */
 .snb-admin{font-size:16px;padding:0 12px;}
+.adm-fecha-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-bottom:16px;}
+.adm-fecha-tile{background:var(--white);border:var(--border);border-radius:3px;padding:14px 10px 10px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.04);}
+.adm-fecha-tile-num{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:800;color:var(--navy);line-height:1;}
+.adm-fecha-tile-lbl{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);margin:2px 0 10px;}
+.adm-fecha-tile-btns{display:flex;gap:6px;justify-content:center;}
+.adm-fecha-tile-btn{flex:1;background:none;border:1px solid var(--g3);border-radius:3px;padding:6px 4px;cursor:pointer;font-size:15px;transition:.12s;}
+.adm-fecha-tile-btn:hover{background:var(--off);}
+.adm-fecha-tile-btn.danger:hover{background:#fee2e2;border-color:#b91c1c;}
+.adm-edit-panel-hdr{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.adm-edit-panel-title{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);flex:1;background:var(--off);padding:10px 14px;border-radius:3px;border-left:3px solid var(--red);}
+.adm-edit-panel-close{background:none;border:1px solid var(--g3);border-radius:3px;padding:7px 12px;cursor:pointer;font-size:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.06em;color:var(--g4);}
+.adm-edit-panel-close:hover{border-color:var(--navy);color:var(--navy);}
 .adm-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);margin-bottom:14px;}
 .adm-card-hdr{background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.06em;padding:12px 16px;border-bottom:3px solid var(--red);}
 .adm-card-body{padding:18px;}
@@ -1668,75 +1680,79 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     </div>
 
 
-    <!-- Gestionar Fecha (antes: Editar Fecha) -->
+    <!-- Gestionar Fecha -->
     <div class="adm-section" id="adm-editar" style="display:none;">
 
-      <div class="adm-card">
-        <div class="adm-card-hdr">📅 Seleccionar Fecha a Gestionar</div>
-        <div class="adm-card-body">
-          <select id="adm-edit-fecha-sel" class="adm-input" onchange="loadFechaParaEditar()">
-            <option value="">Seleccionar...</option>
-          </select>
-        </div>
+      <!-- Grilla de fechas — una tile por fecha -->
+      <div id="adm-fechas-grid" class="adm-fecha-grid">
+        <div style="color:var(--g4);font-size:13px;padding:4px;">Cargando...</div>
       </div>
 
-      <!-- DATOS: jugadores / cancha / dobles -->
-      <div class="adm-card" id="adm-edit-data-card" style="display:none;">
-        <div class="adm-card-hdr">👥 Datos de la Fecha</div>
-        <div class="adm-card-body">
-          <div class="adm-row">
-            <div class="adm-field">
-              <label class="adm-label">Cancha</label>
-              <select id="adm-edit-cancha" class="adm-input" onchange="loadColoresCanchaEdit()"></select>
+      <!-- Panel de edición — oculto hasta clickear el lápiz -->
+      <div id="adm-edit-panel" style="display:none;">
+
+        <div class="adm-edit-panel-hdr">
+          <div class="adm-edit-panel-title">✏ Editando Fecha <span id="adm-edit-panel-num"></span></div>
+          <button class="adm-edit-panel-close" onclick="cerrarEditPanel()">✕ Cerrar</button>
+        </div>
+
+        <!-- DATOS: cancha / jugadores / dobles -->
+        <div class="adm-card" id="adm-edit-data-card">
+          <div class="adm-card-hdr">👥 Datos de la Fecha</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Cancha</label>
+                <select id="adm-edit-cancha" class="adm-input" onchange="loadColoresCanchaEdit()"></select>
+              </div>
             </div>
-          </div>
 
-          <div class="adm-row">
-            <div class="adm-field">
-              <label class="adm-label">Color de Salidas</label>
-              <select id="adm-edit-color-tee" class="adm-input">
-                <option value="BLANCAS">Blancas (default)</option>
-              </select>
-              <div class="adm-hint" id="adm-edit-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Color de Salidas</label>
+                <select id="adm-edit-color-tee" class="adm-input">
+                  <option value="BLANCAS">Blancas (default)</option>
+                </select>
+                <div class="adm-hint" id="adm-edit-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+              </div>
             </div>
+
+            <label class="adm-label">Jugadores que disputan</label>
+            <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
+
+            <label class="adm-label" style="margin-top:14px;">Puntos dobles (Stableford × 2)</label>
+            <div id="adm-edit-dobles" class="adm-jugs">Cargando...</div>
+
+            <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Datos</button>
+            <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
           </div>
-
-          <label class="adm-label">Jugadores que disputan</label>
-          <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
-
-          <label class="adm-label" style="margin-top:14px;">Puntos dobles (Stableford × 2)</label>
-          <div id="adm-edit-dobles" class="adm-jugs">Cargando...</div>
-
-          <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Datos</button>
-          <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
         </div>
-      </div>
 
-      <!-- RESET FECHA -->
-      <div class="adm-card" id="adm-reset-card" style="display:none;">
-        <div class="adm-card-hdr">🗑 Borrar Resultados de la Fecha</div>
-        <div class="adm-card-body">
-          <p style="font-size:12px;color:var(--g4);line-height:1.5;margin:0 0 12px;">
-            Limpia todas las tarjetas, STB, MATCH, PB, SCORE y Leaderboard de esta fecha.<br>
-            La estructura queda intacta: jugadores y matches no se borran.
-          </p>
-          <button class="adm-btn-primary" onclick="adminResetFecha()"
-            style="background:#b91c1c;">🗑 Borrar Resultados</button>
-          <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
+        <!-- MATCHES -->
+        <div class="adm-card" id="adm-edit-matches-card">
+          <div class="adm-card-hdr">⚔ Matches de la Fecha</div>
+          <div class="adm-card-body">
+            <div id="adm-mgr-matches-list"></div>
+            <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
+            <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
+            <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
+          </div>
         </div>
-      </div>
 
-      <!-- MATCHES: ver, agregar, borrar, editar -->
-      <div class="adm-card" id="adm-edit-matches-card" style="display:none;">
-        <div class="adm-card-hdr">⚔ Matches de la Fecha</div>
-        <div class="adm-card-body">
-          <div id="adm-mgr-matches-list"></div>
-          <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
-
-          <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
-          <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
+        <!-- BORRAR FECHA — al fondo del panel de edición -->
+        <div class="adm-card" style="border-color:#fca5a5;">
+          <div class="adm-card-hdr" style="background:#7f1d1d;border-bottom-color:#b91c1c;">🗑 Borrar Fecha</div>
+          <div class="adm-card-body">
+            <p style="font-size:12px;color:var(--g4);line-height:1.5;margin:0 0 12px;">
+              Elimina esta fecha por completo: tarjetas, STB, matches, SCORE y Leaderboard.<br>
+              <strong style="color:#b91c1c;">Esta acción no se puede deshacer.</strong>
+            </p>
+            <button class="adm-btn-primary" onclick="adminEliminarFecha()" style="background:#b91c1c;">🗑 Borrar Fecha Completa</button>
+            <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
+          </div>
         </div>
-      </div>
+
+      </div><!-- /adm-edit-panel -->
 
     </div>
 
@@ -3289,7 +3305,7 @@ function admTab(name, btn){
   if(btn) btn.classList.add('on');
   document.getElementById('adm-crear').style.display = name === 'crear' ? 'block' : 'none';
   document.getElementById('adm-editar').style.display = name === 'editar' ? 'block' : 'none';
-  if(name === 'editar') populateEditFechaSelect();
+  if(name === 'editar') renderFechasGrid();
 }
 
 
@@ -3552,37 +3568,53 @@ function mgrGuardarMatches(){
   });
 }
 
-// ══ EDITAR FECHA ══
-function populateEditFechaSelect(){
+// ══ GESTIONAR FECHA — grilla + panel de edición ══
+let ADM_EDIT_FECHA = null;
+
+function renderFechasGrid(){
+  const grid = document.getElementById('adm-fechas-grid');
+  grid.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:4px;">Cargando...</div>';
+  cerrarEditPanel();
   ngtApiGet('fechas').then(r => {
     const fechas = (r && r.data) || [];
-    const sel = document.getElementById('adm-edit-fecha-sel');
-    sel.innerHTML = '<option value="">Seleccionar...</option>';
-    fechas.forEach(f => {
-      sel.innerHTML += '<option value="' + f + '">Fecha ' + f + '</option>';
-    });
-    document.getElementById('adm-edit-form').style.display = 'none';
+    if(!fechas.length){
+      grid.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:4px;">No hay fechas creadas</div>';
+      return;
+    }
+    grid.innerHTML = fechas.map(f => `
+      <div class="adm-fecha-tile">
+        <div class="adm-fecha-tile-num">${f}</div>
+        <div class="adm-fecha-tile-lbl">Fecha</div>
+        <div class="adm-fecha-tile-btns">
+          <button class="adm-fecha-tile-btn" title="Editar" onclick="abrirEditPanel('${f}')">✏</button>
+          <button class="adm-fecha-tile-btn danger" title="Borrar" onclick="adminEliminarFechaDesdeGrid('${f}')">🗑</button>
+        </div>
+      </div>`).join('');
+  }).catch(() => {
+    grid.innerHTML = '<div style="color:#c8102e;font-size:13px;">Error al cargar fechas</div>';
   });
 }
 
-function loadFechaParaEditar(){
-  const fecha = document.getElementById('adm-edit-fecha-sel').value;
-  const dataCard  = document.getElementById('adm-edit-data-card');
-  const matchCard = document.getElementById('adm-edit-matches-card');
-  const resetCard = document.getElementById('adm-reset-card');
-  if(!fecha){
-    if(dataCard)  dataCard.style.display  = 'none';
-    if(matchCard) matchCard.style.display = 'none';
-    if(resetCard) resetCard.style.display = 'none';
-    return;
-  }
+function cerrarEditPanel(){
+  ADM_EDIT_FECHA = null;
+  const panel = document.getElementById('adm-edit-panel');
+  if(panel) panel.style.display = 'none';
+  const msg = document.getElementById('adm-reset-msg');
+  if(msg) msg.style.display = 'none';
+}
 
-  // Show a loading hint + open all cards
+function abrirEditPanel(fecha){
+  ADM_EDIT_FECHA = String(fecha);
+  const panel = document.getElementById('adm-edit-panel');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('adm-edit-panel-num').textContent = fecha;
+
+  // Reset mensajes
+  document.getElementById('adm-edit-msg').style.display = 'none';
+  document.getElementById('adm-reset-msg').style.display = 'none';
   document.getElementById('adm-edit-jugs').innerHTML = 'Cargando...';
   document.getElementById('adm-edit-dobles').innerHTML = 'Cargando...';
-  if(dataCard)  dataCard.style.display  = 'block';
-  if(matchCard) matchCard.style.display = 'block';
-  if(resetCard) resetCard.style.display = 'block';
 
   // Load matches for this fecha
   loadMatchesForGestion(fecha);
@@ -3603,9 +3635,9 @@ function loadFechaParaEditar(){
     ADM_CANCHAS = canchas;
     window.ADM_DOBLES_DISP = disponibles;
 
-    console.log('[Editar Fecha] detalle:', det);
-    console.log('[Editar Fecha] jugadores in fecha:', det.jugadores);
-    console.log('[Editar Fecha] dobles in fecha:', det.dobles);
+    console.log('[abrirEditPanel] detalle:', det);
+    console.log('[abrirEditPanel] jugadores in fecha:', det.jugadores);
+    console.log('[abrirEditPanel] dobles in fecha:', det.dobles);
 
     const curMatriculas = (det.jugadores || []).map(j => String(j.matricula));
     const curDobles = (det.dobles || []).map(String);
@@ -3671,13 +3703,13 @@ function loadFechaParaEditar(){
 
     document.getElementById('adm-edit-msg').style.display = 'none';
   }).catch(e => {
-    console.error('Error loadFechaParaEditar:', e);
+    console.error('Error abrirEditPanel:', e);
     document.getElementById('adm-edit-jugs').innerHTML = '<div class="adm-msg err">Error: ' + e.message + '</div>';
   });
 }
 
 function adminEditarFecha(){
-  const fecha = document.getElementById('adm-edit-fecha-sel').value;
+  const fecha = ADM_EDIT_FECHA;
   const canchaId = document.getElementById('adm-edit-cancha').value;
   const colorEl = document.getElementById('adm-edit-color-tee');
   const colorTee = (colorEl ? colorEl.value.trim() : '') || 'BLANCAS';
@@ -3689,7 +3721,7 @@ function adminEditarFecha(){
 
   if(!fecha){
     msg.className = 'adm-msg err';
-    msg.textContent = 'Seleccioná una fecha';
+    msg.textContent = 'No hay fecha seleccionada';
     msg.style.display = 'block';
     return;
   }
@@ -3726,46 +3758,48 @@ function adminEditarFecha(){
   });
 }
 
-function adminResetFecha(){
-  const fecha = document.getElementById('adm-edit-fecha-sel').value;
+// Llamado desde el ícono 🗑 de la grilla (confirma y borra sin abrir el panel)
+function adminEliminarFechaDesdeGrid(fecha){
+  if(!confirm('⚠️ ¿Borrar la Fecha ' + fecha + ' por completo?\n\nSe eliminan tarjetas, STB, matches, PB, SCORE y Leaderboard.\nEsta acción no se puede deshacer.')){
+    return;
+  }
+  _doEliminarFecha(fecha, null);
+}
+
+// Llamado desde el botón al fondo del panel de edición
+function adminEliminarFecha(){
+  const fecha = ADM_EDIT_FECHA;
+  if(!fecha) return;
+  if(!confirm('⚠️ ¿Borrar la Fecha ' + fecha + ' por completo?\n\nSe eliminan tarjetas, STB, matches, PB, SCORE y Leaderboard.\nEsta acción no se puede deshacer.')){
+    return;
+  }
   const msg = document.getElementById('adm-reset-msg');
-  msg.style.display = 'none';
+  _doEliminarFecha(fecha, msg);
+}
 
-  if(!fecha){
-    msg.className = 'adm-msg err';
-    msg.textContent = 'Seleccioná una fecha primero';
-    msg.style.display = 'block';
-    return;
-  }
-
-  if(!confirm('⚠️ ¿Borrar TODOS los resultados de la fecha ' + fecha + '?\n\nEsto elimina tarjetas, STB, MATCH, PB, SCORE y Leaderboard de esta fecha.\nEsta acción no se puede deshacer.')){
-    return;
-  }
-
-  msg.className = 'adm-msg';
-  msg.textContent = 'Borrando...';
-  msg.style.display = 'block';
-
+function _doEliminarFecha(fecha, msgEl){
+  if(msgEl){ msgEl.className='adm-msg'; msgEl.textContent='Borrando...'; msgEl.style.display='block'; }
   ngtApiPost({
-    action: 'resetFecha',
+    action: 'eliminarFecha',
     adminKey: ADMIN_KEY_OK,
     fecha: fecha,
   }).then(r => {
     if(r.ok){
-      msg.className = 'adm-msg ok';
       const ch = r.changes || {};
-      let txt = '✓ Fecha ' + fecha + ' limpiada';
-      if(ch.tarjetas  != null) txt += ' · ' + ch.tarjetas  + ' tarjeta(s)';
-      if(ch.stbRows   != null) txt += ' · ' + ch.stbRows   + ' STB';
-      if(ch.matchRows != null) txt += ' · ' + ch.matchRows + ' MATCH';
-      msg.textContent = txt;
+      let txt = '✓ Fecha ' + fecha + ' eliminada';
+      if(ch.tarjetas != null) txt += ' · ' + ch.tarjetas + ' tarjeta(s)';
+      if(ch.match    != null) txt += ' · ' + ch.match    + ' match(es)';
+      if(ch.stb      != null) txt += ' · ' + ch.stb      + ' STB';
+      if(msgEl){ msgEl.className='adm-msg ok'; msgEl.textContent=txt; }
+      // Cerrar panel y refrescar grilla
+      setTimeout(() => { cerrarEditPanel(); renderFechasGrid(); }, 1200);
     } else {
-      msg.className = 'adm-msg err';
-      msg.textContent = '✗ ' + (r.error || 'Error desconocido');
+      if(msgEl){ msgEl.className='adm-msg err'; msgEl.textContent='✗ ' + (r.error || 'Error'); }
+      else alert('✗ ' + (r.error || 'Error al borrar fecha ' + fecha));
     }
   }).catch(e => {
-    msg.className = 'adm-msg err';
-    msg.textContent = '✗ Error: ' + e.message;
+    if(msgEl){ msgEl.className='adm-msg err'; msgEl.textContent='✗ Error: ' + e.message; }
+    else alert('✗ Error: ' + e.message);
   });
 }
 
