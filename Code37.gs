@@ -1614,6 +1614,67 @@ function cargarTarjeta_(params) {
               return rank + cntBefore - 1;
             });
             scoreSh5.getRange(3, 4, 18, 1).setValues(allRanks.map(function(r){ return [r]; }));
+
+            // ── 6. LEADERBOARD G, J, K, L, M static update ─────────────────
+            // G = player name by rank (eliminates INDEX/MATCH on SCORE!D → cascade)
+            // J = total points by rank (eliminates INDEX on SCORE!C)
+            // K = cumulative STB, L = cumulative MA, M = cumulative PB
+            //     computed from SCORE!E:AJ (already static) — removes SUMIF on STB/MATCH/PB
+            try {
+              const lbSh = getSheet_('LEADERBOARD');
+              if (lbSh) {
+                // Read SCORE B3:B20 (player names) and E3:AJ20 (32 cols = 8 fechas × 4 cols)
+                const scoreNames   = scoreSh5.getRange(3, 2, 18, 1).getValues();
+                const allScoreData = scoreSh5.getRange(3, 5, 18, 32).getValues();
+
+                // Override current player's stale pre-flush values in allScoreData
+                if (myRankIdx >= 0 && myRankIdx < 18) {
+                  const b = 4 * (parseInt(fecha) - 1); // 0-indexed offset within 32 cols
+                  allScoreData[myRankIdx][b]     = myStWritten;
+                  if (myMaWritten !== null) allScoreData[myRankIdx][b + 1] = myMaWritten;
+                  allScoreData[myRankIdx][b + 2] = myPbWritten;
+                }
+
+                // Compute cumulative STB / MA / PB across all 8 fechas for each player
+                // Layout in allScoreData[i]: [ST1,MA1,PB1,DB1, ST2,MA2,PB2,DB2, ..., ST8,MA8,PB8,DB8]
+                const stbTot = new Array(18), maTot = new Array(18), pbTot = new Array(18);
+                for (let i = 0; i < 18; i++) {
+                  let st = 0, ma = 0, pb = 0;
+                  for (let n = 0; n < 8; n++) {
+                    st += Number(allScoreData[i][4 * n])     || 0;
+                    ma += Number(allScoreData[i][4 * n + 1]) || 0;
+                    pb += Number(allScoreData[i][4 * n + 2]) || 0;
+                  }
+                  stbTot[i] = st; maTot[i] = ma; pbTot[i] = pb;
+                }
+
+                // Sort by rank into LEADERBOARD rows 2-19 (rank 1 → row 2)
+                // allRanks[i] = rank of player i (1-indexed, unique 1-18)
+                const gVals = [], jVals = [], kVals = [], lVals = [], mVals = [];
+                for (let r = 1; r <= 18; r++) {
+                  const idx = allRanks.indexOf(r);
+                  if (idx >= 0) {
+                    gVals.push([String(scoreNames[idx][0] || '')]);
+                    jVals.push([allC[idx]]);
+                    kVals.push([stbTot[idx]]);
+                    lVals.push([maTot[idx]]);
+                    mVals.push([pbTot[idx]]);
+                  } else {
+                    gVals.push(['']); jVals.push([0]); kVals.push([0]);
+                    lVals.push([0]); mVals.push([0]);
+                  }
+                }
+
+                // 5 batch writes to LEADERBOARD rows 2-19
+                lbSh.getRange(2,  7, 18, 1).setValues(gVals); // G — player name by rank
+                lbSh.getRange(2, 10, 18, 1).setValues(jVals); // J — total points
+                lbSh.getRange(2, 11, 18, 1).setValues(kVals); // K — cumulative STB
+                lbSh.getRange(2, 12, 18, 1).setValues(lVals); // L — cumulative MA
+                lbSh.getRange(2, 13, 18, 1).setValues(mVals); // M — cumulative PB
+              }
+            } catch (lbErr) {
+              // Non-fatal — LEADERBOARD update failure doesn't block tarjeta write
+            }
           }
         }
       } catch (totalErr) {
