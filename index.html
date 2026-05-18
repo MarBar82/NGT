@@ -139,8 +139,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .rc-match:last-child{margin-bottom:0;}
 .rc-left{flex:1;display:flex;align-items:center;justify-content:flex-start;padding:0 16px;}
 .rc-right{flex:1;display:flex;align-items:center;justify-content:flex-end;padding:0 16px;}
-.rc-left.win{background:var(--red);}
-.rc-right.win{background:#1a3a6e;}
+.rc-left.win,.rc-right.win{background:var(--navy);}
 .rc-left.lose,.rc-left.draw{background:var(--white);}
 .rc-right.lose,.rc-right.draw{background:var(--white);}
 .rc-name{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:400;}
@@ -153,8 +152,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .rc-name .hist-ap{font-weight:700;text-transform:uppercase;}
 .rc-name .hist-nm{font-weight:400;}
 .rc-center{width:78px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
-.rc-center.cleft{background:var(--red);}
-.rc-center.cright{background:#1a3a6e;}
+.rc-center.cleft,.rc-center.cright{background:var(--navy);}
 .rc-center.cdraw{background:var(--g3);}
 .rc-score{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:#fff;line-height:1;}
 .rc-score.draw{color:var(--white);}
@@ -165,10 +163,10 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .fd-match-wrap{margin-bottom:8px;}
 .fd-match-wrap:last-child{margin-bottom:0;}
 .fd-match-wrap .rc-match{border-radius:3px 3px 0 0;margin-bottom:0;}
-.fd-holes-row{display:flex;gap:3px;padding:7px 10px;background:var(--white);border:var(--border);border-top:none;border-radius:0 0 3px 3px;justify-content:center;flex-wrap:nowrap;overflow-x:auto;}
-.fd-hb{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:800;color:#fff;flex-shrink:0;transition:background .15s;}
-.fd-hb.won-a{background:var(--navy);}
-.fd-hb.won-b{background:var(--red);}
+.fd-holes-row{display:grid;grid-template-columns:repeat(18,1fr);gap:3px;padding:7px 10px;background:var(--white);border:var(--border);border-top:none;border-radius:0 0 3px 3px;}
+.fd-hb{aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:clamp(7px,1.4vw,10px);font-weight:800;color:#fff;}
+.fd-hb.won-w{background:var(--navy);}
+.fd-hb.won-l{background:var(--red);}
 .fd-hb.tie{background:var(--g3);color:var(--g5);}
 .fd-hb.empty{background:var(--g2);color:var(--g3);}
 
@@ -264,7 +262,6 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   .rc-mnum-c{display:none;}
   /* Hole bubbles on mobile */
   .fd-holes-row{gap:2px;padding:5px 6px;}
-  .fd-hb{width:17px;height:17px;font-size:7px;}
 
   /* Leaderboard: horizontal scroll ok, but make cells tighter */
   .pga tbody td{padding:7px 6px;font-size:11px;}
@@ -4790,7 +4787,7 @@ function renderFechaDinamica(data){
     // a separate fetch to fill in the resultados.
     matches.forEach((m, i) => {
       let holesPlaceholder = '';
-      for(let h = 1; h <= 18; h++) holesPlaceholder += '<div class="fd-hb empty">' + h + '</div>';
+      for(let h = 1; h <= 18; h++) holesPlaceholder += '<div class="fd-hb empty" style="color:transparent;">'+h+'</div>';
       html +=
         '<div class="fd-match-wrap">' +
           '<div class="rc-match" data-match-idx="' + i + '">' +
@@ -4920,6 +4917,7 @@ function fechaMatchScoresCallback(response){
       scoreEl.textContent = res.resultStr;
 
       // Render hole-by-hole colored bubbles
+      // won-w = navy (ganador del match), won-l = red (perdedor), tie = gray, empty = unplayed
       const holeResults = [];
       for(let h = 0; h < 18; h++){
         const sA = parseInt(found.rowA[2 + h]);
@@ -4931,10 +4929,20 @@ function fechaMatchScoresCallback(response){
       }
       const holesEl = document.getElementById('fd-holes-' + idx);
       if(holesEl){
+        const mWinner = res.winner; // 'A', 'B', 'draw', or 'pending'
         let holesHtml = '';
         for(let h = 0; h < 18; h++){
           const hr = holeResults[h];
-          const cls = hr === 'A' ? 'won-a' : hr === 'B' ? 'won-b' : hr === 'tie' ? 'tie' : 'empty';
+          let cls;
+          if(hr === null) cls = 'empty';
+          else if(hr === 'tie') cls = 'tie';
+          else {
+            // If match has a decisive winner: winner's holes = won-w (navy), loser's = won-l (red)
+            // If draw/pending: A holes = won-w (navy), B holes = won-l (red) as neutral fallback
+            const isWinnerHole = (mWinner === 'A' && hr === 'A') || (mWinner === 'B' && hr === 'B')
+                               || (mWinner !== 'A' && mWinner !== 'B' && hr === 'A');
+            cls = isWinnerHole ? 'won-w' : 'won-l';
+          }
           holesHtml += '<div class="fd-hb ' + cls + '">' + (h + 1) + '</div>';
         }
         holesEl.innerHTML = holesHtml;
