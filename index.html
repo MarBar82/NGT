@@ -161,6 +161,17 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .rc-mnum-c{font-size:7px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-top:2px;}
 .rc-mnum-c.draw{color:rgba(255,255,255,.6);}
 
+/* Fecha detail: hole-by-hole tracker */
+.fd-match-wrap{margin-bottom:8px;}
+.fd-match-wrap:last-child{margin-bottom:0;}
+.fd-match-wrap .rc-match{border-radius:3px 3px 0 0;margin-bottom:0;}
+.fd-holes-row{display:flex;gap:3px;padding:7px 10px;background:var(--white);border:var(--border);border-top:none;border-radius:0 0 3px 3px;justify-content:center;flex-wrap:nowrap;overflow-x:auto;}
+.fd-hb{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:800;color:#fff;flex-shrink:0;transition:background .15s;}
+.fd-hb.won-a{background:var(--navy);}
+.fd-hb.won-b{background:var(--red);}
+.fd-hb.tie{background:var(--g3);color:var(--g5);}
+.fd-hb.empty{background:var(--g2);color:var(--g3);}
+
 /* FECHA 2 */
 .f2-info-card{display:flex;align-items:stretch;background:var(--white);border:var(--border);border-radius:3px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);}
 .f2-info-item{flex:1;display:flex;align-items:center;gap:12px;padding:16px 18px;color:var(--navy);}
@@ -251,6 +262,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   .rc-center{width:52px;}
   .rc-score{font-size:13px;}
   .rc-mnum-c{display:none;}
+  /* Hole bubbles on mobile */
+  .fd-holes-row{gap:2px;padding:5px 6px;}
+  .fd-hb{width:17px;height:17px;font-size:7px;}
 
   /* Leaderboard: horizontal scroll ok, but make cells tighter */
   .pga tbody td{padding:7px 6px;font-size:11px;}
@@ -4775,11 +4789,17 @@ function renderFechaDinamica(data){
     // For simplicity here: we render with the jugador names + "—" for result, and trigger
     // a separate fetch to fill in the resultados.
     matches.forEach((m, i) => {
-      html += '<div class="rc-match" data-match-idx="' + i + '">' +
-        '<div class="rc-left pending"><span class="rc-name pending">' + fmtHistName(m.j1Name) + '</span></div>' +
-        '<div class="rc-center cdraw"><span class="rc-score draw" id="fd-res-' + i + '">–</span><span class="rc-mnum-c draw">Match ' + (i+1) + '</span></div>' +
-        '<div class="rc-right pending"><span class="rc-name pending">' + fmtHistName(m.j2Name) + '</span></div>' +
-      '</div>';
+      let holesPlaceholder = '';
+      for(let h = 1; h <= 18; h++) holesPlaceholder += '<div class="fd-hb empty">' + h + '</div>';
+      html +=
+        '<div class="fd-match-wrap">' +
+          '<div class="rc-match" data-match-idx="' + i + '">' +
+            '<div class="rc-left pending"><span class="rc-name pending">' + fmtHistName(m.j1Name) + '</span></div>' +
+            '<div class="rc-center cdraw"><span class="rc-score draw">–</span><span class="rc-mnum-c draw">Match ' + (i+1) + '</span></div>' +
+            '<div class="rc-right pending"><span class="rc-name pending">' + fmtHistName(m.j2Name) + '</span></div>' +
+          '</div>' +
+          '<div class="fd-holes-row" id="fd-holes-' + i + '">' + holesPlaceholder + '</div>' +
+        '</div>';
     });
   }
 
@@ -4898,6 +4918,27 @@ function fechaMatchScoresCallback(response){
       scoreEl.className = scoreClass;
       mnumEl.className = mnumClass;
       scoreEl.textContent = res.resultStr;
+
+      // Render hole-by-hole colored bubbles
+      const holeResults = [];
+      for(let h = 0; h < 18; h++){
+        const sA = parseInt(found.rowA[2 + h]);
+        const sB = parseInt(found.rowB[2 + h]);
+        if(isNaN(sA) || isNaN(sB)) holeResults.push(null);
+        else if(sA < sB) holeResults.push('A');
+        else if(sB < sA) holeResults.push('B');
+        else holeResults.push('tie');
+      }
+      const holesEl = document.getElementById('fd-holes-' + idx);
+      if(holesEl){
+        let holesHtml = '';
+        for(let h = 0; h < 18; h++){
+          const hr = holeResults[h];
+          const cls = hr === 'A' ? 'won-a' : hr === 'B' ? 'won-b' : hr === 'tie' ? 'tie' : 'empty';
+          holesHtml += '<div class="fd-hb ' + cls + '">' + (h + 1) + '</div>';
+        }
+        holesEl.innerHTML = holesHtml;
+      }
     });
   } catch(e){
     console.error('fechaMatchScoresCallback error:', e);
