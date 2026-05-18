@@ -1306,26 +1306,31 @@ function cargarTarjeta_(params) {
     // AB-AE computed above as static values; no more sheet formula recalculation.
     sh.getRange(rowIdx, 5, 1, 27).setValues([newRow]);
 
-    // ── Write STB E-K + SCORE ST col as static values ──────────────────────
-    // Breaks the recalc chain: TARJETAS write → STB COUNTIFS → SCORE SUMIF.
-    // After this, STB and SCORE cells for this player/fecha are static numbers.
+    // ── Write STB E-K + SCORE ST col + MATCH as static values ─────────────
+    // Breaks the recalc chains:
+    //   TARJETAS → STB COUNTIFS → SCORE SUMIF
+    //   TARJETAS → MATCH!E/AF → MATCH!AY/BC → MATCH!AG:AX → MATCH!F:W → MATCH!BA/BB/X/Y
     try {
-      const canchaId = existingRow[5]; // col G (canchaId, preserved in existingRow)
-      const cd = canchaId
+      // Shared cancha data (used by STB, SCORE, and MATCH)
+      const canchaId   = existingRow[5]; // TARJETAS col G (canchaId)
+      const cd         = canchaId
         ? cachedRead_('cp2_' + String(canchaId), 300, function(){ return getCanchaPares_(canchaId); })
         : null;
-      const cpPares   = (cd && cd.pares)   || [];
-      const cpIndices = (cd && cd.indices) || [];
-      const stbBreak  = calcStbBreakdown_(newRow.slice(3, 21), cpPares, cpIndices, hcpNum);
+      const cpPares    = (cd && cd.pares)   || [];
+      const cpIndices  = (cd && cd.indices) || [];
+      const myScores18 = newRow.slice(3, 21); // H1..H18 from TARJETAS
+      const fStr       = String(fecha);
+      const mStr       = String(matricula);
+
+      // ── 1. STB E:K ──────────────────────────────────────────────────────
+      const stbBreak = calcStbBreakdown_(myScores18, cpPares, cpIndices, hcpNum);
       if (stbBreak) {
-        // 1. Write STB!E:K — find row where B=fecha AND C=matricula
         const stbSh = getSheet_('STB');
         if (stbSh) {
           const stbLast = stbSh.getLastRow();
           if (stbLast >= 2) {
-            const stbBC = stbSh.getRange(2, 2, stbLast - 1, 2).getValues(); // cols B-C
+            const stbBC = stbSh.getRange(2, 2, stbLast - 1, 2).getValues(); // B-C
             let stbRow = -1;
-            const fStr = String(fecha), mStr = String(matricula);
             for (let i = 0; i < stbBC.length; i++) {
               if (String(stbBC[i][0]).trim() === fStr && String(stbBC[i][1]).trim() === mStr) {
                 stbRow = i + 2; break;
@@ -1339,8 +1344,9 @@ function cargarTarjeta_(params) {
             }
           }
         }
-        // 2. Write SCORE ST column for this player/fecha (eliminates SUMIF on STB)
-        //    ST col formula: fecha n → col = 4*n + 1  (fecha1=E=5, fecha2=I=9, ...)
+
+        // ── 2. SCORE ST column ────────────────────────────────────────────
+        // ST col formula: fecha n → col = 4*n + 1 (fecha1=E=5, fecha2=I=9, …)
         const scoreSh = getSheet_('SCORE');
         if (scoreSh) {
           const scoreRow = getScoreRowForMat_(matricula);
@@ -1350,8 +1356,121 @@ function cargarTarjeta_(params) {
           }
         }
       }
+
+      // ── 3. MATCH static computation ──────────────────────────────────────
+      // Eliminates: MATCH!E(VLOOKUP) → AF → AY/BC → AG:AX(18×2) → F:W(18×2)
+      //             → BA/BB/X/Y(2×2). ~90 formula cells cleared per write.
+      // Only fires when the opponent has also submitted their tarjeta.
+      const matchSh = getSheet_(SHEETS.MATCH);
+      if (matchSh && cpIndices.length > 0 && stbBreak) {
+        const hcp85val  = stbBreak.e; // Math.round(hcpNum * 0.85), already computed
+        const matchLast = findNextEmptyRow_(matchSh, 2); // first empty row in col B
+        if (matchLast > 2) {
+          const matchBC = matchSh.getRange(2, 2, matchLast - 2, 2).getValues(); // B,C per row
+
+          // Find all rows in MATCH where this player is listed for this fecha
+          for (let mi = 0; mi < matchBC.length; mi++) {
+            if (String(matchBC[mi][0]).trim() !== fStr || String(matchBC[mi][1]).trim() !== mStr) continue;
+            const mySheetRow = mi + 2; // 1-based sheet row
+
+            // Pair: even row (2,4,6…) goes with next row; odd goes with previous
+            const partnerSheetRow = (mySheetRow % 2 === 0) ? mySheetRow + 1 : mySheetRow - 1;
+            const partnerIdx      = partnerSheetRow - 2;
+            if (partnerIdx < 0 || partnerIdx >= matchBC.length) continue;
+
+            // Look up opponent's matricula from the MATCH sheet
+            const oppMat = String(matchBC[partnerIdx][1]).trim();
+            if (!oppMat) continue;
+
+            // Check if opponent has submitted their tarjeta (search allRows already in memory)
+            let oppTarjeta = null;
+            for (let ai = 0; ai < allRows.length; ai++) {
+              if (String(allRows[ai][0]).trim() === fStr && String(allRows[ai][1]).trim() === oppMat) {
+                oppTarjeta = allRows[ai]; break;
+              }
+            }
+            if (!oppTarjeta) continue; // opponent hasn't been assigned a tarjeta row
+
+            // Check opponent has at least one score
+            const oppScores18 = oppTarjeta.slice(6, 24); // H1..H18 (indices in allRows)
+            const oppHasScores = oppScores18.some(function(s){ return s !== '' && s !== null && s !== undefined; });
+            if (!oppHasScores) continue;
+
+            // Opponent HCP
+            const oppHcpRaw = oppTarjeta[3]; // col E (hcp) in allRows (0-indexed offset from B)
+            const oppHcpNum = parseFloat(oppHcpRaw);
+            if (isNaN(oppHcpNum)) continue;
+            const oppHcp85 = Math.round(oppHcpNum * 0.85);
+
+            // Stroke advantage per player
+            // Higher-HCP player receives strokes on hardest holes.
+            // AY = max(0, myHcp85 - oppHcp85)  → my stroke advantage
+            // BC = max(0, AY - 18)              → extra strokes when diff > 18
+            const ayMy  = Math.max(0, hcp85val - oppHcp85);
+            const ayOpp = Math.max(0, oppHcp85 - hcp85val);
+            const bcMy  = Math.max(0, ayMy  - 18);
+            const bcOpp = Math.max(0, ayOpp - 18);
+
+            // Per-hole adjustments and net scores
+            // AG formula: (AY>=idx ? -1 : 0) + (BC>0 && idx<=BC ? -1 : 0)
+            const myAdj   = new Array(18);
+            const oppAdj  = new Array(18);
+            const myNet   = new Array(18);
+            const oppNet  = new Array(18);
+            for (let h = 0; h < 18; h++) {
+              const idx = cpIndices[h] || 0;
+              myAdj[h]  = (ayMy  > 0 && ayMy  >= idx ? -1 : 0) + (bcMy  > 0 && idx <= bcMy  ? -1 : 0);
+              oppAdj[h] = (ayOpp > 0 && ayOpp >= idx ? -1 : 0) + (bcOpp > 0 && idx <= bcOpp ? -1 : 0);
+              const myG  = (myScores18[h]  !== '' && myScores18[h]  !== null) ? parseInt(myScores18[h])  : null;
+              const oppG = (oppScores18[h] !== '' && oppScores18[h] !== null) ? parseInt(oppScores18[h]) : null;
+              myNet[h]  = (myG  !== null && !isNaN(myG))  ? myG  + myAdj[h]  : '';
+              oppNet[h] = (oppG !== null && !isNaN(oppG)) ? oppG + oppAdj[h] : '';
+            }
+
+            // Hole wins (BA): count holes where my net < opponent net
+            let myBA = 0, oppBA = 0;
+            for (let h = 0; h < 18; h++) {
+              if (myNet[h] !== '' && oppNet[h] !== '') {
+                if (myNet[h]  < oppNet[h])  myBA++;
+                if (oppNet[h] < myNet[h])   oppBA++;
+              }
+            }
+
+            // BB = myBA - oppBA; X = result string; Y = points
+            const myBB  = myBA  - oppBA;
+            const oppBB = oppBA - myBA;
+            const myX   = myBB  > 0 ? (myBB  + ' UP') : (myBB  === 0 ? 'AS' : '');
+            const oppX  = oppBB > 0 ? (oppBB + ' UP') : (oppBB === 0 ? 'AS' : '');
+            const myY   = myX  === '' ? 0 : (myX  === 'AS' ? 3 : 6);
+            const oppY  = oppX === '' ? 0 : (oppX === 'AS' ? 3 : 6);
+
+            // ── Batch writes — 2 setValues calls per row ──────────────────
+            // Row layout:
+            //   E(5)=hcp85, F:W(6-23)=netScores, X(24)=result, Y(25)=points
+            //   → write cols 5-25 in one call (21 cols)
+            //   AG:AX(33-50)=adj, AY(51)=ay, AZ(52)='', BA(53)=holes, BB(54)=diff, BC(55)=extra
+            //   → write cols 33-55 in one call (23 cols)
+
+            // My row
+            matchSh.getRange(mySheetRow, 5, 1, 21).setValues(
+              [[hcp85val].concat(myNet).concat([myX, myY])]
+            );
+            matchSh.getRange(mySheetRow, 33, 1, 23).setValues(
+              [myAdj.concat([ayMy, '', myBA, myBB, bcMy])]
+            );
+
+            // Partner row
+            matchSh.getRange(partnerSheetRow, 5, 1, 21).setValues(
+              [[oppHcp85].concat(oppNet).concat([oppX, oppY])]
+            );
+            matchSh.getRange(partnerSheetRow, 33, 1, 23).setValues(
+              [oppAdj.concat([ayOpp, '', oppBA, oppBB, bcOpp])]
+            );
+          }
+        }
+      }
     } catch (stbErr) {
-      // Non-fatal — STB/SCORE static write failure doesn't block tarjeta write
+      // Non-fatal — STB/SCORE/MATCH static write failure doesn't block tarjeta write
     }
 
     // Handle puntos dobles — if admin marked this player with doble for this fecha,
