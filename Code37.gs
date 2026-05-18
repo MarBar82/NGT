@@ -1366,20 +1366,29 @@ function cargarTarjeta_(params) {
         const hcp85val  = stbBreak.e; // Math.round(hcpNum * 0.85), already computed
         const matchLast = findNextEmptyRow_(matchSh, 2); // first empty row in col B
         if (matchLast > 2) {
-          const matchBC = matchSh.getRange(2, 2, matchLast - 2, 2).getValues(); // B,C per row
+          // Read B through Y (24 cols) — gives B(fecha), C(mat), and Y(points) for SCORE!MA.
+          // Reading Y pre-write lets us recover previously-computed match points for matches
+          // that were resolved in an earlier cargarTarjeta_ call (a different opponent).
+          const matchBCY = matchSh.getRange(2, 2, matchLast - 2, 24).getValues();
+          // matchBCY[i]: [0]=B(fecha), [1]=C(mat), [23]=Y(points col 25)
+
+          // Track Y values written this call so we can overlay them when summing SCORE!MA.
+          // Key = sheet row number (1-based); value = computed Y.
+          const rowYOverride = {};
+          const affectedMats = {}; // mat → true (players who had ≥1 match computed this call)
 
           // Find all rows in MATCH where this player is listed for this fecha
-          for (let mi = 0; mi < matchBC.length; mi++) {
-            if (String(matchBC[mi][0]).trim() !== fStr || String(matchBC[mi][1]).trim() !== mStr) continue;
+          for (let mi = 0; mi < matchBCY.length; mi++) {
+            if (String(matchBCY[mi][0]).trim() !== fStr || String(matchBCY[mi][1]).trim() !== mStr) continue;
             const mySheetRow = mi + 2; // 1-based sheet row
 
             // Pair: even row (2,4,6…) goes with next row; odd goes with previous
             const partnerSheetRow = (mySheetRow % 2 === 0) ? mySheetRow + 1 : mySheetRow - 1;
             const partnerIdx      = partnerSheetRow - 2;
-            if (partnerIdx < 0 || partnerIdx >= matchBC.length) continue;
+            if (partnerIdx < 0 || partnerIdx >= matchBCY.length) continue;
 
             // Look up opponent's matricula from the MATCH sheet
-            const oppMat = String(matchBC[partnerIdx][1]).trim();
+            const oppMat = String(matchBCY[partnerIdx][1]).trim();
             if (!oppMat) continue;
 
             // Check if opponent has submitted their tarjeta (search allRows already in memory)
@@ -1444,6 +1453,12 @@ function cargarTarjeta_(params) {
             const myY   = myX  === '' ? 0 : (myX  === 'AS' ? 3 : 6);
             const oppY  = oppX === '' ? 0 : (oppX === 'AS' ? 3 : 6);
 
+            // Track which rows we're writing Y to (used for SCORE!MA aggregation below)
+            rowYOverride[mySheetRow]      = myY;
+            rowYOverride[partnerSheetRow] = oppY;
+            affectedMats[mStr]   = true;
+            affectedMats[oppMat] = true;
+
             // ── Batch writes — 2 setValues calls per row ──────────────────
             // Row layout:
             //   E(5)=hcp85, F:W(6-23)=netScores, X(24)=result, Y(25)=points
@@ -1466,6 +1481,35 @@ function cargarTarjeta_(params) {
             matchSh.getRange(partnerSheetRow, 33, 1, 23).setValues(
               [oppAdj.concat([ayOpp, '', oppBA, oppBB, bcOpp])]
             );
+          }
+
+          // ── Write SCORE!MA (match points) for affected players ─────────
+          // MA col formula: fecha n → col = 4*n + 2 (fecha1=F=6, fecha2=J=10, …)
+          // For each affected player, sum their Y values across ALL their match rows:
+          //   - rows written this call → use rowYOverride (authoritative)
+          //   - rows from prior calls  → use pre-write matchBCY[i][23] (already static)
+          //   - rows not yet resolved  → matchBCY[i][23] = 0 (formula or prior write)
+          const affectedMatsList = Object.keys(affectedMats);
+          if (affectedMatsList.length > 0) {
+            const maCol   = 4 * parseInt(fecha) + 2; // SCORE!MA column
+            const scoreSh2 = getSheet_('SCORE');
+            if (scoreSh2 && maCol >= 6 && maCol <= 49) {
+              for (let ai = 0; ai < affectedMatsList.length; ai++) {
+                const mat = affectedMatsList[ai];
+                let totalMA = 0;
+                for (let mi2 = 0; mi2 < matchBCY.length; mi2++) {
+                  if (String(matchBCY[mi2][0]).trim() !== fStr) continue;
+                  if (String(matchBCY[mi2][1]).trim() !== mat)  continue;
+                  const shRow = mi2 + 2;
+                  const yVal  = rowYOverride.hasOwnProperty(shRow)
+                    ? rowYOverride[shRow]
+                    : (Number(matchBCY[mi2][23]) || 0);
+                  totalMA += yVal;
+                }
+                const sRow = getScoreRowForMat_(mat);
+                if (sRow > 0) scoreSh2.getRange(sRow, maCol).setValue(totalMA);
+              }
+            }
           }
         }
       }
