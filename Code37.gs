@@ -1183,6 +1183,158 @@ function calcStbBreakdown_(scores18, pares, indices, hcp) {
   return { e: hcp85val, f: counts[1], g: counts[2], h: counts[3], i: counts[4], j: counts[5], k: total };
 }
 
+/**
+ * getTarjetasForFecha_ — Devuelve todas las tarjetas de una fecha (solo admin).
+ */
+function getTarjetasForFecha_(params) {
+  const { adminKey, fecha } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return { ok: true, data: [] };
+  const fStr = String(fecha);
+  const last = findNextEmptyRow_(sh, 2);
+  if (last <= 2) return { ok: true, data: [] };
+  // B=fecha(0), C=mat(1), D=nombre(2), E=hcp(3), F=cancha(4), G=canchaId(5), H..Y=scores(6..23), Z=ld(24), AA=ba(25)
+  const data = sh.getRange(2, 2, last - 2, 26).getValues();
+  const result = [];
+  data.forEach(function(r) {
+    if (String(r[0]).trim() !== fStr) return;
+    result.push({
+      matricula: String(r[1]).trim(),
+      nombre:    String(r[2]).trim(),
+      hcp:       (r[3] === '' || r[3] === null || r[3] === undefined) ? null : r[3],
+      cancha:    String(r[4]).trim(),
+      canchaId:  String(r[5]).trim(),
+      scores:    r.slice(6, 24).map(function(v){ return (v === '' || v === null || v === undefined) ? null : Number(v); }),
+      ld:        (r[24] === 1 || r[24] === true || String(r[24]) === '1') ? 1 : 0,
+      ba:        (r[25] === 1 || r[25] === true || String(r[25]) === '1') ? 1 : 0,
+    });
+  });
+  return { ok: true, data: result };
+}
+
+/**
+ * setBonusWinners_ — Admin cambia el ganador de LD y/o BA para una fecha.
+ * Actualiza TARJETAS Z/AA, PB! col E, SCORE!PB col, y recalcula AL:AS/C/D/LEADERBOARD.
+ */
+function setBonusWinners_(params) {
+  const { adminKey, fecha, ldMat, baMat } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const fStr  = String(fecha);
+  const fecN  = parseInt(fecha);
+  const ldStr = String(ldMat || '').trim();
+  const baStr = String(baMat || '').trim();
+
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return { ok: false, error: 'Sin hoja TARJETAS' };
+  const last = sh.getLastRow();
+  if (last < 2) return { ok: true };
+
+  const allRows = sh.getRange(2, 2, last - 1, 26).getValues();
+  const pbMap = {}; // mat → pbPoints
+
+  // Actualizar col Z (LD) y AA (BA) para cada fila de esta fecha
+  for (let i = 0; i < allRows.length; i++) {
+    if (String(allRows[i][0]).trim() !== fStr) continue;
+    const mat = String(allRows[i][1]).trim();
+    if (!mat) continue;
+    const newLD = (ldStr && mat === ldStr) ? 1 : '';
+    const newBA = (baStr && mat === baStr) ? 1 : '';
+    sh.getRange(i + 2, 26).setValue(newLD); // col Z
+    sh.getRange(i + 2, 27).setValue(newBA); // col AA
+    pbMap[mat] = ((newLD === 1 ? 1 : 0) + (newBA === 1 ? 1 : 0)) * 3;
+  }
+
+  // Actualizar PB! col E
+  const pbSh = getSheet_('PB');
+  if (pbSh) {
+    const pbLast = pbSh.getLastRow();
+    if (pbLast >= 2) {
+      const pbBC = pbSh.getRange(2, 2, pbLast - 1, 2).getValues();
+      for (let i = 0; i < pbBC.length; i++) {
+        if (String(pbBC[i][0]).trim() !== fStr) continue;
+        const mat = String(pbBC[i][1]).trim();
+        if (pbMap[mat] !== undefined) pbSh.getRange(i + 2, 5).setValue(pbMap[mat]);
+      }
+    }
+  }
+
+  // Actualizar SCORE!PB col (4*fecha+3) y recomputar AL:AS/C/D/LEADERBOARD
+  const scoreSh = getSheet_('SCORE');
+  if (scoreSh) {
+    const pbCol = 4 * fecN + 3;
+    if (pbCol >= 5 && pbCol <= 48) {
+      Object.keys(pbMap).forEach(function(mat) {
+        const sRow = getScoreRowForMat_(mat);
+        if (sRow > 0) scoreSh.getRange(sRow, pbCol).setValue(pbMap[mat]);
+      });
+    }
+
+    // Recompute AL:AS / C / D / LEADERBOARD (identical logic as resetFecha_ step 5)
+    const allData = scoreSh.getRange(3, 5, 18, 32).getValues();
+    const alValsAll = [], totalCs = [];
+    for (let i = 0; i < 18; i++) {
+      const als = [];
+      let total = 0;
+      for (let n = 0; n < 8; n++) {
+        const bn = 4 * n;
+        const st = Number(allData[i][bn])     || 0;
+        const ma = Number(allData[i][bn + 1]) || 0;
+        const pb = Number(allData[i][bn + 2]) || 0;
+        const db = (allData[i][bn + 3] === true || allData[i][bn + 3] === 1);
+        const al = st + ma + pb + (db ? st : 0);
+        als.push(al);
+        total += al;
+      }
+      alValsAll.push(als);
+      totalCs.push(total);
+    }
+    const allRanks = totalCs.map(function(ci, i) {
+      let rank = 1;
+      for (let j = 0; j < totalCs.length; j++) { if (totalCs[j] > ci) rank++; }
+      let cnt = 0;
+      for (let j = 0; j <= i; j++) { if (totalCs[j] === ci) cnt++; }
+      return rank + cnt - 1;
+    });
+    scoreSh.getRange(3, 38, 18, 8).setValues(alValsAll);
+    scoreSh.getRange(3,  3, 18, 1).setValues(totalCs.map(function(c){ return [c]; }));
+    scoreSh.getRange(3,  4, 18, 1).setValues(allRanks.map(function(r){ return [r]; }));
+
+    const lbSh = getSheet_('LEADERBOARD');
+    if (lbSh) {
+      const scoreNames = scoreSh.getRange(3, 2, 18, 1).getValues();
+      const stbTot = [], maTot = [], pbTot = [];
+      for (let i = 0; i < 18; i++) {
+        let st = 0, ma = 0, pb = 0;
+        for (let n = 0; n < 8; n++) {
+          st += Number(allData[i][4*n])   || 0;
+          ma += Number(allData[i][4*n+1]) || 0;
+          pb += Number(allData[i][4*n+2]) || 0;
+        }
+        stbTot.push(st); maTot.push(ma); pbTot.push(pb);
+      }
+      const gV=[], jV=[], kV=[], lV=[], mV=[];
+      for (let r = 1; r <= 18; r++) {
+        const idx = allRanks.indexOf(r);
+        if (idx >= 0) {
+          gV.push([String(scoreNames[idx][0]||'')]); jV.push([totalCs[idx]]);
+          kV.push([stbTot[idx]]); lV.push([maTot[idx]]); mV.push([pbTot[idx]]);
+        } else {
+          gV.push(['']); jV.push([0]); kV.push([0]); lV.push([0]); mV.push([0]);
+        }
+      }
+      lbSh.getRange(2, 7,18,1).setValues(gV); lbSh.getRange(2,10,18,1).setValues(jV);
+      lbSh.getRange(2,11,18,1).setValues(kV); lbSh.getRange(2,12,18,1).setValues(lV);
+      lbSh.getRange(2,13,18,1).setValues(mV);
+    }
+  }
+
+  SpreadsheetApp.flush();
+  audit_('SET_BONUS_WINNERS', 'admin', { fecha, ldMat, baMat });
+  return { ok: true };
+}
+
 function cargarTarjeta_(params) {
   const { matricula, adminKey, fecha, hcp, scores, ld, ba, usarDoble } = params;
   let isAdmin = adminKey && checkAdmin_(adminKey);
@@ -1207,7 +1359,7 @@ function cargarTarjeta_(params) {
   //   4=cancha, 5=id, 6..23=H1..H18, 24=LD, 25=BA
 
   // LD/BA uniqueness validation in same pass (avoid second sheet read)
-  if (wantsLD || wantsBA) {
+  if (!isAdmin && (wantsLD || wantsBA)) {
     let jugMap = null;
     for (let i = 0; i < allRows.length; i++) {
       const f = String(allRows[i][0] || '').trim();
@@ -1881,6 +2033,8 @@ function resetFecha_(params) {
   audit_('RESET_FECHA', 'admin', { fecha, changes });
   return { ok: true, changes: changes };
 }
+
+// getTarjetasForFecha_ y setBonusWinners_ definidas más arriba (antes de cargarTarjeta_)
 
 /**
  * eliminarFecha_ — Borra COMPLETAMENTE una fecha: elimina físicamente las filas de
@@ -3654,8 +3808,10 @@ function doPost(e) {
       case 'crearFecha':     result = crearFecha_(params); break;
       case 'editarFecha':    result = editarFecha_(params); break;
       case 'cargarTarjeta':  result = cargarTarjeta_(params); break;
-      case 'resetFecha':     result = resetFecha_(params); break;
-      case 'eliminarFecha':  result = eliminarFecha_(params); break;
+      case 'resetFecha':            result = resetFecha_(params); break;
+      case 'eliminarFecha':         result = eliminarFecha_(params); break;
+      case 'getTarjetasForFecha':   result = getTarjetasForFecha_(params); break;
+      case 'setBonusWinners':       result = setBonusWinners_(params); break;
       case 'cargarMatches':  result = cargarMatches_(params); break;
       case 'editarMatches':  result = editarMatches_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };

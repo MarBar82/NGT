@@ -490,6 +490,20 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-edit-panel-title{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);flex:1;background:var(--off);padding:10px 14px;border-radius:3px;border-left:3px solid var(--red);}
 .adm-edit-panel-close{background:none;border:1px solid var(--g3);border-radius:3px;padding:7px 12px;cursor:pointer;font-size:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.06em;color:var(--g4);}
 .adm-edit-panel-close:hover{border-color:var(--navy);color:var(--navy);}
+.adm-big-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--white);border:var(--border);border-radius:3px;padding:24px 12px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.04);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);transition:.12s;width:100%;}
+.adm-big-btn:hover{background:var(--off);border-color:var(--navy);}
+.adm-big-btn .adm-big-icon{font-size:30px;line-height:1;}
+.adm-sec-back{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.adm-sec-back-btn{background:none;border:1px solid var(--g3);border-radius:3px;padding:6px 12px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--g4);}
+.adm-sec-back-btn:hover{border-color:var(--navy);color:var(--navy);}
+.adm-sec-title{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);}
+.adm-tar-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin:10px 0;}
+.adm-tar-hole{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.adm-tar-hole-num{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;color:var(--g4);}
+.adm-tar-hole-par{font-family:'Barlow Condensed',sans-serif;font-size:9px;color:var(--g3);}
+.adm-tar-hole-input{width:100%;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--navy);padding:5px 2px;border:1px solid var(--g3);border-radius:3px;background:var(--white);box-sizing:border-box;}
+.adm-tar-hole-input:focus{border-color:var(--navy);outline:none;}
+.mit-fecha-card-locked{cursor:default;background:var(--off);opacity:.85;}
 .adm-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);margin-bottom:14px;}
 .adm-card-hdr{background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.06em;padding:12px 16px;border-bottom:3px solid var(--red);}
 .adm-card-body{padding:18px;}
@@ -1605,14 +1619,29 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
   <!-- Admin panel (after login) -->
   <div id="admin-panel" style="display:none;">
-    <div class="adm-tabs">
-      <button class="adm-tab on" onclick="admTab('crear', this)">Crear Fecha</button>
-      <button class="adm-tab" onclick="admTab('editar', this)">Gestionar Fecha</button>
-      <button class="adm-tab" onclick="adminLogout()" style="margin-left:auto;color:var(--g4);">Salir</button>
+
+    <!-- HOME: botones de sección -->
+    <div id="adm-home">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);">⚙ Administrador</div>
+        <button onclick="adminLogout()" style="background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);cursor:pointer;">Salir ✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;">
+        <button class="adm-big-btn" onclick="admGoTo('crear')">
+          <span class="adm-big-icon">📅</span>Crear Fecha
+        </button>
+        <button class="adm-big-btn" onclick="admGoTo('editar')">
+          <span class="adm-big-icon">✏</span>Gestionar Fechas
+        </button>
+      </div>
     </div>
 
     <!-- Crear Fecha (wizard 2 pasos) -->
-    <div class="adm-section" id="adm-crear">
+    <div class="adm-section" id="adm-crear" style="display:none;">
+      <div class="adm-sec-back">
+        <button class="adm-sec-back-btn" onclick="admGoHome()">← Volver</button>
+        <span class="adm-sec-title">Crear Fecha</span>
+      </div>
 
       <!-- Paso indicator -->
       <div class="adm-steps">
@@ -1682,6 +1711,10 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
     <!-- Gestionar Fecha -->
     <div class="adm-section" id="adm-editar" style="display:none;">
+      <div class="adm-sec-back">
+        <button class="adm-sec-back-btn" onclick="admGoHome()">← Volver</button>
+        <span class="adm-sec-title">Gestionar Fechas</span>
+      </div>
 
       <!-- Grilla de fechas — una tile por fecha -->
       <div id="adm-fechas-grid" class="adm-fecha-grid">
@@ -1736,6 +1769,59 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
             <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
             <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- TARJETAS: editar por jugador -->
+        <div class="adm-card" id="adm-edit-tarjetas-card">
+          <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
+          <div class="adm-card-body">
+            <div id="adm-tar-list" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
+            <div id="adm-tar-editor" style="display:none;margin-top:12px;">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);padding:8px 10px;background:var(--off);border-radius:3px;margin-bottom:12px;">
+                ✏ Editando: <span id="adm-tar-nombre"></span>
+              </div>
+              <div class="adm-row">
+                <div class="adm-field">
+                  <label class="adm-label">HCP de juego</label>
+                  <input type="number" id="adm-tar-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP">
+                </div>
+              </div>
+              <label class="adm-label">Golpes por hoyo</label>
+              <div id="adm-tar-holes" class="adm-tar-grid"></div>
+              <div style="display:flex;gap:16px;margin:12px 0 4px;">
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ld"> 💪 Long Drive
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ba"> 🎯 Best Approach
+                </label>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button class="adm-btn-primary" onclick="admTarjetaGuardar()" style="flex:2;">Guardar Tarjeta</button>
+                <button class="adm-btn-secondary" onclick="cerrarAdmTarEditor()" style="flex:1;">Cancelar</button>
+              </div>
+              <div id="adm-tar-msg" class="adm-msg" style="display:none;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LD / BA -->
+        <div class="adm-card" id="adm-edit-ldba-card">
+          <div class="adm-card-hdr">🏆 Long Drive / Best Approach</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Ganador</label>
+                <select id="adm-ldba-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Ganador</label>
+                <select id="adm-ldba-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-primary" onclick="adminSetBonusWinners()" style="margin-top:12px;">Guardar LD/BA</button>
+            <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
           </div>
         </div>
 
@@ -2975,6 +3061,7 @@ function adminLogout(){
 function showAdminPanel(){
   document.getElementById('admin-login').style.display = 'none';
   document.getElementById('admin-panel').style.display = 'block';
+  admGoHome();
   loadAdminData();
 }
 
@@ -3300,13 +3387,22 @@ function finalizarWizard(rFecha, rMatches){
 
 
 
-function admTab(name, btn){
-  document.querySelectorAll('.adm-tab').forEach(t => t.classList.remove('on'));
-  if(btn) btn.classList.add('on');
-  document.getElementById('adm-crear').style.display = name === 'crear' ? 'block' : 'none';
-  document.getElementById('adm-editar').style.display = name === 'editar' ? 'block' : 'none';
-  if(name === 'editar') renderFechasGrid();
+function admGoTo(section) {
+  document.getElementById('adm-home').style.display = 'none';
+  document.getElementById('adm-crear').style.display = section === 'crear' ? 'block' : 'none';
+  document.getElementById('adm-editar').style.display = section === 'editar' ? 'block' : 'none';
+  if(section === 'editar') renderFechasGrid();
 }
+
+function admGoHome() {
+  document.getElementById('adm-home').style.display = 'block';
+  document.getElementById('adm-crear').style.display = 'none';
+  document.getElementById('adm-editar').style.display = 'none';
+  cerrarEditPanel();
+}
+
+// Kept for compatibility
+function admTab(name, btn){ admGoTo(name); }
 
 
 // Cache of players in the currently selected fecha
@@ -3601,6 +3697,7 @@ function cerrarEditPanel(){
   if(panel) panel.style.display = 'none';
   const msg = document.getElementById('adm-reset-msg');
   if(msg) msg.style.display = 'none';
+  cerrarAdmTarEditor();
 }
 
 function abrirEditPanel(fecha){
@@ -3618,6 +3715,8 @@ function abrirEditPanel(fecha){
 
   // Load matches for this fecha
   loadMatchesForGestion(fecha);
+  loadAdmTarjetas(fecha);
+  loadAdmLdBa(fecha);
 
   // Fetch EVERYTHING needed fresh — don't rely on cached globals
   Promise.all([
@@ -3777,6 +3876,185 @@ function adminEliminarFecha(){
   _doEliminarFecha(fecha, msg);
 }
 
+// ══ ADMIN TARJETA EDITOR ══
+let ADM_TAR_PLAYER = null;
+let ADM_TAR_SCORES = new Array(18).fill(null);
+let ADM_TAR_CANCHA_DATA = null;
+
+function loadAdmTarjetas(fecha) {
+  const listEl = document.getElementById('adm-tar-list');
+  if(!listEl) return;
+  cerrarAdmTarEditor();
+  listEl.innerHTML = 'Cargando...';
+  ngtApiPost({
+    action: 'getTarjetasForFecha',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+  }).then(r => {
+    const tarjetas = (r && r.ok && r.data) || [];
+    if(!tarjetas.length){
+      listEl.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:8px 0;">No hay tarjetas cargadas aún</div>';
+      return;
+    }
+    listEl.innerHTML = tarjetas.map(t => {
+      const hasScore = t.hcp !== null && t.hcp !== '';
+      const stat = hasScore ? '✓ HCP ' + t.hcp : '⏳ Pendiente';
+      const statColor = hasScore ? '#15803d' : 'var(--g4)';
+      const safe = t.nombre.replace(/'/g, "\\'");
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--g2);">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">${fmtNameForAdm(t.nombre)}</div>
+          <div style="font-size:11px;color:${statColor};">${stat}</div>
+        </div>
+        <button class="adm-btn-secondary" style="padding:4px 10px;font-size:11px;"
+          onclick="openAdmTarEditor('${t.matricula}','${safe}','${t.cancha}','${t.canchaId}')">✏ Editar</button>
+      </div>`;
+    }).join('');
+  }).catch(e => {
+    listEl.innerHTML = '<div style="color:#c8102e;font-size:13px;">Error: ' + e.message + '</div>';
+  });
+}
+
+function openAdmTarEditor(mat, nombre, cancha, canchaId) {
+  ADM_TAR_PLAYER = { matricula: mat, nombre: nombre, cancha: cancha, canchaId: canchaId };
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  document.getElementById('adm-tar-editor').style.display = 'block';
+  document.getElementById('adm-tar-nombre').textContent = fmtNameForAdm(nombre);
+  document.getElementById('adm-tar-hcp').value = '';
+  document.getElementById('adm-tar-ld').checked = false;
+  document.getElementById('adm-tar-ba').checked = false;
+  document.getElementById('adm-tar-msg').style.display = 'none';
+  renderAdmTarHoles();
+
+  Promise.all([
+    ngtApiGet('canchaPares', { cancha: cancha }),
+    ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }),
+  ]).then(results => {
+    ADM_TAR_CANCHA_DATA = (results[0] && results[0].data) || null;
+    const tarjetas = (results[1] && results[1].ok && results[1].data) || [];
+    const myTar = tarjetas.find(t => String(t.matricula) === String(mat));
+    if(myTar){
+      if(myTar.hcp !== null && myTar.hcp !== '') document.getElementById('adm-tar-hcp').value = myTar.hcp;
+      if(Array.isArray(myTar.scores)) ADM_TAR_SCORES = myTar.scores.map(v => v === null ? null : Number(v));
+      document.getElementById('adm-tar-ld').checked = myTar.ld === 1;
+      document.getElementById('adm-tar-ba').checked = myTar.ba === 1;
+    }
+    renderAdmTarHoles();
+    document.getElementById('adm-tar-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+function renderAdmTarHoles() {
+  const pares = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.pares) || new Array(18).fill(4);
+  const holesEl = document.getElementById('adm-tar-holes');
+  if(!holesEl) return;
+  let html = '';
+  for(let h = 0; h < 18; h++){
+    const par = pares[h] || 4;
+    const score = ADM_TAR_SCORES[h];
+    const val = score !== null ? score : '';
+    html += `<div class="adm-tar-hole">
+      <div class="adm-tar-hole-num">H${h+1}</div>
+      <div class="adm-tar-hole-par">P${par}</div>
+      <input type="number" class="adm-tar-hole-input" id="adm-tar-h${h}"
+        value="${val}" min="1" max="15" inputmode="numeric"
+        oninput="ADM_TAR_SCORES[${h}] = this.value !== '' ? (parseInt(this.value)||null) : null">
+    </div>`;
+  }
+  holesEl.innerHTML = html;
+}
+
+function cerrarAdmTarEditor() {
+  ADM_TAR_PLAYER = null;
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  const ed = document.getElementById('adm-tar-editor');
+  if(ed) ed.style.display = 'none';
+  const msg = document.getElementById('adm-tar-msg');
+  if(msg) msg.style.display = 'none';
+}
+
+function admTarjetaGuardar() {
+  if(!ADM_TAR_PLAYER) return;
+  const msg = document.getElementById('adm-tar-msg');
+  const hcp = document.getElementById('adm-tar-hcp').value.trim();
+  const ld  = document.getElementById('adm-tar-ld').checked ? 1 : 0;
+  const ba  = document.getElementById('adm-tar-ba').checked ? 1 : 0;
+  if(!hcp){
+    msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el HCP de juego'; msg.style.display = 'block'; return;
+  }
+  const scores = ADM_TAR_SCORES.map(v => v !== null ? v : '');
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+  ngtApiPost({
+    action: 'cargarTarjeta',
+    adminKey: ADMIN_KEY_OK,
+    matricula: ADM_TAR_PLAYER.matricula,
+    fecha: ADM_EDIT_FECHA,
+    hcp: parseInt(hcp),
+    scores: scores,
+    ld: ld,
+    ba: ba,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok'; msg.textContent = '✓ Tarjeta guardada';
+      setTimeout(() => loadAdmTarjetas(ADM_EDIT_FECHA), 900);
+    } else {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+// ══ ADMIN LD/BA ══
+function loadAdmLdBa(fecha) {
+  const ldSel = document.getElementById('adm-ldba-ld');
+  const baSel = document.getElementById('adm-ldba-ba');
+  const msg   = document.getElementById('adm-ldba-msg');
+  if(!ldSel || !baSel) return;
+  if(msg) msg.style.display = 'none';
+  ldSel.innerHTML = '<option value="">Cargando...</option>';
+  baSel.innerHTML = '<option value="">Cargando...</option>';
+  Promise.all([
+    ngtApiGet('fechaDetalle', { fecha: fecha }),
+    ngtApiGet('bonusWinners', { fecha: fecha }),
+  ]).then(results => {
+    const det = (results[0] && results[0].data) || {};
+    const bw  = (results[1] && results[1].data) || {};
+    const jugs = (det.jugadores || []);
+    const noOpt = '<option value="">-- Nadie --</option>';
+    const opts = jugs.map(j => `<option value="${j.matricula}">${fmtNameForAdm(j.nombre)}</option>`).join('');
+    ldSel.innerHTML = noOpt + opts;
+    baSel.innerHTML = noOpt + opts;
+    if(bw.ldWinner) ldSel.value = String(bw.ldWinner.matricula);
+    if(bw.baWinner) baSel.value = String(bw.baWinner.matricula);
+  });
+}
+
+function adminSetBonusWinners() {
+  const fecha = ADM_EDIT_FECHA;
+  const ldMat = document.getElementById('adm-ldba-ld').value;
+  const baMat = document.getElementById('adm-ldba-ba').value;
+  const msg   = document.getElementById('adm-ldba-msg');
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+  ngtApiPost({
+    action: 'setBonusWinners',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+    ldMat: ldMat || '',
+    baMat: baMat || '',
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok'; msg.textContent = '✓ LD/BA guardado';
+    } else {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
 function _doEliminarFecha(fecha, msgEl){
   if(msgEl){ msgEl.className='adm-msg'; msgEl.textContent='Borrando...'; msgEl.style.display='block'; }
   ngtApiPost({
@@ -3908,15 +4186,27 @@ function showMitFechas(preloadedPromise){
     let html = '';
     fechas.forEach(f => {
       const hasScore = f.hcp && f.hcp !== '';
-      const stat = hasScore ? '✓ HCP cargado: ' + f.hcp : '• Pendiente de cargar';
-      html += '<div class="mit-fecha-card" onclick="openMitScore(\''+f.fecha+'\', \''+(f.cancha||'').replace(/\'/g,"\\\'")+'\')">' +
-        '<div class="mit-fecha-num">F' + f.fecha + '</div>' +
-        '<div class="mit-fecha-info">' +
-          '<div class="mit-fecha-cancha">' + (f.cancha || 'Sin cancha') + '</div>' +
-          '<div class="mit-fecha-stat">' + stat + '</div>' +
-        '</div>' +
-        '<div class="mit-fecha-arrow">›</div>' +
-      '</div>';
+      if(hasScore){
+        // Tarjeta ya firmada — solo lectura, no editable por el jugador
+        html += '<div class="mit-fecha-card mit-fecha-card-locked">' +
+          '<div class="mit-fecha-num">F' + f.fecha + '</div>' +
+          '<div class="mit-fecha-info">' +
+            '<div class="mit-fecha-cancha">' + (f.cancha || 'Sin cancha') + '</div>' +
+            '<div class="mit-fecha-stat" style="color:#15803d;">✓ Tarjeta cargada · HCP ' + f.hcp + '</div>' +
+            '<div style="font-size:10px;color:var(--g4);margin-top:2px;">Para corregir errores, pedile al admin</div>' +
+          '</div>' +
+          '<div style="font-size:18px;opacity:.35;margin-left:6px;">🔒</div>' +
+        '</div>';
+      } else {
+        html += '<div class="mit-fecha-card" onclick="openMitScore(\''+f.fecha+'\', \''+(f.cancha||'').replace(/\'/g,"\\\'")+'\')">' +
+          '<div class="mit-fecha-num">F' + f.fecha + '</div>' +
+          '<div class="mit-fecha-info">' +
+            '<div class="mit-fecha-cancha">' + (f.cancha || 'Sin cancha') + '</div>' +
+            '<div class="mit-fecha-stat">• Pendiente de cargar</div>' +
+          '</div>' +
+          '<div class="mit-fecha-arrow">›</div>' +
+        '</div>';
+      }
     });
     list.innerHTML = html;
   });
