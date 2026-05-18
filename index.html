@@ -1712,6 +1712,20 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         </div>
       </div>
 
+      <!-- RESET FECHA -->
+      <div class="adm-card" id="adm-reset-card" style="display:none;">
+        <div class="adm-card-hdr">🗑 Borrar Resultados de la Fecha</div>
+        <div class="adm-card-body">
+          <p style="font-size:12px;color:var(--g4);line-height:1.5;margin:0 0 12px;">
+            Limpia todas las tarjetas, STB, MATCH, PB, SCORE y Leaderboard de esta fecha.<br>
+            La estructura queda intacta: jugadores y matches no se borran.
+          </p>
+          <button class="adm-btn-primary" onclick="adminResetFecha()"
+            style="background:#b91c1c;">🗑 Borrar Resultados</button>
+          <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+
       <!-- MATCHES: ver, agregar, borrar, editar -->
       <div class="adm-card" id="adm-edit-matches-card" style="display:none;">
         <div class="adm-card-hdr">⚔ Matches de la Fecha</div>
@@ -3553,19 +3567,22 @@ function populateEditFechaSelect(){
 
 function loadFechaParaEditar(){
   const fecha = document.getElementById('adm-edit-fecha-sel').value;
-  const dataCard = document.getElementById('adm-edit-data-card');
+  const dataCard  = document.getElementById('adm-edit-data-card');
   const matchCard = document.getElementById('adm-edit-matches-card');
+  const resetCard = document.getElementById('adm-reset-card');
   if(!fecha){
-    if(dataCard) dataCard.style.display = 'none';
+    if(dataCard)  dataCard.style.display  = 'none';
     if(matchCard) matchCard.style.display = 'none';
+    if(resetCard) resetCard.style.display = 'none';
     return;
   }
 
-  // Show a loading hint + open both cards
+  // Show a loading hint + open all cards
   document.getElementById('adm-edit-jugs').innerHTML = 'Cargando...';
   document.getElementById('adm-edit-dobles').innerHTML = 'Cargando...';
-  if(dataCard) dataCard.style.display = 'block';
+  if(dataCard)  dataCard.style.display  = 'block';
   if(matchCard) matchCard.style.display = 'block';
+  if(resetCard) resetCard.style.display = 'block';
 
   // Load matches for this fecha
   loadMatchesForGestion(fecha);
@@ -3702,6 +3719,49 @@ function adminEditarFecha(){
     } else {
       msg.className = 'adm-msg err';
       msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+function adminResetFecha(){
+  const fecha = document.getElementById('adm-edit-fecha-sel').value;
+  const msg = document.getElementById('adm-reset-msg');
+  msg.style.display = 'none';
+
+  if(!fecha){
+    msg.className = 'adm-msg err';
+    msg.textContent = 'Seleccioná una fecha primero';
+    msg.style.display = 'block';
+    return;
+  }
+
+  if(!confirm('⚠️ ¿Borrar TODOS los resultados de la fecha ' + fecha + '?\n\nEsto elimina tarjetas, STB, MATCH, PB, SCORE y Leaderboard de esta fecha.\nEsta acción no se puede deshacer.')){
+    return;
+  }
+
+  msg.className = 'adm-msg';
+  msg.textContent = 'Borrando...';
+  msg.style.display = 'block';
+
+  ngtApiPost({
+    action: 'resetFecha',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok';
+      const ch = r.changes || {};
+      let txt = '✓ Fecha ' + fecha + ' limpiada';
+      if(ch.tarjetas  != null) txt += ' · ' + ch.tarjetas  + ' tarjeta(s)';
+      if(ch.stbRows   != null) txt += ' · ' + ch.stbRows   + ' STB';
+      if(ch.matchRows != null) txt += ' · ' + ch.matchRows + ' MATCH';
+      msg.textContent = txt;
+    } else {
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r.error || 'Error desconocido');
     }
   }).catch(e => {
     msg.className = 'adm-msg err';
