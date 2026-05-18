@@ -1321,6 +1321,10 @@ function cargarTarjeta_(params) {
       const myScores18 = newRow.slice(3, 21); // H1..H18 from TARJETAS
       const fStr       = String(fecha);
       const mStr       = String(matricula);
+      // Tracking vars — set as each section writes to SCORE; used by AL:AS block below.
+      let myStWritten = null; // ST points for current fecha (null = not written this call)
+      let myMaWritten = null; // MA points (null = match not resolved yet)
+      let myPbWritten = 0;    // PB points for current fecha
 
       // ── 1. STB E:K ──────────────────────────────────────────────────────
       const stbBreak = calcStbBreakdown_(myScores18, cpPares, cpIndices, hcpNum);
@@ -1353,6 +1357,7 @@ function cargarTarjeta_(params) {
           const stCol    = 4 * parseInt(fecha) + 1;
           if (scoreRow > 0 && stCol >= 5 && stCol <= 48) {
             scoreSh.getRange(scoreRow, stCol).setValue(stbBreak.k);
+            myStWritten = stbBreak.k; // track for AL:AS
           }
         }
       }
@@ -1507,7 +1512,10 @@ function cargarTarjeta_(params) {
                   totalMA += yVal;
                 }
                 const sRow = getScoreRowForMat_(mat);
-                if (sRow > 0) scoreSh2.getRange(sRow, maCol).setValue(totalMA);
+                if (sRow > 0) {
+                  scoreSh2.getRange(sRow, maCol).setValue(totalMA);
+                  if (mat === mStr) myMaWritten = totalMA; // track for AL:AS
+                }
               }
             }
           }
@@ -1522,6 +1530,7 @@ function cargarTarjeta_(params) {
         const ldVal    = (newRow[21] === 1 || newRow[21] === true) ? 1 : 0;
         const baVal    = (newRow[22] === 1 || newRow[22] === true) ? 1 : 0;
         const pbPoints = (ldVal + baVal) * 3;
+        myPbWritten = pbPoints; // track for AL:AS
 
         // Write PB!E — find row where B=fecha AND C=matricula
         const pbSh = getSheet_('PB');
@@ -1548,6 +1557,67 @@ function cargarTarjeta_(params) {
         }
       } catch (pbErr) {
         // Non-fatal
+      }
+
+      // ── 5. SCORE totales por fecha (AL:AS), total general (C) y ranking (D) ─
+      // AL = fecha1 total, AM = fecha2, …, AS = fecha8  (cols 38-45, 8 cols)
+      // Al(n) = ST_n + MA_n + PB_n + (DB_n ? ST_n : 0)
+      // C = SUM(AL:AS) — overall points
+      // D = RANK(C; $C$3:$C$20; 0) + COUNTIF($C$3:C; C) - 1 — with tie-break
+      try {
+        const scoreSh5 = getSheet_('SCORE');
+        if (scoreSh5 && myStWritten !== null) { // only run if we actually wrote ST this call
+          const myScoreRow5 = getScoreRowForMat_(matricula);
+          if (myScoreRow5 > 0) {
+            // Read E:AS (cols 5-45 = 41 cols) — pre-flush, so ST/MA/PB for current fecha
+            // are stale; override them with our tracked in-memory values.
+            const scoreFull = scoreSh5.getRange(myScoreRow5, 5, 1, 41).getValues()[0];
+            const fecN = parseInt(fecha);
+            const b    = 4 * (fecN - 1); // 0-indexed offset within the 41-col read
+            scoreFull[b]   = myStWritten;                             // ST current fecha
+            if (myMaWritten !== null) scoreFull[b + 1] = myMaWritten; // MA (if resolved)
+            scoreFull[b + 2] = myPbWritten;                           // PB current fecha
+            // DB (scoreFull[b+3]) stays as-is — written by dobles logic, not changed here
+
+            // Compute AL:AS (8 values)
+            const alVals = [];
+            for (let n = 1; n <= 8; n++) {
+              const bn = 4 * (n - 1);
+              const st = Number(scoreFull[bn])   || 0;
+              const ma = Number(scoreFull[bn + 1]) || 0;
+              const pb = Number(scoreFull[bn + 2]) || 0;
+              const db = (scoreFull[bn + 3] === true || scoreFull[bn + 3] === 1);
+              alVals.push(st + ma + pb + (db ? st : 0));
+            }
+            const totalC = alVals.reduce(function(a, v){ return a + v; }, 0);
+
+            // Batch write AL:AS (col 38, 8 cols) and C (col 3)
+            scoreSh5.getRange(myScoreRow5, 38, 1, 8).setValues([alVals]);
+            scoreSh5.getRange(myScoreRow5, 3).setValue(totalC);
+
+            // ── Rankings D3:D20 ─────────────────────────────────────────────
+            // Read C3:C20 (pre-flush); override this player's slot with totalC
+            // so the ranking uses the just-computed value without an extra flush.
+            const allCRaw = scoreSh5.getRange(3, 3, 18, 1).getValues();
+            const allC    = allCRaw.map(function(r){ return Number(r[0]) || 0; });
+            const myRankIdx = myScoreRow5 - 3; // 0-indexed (C3=idx0, C20=idx17)
+            if (myRankIdx >= 0 && myRankIdx < 18) allC[myRankIdx] = totalC;
+
+            // Replicate formula: RANK(Ci; all; 0) + COUNTIF($C$3:Ci; Ci) - 1
+            // RANK(Ci; 0) = count players with higher score + 1
+            // COUNTIF cumulative = how many players with same score appeared before (tie-break)
+            const allRanks = allC.map(function(ci, i) {
+              let rank = 1;
+              for (let j = 0; j < allC.length; j++) { if (allC[j] > ci) rank++; }
+              let cntBefore = 0;
+              for (let j = 0; j <= i; j++) { if (allC[j] === ci) cntBefore++; }
+              return rank + cntBefore - 1;
+            });
+            scoreSh5.getRange(3, 4, 18, 1).setValues(allRanks.map(function(r){ return [r]; }));
+          }
+        }
+      } catch (totalErr) {
+        // Non-fatal — totals/ranking failure doesn't block tarjeta write
       }
     } catch (stbErr) {
       // Non-fatal — STB/SCORE/MATCH static write failure doesn't block tarjeta write
