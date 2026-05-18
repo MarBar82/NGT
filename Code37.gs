@@ -1513,6 +1513,42 @@ function cargarTarjeta_(params) {
           }
         }
       }
+      // ── 4. PB!E + SCORE!PB as static values ─────────────────────────────
+      // PB!E formula: =SUMIF(TARJETAS!A:A;A2;TARJETAS!Z:Z)*3
+      //              + SUMIF(TARJETAS!A:A;A2;TARJETAS!AA:AA)*3
+      // LD (newRow[21]) and BA (newRow[22]) are already set above — no extra reads.
+      // pbCol = 4*n + 3  (fecha1=G=7, fecha2=K=11, fecha3=O=15, fecha4=S=19, …)
+      try {
+        const ldVal    = (newRow[21] === 1 || newRow[21] === true) ? 1 : 0;
+        const baVal    = (newRow[22] === 1 || newRow[22] === true) ? 1 : 0;
+        const pbPoints = (ldVal + baVal) * 3;
+
+        // Write PB!E — find row where B=fecha AND C=matricula
+        const pbSh = getSheet_('PB');
+        if (pbSh) {
+          const pbLast = pbSh.getLastRow();
+          if (pbLast >= 2) {
+            const pbBC = pbSh.getRange(2, 2, pbLast - 1, 2).getValues(); // B=fecha, C=mat
+            let pbRow = -1;
+            for (let i = 0; i < pbBC.length; i++) {
+              if (String(pbBC[i][0]).trim() === fStr && String(pbBC[i][1]).trim() === mStr) {
+                pbRow = i + 2; break;
+              }
+            }
+            if (pbRow > 0) pbSh.getRange(pbRow, 5).setValue(pbPoints);
+          }
+        }
+
+        // Write SCORE!PB column
+        const pbCol    = 4 * parseInt(fecha) + 3;
+        const scoreSh3 = getSheet_('SCORE');
+        if (scoreSh3 && pbCol >= 7 && pbCol <= 50) {
+          const pbScoreRow = getScoreRowForMat_(matricula);
+          if (pbScoreRow > 0) scoreSh3.getRange(pbScoreRow, pbCol).setValue(pbPoints);
+        }
+      } catch (pbErr) {
+        // Non-fatal
+      }
     } catch (stbErr) {
       // Non-fatal — STB/SCORE/MATCH static write failure doesn't block tarjeta write
     }
