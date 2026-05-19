@@ -1410,404 +1410,322 @@ function cargarTarjeta_(params) {
   const calcNeto   = (calcGross !== '' && !isNaN(hcpNum)) ? calcGross - hcpNum : '';
   newRow.push(calcIda, calcVuelta, calcGross, calcNeto); // indices 23-26 → cols AB-AE
 
-  // Acquire a script-level lock to serialize concurrent writes.
-  // On Sundays all 17 players submit simultaneously; without this, writes can
-  // interleave and corrupt rows or cause "Service error" quota failures.
+  // ── Pre-lock: reads + pure computation ─────────────────────────────────
+  // Everything that doesn't WRITE to a sheet runs here, outside the lock,
+  // so the lock is held only while committing writes. This keeps lock hold
+  // time short enough for ~18 simultaneous submissions.
+  const fStr = String(fecha);
+  const mStr = String(matricula);
+
+  // Cancha data (cached — fast after first fetch)
+  const canchaId   = existingRow[5];
+  const cd         = canchaId
+    ? cachedRead_('cp2_' + String(canchaId), 300, function(){ return getCanchaPares_(canchaId); })
+    : null;
+  const cpPares    = (cd && cd.pares)   || [];
+  const cpIndices  = (cd && cd.indices) || [];
+  const myScores18 = newRow.slice(3, 21); // H1..H18
+
+  // Stableford breakdown (pure computation, no I/O)
+  const stbBreak = calcStbBreakdown_(myScores18, cpPares, cpIndices, hcpNum);
+
+  // Column addresses (arithmetic only)
+  const stCol = 4 * parseInt(fecha) + 1; // SCORE!ST
+  const maCol = 4 * parseInt(fecha) + 2; // SCORE!MA
+  const pbCol = 4 * parseInt(fecha) + 3; // SCORE!PB
+
+  // SCORE row for current player (1 read, reused multiple times)
+  const preScoreRow = getScoreRowForMat_(matricula);
+
+  // STB row lookup (read B:C once)
+  let preStbRow = -1;
+  const preStbSh = getSheet_('STB');
+  if (stbBreak && preStbSh) {
+    const stbLast = preStbSh.getLastRow();
+    if (stbLast >= 2) {
+      const stbBC = preStbSh.getRange(2, 2, stbLast - 1, 2).getValues();
+      for (let i = 0; i < stbBC.length; i++) {
+        if (String(stbBC[i][0]).trim() === fStr && String(stbBC[i][1]).trim() === mStr) {
+          preStbRow = i + 2; break;
+        }
+      }
+    }
+  }
+
+  // MATCH data read + all match computations (reads matchBCY once, no writes yet)
+  // Results stored as arrays of write-ops executed later inside the lock.
+  const preMatchSh = getSheet_(SHEETS.MATCH);
+  let preMatchBCY  = null;
+  const matchWriteOps  = []; // [{row, col, data}] write ops for MATCH sheet
+  const rowYOverride   = {}; // sheetRow → Y value (for SCORE!MA aggregation)
+  const affectedMats   = {}; // mat → true
+  let   hcp85val       = stbBreak ? stbBreak.e : 0;
+
+  if (preMatchSh && cpIndices.length > 0 && stbBreak) {
+    const matchLast = findNextEmptyRow_(preMatchSh, 2);
+    if (matchLast > 2) {
+      preMatchBCY = preMatchSh.getRange(2, 2, matchLast - 2, 24).getValues();
+
+      for (let mi = 0; mi < preMatchBCY.length; mi++) {
+        if (String(preMatchBCY[mi][0]).trim() !== fStr || String(preMatchBCY[mi][1]).trim() !== mStr) continue;
+        const mySheetRow      = mi + 2;
+        const partnerSheetRow = (mySheetRow % 2 === 0) ? mySheetRow + 1 : mySheetRow - 1;
+        const partnerIdx      = partnerSheetRow - 2;
+        if (partnerIdx < 0 || partnerIdx >= preMatchBCY.length) continue;
+
+        const oppMat = String(preMatchBCY[partnerIdx][1]).trim();
+        if (!oppMat) continue;
+
+        let oppTarjeta = null;
+        for (let ai = 0; ai < allRows.length; ai++) {
+          if (String(allRows[ai][0]).trim() === fStr && String(allRows[ai][1]).trim() === oppMat) {
+            oppTarjeta = allRows[ai]; break;
+          }
+        }
+        if (!oppTarjeta) continue;
+
+        const oppScores18   = oppTarjeta.slice(6, 24);
+        const oppHasScores  = oppScores18.some(function(s){ return s !== '' && s !== null && s !== undefined; });
+        if (!oppHasScores) continue;
+
+        const oppHcpNum = parseFloat(oppTarjeta[3]);
+        if (isNaN(oppHcpNum)) continue;
+        const oppHcp85  = Math.round(oppHcpNum * 0.85);
+
+        const ayMy  = Math.max(0, hcp85val - oppHcp85);
+        const ayOpp = Math.max(0, oppHcp85 - hcp85val);
+        const bcMy  = Math.max(0, ayMy  - 18);
+        const bcOpp = Math.max(0, ayOpp - 18);
+
+        const myAdj = new Array(18), oppAdj = new Array(18);
+        const myNet = new Array(18), oppNet = new Array(18);
+        for (let h = 0; h < 18; h++) {
+          const idx   = cpIndices[h] || 0;
+          myAdj[h]    = (ayMy  > 0 && ayMy  >= idx ? -1 : 0) + (bcMy  > 0 && idx <= bcMy  ? -1 : 0);
+          oppAdj[h]   = (ayOpp > 0 && ayOpp >= idx ? -1 : 0) + (bcOpp > 0 && idx <= bcOpp ? -1 : 0);
+          const myG   = myScores18[h]  !== '' && myScores18[h]  !== null ? parseInt(myScores18[h])  : null;
+          const oppG  = oppScores18[h] !== '' && oppScores18[h] !== null ? parseInt(oppScores18[h]) : null;
+          myNet[h]    = (myG  !== null && !isNaN(myG))  ? myG  + myAdj[h]  : '';
+          oppNet[h]   = (oppG !== null && !isNaN(oppG)) ? oppG + oppAdj[h] : '';
+        }
+
+        let myBA = 0, oppBA = 0;
+        for (let h = 0; h < 18; h++) {
+          if (myNet[h] !== '' && oppNet[h] !== '') {
+            if (myNet[h]  < oppNet[h]) myBA++;
+            if (oppNet[h] < myNet[h])  oppBA++;
+          }
+        }
+        const myBB  = myBA  - oppBA;
+        const oppBB = oppBA - myBA;
+        const myX   = myBB  > 0 ? (myBB  + ' UP') : (myBB  === 0 ? 'AS' : '');
+        const oppX  = oppBB > 0 ? (oppBB + ' UP') : (oppBB === 0 ? 'AS' : '');
+        const myY   = myX  === '' ? 0 : (myX  === 'AS' ? 3 : 6);
+        const oppY  = oppX === '' ? 0 : (oppX === 'AS' ? 3 : 6);
+
+        rowYOverride[mySheetRow]      = myY;
+        rowYOverride[partnerSheetRow] = oppY;
+        affectedMats[mStr]   = true;
+        affectedMats[oppMat] = true;
+
+        matchWriteOps.push(
+          { sh: preMatchSh, row: mySheetRow,      col: 5,  data: [[hcp85val].concat(myNet).concat([myX,  myY])]  },
+          { sh: preMatchSh, row: mySheetRow,      col: 33, data: [myAdj.concat([ayMy,  '', myBA,  myBB,  bcMy])] },
+          { sh: preMatchSh, row: partnerSheetRow, col: 5,  data: [[oppHcp85].concat(oppNet).concat([oppX, oppY])] },
+          { sh: preMatchSh, row: partnerSheetRow, col: 33, data: [oppAdj.concat([ayOpp, '', oppBA, oppBB, bcOpp])] }
+        );
+      }
+    }
+  }
+
+  // SCORE!MA per affected player (sum Y across all their match rows)
+  const maWriteOps = []; // [{scoreRow, totalMA, mat}]
+  const affectedMatsList = Object.keys(affectedMats);
+  if (affectedMatsList.length > 0 && preMatchBCY) {
+    const scoreSh2 = getSheet_('SCORE');
+    if (scoreSh2 && maCol >= 6 && maCol <= 49) {
+      for (let ai = 0; ai < affectedMatsList.length; ai++) {
+        const mat = affectedMatsList[ai];
+        let totalMA = 0;
+        for (let mi2 = 0; mi2 < preMatchBCY.length; mi2++) {
+          if (String(preMatchBCY[mi2][0]).trim() !== fStr) continue;
+          if (String(preMatchBCY[mi2][1]).trim() !== mat)  continue;
+          const shRow = mi2 + 2;
+          totalMA += rowYOverride.hasOwnProperty(shRow) ? rowYOverride[shRow] : (Number(preMatchBCY[mi2][23]) || 0);
+        }
+        const sRow = (mat === mStr) ? preScoreRow : getScoreRowForMat_(mat);
+        if (sRow > 0) maWriteOps.push({ scoreRow: sRow, totalMA: totalMA, mat: mat });
+      }
+    }
+  }
+
+  // PB row lookup
+  const ldVal_    = (newRow[21] === 1 || newRow[21] === true) ? 1 : 0;
+  const baVal_    = (newRow[22] === 1 || newRow[22] === true) ? 1 : 0;
+  const pbPoints_ = (ldVal_ + baVal_) * 3;
+  let prePbRow    = -1;
+  const prePbSh   = getSheet_('PB');
+  if (prePbSh) {
+    const pbLast = prePbSh.getLastRow();
+    if (pbLast >= 2) {
+      const pbBC = prePbSh.getRange(2, 2, pbLast - 1, 2).getValues();
+      for (let i = 0; i < pbBC.length; i++) {
+        if (String(pbBC[i][0]).trim() === fStr && String(pbBC[i][1]).trim() === mStr) {
+          prePbRow = i + 2; break;
+        }
+      }
+    }
+  }
+
+  // Dobles check
+  const currentDobles_ = getDoblesForFecha_(fecha);
+
+  // ── Lock: writes only ────────────────────────────────────────────────────
+  // Lock is held only for the write phase — reads done above keep hold-time
+  // short so up to ~15 simultaneous submissions can queue within 30 s.
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(15000); // wait up to 15 s before giving up
+    lock.waitLock(30000); // 30 s max (Apps Script ceiling)
   } catch (e) {
-    return { ok: false, error: 'Servidor ocupado, esperá unos segundos e intentá de nuevo' };
+    return { ok: false, error: 'Servidor muy ocupado, esperá unos segundos e intentá de nuevo' };
   }
 
   let dobleMsg = null;
   try {
-    // Single batch write — cols E..AE (5..31 = 27 cols).
-    // AB-AE computed above as static values; no more sheet formula recalculation.
+    // 1. TARJETAS — write E..AE (27 cols)
     sh.getRange(rowIdx, 5, 1, 27).setValues([newRow]);
 
-    // ── Write STB E-K + SCORE ST col + MATCH as static values ─────────────
-    // Breaks the recalc chains:
-    //   TARJETAS → STB COUNTIFS → SCORE SUMIF
-    //   TARJETAS → MATCH!E/AF → MATCH!AY/BC → MATCH!AG:AX → MATCH!F:W → MATCH!BA/BB/X/Y
     try {
-      // Shared cancha data (used by STB, SCORE, and MATCH)
-      const canchaId   = existingRow[5]; // TARJETAS col G (canchaId)
-      const cd         = canchaId
-        ? cachedRead_('cp2_' + String(canchaId), 300, function(){ return getCanchaPares_(canchaId); })
-        : null;
-      const cpPares    = (cd && cd.pares)   || [];
-      const cpIndices  = (cd && cd.indices) || [];
-      const myScores18 = newRow.slice(3, 21); // H1..H18 from TARJETAS
-      const fStr       = String(fecha);
-      const mStr       = String(matricula);
-      // Tracking vars — set as each section writes to SCORE; used by AL:AS block below.
-      let myStWritten = null; // ST points for current fecha (null = not written this call)
-      let myMaWritten = null; // MA points (null = match not resolved yet)
-      let myPbWritten = 0;    // PB points for current fecha
+      // 2. STB E:K
+      let myStWritten = null;
+      if (stbBreak && preStbRow > 0 && preStbSh) {
+        preStbSh.getRange(preStbRow, 5, 1, 7).setValues([[
+          stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
+          stbBreak.i, stbBreak.j, stbBreak.k
+        ]]);
+      }
 
-      // ── 1. STB E:K ──────────────────────────────────────────────────────
-      const stbBreak = calcStbBreakdown_(myScores18, cpPares, cpIndices, hcpNum);
-      if (stbBreak) {
-        const stbSh = getSheet_('STB');
-        if (stbSh) {
-          const stbLast = stbSh.getLastRow();
-          if (stbLast >= 2) {
-            const stbBC = stbSh.getRange(2, 2, stbLast - 1, 2).getValues(); // B-C
-            let stbRow = -1;
-            for (let i = 0; i < stbBC.length; i++) {
-              if (String(stbBC[i][0]).trim() === fStr && String(stbBC[i][1]).trim() === mStr) {
-                stbRow = i + 2; break;
-              }
-            }
-            if (stbRow > 0) {
-              stbSh.getRange(stbRow, 5, 1, 7).setValues([[
-                stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
-                stbBreak.i, stbBreak.j, stbBreak.k
-              ]]);
-            }
-          }
-        }
+      // 3. SCORE ST
+      const scoreSh = getSheet_('SCORE');
+      if (scoreSh && stbBreak && preScoreRow > 0 && stCol >= 5 && stCol <= 48) {
+        scoreSh.getRange(preScoreRow, stCol).setValue(stbBreak.k);
+        myStWritten = stbBreak.k;
+      }
 
-        // ── 2. SCORE ST column ────────────────────────────────────────────
-        // ST col formula: fecha n → col = 4*n + 1 (fecha1=E=5, fecha2=I=9, …)
-        const scoreSh = getSheet_('SCORE');
-        if (scoreSh) {
-          const scoreRow = getScoreRowForMat_(matricula);
-          const stCol    = 4 * parseInt(fecha) + 1;
-          if (scoreRow > 0 && stCol >= 5 && stCol <= 48) {
-            scoreSh.getRange(scoreRow, stCol).setValue(stbBreak.k);
-            myStWritten = stbBreak.k; // track for AL:AS
+      // 4. MATCH batch writes (pre-computed above)
+      for (let wi = 0; wi < matchWriteOps.length; wi++) {
+        const op = matchWriteOps[wi];
+        op.sh.getRange(op.row, op.col, 1, op.data[0].length).setValues(op.data);
+      }
+
+      // 5. SCORE MA writes
+      let myMaWritten = null;
+      if (maWriteOps.length > 0 && maCol >= 6 && maCol <= 49) {
+        const scoreSh2b = scoreSh || getSheet_('SCORE');
+        if (scoreSh2b) {
+          for (let mi3 = 0; mi3 < maWriteOps.length; mi3++) {
+            const mop = maWriteOps[mi3];
+            scoreSh2b.getRange(mop.scoreRow, maCol).setValue(mop.totalMA);
+            if (mop.mat === mStr) myMaWritten = mop.totalMA;
           }
         }
       }
 
-      // ── 3. MATCH static computation ──────────────────────────────────────
-      // Eliminates: MATCH!E(VLOOKUP) → AF → AY/BC → AG:AX(18×2) → F:W(18×2)
-      //             → BA/BB/X/Y(2×2). ~90 formula cells cleared per write.
-      // Only fires when the opponent has also submitted their tarjeta.
-      const matchSh = getSheet_(SHEETS.MATCH);
-      if (matchSh && cpIndices.length > 0 && stbBreak) {
-        const hcp85val  = stbBreak.e; // Math.round(hcpNum * 0.85), already computed
-        const matchLast = findNextEmptyRow_(matchSh, 2); // first empty row in col B
-        if (matchLast > 2) {
-          // Read B through Y (24 cols) — gives B(fecha), C(mat), and Y(points) for SCORE!MA.
-          // Reading Y pre-write lets us recover previously-computed match points for matches
-          // that were resolved in an earlier cargarTarjeta_ call (a different opponent).
-          const matchBCY = matchSh.getRange(2, 2, matchLast - 2, 24).getValues();
-          // matchBCY[i]: [0]=B(fecha), [1]=C(mat), [23]=Y(points col 25)
-
-          // Track Y values written this call so we can overlay them when summing SCORE!MA.
-          // Key = sheet row number (1-based); value = computed Y.
-          const rowYOverride = {};
-          const affectedMats = {}; // mat → true (players who had ≥1 match computed this call)
-
-          // Find all rows in MATCH where this player is listed for this fecha
-          for (let mi = 0; mi < matchBCY.length; mi++) {
-            if (String(matchBCY[mi][0]).trim() !== fStr || String(matchBCY[mi][1]).trim() !== mStr) continue;
-            const mySheetRow = mi + 2; // 1-based sheet row
-
-            // Pair: even row (2,4,6…) goes with next row; odd goes with previous
-            const partnerSheetRow = (mySheetRow % 2 === 0) ? mySheetRow + 1 : mySheetRow - 1;
-            const partnerIdx      = partnerSheetRow - 2;
-            if (partnerIdx < 0 || partnerIdx >= matchBCY.length) continue;
-
-            // Look up opponent's matricula from the MATCH sheet
-            const oppMat = String(matchBCY[partnerIdx][1]).trim();
-            if (!oppMat) continue;
-
-            // Check if opponent has submitted their tarjeta (search allRows already in memory)
-            let oppTarjeta = null;
-            for (let ai = 0; ai < allRows.length; ai++) {
-              if (String(allRows[ai][0]).trim() === fStr && String(allRows[ai][1]).trim() === oppMat) {
-                oppTarjeta = allRows[ai]; break;
-              }
-            }
-            if (!oppTarjeta) continue; // opponent hasn't been assigned a tarjeta row
-
-            // Check opponent has at least one score
-            const oppScores18 = oppTarjeta.slice(6, 24); // H1..H18 (indices in allRows)
-            const oppHasScores = oppScores18.some(function(s){ return s !== '' && s !== null && s !== undefined; });
-            if (!oppHasScores) continue;
-
-            // Opponent HCP
-            const oppHcpRaw = oppTarjeta[3]; // col E (hcp) in allRows (0-indexed offset from B)
-            const oppHcpNum = parseFloat(oppHcpRaw);
-            if (isNaN(oppHcpNum)) continue;
-            const oppHcp85 = Math.round(oppHcpNum * 0.85);
-
-            // Stroke advantage per player
-            // Higher-HCP player receives strokes on hardest holes.
-            // AY = max(0, myHcp85 - oppHcp85)  → my stroke advantage
-            // BC = max(0, AY - 18)              → extra strokes when diff > 18
-            const ayMy  = Math.max(0, hcp85val - oppHcp85);
-            const ayOpp = Math.max(0, oppHcp85 - hcp85val);
-            const bcMy  = Math.max(0, ayMy  - 18);
-            const bcOpp = Math.max(0, ayOpp - 18);
-
-            // Per-hole adjustments and net scores
-            // AG formula: (AY>=idx ? -1 : 0) + (BC>0 && idx<=BC ? -1 : 0)
-            const myAdj   = new Array(18);
-            const oppAdj  = new Array(18);
-            const myNet   = new Array(18);
-            const oppNet  = new Array(18);
-            for (let h = 0; h < 18; h++) {
-              const idx = cpIndices[h] || 0;
-              myAdj[h]  = (ayMy  > 0 && ayMy  >= idx ? -1 : 0) + (bcMy  > 0 && idx <= bcMy  ? -1 : 0);
-              oppAdj[h] = (ayOpp > 0 && ayOpp >= idx ? -1 : 0) + (bcOpp > 0 && idx <= bcOpp ? -1 : 0);
-              const myG  = (myScores18[h]  !== '' && myScores18[h]  !== null) ? parseInt(myScores18[h])  : null;
-              const oppG = (oppScores18[h] !== '' && oppScores18[h] !== null) ? parseInt(oppScores18[h]) : null;
-              myNet[h]  = (myG  !== null && !isNaN(myG))  ? myG  + myAdj[h]  : '';
-              oppNet[h] = (oppG !== null && !isNaN(oppG)) ? oppG + oppAdj[h] : '';
-            }
-
-            // Hole wins (BA): count holes where my net < opponent net
-            let myBA = 0, oppBA = 0;
-            for (let h = 0; h < 18; h++) {
-              if (myNet[h] !== '' && oppNet[h] !== '') {
-                if (myNet[h]  < oppNet[h])  myBA++;
-                if (oppNet[h] < myNet[h])   oppBA++;
-              }
-            }
-
-            // BB = myBA - oppBA; X = result string; Y = points
-            const myBB  = myBA  - oppBA;
-            const oppBB = oppBA - myBA;
-            const myX   = myBB  > 0 ? (myBB  + ' UP') : (myBB  === 0 ? 'AS' : '');
-            const oppX  = oppBB > 0 ? (oppBB + ' UP') : (oppBB === 0 ? 'AS' : '');
-            const myY   = myX  === '' ? 0 : (myX  === 'AS' ? 3 : 6);
-            const oppY  = oppX === '' ? 0 : (oppX === 'AS' ? 3 : 6);
-
-            // Track which rows we're writing Y to (used for SCORE!MA aggregation below)
-            rowYOverride[mySheetRow]      = myY;
-            rowYOverride[partnerSheetRow] = oppY;
-            affectedMats[mStr]   = true;
-            affectedMats[oppMat] = true;
-
-            // ── Batch writes — 2 setValues calls per row ──────────────────
-            // Row layout:
-            //   E(5)=hcp85, F:W(6-23)=netScores, X(24)=result, Y(25)=points
-            //   → write cols 5-25 in one call (21 cols)
-            //   AG:AX(33-50)=adj, AY(51)=ay, AZ(52)='', BA(53)=holes, BB(54)=diff, BC(55)=extra
-            //   → write cols 33-55 in one call (23 cols)
-
-            // My row
-            matchSh.getRange(mySheetRow, 5, 1, 21).setValues(
-              [[hcp85val].concat(myNet).concat([myX, myY])]
-            );
-            matchSh.getRange(mySheetRow, 33, 1, 23).setValues(
-              [myAdj.concat([ayMy, '', myBA, myBB, bcMy])]
-            );
-
-            // Partner row
-            matchSh.getRange(partnerSheetRow, 5, 1, 21).setValues(
-              [[oppHcp85].concat(oppNet).concat([oppX, oppY])]
-            );
-            matchSh.getRange(partnerSheetRow, 33, 1, 23).setValues(
-              [oppAdj.concat([ayOpp, '', oppBA, oppBB, bcOpp])]
-            );
-          }
-
-          // ── Write SCORE!MA (match points) for affected players ─────────
-          // MA col formula: fecha n → col = 4*n + 2 (fecha1=F=6, fecha2=J=10, …)
-          // For each affected player, sum their Y values across ALL their match rows:
-          //   - rows written this call → use rowYOverride (authoritative)
-          //   - rows from prior calls  → use pre-write matchBCY[i][23] (already static)
-          //   - rows not yet resolved  → matchBCY[i][23] = 0 (formula or prior write)
-          const affectedMatsList = Object.keys(affectedMats);
-          if (affectedMatsList.length > 0) {
-            const maCol   = 4 * parseInt(fecha) + 2; // SCORE!MA column
-            const scoreSh2 = getSheet_('SCORE');
-            if (scoreSh2 && maCol >= 6 && maCol <= 49) {
-              for (let ai = 0; ai < affectedMatsList.length; ai++) {
-                const mat = affectedMatsList[ai];
-                let totalMA = 0;
-                for (let mi2 = 0; mi2 < matchBCY.length; mi2++) {
-                  if (String(matchBCY[mi2][0]).trim() !== fStr) continue;
-                  if (String(matchBCY[mi2][1]).trim() !== mat)  continue;
-                  const shRow = mi2 + 2;
-                  const yVal  = rowYOverride.hasOwnProperty(shRow)
-                    ? rowYOverride[shRow]
-                    : (Number(matchBCY[mi2][23]) || 0);
-                  totalMA += yVal;
-                }
-                const sRow = getScoreRowForMat_(mat);
-                if (sRow > 0) {
-                  scoreSh2.getRange(sRow, maCol).setValue(totalMA);
-                  if (mat === mStr) myMaWritten = totalMA; // track for AL:AS
-                }
-              }
-            }
-          }
-        }
-      }
-      // ── 4. PB!E + SCORE!PB as static values ─────────────────────────────
-      // PB!E formula: =SUMIF(TARJETAS!A:A;A2;TARJETAS!Z:Z)*3
-      //              + SUMIF(TARJETAS!A:A;A2;TARJETAS!AA:AA)*3
-      // LD (newRow[21]) and BA (newRow[22]) are already set above — no extra reads.
-      // pbCol = 4*n + 3  (fecha1=G=7, fecha2=K=11, fecha3=O=15, fecha4=S=19, …)
+      // 6. PB!E + SCORE!PB
       try {
-        const ldVal    = (newRow[21] === 1 || newRow[21] === true) ? 1 : 0;
-        const baVal    = (newRow[22] === 1 || newRow[22] === true) ? 1 : 0;
-        const pbPoints = (ldVal + baVal) * 3;
-        myPbWritten = pbPoints; // track for AL:AS
+        const myPbWritten = pbPoints_;
+        if (prePbRow > 0 && prePbSh) prePbSh.getRange(prePbRow, 5).setValue(myPbWritten);
+        const scoreSh3 = scoreSh || getSheet_('SCORE');
+        if (scoreSh3 && pbCol >= 7 && pbCol <= 50 && preScoreRow > 0) {
+          scoreSh3.getRange(preScoreRow, pbCol).setValue(myPbWritten);
+        }
 
-        // Write PB!E — find row where B=fecha AND C=matricula
-        const pbSh = getSheet_('PB');
-        if (pbSh) {
-          const pbLast = pbSh.getLastRow();
-          if (pbLast >= 2) {
-            const pbBC = pbSh.getRange(2, 2, pbLast - 1, 2).getValues(); // B=fecha, C=mat
-            let pbRow = -1;
-            for (let i = 0; i < pbBC.length; i++) {
-              if (String(pbBC[i][0]).trim() === fStr && String(pbBC[i][1]).trim() === mStr) {
-                pbRow = i + 2; break;
-              }
-            }
-            if (pbRow > 0) pbSh.getRange(pbRow, 5).setValue(pbPoints);
+        // 7. SCORE totales (AL:AS) + C + D — reads INSIDE lock for correctness
+        const scoreSh5 = scoreSh || getSheet_('SCORE');
+        if (scoreSh5 && myStWritten !== null && preScoreRow > 0) {
+          const scoreFull = scoreSh5.getRange(preScoreRow, 5, 1, 41).getValues()[0];
+          const fecN = parseInt(fecha);
+          const b    = 4 * (fecN - 1);
+          scoreFull[b]     = myStWritten;
+          if (myMaWritten !== null) scoreFull[b + 1] = myMaWritten;
+          scoreFull[b + 2] = myPbWritten;
+
+          const alVals = [];
+          for (let n = 1; n <= 8; n++) {
+            const bn = 4 * (n - 1);
+            const st = Number(scoreFull[bn])     || 0;
+            const ma = Number(scoreFull[bn + 1]) || 0;
+            const pb = Number(scoreFull[bn + 2]) || 0;
+            const db = (scoreFull[bn + 3] === true || scoreFull[bn + 3] === 1);
+            alVals.push(st + ma + pb + (db ? st : 0));
           }
-        }
+          const totalC = alVals.reduce(function(a, v){ return a + v; }, 0);
+          scoreSh5.getRange(preScoreRow, 38, 1, 8).setValues([alVals]);
+          scoreSh5.getRange(preScoreRow, 3).setValue(totalC);
 
-        // Write SCORE!PB column
-        const pbCol    = 4 * parseInt(fecha) + 3;
-        const scoreSh3 = getSheet_('SCORE');
-        if (scoreSh3 && pbCol >= 7 && pbCol <= 50) {
-          const pbScoreRow = getScoreRowForMat_(matricula);
-          if (pbScoreRow > 0) scoreSh3.getRange(pbScoreRow, pbCol).setValue(pbPoints);
-        }
-      } catch (pbErr) {
-        // Non-fatal
-      }
+          const allCRaw = scoreSh5.getRange(3, 3, 18, 1).getValues();
+          const allC    = allCRaw.map(function(r){ return Number(r[0]) || 0; });
+          const myRankIdx = preScoreRow - 3;
+          if (myRankIdx >= 0 && myRankIdx < 18) allC[myRankIdx] = totalC;
 
-      // ── 5. SCORE totales por fecha (AL:AS), total general (C) y ranking (D) ─
-      // AL = fecha1 total, AM = fecha2, …, AS = fecha8  (cols 38-45, 8 cols)
-      // Al(n) = ST_n + MA_n + PB_n + (DB_n ? ST_n : 0)
-      // C = SUM(AL:AS) — overall points
-      // D = RANK(C; $C$3:$C$20; 0) + COUNTIF($C$3:C; C) - 1 — with tie-break
-      try {
-        const scoreSh5 = getSheet_('SCORE');
-        if (scoreSh5 && myStWritten !== null) { // only run if we actually wrote ST this call
-          const myScoreRow5 = getScoreRowForMat_(matricula);
-          if (myScoreRow5 > 0) {
-            // Read E:AS (cols 5-45 = 41 cols) — pre-flush, so ST/MA/PB for current fecha
-            // are stale; override them with our tracked in-memory values.
-            const scoreFull = scoreSh5.getRange(myScoreRow5, 5, 1, 41).getValues()[0];
-            const fecN = parseInt(fecha);
-            const b    = 4 * (fecN - 1); // 0-indexed offset within the 41-col read
-            scoreFull[b]   = myStWritten;                             // ST current fecha
-            if (myMaWritten !== null) scoreFull[b + 1] = myMaWritten; // MA (if resolved)
-            scoreFull[b + 2] = myPbWritten;                           // PB current fecha
-            // DB (scoreFull[b+3]) stays as-is — written by dobles logic, not changed here
+          const allRanks = allC.map(function(ci, i) {
+            let rank = 1;
+            for (let j = 0; j < allC.length; j++) { if (allC[j] > ci) rank++; }
+            let cntBefore = 0;
+            for (let j = 0; j <= i; j++) { if (allC[j] === ci) cntBefore++; }
+            return rank + cntBefore - 1;
+          });
+          scoreSh5.getRange(3, 4, 18, 1).setValues(allRanks.map(function(r){ return [r]; }));
 
-            // Compute AL:AS (8 values)
-            const alVals = [];
-            for (let n = 1; n <= 8; n++) {
-              const bn = 4 * (n - 1);
-              const st = Number(scoreFull[bn])   || 0;
-              const ma = Number(scoreFull[bn + 1]) || 0;
-              const pb = Number(scoreFull[bn + 2]) || 0;
-              const db = (scoreFull[bn + 3] === true || scoreFull[bn + 3] === 1);
-              alVals.push(st + ma + pb + (db ? st : 0));
-            }
-            const totalC = alVals.reduce(function(a, v){ return a + v; }, 0);
-
-            // Batch write AL:AS (col 38, 8 cols) and C (col 3)
-            scoreSh5.getRange(myScoreRow5, 38, 1, 8).setValues([alVals]);
-            scoreSh5.getRange(myScoreRow5, 3).setValue(totalC);
-
-            // ── Rankings D3:D20 ─────────────────────────────────────────────
-            // Read C3:C20 (pre-flush); override this player's slot with totalC
-            // so the ranking uses the just-computed value without an extra flush.
-            const allCRaw = scoreSh5.getRange(3, 3, 18, 1).getValues();
-            const allC    = allCRaw.map(function(r){ return Number(r[0]) || 0; });
-            const myRankIdx = myScoreRow5 - 3; // 0-indexed (C3=idx0, C20=idx17)
-            if (myRankIdx >= 0 && myRankIdx < 18) allC[myRankIdx] = totalC;
-
-            // Replicate formula: RANK(Ci; all; 0) + COUNTIF($C$3:Ci; Ci) - 1
-            // RANK(Ci; 0) = count players with higher score + 1
-            // COUNTIF cumulative = how many players with same score appeared before (tie-break)
-            const allRanks = allC.map(function(ci, i) {
-              let rank = 1;
-              for (let j = 0; j < allC.length; j++) { if (allC[j] > ci) rank++; }
-              let cntBefore = 0;
-              for (let j = 0; j <= i; j++) { if (allC[j] === ci) cntBefore++; }
-              return rank + cntBefore - 1;
-            });
-            scoreSh5.getRange(3, 4, 18, 1).setValues(allRanks.map(function(r){ return [r]; }));
-
-            // ── 6. LEADERBOARD G, J, K, L, M static update ─────────────────
-            // G = player name by rank (eliminates INDEX/MATCH on SCORE!D → cascade)
-            // J = total points by rank (eliminates INDEX on SCORE!C)
-            // K = cumulative STB, L = cumulative MA, M = cumulative PB
-            //     computed from SCORE!E:AJ (already static) — removes SUMIF on STB/MATCH/PB
-            try {
-              const lbSh = getSheet_('LEADERBOARD');
-              if (lbSh) {
-                // Read SCORE B3:B20 (player names) and E3:AJ20 (32 cols = 8 fechas × 4 cols)
-                const scoreNames   = scoreSh5.getRange(3, 2, 18, 1).getValues();
-                const allScoreData = scoreSh5.getRange(3, 5, 18, 32).getValues();
-
-                // Override current player's stale pre-flush values in allScoreData
-                if (myRankIdx >= 0 && myRankIdx < 18) {
-                  const b = 4 * (parseInt(fecha) - 1); // 0-indexed offset within 32 cols
-                  allScoreData[myRankIdx][b]     = myStWritten;
-                  if (myMaWritten !== null) allScoreData[myRankIdx][b + 1] = myMaWritten;
-                  allScoreData[myRankIdx][b + 2] = myPbWritten;
-                }
-
-                // Compute cumulative STB / MA / PB across all 8 fechas for each player
-                // Layout in allScoreData[i]: [ST1,MA1,PB1,DB1, ST2,MA2,PB2,DB2, ..., ST8,MA8,PB8,DB8]
-                const stbTot = new Array(18), maTot = new Array(18), pbTot = new Array(18);
-                for (let i = 0; i < 18; i++) {
-                  let st = 0, ma = 0, pb = 0;
-                  for (let n = 0; n < 8; n++) {
-                    st += Number(allScoreData[i][4 * n])     || 0;
-                    ma += Number(allScoreData[i][4 * n + 1]) || 0;
-                    pb += Number(allScoreData[i][4 * n + 2]) || 0;
-                  }
-                  stbTot[i] = st; maTot[i] = ma; pbTot[i] = pb;
-                }
-
-                // Sort by rank into LEADERBOARD rows 2-19 (rank 1 → row 2)
-                // allRanks[i] = rank of player i (1-indexed, unique 1-18)
-                const gVals = [], jVals = [], kVals = [], lVals = [], mVals = [];
-                for (let r = 1; r <= 18; r++) {
-                  const idx = allRanks.indexOf(r);
-                  if (idx >= 0) {
-                    gVals.push([String(scoreNames[idx][0] || '')]);
-                    jVals.push([allC[idx]]);
-                    kVals.push([stbTot[idx]]);
-                    lVals.push([maTot[idx]]);
-                    mVals.push([pbTot[idx]]);
-                  } else {
-                    gVals.push(['']); jVals.push([0]); kVals.push([0]);
-                    lVals.push([0]); mVals.push([0]);
-                  }
-                }
-
-                // 5 batch writes to LEADERBOARD rows 2-19
-                lbSh.getRange(2,  7, 18, 1).setValues(gVals); // G — player name by rank
-                lbSh.getRange(2, 10, 18, 1).setValues(jVals); // J — total points
-                lbSh.getRange(2, 11, 18, 1).setValues(kVals); // K — cumulative STB
-                lbSh.getRange(2, 12, 18, 1).setValues(lVals); // L — cumulative MA
-                lbSh.getRange(2, 13, 18, 1).setValues(mVals); // M — cumulative PB
+          // 8. LEADERBOARD G, J, K, L, M
+          try {
+            const lbSh = getSheet_('LEADERBOARD');
+            if (lbSh) {
+              const scoreNames   = scoreSh5.getRange(3, 2, 18, 1).getValues();
+              const allScoreData = scoreSh5.getRange(3, 5, 18, 32).getValues();
+              if (myRankIdx >= 0 && myRankIdx < 18) {
+                const bld = 4 * (fecN - 1);
+                allScoreData[myRankIdx][bld]     = myStWritten;
+                if (myMaWritten !== null) allScoreData[myRankIdx][bld + 1] = myMaWritten;
+                allScoreData[myRankIdx][bld + 2] = myPbWritten;
               }
-            } catch (lbErr) {
-              // Non-fatal — LEADERBOARD update failure doesn't block tarjeta write
+              const stbTot = new Array(18), maTot = new Array(18), pbTot = new Array(18);
+              for (let i = 0; i < 18; i++) {
+                let st = 0, ma = 0, pb = 0;
+                for (let n = 0; n < 8; n++) {
+                  st += Number(allScoreData[i][4 * n])     || 0;
+                  ma += Number(allScoreData[i][4 * n + 1]) || 0;
+                  pb += Number(allScoreData[i][4 * n + 2]) || 0;
+                }
+                stbTot[i] = st; maTot[i] = ma; pbTot[i] = pb;
+              }
+              const gVals = [], jVals = [], kVals = [], lVals = [], mVals = [];
+              for (let r = 1; r <= 18; r++) {
+                const idx = allRanks.indexOf(r);
+                if (idx >= 0) {
+                  gVals.push([String(scoreNames[idx][0] || '')]);
+                  jVals.push([allC[idx]]);
+                  kVals.push([stbTot[idx]]);
+                  lVals.push([maTot[idx]]);
+                  mVals.push([pbTot[idx]]);
+                } else {
+                  gVals.push(['']); jVals.push([0]); kVals.push([0]);
+                  lVals.push([0]);  mVals.push([0]);
+                }
+              }
+              lbSh.getRange(2,  7, 18, 1).setValues(gVals);
+              lbSh.getRange(2, 10, 18, 1).setValues(jVals);
+              lbSh.getRange(2, 11, 18, 1).setValues(kVals);
+              lbSh.getRange(2, 12, 18, 1).setValues(lVals);
+              lbSh.getRange(2, 13, 18, 1).setValues(mVals);
             }
-          }
+          } catch (lbErr) { /* Non-fatal */ }
         }
-      } catch (totalErr) {
-        // Non-fatal — totals/ranking failure doesn't block tarjeta write
-      }
-    } catch (stbErr) {
-      // Non-fatal — STB/SCORE/MATCH static write failure doesn't block tarjeta write
-    }
+      } catch (pbErr) { /* Non-fatal */ }
+    } catch (stbErr) { /* Non-fatal — STB/SCORE/MATCH failure doesn't block tarjeta write */ }
 
-    // Handle puntos dobles — if admin marked this player with doble for this fecha,
-    // automatically copy the ST score from SCORE to col AU after firma.
-    const currentDobles = getDoblesForFecha_(fecha);
-    if (currentDobles.indexOf(String(matricula)) >= 0) {
+    // 9. Puntos dobles
+    if (currentDobles_.indexOf(String(matricula)) >= 0) {
       const auResult = writeDobleStScore_(matricula, fecha);
       if (auResult.ok) {
         dobleMsg = 'doble aplicado: ST=' + auResult.st + ' escrito en AU';
@@ -1815,13 +1733,15 @@ function cargarTarjeta_(params) {
         dobleMsg = 'doble marcado pero AU no se pudo escribir: ' + auResult.error;
       }
     }
-    SpreadsheetApp.flush();
   } finally {
     lock.releaseLock();
   }
 
+  // Flush FUERA del lock — los setValues() están encolados; el flush los
+  // confirma sin bloquear a otros jugadores que esperen el lock.
+  SpreadsheetApp.flush();
+
   audit_('CARGAR_TARJETA', isAdmin ? 'admin' : matricula, { fecha, matricula, hcp, scores, ld, ba, usarDoble, dobleMsg });
-  // Invalidate cached fecha results so next load reflects new tarjeta immediately
   try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
   return { ok: true, dobleMsg: dobleMsg };
 }
@@ -2036,17 +1956,19 @@ function eliminarFecha_(params) {
     return count;
   }
 
-  // ── 1. TARJETAS — eliminar filas ─────────────────────────────────────────
-  changes.tarjetas = deleteRowsForFecha(getSheet_(SHEETS.TARJETAS), 2); // col B = fecha
-
-  // ── 2. MATCH — eliminar filas ─────────────────────────────────────────────
-  changes.match = deleteRowsForFecha(getSheet_(SHEETS.MATCH), 2); // col B = fecha
-
-  // ── 3. STB — eliminar filas ──────────────────────────────────────────────
+  // ── 1. STB — eliminar filas PRIMERO (antes de TARJETAS) ─────────────────
+  // Si col B de STB tiene fórmulas que referencian TARJETAS, borrar TARJETAS
+  // primero las deja en blanco/error y deleteRowsForFecha no encontraría la fecha.
   changes.stb = deleteRowsForFecha(getSheet_('STB'), 2); // col B = fecha
 
-  // ── 4. PB — eliminar filas ───────────────────────────────────────────────
+  // ── 2. PB — eliminar filas ───────────────────────────────────────────────
   changes.pb = deleteRowsForFecha(getSheet_('PB'), 2); // col B = fecha
+
+  // ── 3. TARJETAS — eliminar filas ─────────────────────────────────────────
+  changes.tarjetas = deleteRowsForFecha(getSheet_(SHEETS.TARJETAS), 2); // col B = fecha
+
+  // ── 4. MATCH — eliminar filas ─────────────────────────────────────────────
+  changes.match = deleteRowsForFecha(getSheet_(SHEETS.MATCH), 2); // col B = fecha
 
   // ── 5. SCORE — zerar cols de la fecha + recalcular AL:AS / C / D / LEADERBOARD ──
   const scoreSh = getSheet_('SCORE');
