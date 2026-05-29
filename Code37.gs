@@ -4003,7 +4003,7 @@ function actualizarHcpIndices_(params) {
       results.notFound++;
       results.details.push({ mat, hcpIndex: null });
     }
-    Utilities.sleep(400); // 400ms entre requests — no spamear vistagolf
+    Utilities.sleep(150); // 150ms entre requests — suficiente para no spamear vistagolf
   }
 
   SpreadsheetApp.flush();

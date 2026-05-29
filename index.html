@@ -3429,9 +3429,9 @@ function admActualizarHcp(){
   const btn = document.getElementById('adm-hcp-btn');
   const sub = document.getElementById('adm-hcp-btn-sub');
   if(btn) btn.disabled = true;
-  if(sub) sub.textContent = 'Consultando vistagolf… puede tardar ~15 seg';
+  if(sub) sub.textContent = 'Consultando vistagolf… puede tardar ~30 seg';
 
-  ngtApiPost('actualizarHcpIndices', { adminKey: ADM_KEY }).then(r => {
+  ngtApiPost({ action: 'actualizarHcpIndices', adminKey: ADM_KEY }).then(r => {
     if(btn) btn.disabled = false;
     if(r && r.ok){
       const msg = 'Actualizado: ' + r.updated + ' jugadores · No encontrados: ' + (r.notFound || 0);
