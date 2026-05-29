@@ -3429,7 +3429,7 @@ function admActualizarHcp(){
   const btn = document.getElementById('adm-hcp-btn');
   const sub = document.getElementById('adm-hcp-btn-sub');
   if(btn) btn.disabled = true;
-  if(sub) sub.textContent = 'Consultando vistagolf… puede tardar ~30 seg';
+  if(sub) sub.textContent = 'Consultando vistagolf… puede tardar ~10 seg';
 
   ngtApiPost({ action: 'actualizarHcpIndices', adminKey: ADM_KEY }).then(r => {
     if(btn) btn.disabled = false;

@@ -3986,30 +3986,68 @@ function actualizarHcpIndices_(params) {
   const nowStr = Utilities.formatDate(now, 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy HH:mm');
   const results = { updated: 0, notFound: 0, details: [] };
 
+  // Recolectar jugadores con matrícula válida
+  const players = [];
   for (let i = 1; i < data.length; i++) {
     const mat = String(data[i][COL_J.MATRICULA] || '').trim();
     if (!mat) continue;
+    players.push({ sheetRow: i + 1, mat: mat });
+  }
+  if (!players.length) return { ok: true, updated: 0, notFound: 0, details: [] };
 
-    const hcpIndex = fetchHcpIndex_(mat);
-    const hcpCol   = COL_J.HCP_INDEX  + 1; // 1-based col
-    const updCol   = COL_J.HCP_UPDATED + 1;
+  // Construir requests para fetchAll — todos los jugadores en paralelo
+  const requests = players.map(p => ({
+    url: 'http://www.vistagolf.com.ar/handicap/DiferencialesArg.asp'
+       + '?strCampo=Campo1&strValor=' + encodeURIComponent(p.mat),
+    muteHttpExceptions: true,
+    followRedirects: true,
+    deadline: 10,   // 10s timeout por jugador — en paralelo, no se acumulan
+  }));
 
-    if (hcpIndex !== null) {
-      jugSh.getRange(i + 1, hcpCol).setValue(hcpIndex);
-      jugSh.getRange(i + 1, updCol).setValue(nowStr);
-      results.updated++;
-      results.details.push({ mat, hcpIndex });
-    } else {
-      results.notFound++;
-      results.details.push({ mat, hcpIndex: null });
-    }
-    Utilities.sleep(150); // 150ms entre requests — suficiente para no spamear vistagolf
+  // Ejecutar todos los requests en paralelo (UrlFetchApp.fetchAll)
+  let responses;
+  try {
+    responses = UrlFetchApp.fetchAll(requests);
+  } catch(e) {
+    return { ok: false, error: 'Error al consultar vistagolf: ' + e.message };
   }
 
-  SpreadsheetApp.flush();
-  // Invalidar cache de jugadores para que el próximo getJugadores_ traiga los nuevos índices
-  try { CacheService.getScriptCache().remove('jugadores'); } catch(e) {}
+  const hcpCol = COL_J.HCP_INDEX  + 1; // col E (1-based)
+  const updCol = COL_J.HCP_UPDATED + 1; // col F (1-based)
 
+  responses.forEach(function(resp, idx) {
+    const p = players[idx];
+    try {
+      if (resp.getResponseCode() !== 200) {
+        results.notFound++;
+        results.details.push({ mat: p.mat, hcpIndex: null, err: 'HTTP ' + resp.getResponseCode() });
+        return;
+      }
+      const html = resp.getContentText('ISO-8859-1');
+      const m    = html.match(/HCP\s+Index\s*:?\s*([0-9]+[.,][0-9]+|[0-9]+)/i);
+      if (!m) {
+        results.notFound++;
+        results.details.push({ mat: p.mat, hcpIndex: null, err: 'no match' });
+        return;
+      }
+      const val = parseFloat(m[1].replace(',', '.'));
+      if (isNaN(val)) {
+        results.notFound++;
+        results.details.push({ mat: p.mat, hcpIndex: null, err: 'NaN' });
+        return;
+      }
+      jugSh.getRange(p.sheetRow, hcpCol).setValue(val);
+      jugSh.getRange(p.sheetRow, updCol).setValue(nowStr);
+      results.updated++;
+      results.details.push({ mat: p.mat, hcpIndex: val });
+    } catch(e2) {
+      results.notFound++;
+      results.details.push({ mat: p.mat, hcpIndex: null, err: e2.message });
+    }
+  });
+
+  SpreadsheetApp.flush();
+  try { CacheService.getScriptCache().remove('jugadores'); } catch(e) {}
   audit_('ACTUALIZAR_HCP_INDICES', (params && params.adminKey) ? 'admin' : 'trigger',
     { updated: results.updated, notFound: results.notFound, date: nowStr });
   return { ok: true, updated: results.updated, notFound: results.notFound, details: results.details };
