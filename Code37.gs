@@ -16,8 +16,8 @@ const SHEETS = {
   AUDIT:     '_AUDIT',
 };
 
-const COL_J = { ORDEN: 0, MATRICULA: 1, NOMBRE: 2, APODO: 3 };
-const COL_C = { ID: 0, NOMBRE: 1 };
+const COL_J = { ORDEN: 0, MATRICULA: 1, NOMBRE: 2, APODO: 3, HCP_INDEX: 4, HCP_UPDATED: 5 };
+const COL_C = { ID: 0, NOMBRE: 1, SLOPE: 20 }; // col U (0-indexed) = Slope Rating
 
 // ════════════ UTILS ════════════
 function jsonResponse_(obj) {
@@ -115,10 +115,13 @@ function checkPlayerByMat_(matricula) {
   for (let i = 1; i < data.length; i++) {
     const m = String(data[i][COL_J.MATRICULA] || '').trim();
     if (m === matStr) {
+      const rawHcp = data[i][COL_J.HCP_INDEX];
       return {
-        matricula: m,
-        nombre: String(data[i][COL_J.NOMBRE] || '').trim(),
-        apodo: String(data[i][COL_J.APODO] || '').trim(),
+        matricula:  m,
+        nombre:     String(data[i][COL_J.NOMBRE]    || '').trim(),
+        apodo:      String(data[i][COL_J.APODO]     || '').trim(),
+        hcpIndex:   (rawHcp !== '' && rawHcp !== null && rawHcp !== undefined) ? (parseFloat(rawHcp) || null) : null,
+        hcpUpdated: String(data[i][COL_J.HCP_UPDATED] || '').trim(),
       };
     }
   }
@@ -134,10 +137,13 @@ function getJugadores_() {
   for (let i = 1; i < data.length; i++) {
     const m = String(data[i][COL_J.MATRICULA] || '').trim();
     if (!m) continue;
+    const rawHcp = data[i][COL_J.HCP_INDEX];
     out.push({
       matricula: m,
-      nombre: String(data[i][COL_J.NOMBRE] || '').trim(),
-      apodo: String(data[i][COL_J.APODO] || '').trim(),
+      nombre:     String(data[i][COL_J.NOMBRE]   || '').trim(),
+      apodo:      String(data[i][COL_J.APODO]    || '').trim(),
+      hcpIndex:   (rawHcp !== '' && rawHcp !== null && rawHcp !== undefined) ? (parseFloat(rawHcp) || null) : null,
+      hcpUpdated: String(data[i][COL_J.HCP_UPDATED] || '').trim(),
     });
   }
   return out;
@@ -543,7 +549,7 @@ function getCanchaPares_(canchaNombreOrId) {
   if (!sh) return null;
   const lastRow = sh.getLastRow();
   if (lastRow < 2) return null;
-  const data = sh.getRange(2, 1, lastRow - 1, 20).getValues();
+  const data = sh.getRange(2, 1, lastRow - 1, 22).getValues(); // A:V — incluye slope (U=20) y course rating (V=21)
   const keyRaw = String(canchaNombreOrId).trim();
   const keyUp = keyRaw.toUpperCase();
 
@@ -552,11 +558,15 @@ function getCanchaPares_(canchaNombreOrId) {
     const id = String(data[i][0] || '').trim();
     const nombre = String(data[i][1] || '').trim();
     if (id === keyRaw || nombre.toUpperCase() === keyUp) {
+      const slope = parseInt(data[i][COL_C.SLOPE]) || null;       // col U
+      const cr    = parseFloat(data[i][21]) || null;              // col V = Course Rating
       cancha = {
-        id: id,
-        nombre: nombre,
-        pares: data[i].slice(2, 20).map(v => parseInt(v) || null),
-        indices: [],
+        id:           id,
+        nombre:       nombre,
+        pares:        data[i].slice(2, 20).map(v => parseInt(v) || null),
+        indices:      [],
+        slope:        slope,
+        courseRating: cr,
       };
       break;
     }
@@ -3752,6 +3762,121 @@ function doGet(e) {
   return callback ? jsonpResponse_(callback, result) : jsonResponse_(result);
 }
 
+// ════════════ HCP INDEX — Actualización semanal desde VistagolfSouth ════════════
+
+/**
+ * Calcula el handicap de juego (course handicap) a partir del HCP Index y el Slope.
+ * Fórmula WHS: round(hcpIndex × slope / 113)
+ * Opcional: + (courseRating - par) para mayor precisión.
+ */
+function calcHandicapJuego_(hcpIndex, slope, courseRating, par) {
+  if (hcpIndex === null || hcpIndex === undefined || !slope) return null;
+  let ch = hcpIndex * (slope / 113);
+  if (courseRating && par) ch += (courseRating - par);
+  return Math.round(ch);
+}
+
+/**
+ * Consulta el HCP Index de un jugador en vistagolf.com.ar.
+ * Retorna el valor float o null si no se encontró / error.
+ */
+function fetchHcpIndex_(matricula) {
+  try {
+    const url = 'http://www.vistagolf.com.ar/handicap/DiferencialesArg.asp'
+              + '?strCampo=Campo1&strValor=' + encodeURIComponent(String(matricula).trim());
+    const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+    if (resp.getResponseCode() !== 200) return null;
+    // Página en ISO-8859-1 (ASP clásico en español)
+    const html = resp.getContentText('ISO-8859-1');
+    // El HCP Index aparece como "HCP Index: 8.8" o similar en la página
+    const m = html.match(/HCP\s+Index\s*:?\s*([0-9]+\.?[0-9]*)/i);
+    if (!m) return null;
+    const val = parseFloat(m[1]);
+    return isNaN(val) ? null : val;
+  } catch(e) {
+    return null;
+  }
+}
+
+/**
+ * Actualiza el HCP Index de todos los jugadores consultando vistagolf.com.ar.
+ * Se puede llamar:
+ *   (a) Desde el admin vía API: params = { adminKey }
+ *   (b) Desde el trigger semanal: params = null
+ * Escribe en JUGADORES col E = HCP Index, col F = fecha de actualización.
+ */
+function actualizarHcpIndices_(params) {
+  if (params && params.adminKey && !checkAdmin_(params.adminKey)) {
+    return { ok: false, error: 'No autorizado' };
+  }
+  const jugSh = getSheet_(SHEETS.JUGADORES);
+  if (!jugSh) return { ok: false, error: 'No se encontró hoja JUGADORES' };
+
+  const data   = jugSh.getDataRange().getValues();
+  const now    = new Date();
+  const nowStr = Utilities.formatDate(now, 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy HH:mm');
+  const results = { updated: 0, notFound: 0, details: [] };
+
+  for (let i = 1; i < data.length; i++) {
+    const mat = String(data[i][COL_J.MATRICULA] || '').trim();
+    if (!mat) continue;
+
+    const hcpIndex = fetchHcpIndex_(mat);
+    const hcpCol   = COL_J.HCP_INDEX  + 1; // 1-based col
+    const updCol   = COL_J.HCP_UPDATED + 1;
+
+    if (hcpIndex !== null) {
+      jugSh.getRange(i + 1, hcpCol).setValue(hcpIndex);
+      jugSh.getRange(i + 1, updCol).setValue(nowStr);
+      results.updated++;
+      results.details.push({ mat, hcpIndex });
+    } else {
+      results.notFound++;
+      results.details.push({ mat, hcpIndex: null });
+    }
+    Utilities.sleep(400); // 400ms entre requests — no spamear vistagolf
+  }
+
+  SpreadsheetApp.flush();
+  // Invalidar cache de jugadores para que el próximo getJugadores_ traiga los nuevos índices
+  try { CacheService.getScriptCache().remove('jugadores'); } catch(e) {}
+
+  audit_('ACTUALIZAR_HCP_INDICES', (params && params.adminKey) ? 'admin' : 'trigger',
+    { updated: results.updated, notFound: results.notFound, date: nowStr });
+  return { ok: true, updated: results.updated, notFound: results.notFound, details: results.details };
+}
+
+/**
+ * Entry point para el trigger de tiempo.
+ * Se registra como handler en crearTriggerJueves().
+ */
+function triggerActualizarHcp() {
+  actualizarHcpIndices_(null);
+}
+
+/**
+ * Crea (o recrea) el trigger semanal del jueves a las 8am Argentina.
+ * EJECUTAR UNA VEZ desde el editor de Apps Script (Run → crearTriggerJueves).
+ * Requiere que el huso horario del proyecto esté en America/Argentina/Buenos_Aires
+ * (Project Settings → Time zone).
+ */
+function crearTriggerJueves() {
+  // Eliminar triggers anteriores del mismo handler para evitar duplicados
+  ScriptApp.getProjectTriggers()
+    .filter(function(t){ return t.getHandlerFunction() === 'triggerActualizarHcp'; })
+    .forEach(function(t){ ScriptApp.deleteTrigger(t); });
+
+  ScriptApp.newTrigger('triggerActualizarHcp')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.THURSDAY)
+    .atHour(8)   // 8am en la TZ del proyecto (Buenos Aires)
+    .create();
+
+  Logger.log('Trigger creado: triggerActualizarHcp — jueves 8am');
+}
+
+// ════════════ fin HCP INDEX ════════════
+
 function doPost(e) {
   let params = {};
   try { params = JSON.parse(e.postData.contents || '{}'); }
@@ -3768,8 +3893,9 @@ function doPost(e) {
       case 'eliminarFecha':         result = eliminarFecha_(params); break;
       case 'getTarjetasForFecha':   result = getTarjetasForFecha_(params); break;
       case 'setBonusWinners':       result = setBonusWinners_(params); break;
-      case 'cargarMatches':  result = cargarMatches_(params); break;
-      case 'editarMatches':  result = editarMatches_(params); break;
+      case 'cargarMatches':       result = cargarMatches_(params); break;
+      case 'editarMatches':       result = editarMatches_(params); break;
+      case 'actualizarHcpIndices': result = actualizarHcpIndices_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }

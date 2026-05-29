@@ -1509,7 +1509,10 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <div class="adm-row" style="margin-bottom:16px;">
           <div class="adm-field">
             <label class="adm-label">HCP de juego <span class="hcp-hint" id="mit-hcp-hint"></span></label>
-            <input type="number" id="mit-hcp" class="adm-input" min="0" max="54" placeholder="Tu hcp" oninput="updateSummary()">
+            <div id="mit-hcp-index-banner" style="display:none;background:var(--off);border:var(--border);border-radius:3px;padding:7px 10px;margin-bottom:8px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g5);line-height:1.4;">
+              <span id="mit-hcp-index-text"></span>
+            </div>
+            <input type="number" id="mit-hcp" class="adm-input" min="0" max="54" placeholder="Tu hcp" inputmode="numeric" oninput="updateSummary()">
           </div>
         </div>
 
@@ -1637,7 +1640,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);">⚙ Administrador</div>
         <button onclick="adminLogout()" style="background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);cursor:pointer;">Salir ✕</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
         <button class="adm-big-btn" onclick="admGoTo('crear')">
           <span class="adm-big-icon">📅</span>Crear Fecha
         </button>
@@ -1645,6 +1648,13 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           <span class="adm-big-icon">✏</span>Gestionar Fechas
         </button>
       </div>
+      <button class="adm-big-btn" onclick="admActualizarHcp()" id="adm-hcp-btn" style="flex-direction:row;justify-content:flex-start;gap:12px;padding:14px 16px;">
+        <span style="font-size:22px;">🏌️</span>
+        <div style="text-align:left;">
+          <div style="font-size:13px;">Actualizar HCP Índices</div>
+          <div id="adm-hcp-btn-sub" style="font-size:10px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--g4);margin-top:2px;">Consulta la AAG para todos los jugadores</div>
+        </div>
+      </button>
     </div>
 
     <!-- Crear Fecha (wizard 2 pasos) -->
@@ -3415,6 +3425,30 @@ function admGoHome() {
 // Kept for compatibility
 function admTab(name, btn){ admGoTo(name); }
 
+function admActualizarHcp(){
+  const btn = document.getElementById('adm-hcp-btn');
+  const sub = document.getElementById('adm-hcp-btn-sub');
+  if(btn) btn.disabled = true;
+  if(sub) sub.textContent = 'Consultando vistagolf… puede tardar ~15 seg';
+
+  ngtApiPost('actualizarHcpIndices', { adminKey: ADM_KEY }).then(r => {
+    if(btn) btn.disabled = false;
+    if(r && r.ok){
+      const msg = 'Actualizado: ' + r.updated + ' jugadores · No encontrados: ' + (r.notFound || 0);
+      if(sub) sub.textContent = msg;
+      // Invalidar cache de jugadores en sessionStorage
+      try {
+        Object.keys(sessionStorage).filter(k => k.startsWith('ngt_jug')).forEach(k => sessionStorage.removeItem(k));
+      } catch(e){}
+    } else {
+      if(sub) sub.textContent = 'Error: ' + ((r && r.error) || 'desconocido');
+    }
+  }).catch(err => {
+    if(btn) btn.disabled = false;
+    if(sub) sub.textContent = 'Error de conexión';
+  });
+}
+
 
 // Cache of players in the currently selected fecha
 let MATCH_FECHA_JUGS = [];
@@ -4279,8 +4313,35 @@ function openMitScore(fecha, cancha){
     const tj = (results[1] && results[1].data) || null;
     const bw = (results[2] && results[2].data) || {};
 
+    // ── HCP Index banner ──────────────────────────────────────────────────
+    // Si el jugador tiene hcpIndex en su perfil y la cancha tiene Slope,
+    // calculamos el HCP de juego y lo mostramos / pre-llenamos.
+    const banner  = document.getElementById('mit-hcp-index-banner');
+    const bannerT = document.getElementById('mit-hcp-index-text');
+    const hcpInput = document.getElementById('mit-hcp');
+    const slope = MIT_CANCHA && MIT_CANCHA.slope;
+    const hcpIdx = MIT_PLAYER && MIT_PLAYER.hcpIndex;
+
+    if(hcpIdx !== null && hcpIdx !== undefined && banner){
+      let bannerHtml = '📊 Tu <strong>Índice WHS</strong>: <strong>' + hcpIdx.toFixed(1) + '</strong>';
+      if(MIT_PLAYER.hcpUpdated) bannerHtml += ' <span style="color:var(--g4);">(actualizado ' + MIT_PLAYER.hcpUpdated + ')</span>';
+      if(slope){
+        const hcpJuego = Math.round(hcpIdx * slope / 113);
+        bannerHtml += '<br>🏌️ <strong>HCP de juego</strong> en esta cancha (slope ' + slope + '): <strong>' + hcpJuego + '</strong>';
+        // Pre-llenar solo si no hay tarjeta ya cargada con HCP
+        if(!tj || tj.hcp === '' || tj.hcp === null || tj.hcp === undefined){
+          hcpInput.value = hcpJuego;
+          updateSummary();
+        }
+      } else {
+        bannerHtml += '<br><span style="color:var(--g4);font-size:11px;">El admin debe cargar el Slope de esta cancha para calcular el HCP de juego automáticamente.</span>';
+      }
+      bannerT.innerHTML = bannerHtml;
+      banner.style.display = 'block';
+    }
+
     if(tj){
-      if(tj.hcp !== '' && tj.hcp !== null) document.getElementById('mit-hcp').value = tj.hcp;
+      if(tj.hcp !== '' && tj.hcp !== null) hcpInput.value = tj.hcp;
       if(tj.ld === 1 || tj.ld === true || tj.ld === '1') ldInput.checked = true;
       if(tj.ba === 1 || tj.ba === true || tj.ba === '1') baInput.checked = true;
       if(Array.isArray(tj.scores)){
