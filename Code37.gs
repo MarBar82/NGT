@@ -17,7 +17,7 @@ const SHEETS = {
 };
 
 const COL_J = { ORDEN: 0, MATRICULA: 1, NOMBRE: 2, APODO: 3, HCP_INDEX: 4, HCP_UPDATED: 5 };
-const COL_C = { ID: 0, NOMBRE: 1, SLOPE: 20 }; // col U (0-indexed) = Slope Rating
+const COL_C = { ID: 0, NOMBRE: 1 }; // Slope/Rating leídos desde NGT DB hoja "Rating"
 
 // ════════════ UTILS ════════════
 function jsonResponse_(obj) {
@@ -462,19 +462,21 @@ function getMisFechas_(matricula) {
   if (!sh) return [];
   const nextEmpty = findNextEmptyRow_(sh, 2);
   if (nextEmpty <= 2) return [];
-  // Cols: A=FM, B=FECHA, C=MATRICULA, D=NOMBRE, E=HCP, F=CANCHA
-  const data = sh.getRange(2, 2, nextEmpty - 2, 5).getValues();
+  // Cols: A=FM, B=FECHA(0), C=MATRICULA(1), D=NOMBRE(2), E=HCP(3), F=CANCHA(4) … AG=COLOR_TEE(31)
+  const data = sh.getRange(2, 2, nextEmpty - 2, 32).getValues();
   const out = [];
   const canchasNeeded = {};
   data.forEach((row, i) => {
     const f = String(row[0] || '').trim();
     const m = String(row[1] || '').trim();
     if (m === String(matricula) && f) {
-      const c = String(row[4] || '').trim();
+      const c  = String(row[4]  || '').trim();
+      const ct = String(row[31] || '').trim().toUpperCase(); // AG = colorTee
       out.push({
-        fecha: f,
-        hcp: row[3] || '',
-        cancha: c,
+        fecha:    f,
+        hcp:      row[3] || '',
+        cancha:   c,
+        colorTee: ct || 'BLANCAS',
         rowIndex: i + 2,
       });
       if (c) canchasNeeded[c.toUpperCase()] = true;
@@ -543,30 +545,27 @@ function getMisFechas_(matricula) {
 }
 
 function getCanchaPares_(canchaNombreOrId) {
-  // Returns { id, nombre, pares: [18], indices: [18] } for a given cancha (by ID or name)
+  // Returns { id, nombre, pares:[18], indices:[18], ratings:[{tee,rating,slope}] }
   // Name matching is case-insensitive.
   const sh = getSheet_(SHEETS.CANCHAS);
   if (!sh) return null;
   const lastRow = sh.getLastRow();
   if (lastRow < 2) return null;
-  const data = sh.getRange(2, 1, lastRow - 1, 22).getValues(); // A:V — incluye slope (U=20) y course rating (V=21)
+  const data = sh.getRange(2, 1, lastRow - 1, 20).getValues(); // A:T (20 cols: id, nombre, 18 pares)
   const keyRaw = String(canchaNombreOrId).trim();
-  const keyUp = keyRaw.toUpperCase();
+  const keyUp  = keyRaw.toUpperCase();
 
   let cancha = null;
   for (let i = 0; i < data.length; i++) {
-    const id = String(data[i][0] || '').trim();
+    const id     = String(data[i][0] || '').trim();
     const nombre = String(data[i][1] || '').trim();
     if (id === keyRaw || nombre.toUpperCase() === keyUp) {
-      const slope = parseInt(data[i][COL_C.SLOPE]) || null;       // col U
-      const cr    = parseFloat(data[i][21]) || null;              // col V = Course Rating
       cancha = {
-        id:           id,
-        nombre:       nombre,
-        pares:        data[i].slice(2, 20).map(v => parseInt(v) || null),
-        indices:      [],
-        slope:        slope,
-        courseRating: cr,
+        id:      id,
+        nombre:  nombre,
+        pares:   data[i].slice(2, 20).map(v => parseInt(v) || null),
+        indices: [],
+        ratings: [], // [{tee, rating, slope}] — llenado desde NGT DB Rating
       };
       break;
     }
@@ -581,10 +580,10 @@ function getCanchaPares_(canchaNombreOrId) {
       const hcpData = shDb.getRange(2, 1, lr - 1, 5).getValues();
       const holes = [];
       hcpData.forEach(r => {
-        const id = String(r[0] || '').trim();
+        const id     = String(r[0] || '').trim();
         const nombre = String(r[1] || '').trim();
         if (id === cancha.id || nombre.toUpperCase() === cancha.nombre.toUpperCase()) {
-          const hoyo = parseInt(r[2]);
+          const hoyo   = parseInt(r[2]);
           const indice = parseInt(r[4]);
           if (hoyo >= 1 && hoyo <= 18 && indice) holes.push({ hoyo, indice });
         }
@@ -595,7 +594,95 @@ function getCanchaPares_(canchaNombreOrId) {
       }
     }
   }
+
+  // Read slope/rating per tee from NGT DB Rating (A=canchaId, B=nombre, C=tee, D=rating, E=slope)
+  const shRating = getHistSheet_('Rating');
+  if (shRating) {
+    const lr = shRating.getLastRow();
+    if (lr >= 2) {
+      const rData = shRating.getRange(2, 1, lr - 1, 5).getValues();
+      rData.forEach(r => {
+        const id     = String(r[0] || '').trim();
+        const nombre = String(r[1] || '').trim();
+        if (id !== cancha.id && nombre.toUpperCase() !== cancha.nombre.toUpperCase()) return;
+        const tee    = String(r[2] || '').trim();
+        const rating = parseFloat(r[3]) || null;
+        const slope  = parseInt(r[4])   || null;
+        if (tee && slope) cancha.ratings.push({ tee, rating, slope });
+      });
+    }
+  }
+
   return cancha;
+}
+
+/**
+ * Builds { slope, rating, tee, hcpMap: { matricula → hcpJuego } } for a given cancha + tee color.
+ * Used by crearFecha_ and editarFecha_ to pre-calculate HCP de juego for each player.
+ * Returns null if slope data is not available for this cancha/color.
+ *
+ * Formula: hcpJuego = round(hcpIndex × slope / 113)
+ * (simplified WHS course handicap — no par adjustment since par isn't stored per-cancha here)
+ */
+function buildHcpJuegoMap_(canchaId, canchaName, teeColor) {
+  // ── 1. Find slope from NGT DB Rating sheet ────────────────────────────────
+  const shRating = getHistSheet_('Rating');
+  if (!shRating) return null;
+  const rlr = shRating.getLastRow();
+  if (rlr < 2) return null;
+
+  const rData    = shRating.getRange(2, 1, rlr - 1, 5).getValues();
+  const colorKey = String(teeColor || 'BLANCAS').trim().toUpperCase();
+  const idKey    = String(canchaId   || '').trim();
+  const nomKey   = String(canchaName || '').trim().toUpperCase();
+
+  let slope = null, rating = null, matchedTee = null;
+
+  // Exact color match first
+  for (const r of rData) {
+    const id  = String(r[0] || '').trim();
+    const nom = String(r[1] || '').trim().toUpperCase();
+    if (id !== idKey && nom !== nomKey) continue;
+    if (String(r[2] || '').trim().toUpperCase() !== colorKey) continue;
+    slope      = parseInt(r[4])   || null;
+    rating     = parseFloat(r[3]) || null;
+    matchedTee = String(r[2] || '').trim();
+    break;
+  }
+  // Fallback: first row for this cancha regardless of color
+  if (!slope) {
+    for (const r of rData) {
+      const id  = String(r[0] || '').trim();
+      const nom = String(r[1] || '').trim().toUpperCase();
+      if (id !== idKey && nom !== nomKey) continue;
+      slope      = parseInt(r[4])   || null;
+      rating     = parseFloat(r[3]) || null;
+      matchedTee = String(r[2] || '').trim();
+      break;
+    }
+  }
+  if (!slope) return null;
+
+  // ── 2. Read hcpIndex for every player from JUGADORES ─────────────────────
+  const jugSh = getSheet_(SHEETS.JUGADORES);
+  const hcpMap = {};
+  if (jugSh) {
+    const jlr = jugSh.getLastRow();
+    if (jlr >= 2) {
+      const cols = COL_J.HCP_INDEX + 1; // read enough columns to include HCP_INDEX
+      const jData = jugSh.getRange(2, 1, jlr - 1, cols).getValues();
+      jData.forEach(row => {
+        const mat    = String(row[COL_J.MATRICULA] || '').trim();
+        const rawHcp = row[COL_J.HCP_INDEX];
+        if (!mat || rawHcp === '' || rawHcp === null || rawHcp === undefined) return;
+        const hcpIndex = parseFloat(rawHcp);
+        if (isNaN(hcpIndex)) return;
+        hcpMap[mat] = Math.round(hcpIndex * slope / 113);
+      });
+    }
+  }
+
+  return { slope, rating, tee: matchedTee, hcpMap };
 }
 
 function debugHcpCanchas_() {
@@ -856,16 +943,20 @@ function editarFecha_(params) {
 
   const colorFinal = colorTee ? String(colorTee).trim().toUpperCase() : null;
 
-  // Find existing rows for this fecha
+  // Find existing rows for this fecha (read B-G = 6 cols, so we get canchaId from col G)
   const nextEmpty = findNextEmptyRow_(sh, 2);
   const existingRows = [];
+  let existingCanchaId   = '';
+  let existingCanchaName = '';
   if (nextEmpty > 2) {
-    const data = sh.getRange(2, 2, nextEmpty - 2, 5).getValues();
+    const data = sh.getRange(2, 2, nextEmpty - 2, 6).getValues(); // B(0)-G(5)
     data.forEach((row, i) => {
       const f = String(row[0] || '').trim();
       const m = String(row[1] || '').trim();
       const n = String(row[2] || '').trim();
       if (f === String(fecha) && m) {
+        if (!existingCanchaId   && row[5]) existingCanchaId   = String(row[5] || '').trim(); // G
+        if (!existingCanchaName && row[4]) existingCanchaName = String(row[4] || '').trim(); // F
         existingRows.push({
           row: i + 2,
           matricula: m,
@@ -893,7 +984,7 @@ function editarFecha_(params) {
     } catch (e) { changes.errors.push('cancha: ' + e.message); }
   }
 
-  // Step 1b: Update color tee (col AB = 28) for all existing rows
+  // Step 1b: Update color tee (col AG = 33) for all existing rows
   if (colorFinal) {
     try {
       existingRows.forEach(er => {
@@ -901,6 +992,27 @@ function editarFecha_(params) {
       });
       changes.colorUpdated = true;
     } catch (e) { changes.errors.push('color: ' + e.message); }
+  }
+
+  // Step 1c: Recalculate HCP de juego for all non-invitado rows when cancha or color changed.
+  // Build hcpInfo once here; reused in Step 3 for newly added players too.
+  const effCanchaId   = canchaId   || existingCanchaId;
+  const effCanchaName = canchaName || existingCanchaName;
+  const effColor      = colorFinal || 'BLANCAS';
+  let   editHcpMap    = {};
+  if (canchaName || colorFinal) {
+    try {
+      const hcpInfo = buildHcpJuegoMap_(effCanchaId, effCanchaName, effColor);
+      if (hcpInfo && Object.keys(hcpInfo.hcpMap).length > 0) {
+        editHcpMap = hcpInfo.hcpMap;
+        existingRows.forEach(er => {
+          if (er.isInvitado) return; // invitados no tienen matricula en JUGADORES
+          const hcp = editHcpMap[er.matricula];
+          if (hcp !== undefined) sh.getRange(er.row, 5).setValue(hcp); // E = HCP de juego
+        });
+        changes.hcpRecalculated = true;
+      }
+    } catch (e) { changes.errors.push('hcp recalc: ' + e.message); }
   }
 
   // Step 2: Remove players no longer in the list
@@ -951,8 +1063,21 @@ function editarFecha_(params) {
     try {
       sh.getRange(nextRow, 2).setValue(fecha);
       sh.getRange(nextRow, 3).setValue(mat);
+      // Write HCP de juego for new player (editHcpMap populated in step 1c, or build now if needed)
+      const newHcp = editHcpMap[mat] !== undefined
+        ? editHcpMap[mat]
+        : (() => {
+            // editHcpMap empty means step 1c was skipped (no cancha/color change sent);
+            // build map on demand using current effective values
+            try {
+              const info = buildHcpJuegoMap_(effCanchaId, effCanchaName, effColor);
+              editHcpMap = (info && info.hcpMap) ? info.hcpMap : {};
+              return editHcpMap[mat] !== undefined ? editHcpMap[mat] : '';
+            } catch(e2) { return ''; }
+          })();
+      if (newHcp !== '') sh.getRange(nextRow, 5).setValue(newHcp); // E = HCP de juego
       if (canchaName) sh.getRange(nextRow, 6, 1, 2).setValues([[canchaName, canchaId]]); // F + G
-      if (colorFinal) sh.getRange(nextRow, 33).setValue(colorFinal);   // AG = col 33
+      if (colorFinal) sh.getRange(nextRow, 33).setValue(colorFinal); // AG = col 33
       nextRow++;
       changes.added.push(mat);
     } catch (e) { changes.errors.push('add ' + mat + ': ' + e.message); }
@@ -1050,6 +1175,11 @@ function crearFecha_(params) {
   // Tee color: defaults to BLANCAS if not provided
   const colorFinal = String(colorTee || 'BLANCAS').trim().toUpperCase();
 
+  // Pre-calculate HCP de juego for all players (hcpIndex × slope / 113).
+  // This avoids asking each player to enter their HCP manually when loading the tarjeta.
+  const hcpInfo = buildHcpJuegoMap_(canchaId, canchaName, colorFinal);
+  const hcpMap  = hcpInfo ? hcpInfo.hcpMap : {};
+
   const existing = [];
   const nextEmpty = findNextEmptyRow_(sh, 2);
   if (nextEmpty > 2) {
@@ -1078,11 +1208,13 @@ function crearFecha_(params) {
   if (newJugMats.length) {
     const startJug = nextRow;
     sh.getRange(startJug, 2, newJugMats.length, 2)
-      .setValues(newJugMats.map(m => [fecha, m]));                    // B-C
+      .setValues(newJugMats.map(m => [fecha, m]));                    // B-C (fecha, matricula)
+    sh.getRange(startJug, 5, newJugMats.length, 1)
+      .setValues(newJugMats.map(m => [hcpMap[m] !== undefined ? hcpMap[m] : ''])); // E (HCP de juego)
     sh.getRange(startJug, 6, newJugMats.length, 2)
-      .setValues(newJugMats.map(() => [canchaName, canchaId]));        // F-G (nombre + ID estático)
+      .setValues(newJugMats.map(() => [canchaName, canchaId]));        // F-G (cancha nombre + ID)
     sh.getRange(startJug, 33, newJugMats.length, 1)
-      .setValues(newJugMats.map(() => [colorFinal]));                  // AG
+      .setValues(newJugMats.map(() => [colorFinal]));                  // AG (color tee)
     nextRow += newJugMats.length;
   }
 

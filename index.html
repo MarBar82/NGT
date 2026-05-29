@@ -1512,7 +1512,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div id="mit-hcp-index-banner" style="display:none;background:var(--off);border:var(--border);border-radius:3px;padding:7px 10px;margin-bottom:8px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g5);line-height:1.4;">
               <span id="mit-hcp-index-text"></span>
             </div>
-            <input type="number" id="mit-hcp" class="adm-input" min="0" max="54" placeholder="Tu hcp" inputmode="numeric" oninput="updateSummary()">
+            <input type="number" id="mit-hcp" class="adm-input" min="0" max="54" placeholder="Calculado automáticamente" inputmode="numeric" oninput="updateSummary()">
           </div>
         </div>
 
@@ -4147,6 +4147,7 @@ window.addEventListener('load', function(){
 let MIT_PLAYER = null;
 let MIT_FECHA = null;         // current fecha being edited
 let MIT_CANCHA = null;        // cancha info (with pares)
+let MIT_COLOR_TEE = 'BLANCAS'; // tee color for the current fecha (from TARJETAS col AG)
 let MIT_SCORES = [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null];
 let MIT_CUR_HOLE = 0;         // hole currently in modal (0-indexed)
 
@@ -4224,7 +4225,7 @@ function showMitFechas(preloadedPromise){
     const pending = fechas.filter(f => !f.hcp || f.hcp === '');
     if(pending.length === 1){
       const f = pending[0];
-      openMitScore(f.fecha, f.cancha || '');
+      openMitScore(f.fecha, f.cancha || '', f.colorTee || 'BLANCAS');
       return;
     }
 
@@ -4243,7 +4244,7 @@ function showMitFechas(preloadedPromise){
           '<div style="font-size:18px;opacity:.35;margin-left:6px;">🔒</div>' +
         '</div>';
       } else {
-        html += '<div class="mit-fecha-card" onclick="openMitScore(\''+f.fecha+'\', \''+(f.cancha||'').replace(/\'/g,"\\\'")+'\')">' +
+        html += '<div class="mit-fecha-card" onclick="openMitScore(\''+f.fecha+'\', \''+(f.cancha||'').replace(/\'/g,"\\\'")+ '\', \''+(f.colorTee||'BLANCAS')+'\')">' +
           '<div class="mit-fecha-num">F' + f.fecha + '</div>' +
           '<div class="mit-fecha-info">' +
             '<div class="mit-fecha-cancha">' + (f.cancha || 'Sin cancha') + '</div>' +
@@ -4257,8 +4258,9 @@ function showMitFechas(preloadedPromise){
   });
 }
 
-function openMitScore(fecha, cancha){
+function openMitScore(fecha, cancha, colorTee){
   MIT_FECHA = fecha;
+  MIT_COLOR_TEE = String(colorTee || 'BLANCAS').trim().toUpperCase();
   document.getElementById('mit-fechas').style.display = 'none';
   document.getElementById('mit-score').style.display = 'block';
   document.getElementById('mit-score-title').textContent = 'Fecha ' + fecha + ' · ' + cancha;
@@ -4313,35 +4315,21 @@ function openMitScore(fecha, cancha){
     const tj = (results[1] && results[1].data) || null;
     const bw = (results[2] && results[2].data) || {};
 
-    // ── HCP Index banner ──────────────────────────────────────────────────
-    // Si el jugador tiene hcpIndex en su perfil y la cancha tiene Slope,
-    // calculamos el HCP de juego y lo mostramos / pre-llenamos.
-    const banner  = document.getElementById('mit-hcp-index-banner');
-    const bannerT = document.getElementById('mit-hcp-index-text');
+    // ── HCP banner: informativo + validación ─────────────────────────────────
+    // El admin ya precalculó el HCP de juego al crear la fecha (hcpIndex × slope / 113)
+    // y lo guardó en TARJETAS col E. Aquí mostramos de dónde viene ese número para que
+    // el jugador lo entienda y lo corrija si hace falta.
+    const banner   = document.getElementById('mit-hcp-index-banner');
+    const bannerT  = document.getElementById('mit-hcp-index-text');
     const hcpInput = document.getElementById('mit-hcp');
-    const slope = MIT_CANCHA && MIT_CANCHA.slope;
-    const hcpIdx = MIT_PLAYER && MIT_PLAYER.hcpIndex;
+    const ratings  = MIT_CANCHA && Array.isArray(MIT_CANCHA.ratings) ? MIT_CANCHA.ratings : [];
+    const hcpIdx   = MIT_PLAYER && MIT_PLAYER.hcpIndex;
 
-    if(hcpIdx !== null && hcpIdx !== undefined && banner){
-      let bannerHtml = '📊 Tu <strong>Índice WHS</strong>: <strong>' + hcpIdx.toFixed(1) + '</strong>';
-      if(MIT_PLAYER.hcpUpdated) bannerHtml += ' <span style="color:var(--g4);">(actualizado ' + MIT_PLAYER.hcpUpdated + ')</span>';
-      if(slope){
-        const hcpJuego = Math.round(hcpIdx * slope / 113);
-        bannerHtml += '<br>🏌️ <strong>HCP de juego</strong> en esta cancha (slope ' + slope + '): <strong>' + hcpJuego + '</strong>';
-        // Pre-llenar solo si no hay tarjeta ya cargada con HCP
-        if(!tj || tj.hcp === '' || tj.hcp === null || tj.hcp === undefined){
-          hcpInput.value = hcpJuego;
-          updateSummary();
-        }
-      } else {
-        bannerHtml += '<br><span style="color:var(--g4);font-size:11px;">El admin debe cargar el Slope de esta cancha para calcular el HCP de juego automáticamente.</span>';
-      }
-      bannerT.innerHTML = bannerHtml;
-      banner.style.display = 'block';
-    }
-
+    // ── Cargar HCP desde la tarjeta guardada (precalculado por el admin) ──────
     if(tj){
-      if(tj.hcp !== '' && tj.hcp !== null) hcpInput.value = tj.hcp;
+      if(tj.hcp !== '' && tj.hcp !== null && tj.hcp !== undefined) {
+        hcpInput.value = tj.hcp;
+      }
       if(tj.ld === 1 || tj.ld === true || tj.ld === '1') ldInput.checked = true;
       if(tj.ba === 1 || tj.ba === true || tj.ba === '1') baInput.checked = true;
       if(Array.isArray(tj.scores)){
@@ -4350,6 +4338,40 @@ function openMitScore(fecha, cancha){
           if(v !== '' && v !== null && v !== undefined) MIT_SCORES[i] = parseInt(v) || null;
         }
       }
+    }
+
+    // ── Mostrar banner con detalle del HCP calculado ──────────────────────────
+    // Si el jugador tiene hcpIndex y la cancha tiene slope: mostramos de dónde
+    // viene el HCP de juego para que el jugador pueda validarlo/corregirlo.
+    if(hcpIdx !== null && hcpIdx !== undefined && banner){
+      let bannerHtml = '📊 Índice WHS: <strong>' + hcpIdx.toFixed(1) + '</strong>';
+      if(MIT_PLAYER.hcpUpdated) bannerHtml += ' <span style="color:var(--g4);">(actualizado ' + MIT_PLAYER.hcpUpdated + ')</span>';
+
+      if(ratings.length > 0){
+        const colorKey      = MIT_COLOR_TEE.toUpperCase();
+        const matchedRating = ratings.find(r => String(r.tee || '').toUpperCase() === colorKey) || ratings[0];
+        const slope         = matchedRating.slope;
+        const rating        = matchedRating.rating;
+        const hcpCalculado  = Math.round(hcpIdx * slope / 113);
+        const colorLabel    = matchedRating.tee;
+
+        bannerHtml += ' · slope ' + slope + (rating ? ' / rating ' + rating : '') +
+                      ' · <strong>' + colorLabel + '</strong>' +
+                      ' → HCP calculado: <strong>' + hcpCalculado + '</strong>';
+
+        // Si la tarjeta no tenía HCP precargado (fecha anterior al cambio), auto-llenar ahora
+        if(!hcpInput.value){
+          hcpInput.value = hcpCalculado;
+          updateSummary();
+        }
+
+        bannerHtml += '<br><span style="color:var(--g4);font-size:11px;">Si no es correcto, modificalo en el campo de abajo antes de confirmar.</span>';
+      } else {
+        bannerHtml += '<br><span style="color:var(--g4);font-size:11px;">Sin slope cargado para esta cancha. Ingresá tu HCP manualmente.</span>';
+      }
+
+      bannerT.innerHTML = bannerHtml;
+      banner.style.display = 'block';
     }
 
     // Disable LD/BA checkboxes if someone else already won
