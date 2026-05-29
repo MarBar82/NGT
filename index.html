@@ -3431,7 +3431,7 @@ function admActualizarHcp(){
   if(btn) btn.disabled = true;
   if(sub) sub.textContent = 'Consultando vistagolf… puede tardar ~10 seg';
 
-  ngtApiPost({ action: 'actualizarHcpIndices', adminKey: ADM_KEY }).then(r => {
+  ngtApiPost({ action: 'actualizarHcpIndices', adminKey: ADMIN_KEY_OK }).then(r => {
     if(btn) btn.disabled = false;
     if(r && r.ok){
       const msg = 'Actualizado: ' + r.updated + ' jugadores · No encontrados: ' + (r.notFound || 0);
