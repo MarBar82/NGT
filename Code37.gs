@@ -3916,17 +3916,54 @@ function fetchHcpIndex_(matricula) {
   try {
     const url = 'http://www.vistagolf.com.ar/handicap/DiferencialesArg.asp'
               + '?strCampo=Campo1&strValor=' + encodeURIComponent(String(matricula).trim());
-    const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
-    if (resp.getResponseCode() !== 200) return null;
+    const resp = UrlFetchApp.fetch(url, {
+      muteHttpExceptions: true,
+      followRedirects: true,
+      deadline: 15,           // 15s máximo por request — evita colgar la ejecución
+    });
+    const code = resp.getResponseCode();
+    if (code !== 200) {
+      Logger.log('fetchHcpIndex_ [' + matricula + '] HTTP ' + code);
+      return null;
+    }
     // Página en ISO-8859-1 (ASP clásico en español)
     const html = resp.getContentText('ISO-8859-1');
-    // El HCP Index aparece como "HCP Index: 8.8" o similar en la página
-    const m = html.match(/HCP\s+Index\s*:?\s*([0-9]+\.?[0-9]*)/i);
-    if (!m) return null;
-    const val = parseFloat(m[1]);
+    // El HCP Index aparece como "HCP Index: 17,5" (coma) o "17.5" (punto) según el idioma del sitio
+    const m = html.match(/HCP\s+Index\s*:?\s*([0-9]+[.,][0-9]+|[0-9]+)/i);
+    if (!m) {
+      Logger.log('fetchHcpIndex_ [' + matricula + '] regex no match. HTML snippet: ' + html.substring(0, 300));
+      return null;
+    }
+    const val = parseFloat(m[1].replace(',', '.'));  // normalizar coma → punto antes de parsear
     return isNaN(val) ? null : val;
   } catch(e) {
+    Logger.log('fetchHcpIndex_ [' + matricula + '] exception: ' + e.message);
     return null;
+  }
+}
+
+/**
+ * TEST — ejecutar desde el editor para diagnosticar la conexión con vistagolf.
+ * Cambiá MATRICULA_TEST por una matrícula real antes de correr.
+ */
+function testFetchHcpUno() {
+  const MATRICULA_TEST = '89837'; // ← reemplazá con una matrícula real
+  Logger.log('=== Test fetchHcpIndex_ ===');
+  Logger.log('Matrícula: ' + MATRICULA_TEST);
+  const url = 'http://www.vistagolf.com.ar/handicap/DiferencialesArg.asp'
+            + '?strCampo=Campo1&strValor=' + encodeURIComponent(String(MATRICULA_TEST).trim());
+  Logger.log('URL: ' + url);
+  try {
+    const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true, deadline: 15 });
+    Logger.log('HTTP code: ' + resp.getResponseCode());
+    const html = resp.getContentText('ISO-8859-1');
+    Logger.log('Response length: ' + html.length);
+    Logger.log('First 500 chars: ' + html.substring(0, 500));
+    const m = html.match(/HCP\s+Index\s*:?\s*([0-9]+\.?[0-9]*)/i);
+    Logger.log('Regex match: ' + JSON.stringify(m));
+    Logger.log('HCP Index resultado: ' + (m ? parseFloat(m[1]) : 'NO ENCONTRADO'));
+  } catch(e) {
+    Logger.log('ERROR: ' + e.message);
   }
 }
 
