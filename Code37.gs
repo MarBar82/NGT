@@ -4424,33 +4424,35 @@ function armarLineas_(params) {
   // Clave de par
   function pKey(a, b) { return [a.matricula, b.matricula].sort().join('|'); }
 
-  // Para una línea de 4, busca la mejor división {A,D} vs {B,C}
-  // donde los matches son A-B, A-C, D-B, D-C.
-  // Devuelve { matches, matchScore, lineScore } o null si ninguna es válida.
+  // Penalizaciones — son SOFT (nunca bloquean, solo ordenan preferencias).
+  // El algoritmo siempre encuentra una solución; simplemente prefiere evitar repeticiones.
+  var PEN_MATCH_REPEAT = 10000; // partido ya jugado: muy indeseable
+  var PEN_LINE_REPEAT  = 1000;  // línea compartida en últimas 2 fechas: indeseable
+
+  // Para una línea de 4: busca la mejor división {A,D} vs {B,C}.
+  // Siempre devuelve la mejor de las 3 opciones (nunca null).
   function bestFourDiv(group) {
-    // 3 posibles divisiones de índices [0,1,2,3] en dos pares de "lados"
     var divs = [
-      [[0,1],[2,3]],  // {g[0],g[1]} vs {g[2],g[3]}  → g0-g2,g0-g3,g1-g2,g1-g3
-      [[0,2],[1,3]],  // {g[0],g[2]} vs {g[1],g[3]}
-      [[0,3],[1,2]],  // {g[0],g[3]} vs {g[1],g[2]}
+      [[0,1],[2,3]],
+      [[0,2],[1,3]],
+      [[0,3],[1,2]],
     ];
     var best = null, bestScore = Infinity;
     divs.forEach(function(div) {
       var sideA = [group[div[0][0]], group[div[0][1]]];
       var sideB = [group[div[1][0]], group[div[1][1]]];
-      // Matches: sideA[0]-sideB[0], sideA[0]-sideB[1], sideA[1]-sideB[0], sideA[1]-sideB[1]
       var mps = [
         [sideA[0], sideB[0]], [sideA[0], sideB[1]],
         [sideA[1], sideB[0]], [sideA[1], sideB[1]],
       ];
-      // Hard: ningún match puede haber sido jugado
-      var hasMatchConflict = mps.some(function(mp) { return matchedPairs[pKey(mp[0], mp[1])]; });
-      if (hasMatchConflict) return;
-      // Score: HCP diff de los matches (menor = mejor)
-      var matchScore = mps.reduce(function(s, mp) { return s + Math.abs(mp[0].hcp - mp[1].hcp); }, 0);
-      // Soft: penalizar línea compartida en últimas 2 fechas (todos los pares del grupo)
+      // Penalizar matches repetidos (no bloquear)
+      var matchScore = mps.reduce(function(s, mp) {
+        return s + Math.abs(mp[0].hcp - mp[1].hcp)
+                 + (matchedPairs[pKey(mp[0], mp[1])] ? PEN_MATCH_REPEAT : 0);
+      }, 0);
+      // Penalizar línea compartida en últimas 2 fechas
       var lineScore = allPairs(group).reduce(function(s, mp) {
-        return s + (recentLinePairs[pKey(mp[0], mp[1])] ? 1000 : 0);
+        return s + (recentLinePairs[pKey(mp[0], mp[1])] ? PEN_LINE_REPEAT : 0);
       }, 0);
       var total = matchScore + lineScore;
       if (total < bestScore) {
@@ -4458,28 +4460,26 @@ function armarLineas_(params) {
         best = { matches: mps, matchScore: matchScore, lineScore: lineScore };
       }
     });
-    return best;
+    return best; // siempre devuelve la mejor opción disponible
   }
 
-  // Puntaje de un grupo de 3 para la línea
+  // Puntaje de un grupo de 3 — nunca Infinity
   function scoreThree(group) {
     var pairs = allPairs(group);
-    // Hard: match repetido → siempre inválido
-    if (pairs.some(function(mp) { return matchedPairs[pKey(mp[0], mp[1])]; })) return Infinity;
-    // Soft 1: línea compartida en últimas 2 fechas → muy penalizado
-    var lineScore = pairs.reduce(function(s, mp) {
-      return s + (recentLinePairs[pKey(mp[0], mp[1])] ? 1000 : 0);
+    var matchScore = pairs.reduce(function(s, mp) {
+      return s + (matchedPairs[pKey(mp[0], mp[1])] ? PEN_MATCH_REPEAT : 0);
     }, 0);
-    // Soft 2: HCP spread
+    var lineScore = pairs.reduce(function(s, mp) {
+      return s + (recentLinePairs[pKey(mp[0], mp[1])] ? PEN_LINE_REPEAT : 0);
+    }, 0);
     var hcpSpread = Math.max.apply(null, group.map(function(p){ return p.hcp; }))
                   - Math.min.apply(null, group.map(function(p){ return p.hcp; }));
-    return lineScore + hcpSpread;
+    return matchScore + lineScore + hcpSpread;
   }
 
-  // Puntaje de un grupo de 4 para la línea
+  // Puntaje de un grupo de 4 — nunca Infinity
   function scoreFour(group) {
     var div = bestFourDiv(group);
-    if (!div) return Infinity;
     return div.matchScore + div.lineScore;
   }
 
@@ -4495,8 +4495,6 @@ function armarLineas_(params) {
 
     for (var i = 0; i < combos.length; i++) {
       var group = combos[i];
-      var score = scoreFn(group);
-      if (score === Infinity) continue; // inválido, saltear
 
       var usedSet = {};
       group.forEach(function(p) { usedSet[p.matricula] = true; });
@@ -4530,7 +4528,7 @@ function armarLineas_(params) {
 
   const lines = buildLines(players, numThree, numFour);
   if (!lines) {
-    return { ok: false, error: 'No se pudo armar líneas sin repetir partidos. Revisá el historial de matches.' };
+    return { ok: false, error: 'Error inesperado al armar líneas. Intentá de nuevo.' };
   }
 
   // ── 6. Formatear resultado ────────────────────────────────────────────────
