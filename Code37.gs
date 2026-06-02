@@ -2776,11 +2776,24 @@ function getProximaFecha_() {
 
   // Sort upcoming by millisUntil ascending (soonest first)
   upcoming.sort((a, b) => a.millisUntil - b.millisUntil);
-  if (upcoming.length) return upcoming[0];
+
+  // Enriquecer con datos de FECHA_META (horario, lineas confirmadas, cancha override)
+  const meta = JSON.parse(PropertiesService.getDocumentProperties().getProperty('FECHA_META') || '{}');
+  function enrichWithMeta(item) {
+    const m = meta[String(item.fechaNum)] || {};
+    return Object.assign({}, item, {
+      hasLineas: Array.isArray(m.lineas) && m.lineas.length > 0,
+      horario:   m.horario   || '',
+      greenFee:  m.greenFee  || '',
+      cancha:    m.canchaName || item.cancha || 'Cancha a definir',
+    });
+  }
+
+  if (upcoming.length) return enrichWithMeta(upcoming[0]);
 
   // If no upcoming fecha, return the most recent past one so UI can show a "torneo finalizado" message
   all.sort((a, b) => b.millisUntil - a.millisUntil);
-  return all.length ? { ...all[0], isPast: true } : null;
+  return all.length ? enrichWithMeta(Object.assign({}, all[0], { isPast: true })) : null;
 }
 
 // ════════════ HISTÓRICO (NGT DB) ════════════

@@ -927,6 +927,15 @@ body.home-mode{
   opacity:1;
   background:rgba(255,255,255,.06);
 }
+.home-btn-fecha{
+  background:linear-gradient(135deg, #0a3d6e 0%, var(--navy) 100%);
+  border-color:rgba(201,168,76,.6);
+  box-shadow:0 4px 16px rgba(0,35,75,.5);
+}
+.home-btn-fecha:hover{
+  border-color:#c9a84c;
+  box-shadow:0 6px 22px rgba(0,35,75,.7);
+}
 .hb-icon{
   font-size:28px;
   width:44px;
@@ -1421,9 +1430,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <div class="home-subtitle">XIV · 2026</div>
       </div>
 
-      <div class="home-eyebrow">Próxima Fecha</div>
-
-      <div class="home-fecha-card" id="home-fecha-card">
+      <div class="home-fecha-card" id="home-fecha-card-OLD" style="display:none;">
         <div class="hfc-num" id="hfi-num">Fecha —</div>
         <div class="hfc-rows">
           <div class="hfc-row">
@@ -1453,6 +1460,18 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       </div>
 
       <div class="home-actions">
+
+        <!-- Botón FECHA activa — mostrado cuando hay fecha con líneas confirmadas y no completada -->
+        <button class="home-btn home-btn-fecha" id="home-fecha-btn"
+                style="display:none;"
+                onclick="openVerLineas(HOME_FECHA_ACTIVA)">
+          <span class="hb-icon">📅</span>
+          <span class="hb-txt">
+            <span class="hb-title" id="home-fecha-btn-title">FECHA —</span>
+            <span class="hb-sub" id="home-fecha-btn-sub">Ver líneas y matches</span>
+          </span>
+        </button>
+
         <button class="home-btn home-btn-primary" onclick="pg('lb', document.querySelectorAll('.subnav .snb')[1])">
           <span class="hb-icon">🏆</span>
           <span class="hb-txt"><span class="hb-title">Ver Torneo</span><span class="hb-sub">Leaderboard, Fechas, Match</span></span>
@@ -1463,7 +1482,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         </button>
         <button class="home-btn home-btn-admin" onclick="pg('admin', document.querySelectorAll('.subnav .snb-admin')[0])">
           <span class="hb-icon">⚙</span>
-          <span class="hb-txt"><span class="hb-title">Crear Fecha</span><span class="hb-sub">Admin</span></span>
+          <span class="hb-txt"><span class="hb-title">Admin</span><span class="hb-sub">Panel de administración</span></span>
         </button>
       </div>
 
@@ -5790,7 +5809,24 @@ function loadHome(){
   });
 }
 
+let HOME_FECHA_ACTIVA = null; // número de fecha activa para openVerLineas
+
 function applyHomeData(data){
+  // ── Botón FECHA activa ───────────────────────────────────────────────────
+  const fechaBtn    = document.getElementById('home-fecha-btn');
+  const fechaBtnTit = document.getElementById('home-fecha-btn-title');
+  const fechaBtnSub = document.getElementById('home-fecha-btn-sub');
+  if(fechaBtn && data && data.fechaNum && data.hasLineas && !data.isPast){
+    HOME_FECHA_ACTIVA = parseInt(data.fechaNum) || 0;
+    if(fechaBtnTit) fechaBtnTit.textContent = 'FECHA ' + data.fechaNum;
+    const sub = [data.cancha, data.horario].filter(Boolean).join(' · ');
+    if(fechaBtnSub) fechaBtnSub.textContent = sub || 'Ver líneas y matches';
+    fechaBtn.style.display = 'flex';
+  } else if(fechaBtn) {
+    fechaBtn.style.display = 'none';
+  }
+
+  // Legacy elements (hidden but kept to avoid JS errors)
   const numEl = document.getElementById('hfi-num');
   const canchaEl = document.getElementById('hfi-cancha');
   const dateEl = document.getElementById('hfi-date');
