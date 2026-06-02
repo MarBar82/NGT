@@ -866,6 +866,127 @@ function getFechaMeta_(fecha) {
 }
 
 /**
+ * Devuelve la información completa de una fecha para mostrar el card:
+ * líneas, jugadores (nombre, apodo, HCPs), matches y meta (horario, cancha, greenfee).
+ * Usa FECHA_META para líneas + TARJETAS para HCP + JUGADORES para nombres + Rating para slopes.
+ */
+function getFechaLineas_(fecha) {
+  if (!fecha) return null;
+  const meta = getFechaMeta_(fecha);
+  if (!meta || !meta.lineas || !meta.lineas.length) return null;
+
+  // ── Jugadores de esta fecha → hcp de juego (col E TARJETAS) ─────────────
+  const shT = getSheet_(SHEETS.TARJETAS);
+  const hcpMap = {}; // matricula → hcp de juego (almacenado en tarjeta)
+  if (shT) {
+    const ne = findNextEmptyRow_(shT, 2);
+    if (ne > 2) {
+      shT.getRange(2, 2, ne - 2, 4).getValues().forEach(function(row) {
+        const f = String(row[0] || '').trim();
+        const m = String(row[1] || '').trim();
+        if (f === String(fecha) && m) hcpMap[m] = parseInt(row[3]) || 0;
+      });
+    }
+  }
+
+  // ── Nombres y apodos desde JUGADORES ─────────────────────────────────────
+  const jugs = getJugadores_();
+  const jugMap = {};
+  jugs.forEach(function(j) { jugMap[j.matricula] = j; });
+
+  // ── Slopes desde Rating (para mostrar HCP blancas y azules) ─────────────
+  const canchaId = meta.canchaId || '';
+  const canchaName = meta.canchaName || '';
+  const cd = getCanchaPares_(canchaId || canchaName);
+  const ratings = (cd && cd.ratings) || [];
+
+  function computeHcp(hcpIndex, slope) {
+    if (!hcpIndex || !slope) return null;
+    return Math.round(hcpIndex * slope / 113);
+  }
+
+  // ── Matches de esta fecha desde MATCH sheet ───────────────────────────────
+  const shM = getSheet_(SHEETS.MATCH);
+  const matchPairsSet = {}; // "matA|matB" sorted → true
+  if (shM) {
+    try {
+      const ne2 = shM.getLastRow();
+      if (ne2 >= 2) {
+        // Read cols B(2)=fecha, C(3)=j1mat, D(4)=j2mat (standard MATCH layout)
+        const mData = shM.getRange(2, 2, ne2 - 1, 4).getValues();
+        mData.forEach(function(row) {
+          if (String(row[0] || '').trim() !== String(fecha)) return;
+          const j1 = String(row[1] || '').trim();
+          const j2 = String(row[2] || '').trim(); // approx — actual col depends on MATCH layout
+          if (j1 && j2) matchPairsSet[[j1, j2].sort().join('|')] = true;
+        });
+      }
+    } catch(e) {}
+  }
+
+  // ── Construir líneas ──────────────────────────────────────────────────────
+  const lineas = meta.lineas.map(function(lineaMats, idx) {
+    const lineNum = idx + 1;
+    const players = lineaMats.map(function(mat) {
+      const j = jugMap[String(mat)] || {};
+      const hcpIndex = j.hcpIndex || null;
+      // Find tee colors
+      const teeData = {};
+      ratings.forEach(function(r) {
+        const key = (r.tee || '').toUpperCase();
+        teeData[key] = {
+          hcp:   computeHcp(hcpIndex, r.slope),
+          pct85: computeHcp(hcpIndex, r.slope) !== null ? Math.round(computeHcp(hcpIndex, r.slope) * 0.85) : null,
+          slope: r.slope,
+          rating: r.rating,
+        };
+      });
+      return {
+        matricula: String(mat),
+        nombre: j.nombre || '',
+        apodo:  (j.apodo || (j.nombre ? j.nombre.split(' ')[0] : '') || String(mat)).toUpperCase(),
+        hcp:    hcpMap[String(mat)] || 0,
+        tees:   teeData, // { BLANCAS: {hcp, pct85, slope, rating}, AZULES: {...} }
+      };
+    });
+
+    // Matches de esta línea = todos los pares de players que tienen un match en MATCH sheet
+    const mats = lineaMats.map(String);
+    const matches = [];
+    for (var i = 0; i < mats.length; i++) {
+      for (var j2 = i + 1; j2 < mats.length; j2++) {
+        const key = [mats[i], mats[j2]].sort().join('|');
+        if (matchPairsSet[key]) {
+          const pA = players.find(function(p) { return p.matricula === mats[i]; });
+          const pB = players.find(function(p) { return p.matricula === mats[j2]; });
+          matches.push({
+            j1: mats[i], apodo1: pA ? pA.apodo : mats[i],
+            j2: mats[j2], apodo2: pB ? pB.apodo : mats[j2],
+          });
+        }
+      }
+    }
+
+    return { lineNum: lineNum, players: players, matches: matches };
+  });
+
+  // ── Fecha del calendario ──────────────────────────────────────────────────
+  const fechasMap = { '1':'08-03','2':'19-04','3':'10-05','4':'07-06','5':'05-07',
+                      '6':'09-08','7':'13-09','8':'25-10' };
+
+  return {
+    fecha:     String(fecha),
+    dia:       fechasMap[String(fecha)] || '',
+    cancha:    canchaName,
+    canchaId:  canchaId,
+    colorTee:  meta.colorTee || 'BLANCAS',
+    horario:   meta.horario  || '',
+    greenFee:  meta.greenFee || '',
+    lineas:    lineas,
+  };
+}
+
+/**
  * Get full detail of an existing fecha: all players in it, cancha, dobles
  */
 function getFechaDetalle_(fecha) {
@@ -1160,7 +1281,8 @@ function debugMatch_() {
 
 // ════════════ WRITES ════════════
 function crearFecha_(params) {
-  const { adminKey, fecha, canchaId, jugadores, dobles, invitados, colorTee } = params;
+  const { adminKey, fecha, canchaId, jugadores, dobles, invitados, colorTee,
+          horario, greenFee, lineas } = params;
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
   if (!fecha || !canchaId || ((!jugadores || !jugadores.length) && (!invitados || !invitados.length))) {
     return { ok: false, error: 'Faltan datos' };
@@ -1254,8 +1376,42 @@ function crearFecha_(params) {
   audit_('CREAR_FECHA', 'admin', { fecha, canchaId, canchaName, jugadores, dobles, invitados, added, dobleResults });
   const props = PropertiesService.getDocumentProperties();
   const meta = JSON.parse(props.getProperty('FECHA_META') || '{}');
-  meta[String(fecha)] = { canchaId, canchaName, dobles: dobles || [] };
+  meta[String(fecha)] = {
+    canchaId,
+    canchaName,
+    dobles:   dobles   || [],
+    colorTee: colorTee || 'BLANCAS',
+    horario:  horario  || '',
+    greenFee: greenFee || '',
+    lineas:   Array.isArray(lineas) ? lineas : [],  // [[mat,...], [mat,...], ...]
+  };
   props.setProperty('FECHA_META', JSON.stringify(meta));
+
+  // ── Escribir líneas en MATCH!BZ:CB (flat list: fecha, nroLinea, apodo) ──────
+  // Esto permite que armarLineas_ sepa qué líneas se jugaron en fechas anteriores.
+  if (Array.isArray(lineas) && lineas.length) {
+    try {
+      const shM = getSheet_(SHEETS.MATCH);
+      const jugsAll = getJugadores_();
+      const matToApodo = {};
+      jugsAll.forEach(function(j) {
+        matToApodo[j.matricula] = (j.apodo || j.nombre.split(' ')[0] || j.matricula).toUpperCase();
+      });
+      const rows = [];
+      lineas.forEach(function(lineaMats, idx) {
+        const lineNum = idx + 1;
+        (Array.isArray(lineaMats) ? lineaMats : []).forEach(function(mat) {
+          const apodo = matToApodo[String(mat)] || String(mat);
+          rows.push([parseInt(fecha), lineNum, apodo]);
+        });
+      });
+      if (rows.length) {
+        const lastRow = shM.getLastRow();
+        const startRow = Math.max(lastRow + 1, 2);
+        shM.getRange(startRow, 78, rows.length, 3).setValues(rows); // BZ=78, CA=79, CB=80
+      }
+    } catch(e) { /* no bloquear si falla la escritura de líneas */ }
+  }
 
   return {
     ok: true,
@@ -4155,57 +4311,75 @@ function armarLineas_(params) {
   });
   players.forEach(function(p) { p.apodo = matToApodo[p.matricula] || p.matricula; });
 
-  // ── 3. Leer matrices del sheet MATCH ─────────────────────────────────────
+  // ── 3. Leer historial de matches y líneas del sheet MATCH ────────────────
   const shM = getSheet_(SHEETS.MATCH);
   if (!shM) return { ok: false, error: 'Hoja MATCH no encontrada' };
 
-  let matchRaw, lineRaw;
+  // 3a. Match history: BF1:BX19 — matriz 18×18 con 1 si ya jugaron
+  const matchedPairs = {}; // "matA|matB" → true
   try {
-    matchRaw = shM.getRange(1, 58, 19, 19).getValues(); // BF1:BX19
-    lineRaw  = shM.getRange(1, 79, 19, 19).getValues(); // CA1:CS19
-  } catch(e) {
-    return { ok: false, error: 'Error leyendo matrices MATCH: ' + e.message };
-  }
-
-  // ── 4. Parsear matrices → sets de pares ──────────────────────────────────
-  function parseMatrix(raw) {
-    const result = {}; // "matA_matB" (sorted) → max value seen
-    const headerRow = raw[0];
-
-    // Find column index for each player apodo
-    const colToMat = {}; // col index → matricula
+    const matchRaw = shM.getRange(1, 58, 19, 19).getValues(); // BF1:BX19
+    const headerRow = matchRaw[0];
+    const colToMat = {};
     for (var c = 0; c < headerRow.length; c++) {
       const v = String(headerRow[c] || '').trim().toUpperCase();
       if (v && apodoToMat[v]) colToMat[c] = apodoToMat[v];
     }
-
-    // Find which column holds the row label (apodo)
     var labelCol = -1;
     for (var c2 = 0; c2 <= 2; c2++) {
-      const v2 = String(raw[1] ? raw[1][c2] : '').trim().toUpperCase();
-      if (v2 && apodoToMat[v2]) { labelCol = c2; break; }
+      if (matchRaw[1] && apodoToMat[String(matchRaw[1][c2] || '').trim().toUpperCase()]) {
+        labelCol = c2; break;
+      }
     }
-    if (labelCol < 0) return result;
+    if (labelCol >= 0) {
+      for (var r = 1; r < matchRaw.length; r++) {
+        const matA = apodoToMat[String(matchRaw[r][labelCol] || '').trim().toUpperCase()];
+        if (!matA) continue;
+        Object.keys(colToMat).forEach(function(c3) {
+          const matB = colToMat[c3];
+          if (!matB || matB === matA) return;
+          if (parseInt(matchRaw[r][c3]) > 0) matchedPairs[[matA, matB].sort().join('|')] = true;
+        });
+      }
+    }
+  } catch(e) { /* continuar sin historial de matches */ }
 
-    for (var r = 1; r < raw.length; r++) {
-      const rowApodo = String(raw[r][labelCol] || '').trim().toUpperCase();
-      const matA = apodoToMat[rowApodo];
-      if (!matA) continue;
-      Object.keys(colToMat).forEach(function(c3) {
-        const matB = colToMat[c3];
-        if (!matB || matB === matA) return;
-        const val = parseInt(raw[r][c3]) || 0;
-        if (val > 0) {
-          const key = [matA, matB].sort().join('|');
-          result[key] = Math.max(result[key] || 0, val);
-        }
+  // 3b. Líneas compartidas: BZ:CB flat list (BZ=78) — fecha, nroLinea, apodo
+  // Regla: evitar repetir línea con las ÚLTIMAS 2 FECHAS jugadas.
+  const recentLinePairs = {}; // "matA|matB" → true si compartieron línea en las últimas 2 fechas
+  try {
+    const lastRowM = shM.getLastRow();
+    if (lastRowM >= 2) {
+      const lineData = shM.getRange(2, 78, lastRowM - 1, 3).getValues(); // BZ:CB
+      // Build: fechaNum → lineNum → [matriculas]
+      const linesByFecha = {};
+      lineData.forEach(function(row) {
+        const f  = parseInt(row[0]) || 0;
+        const l  = parseInt(row[1]) || 0;
+        const ap = String(row[2] || '').trim().toUpperCase();
+        if (!f || !l || !ap) return;
+        const mat = apodoToMat[ap];
+        if (!mat) return;
+        if (!linesByFecha[f]) linesByFecha[f] = {};
+        if (!linesByFecha[f][l]) linesByFecha[f][l] = [];
+        linesByFecha[f][l].push(mat);
+      });
+      // Últimas 2 fechas anteriores a la actual
+      const currentFechaNum = parseInt(fecha) || 0;
+      const lastTwo = Object.keys(linesByFecha).map(Number)
+        .filter(function(f2) { return f2 < currentFechaNum; })
+        .sort(function(a, b) { return b - a; })
+        .slice(0, 2);
+      lastTwo.forEach(function(f2) {
+        Object.values(linesByFecha[f2]).forEach(function(players) {
+          for (var i = 0; i < players.length; i++)
+            for (var j = i + 1; j < players.length; j++) {
+              recentLinePairs[[players[i], players[j]].sort().join('|')] = true;
+            }
+        });
       });
     }
-    return result;
-  }
-
-  const matchedPairs = parseMatrix(matchRaw); // par → 1 si ya jugaron match
-  const sharedPairs  = parseMatrix(lineRaw);  // par → N veces en misma línea
+  } catch(e) { /* continuar sin historial de líneas */ }
 
   // ── 5. Algoritmo de armado de líneas ─────────────────────────────────────
   const N = players.length;
@@ -4261,9 +4435,9 @@ function armarLineas_(params) {
       if (hasMatchConflict) return;
       // Score: HCP diff de los matches (menor = mejor)
       var matchScore = mps.reduce(function(s, mp) { return s + Math.abs(mp[0].hcp - mp[1].hcp); }, 0);
-      // Soft: penalizar línea compartida previa (todos los pares de la línea)
+      // Soft: penalizar línea compartida en últimas 2 fechas (todos los pares del grupo)
       var lineScore = allPairs(group).reduce(function(s, mp) {
-        return s + (sharedPairs[pKey(mp[0], mp[1])] || 0) * 10;
+        return s + (recentLinePairs[pKey(mp[0], mp[1])] ? 1000 : 0);
       }, 0);
       var total = matchScore + lineScore;
       if (total < bestScore) {
@@ -4276,11 +4450,14 @@ function armarLineas_(params) {
 
   // Puntaje de un grupo de 3 para la línea
   function scoreThree(group) {
-    var hasConflict = allPairs(group).some(function(mp) { return matchedPairs[pKey(mp[0], mp[1])]; });
-    if (hasConflict) return Infinity;
-    var lineScore = allPairs(group).reduce(function(s, mp) {
-      return s + (sharedPairs[pKey(mp[0], mp[1])] || 0) * 10;
+    var pairs = allPairs(group);
+    // Hard: match repetido → siempre inválido
+    if (pairs.some(function(mp) { return matchedPairs[pKey(mp[0], mp[1])]; })) return Infinity;
+    // Soft 1: línea compartida en últimas 2 fechas → muy penalizado
+    var lineScore = pairs.reduce(function(s, mp) {
+      return s + (recentLinePairs[pKey(mp[0], mp[1])] ? 1000 : 0);
     }, 0);
+    // Soft 2: HCP spread
     var hcpSpread = Math.max.apply(null, group.map(function(p){ return p.hcp; }))
                   - Math.min.apply(null, group.map(function(p){ return p.hcp; }));
     return lineScore + hcpSpread;
@@ -4379,6 +4556,7 @@ function doPost(e) {
       case 'editarMatches':       result = editarMatches_(params); break;
       case 'actualizarHcpIndices': result = actualizarHcpIndices_(params); break;
       case 'armarLineas':          result = armarLineas_(params); break;
+      case 'fechaLineas':          result = { ok: true, data: getFechaLineas_(params.fecha) }; break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }

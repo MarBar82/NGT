@@ -835,6 +835,44 @@ body.home-mode{
 }
 .hfi-ver-btn:hover{ background:#fff;color:var(--red); }
 
+/* ── Fecha Card (modal Ver Líneas) ── */
+.fc-card{background:#fff;font-family:'Barlow Condensed',sans-serif;}
+.fc-hdr{background:var(--navy);color:#fff;padding:14px 18px;border-bottom:3px solid var(--red);display:flex;align-items:center;gap:14px;}
+.fc-logo{width:46px;height:46px;object-fit:contain;flex-shrink:0;}
+.fc-hdr-txt{flex:1;text-align:center;}
+.fc-tour{font-size:9px;letter-spacing:.3em;font-weight:700;color:#c9a84c;text-transform:uppercase;margin-bottom:3px;}
+.fc-num{font-family:'Roboto Slab',serif;font-size:24px;font-weight:900;letter-spacing:.06em;}
+.fc-line{width:40px;height:2px;background:#c9a84c;margin:5px auto 0;}
+.fc-spacer{width:46px;}
+.fc-info{padding:10px 12px;background:var(--off);border-bottom:1px solid var(--g2);display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+.fc-inf-box{background:#fff;border:1px solid var(--g2);padding:8px 10px;}
+.fc-inf-lbl{font-size:8px;font-weight:700;letter-spacing:.14em;color:var(--g4);text-transform:uppercase;margin-bottom:2px;}
+.fc-inf-val{font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;}
+.fc-fee{color:var(--red);}
+.fc-lineas{padding:10px 10px 6px;}
+.fc-linea{border:1px solid var(--g2);margin-bottom:10px;}
+.fc-linea-hdr{background:var(--navy);color:#fff;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;}
+.fc-lnum{font-family:'Roboto Slab',serif;font-size:14px;font-weight:900;color:#c9a84c;text-transform:uppercase;}
+.fc-ltee{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+.fc-linea-body{padding:7px;}
+.fc-players{display:flex;flex-direction:column;gap:4px;}
+.fc-player{display:grid;grid-template-columns:1fr 80px 80px;border:1px solid var(--g2);border-left:3px solid var(--red);min-height:34px;}
+.fc-pname{display:flex;align-items:center;padding:5px 10px;font-weight:800;font-size:13px;letter-spacing:.04em;color:var(--navy);text-transform:uppercase;border-right:1px solid var(--g2);}
+.fc-ptee{display:flex;align-items:center;justify-content:center;gap:3px;padding:5px 6px;font-size:11px;font-weight:700;}
+.fc-blancas{background:#fff;border-right:1px solid var(--g2);color:var(--navy);}
+.fc-azules{background:#dbe7f5;color:var(--navy);}
+.fc-phcp{font-weight:800;font-size:12px;}
+.fc-parrow{color:var(--g4);font-size:9px;}
+.fc-p85{font-weight:800;color:var(--red);font-size:12px;}
+.fc-p85t{font-size:7px;color:var(--g4);font-weight:600;}
+.fc-match-hdr{background:var(--g1);border:1px solid var(--g2);border-top:none;padding:5px 8px;font-size:9px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--navy);text-align:center;margin-top:8px;}
+.fc-matches{padding:7px;display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+.fc-match{background:#fff;border:1px solid var(--g2);border-left:3px solid #c9a84c;padding:6px 5px;text-align:center;}
+.fc-mpair{font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.03em;}
+.fc-mvs{color:var(--red);font-weight:900;font-size:8px;margin:0 4px;letter-spacing:.05em;}
+.fc-ftr{background:var(--navy);color:#fff;padding:9px;text-align:center;font-size:9px;letter-spacing:.18em;text-transform:uppercase;border-top:2px solid #c9a84c;}
+.fc-ftour{color:#c9a84c;font-weight:700;}
+
 @media(max-width:480px){
   .home-fecha-card{padding:18px 16px 14px;max-width:none;}
   .hfc-num{font-size:26px;}
@@ -1704,6 +1742,17 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
           <label class="adm-label" style="margin-top:14px;">Puntos dobles (Stableford × 2) — opcional</label>
           <div id="adm-dobles-list" class="adm-jugs">Cargando...</div>
+
+          <div class="adm-row" style="margin-top:14px;">
+            <div class="adm-field">
+              <label class="adm-label">Horario de salida</label>
+              <input type="time" id="adm-horario" class="adm-input" value="09:40">
+            </div>
+            <div class="adm-field">
+              <label class="adm-label">Green Fee</label>
+              <input type="text" id="adm-greenfee" class="adm-input" placeholder="$ 0.000">
+            </div>
+          </div>
 
           <button class="adm-btn-primary" id="wiz-armar-btn" onclick="wizArmarLineas()" style="margin-top:18px;">⚡ Armar Líneas →</button>
           <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
@@ -3255,13 +3304,19 @@ function loadColoresCancha(){
 }
 
 // Valida y recopila datos de Paso 1. Devuelve el objeto de datos o null si hay error.
+let WIZ_LINEAS_RESULT = null; // resultado de armarLineas: { lines: [...] }
+
 function wizValidarPaso1_(){
-  const fechaEl  = document.getElementById('adm-fecha');
-  const canchaEl = document.getElementById('adm-cancha');
-  const colorEl  = document.getElementById('adm-color-tee');
-  const fecha    = fechaEl  ? fechaEl.value.trim()  : '';
-  const canchaId = canchaEl ? canchaEl.value.trim() : '';
-  const colorTee = (colorEl ? colorEl.value.trim()  : '') || 'BLANCAS';
+  const fechaEl   = document.getElementById('adm-fecha');
+  const canchaEl  = document.getElementById('adm-cancha');
+  const colorEl   = document.getElementById('adm-color-tee');
+  const horarioEl = document.getElementById('adm-horario');
+  const feeEl     = document.getElementById('adm-greenfee');
+  const fecha    = fechaEl   ? fechaEl.value.trim()   : '';
+  const canchaId = canchaEl  ? canchaEl.value.trim()  : '';
+  const colorTee = (colorEl  ? colorEl.value.trim()   : '') || 'BLANCAS';
+  const horario  = horarioEl ? horarioEl.value.trim() : '';
+  const greenFee = feeEl     ? feeEl.value.trim()     : '';
   const jugadores = [...document.querySelectorAll('#adm-jugadores-list input:checked')].map(i => i.value);
   const dobles    = [...document.querySelectorAll('#adm-dobles-list input:checked')].map(i => i.value);
   const msg = document.getElementById('adm-crear-msg');
@@ -3275,7 +3330,7 @@ function wizValidarPaso1_(){
   if(!jugadores.length){
     msg.className = 'adm-msg err'; msg.textContent = 'Marcá al menos un jugador'; msg.style.display = 'block'; return null;
   }
-  return { fecha, canchaId, colorTee, jugadores, dobles };
+  return { fecha, canchaId, colorTee, jugadores, dobles, horario, greenFee };
 }
 
 // Muestra el Paso 2 con los datos ya guardados en WIZ_PASO1_DATA
@@ -3336,6 +3391,9 @@ function wizArmarLineas(){
       msg.style.display = 'block';
       return;
     }
+
+    // Guardar resultado para wizCrearTodo
+    WIZ_LINEAS_RESULT = r;
 
     // Ir a Paso 2
     wizMostrarPaso2_(jugsInFecha, canchaName);
@@ -3445,15 +3503,21 @@ function wizCrearTodo(){
   msg.textContent = 'Creando fecha...';
   msg.style.display = 'block';
 
-  // Step A: crear fecha (tarjetas + dobles)
+  // Step A: crear fecha (tarjetas + dobles + líneas + horario)
+  const lineasParam = WIZ_LINEAS_RESULT
+    ? WIZ_LINEAS_RESULT.lines.map(l => l.players.map(p => p.matricula))
+    : [];
   ngtApiPost({
-    action: 'crearFecha',
+    action:   'crearFecha',
     adminKey: ADMIN_KEY_OK,
-    fecha: WIZ_PASO1_DATA.fecha,
+    fecha:    WIZ_PASO1_DATA.fecha,
     canchaId: WIZ_PASO1_DATA.canchaId,
     colorTee: WIZ_PASO1_DATA.colorTee,
     jugadores: WIZ_PASO1_DATA.jugadores,
-    dobles: WIZ_PASO1_DATA.dobles,
+    dobles:   WIZ_PASO1_DATA.dobles,
+    horario:  WIZ_PASO1_DATA.horario  || '',
+    greenFee: WIZ_PASO1_DATA.greenFee || '',
+    lineas:   lineasParam,
   }).then(r => {
     if(!r.ok){
       msg.className = 'adm-msg err';
@@ -5766,18 +5830,16 @@ function applyHomeData(data){
 
   // Show "Ver fecha" button if there's an HTML file for this fecha
   // Convention: fecha-N.html in the same folder as index.html
-  // Currently only fecha-3.html exists; extend the list as new fechas are added.
+  // "Ver Fecha" button: always visible for the upcoming/current fecha
   const verBtn = document.getElementById('hfi-ver');
-  if(verBtn){
+  if(verBtn && data.fechaNum){
     const num = parseInt(data.fechaNum) || 0;
-    const fechasConHTML = [3];   // add 4, 5, ... when files exist
-    if(num && fechasConHTML.indexOf(num) >= 0){
-      verBtn.href = 'fecha-' + num + '.html';
-      verBtn.textContent = 'Ver Fecha ' + num + ' →';
-      verBtn.style.display = 'inline-block';
-    } else {
-      verBtn.style.display = 'none';
-    }
+    verBtn.href = '#';
+    verBtn.onclick = function(e){ e.preventDefault(); openVerLineas(num); return false; };
+    verBtn.textContent = 'Ver Líneas Fecha ' + num + ' →';
+    verBtn.style.display = 'inline-block';
+  } else if(verBtn) {
+    verBtn.style.display = 'none';
   }
 
   // Tick once just to ensure consistent state (no-op now since Falta row is gone)
@@ -5845,6 +5907,119 @@ function ngtInitData(){
 
 document.body.classList.add('home-mode');
 ngtInitData();
+
+// ══════════ VER LÍNEAS MODAL ══════════
+function openVerLineas(fecha){
+  let overlay = document.getElementById('ver-lineas-overlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'ver-lineas-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;overflow-y:auto;padding:20px 0;';
+    overlay.innerHTML =
+      '<div style="max-width:440px;margin:0 auto;position:relative;">' +
+        '<button onclick="closeVerLineas()" style="position:absolute;top:-10px;right:8px;background:none;border:none;color:#fff;font-size:26px;cursor:pointer;z-index:1;padding:4px 10px;">×</button>' +
+        '<div id="ver-lineas-content" style="min-height:200px;"></div>' +
+      '</div>';
+    overlay.addEventListener('click', function(e){ if(e.target === overlay) closeVerLineas(); });
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  const cont = document.getElementById('ver-lineas-content');
+  cont.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;">Cargando...</div>';
+
+  ngtApiGet('fechaLineas', { fecha: fecha }).then(r => {
+    const d = r && r.data;
+    if(!d || !d.lineas || !d.lineas.length){
+      cont.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#fff;font-family:\'Barlow Condensed\',sans-serif;">Líneas aún no confirmadas para esta fecha.</div>';
+      return;
+    }
+    cont.innerHTML = renderFechaCard_(d);
+  }).catch(e => {
+    cont.innerHTML = '<div style="text-align:center;padding:40px;color:#fff;">Error: ' + e.message + '</div>';
+  });
+}
+
+function closeVerLineas(){
+  const overlay = document.getElementById('ver-lineas-overlay');
+  if(overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function renderFechaCard_(d){
+  // Genera el HTML del card de fecha (mismo diseño que fecha-4.html) desde datos dinámicos
+  const tees = (d.lineas[0] && d.lineas[0].players[0] && d.lineas[0].players[0].tees) || {};
+  const teeColors = Object.keys(tees);
+  const colorPrimario = d.colorTee || (teeColors[0] || 'BLANCAS');
+
+  let html = '<div class="fc-card">' +
+    '<div class="fc-hdr">' +
+      '<img src="logo.png" alt="NGT" class="fc-logo" onerror="this.style.display=\'none\'">' +
+      '<div class="fc-hdr-txt">' +
+        '<div class="fc-tour">Numa Golf Tour · XIV · 2026</div>' +
+        '<div class="fc-num">FECHA ' + d.fecha + '</div>' +
+        '<div class="fc-line"></div>' +
+      '</div>' +
+      '<div class="fc-spacer"></div>' +
+    '</div>' +
+    '<div class="fc-info">' +
+      '<div class="fc-inf-box"><div class="fc-inf-lbl">Cancha</div><div class="fc-inf-val">' + (d.cancha||'—') + '</div></div>' +
+      '<div class="fc-inf-box"><div class="fc-inf-lbl">Fecha · Horario</div><div class="fc-inf-val">' + (d.dia||'') + (d.horario ? ' · ' + d.horario : '') + '</div></div>' +
+      (d.greenFee ? '<div class="fc-inf-box"><div class="fc-inf-lbl">Green Fee</div><div class="fc-inf-val fc-fee">' + d.greenFee + '</div></div>' : '') +
+      '<div class="fc-inf-box"><div class="fc-inf-lbl">Modalidad</div><div class="fc-inf-val">Stableford + Match</div></div>' +
+    '</div>' +
+    '<div class="fc-lineas">';
+
+  d.lineas.forEach(function(l, li){
+    const startTime = calcTeeTime_(d.horario, li, d.lineas.length);
+    html += '<div class="fc-linea">' +
+      '<div class="fc-linea-hdr"><span class="fc-lnum">Línea ' + l.lineNum + '</span><span class="fc-ltee">' + startTime + ' · Hoyo 1</span></div>' +
+      '<div class="fc-linea-body">' +
+        '<div class="fc-players">';
+
+    l.players.forEach(function(p){
+      const teeData = p.tees || {};
+      const b = teeData['BLANCAS'] || teeData[colorPrimario.toUpperCase()] || {};
+      const az = teeData['AZULES'] || {};
+      html += '<div class="fc-player">' +
+        '<div class="fc-pname">' + p.apodo + '</div>';
+      if(b.hcp !== null && b.hcp !== undefined){
+        html += '<div class="fc-ptee fc-blancas"><span class="fc-phcp">' + b.hcp + '</span><span class="fc-parrow">→</span><span class="fc-p85">' + (b.pct85||'') + '</span><span class="fc-p85t">85%</span></div>';
+      }
+      if(az.hcp !== null && az.hcp !== undefined){
+        html += '<div class="fc-ptee fc-azules"><span class="fc-phcp">' + az.hcp + '</span><span class="fc-parrow">→</span><span class="fc-p85">' + (az.pct85||'') + '</span><span class="fc-p85t">85%</span></div>';
+      }
+      html += '</div>';
+    });
+
+    html += '</div>' +
+      '<div class="fc-match-hdr">⚔ Match</div>' +
+      '<div class="fc-matches">';
+
+    l.matches.forEach(function(m){
+      html += '<div class="fc-match"><span class="fc-mpair">' + m.apodo1 + '<span class="fc-mvs">vs</span>' + m.apodo2 + '</span></div>';
+    });
+
+    html += '</div></div></div>';
+  });
+
+  html += '</div>' +
+    '<div class="fc-ftr"><span class="fc-ftour">NGT XIV</span> · ' + d.lineas.length + ' líneas · ' +
+    d.lineas.reduce(function(s,l){ return s + l.matches.length; }, 0) + ' matches</div>' +
+  '</div>';
+  return html;
+}
+
+function calcTeeTime_(horario, lineIdx, totalLines){
+  if(!horario) return '—';
+  try {
+    const [h, m] = horario.split(':').map(Number);
+    const totalMin = h * 60 + m + lineIdx * 10;
+    const hh = Math.floor(totalMin / 60) % 24;
+    const mm = totalMin % 60;
+    return (hh < 10 ? '0' + hh : hh) + ':' + (mm < 10 ? '0' + mm : mm);
+  } catch(e) { return horario; }
+}
 
 // ── TARJETA MODAL ──────────────────────────────────────────────────────────────
 function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
