@@ -4105,26 +4105,37 @@ function armarLineas_(params) {
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
   if (!fecha) return { ok: false, error: 'Falta fecha' };
 
-  // ── 1. Jugadores de esta fecha (solo reales, sin invitados) ──────────────
-  const shT = getSheet_(SHEETS.TARJETAS);
-  if (!shT) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
-  const nextEmpty = findNextEmptyRow_(shT, 2);
-  if (nextEmpty <= 2) return { ok: false, error: 'No hay jugadores en TARJETAS' };
-
-  // B(0)=fecha, C(1)=matricula, D(2)=nombre, E(3)=hcp
-  const tData = shT.getRange(2, 2, nextEmpty - 2, 4).getValues();
+  // ── 1. Jugadores: usa la lista provista en params, o lee de TARJETAS ──────
   const players = [];
   const seenMats = {};
-  tData.forEach(function(row) {
-    const f = String(row[0] || '').trim();
-    const m = String(row[1] || '').trim();
-    if (f !== String(fecha) || !m || m.indexOf('INV') === 0) return;
-    if (seenMats[m]) return;
-    seenMats[m] = true;
-    const h = (row[3] !== '' && row[3] !== null && row[3] !== undefined)
-              ? (parseInt(row[3]) || 0) : 0;
-    players.push({ matricula: m, hcp: h, apodo: '' });
-  });
+
+  if (Array.isArray(params.jugadores) && params.jugadores.length) {
+    // Modo wizard: lista enviada directamente desde el frontend con HCP ya calculado
+    params.jugadores.forEach(function(item) {
+      const m = String(item.matricula || '').trim();
+      if (!m || m.indexOf('INV') === 0 || seenMats[m]) return;
+      seenMats[m] = true;
+      players.push({ matricula: m, hcp: parseInt(item.hcp) || 0, apodo: '' });
+    });
+  } else {
+    // Modo gestionar: lee de TARJETAS para la fecha indicada
+    const shT = getSheet_(SHEETS.TARJETAS);
+    if (!shT) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
+    const nextEmpty = findNextEmptyRow_(shT, 2);
+    if (nextEmpty <= 2) return { ok: false, error: 'No hay jugadores en TARJETAS' };
+    // B(0)=fecha, C(1)=matricula, D(2)=nombre, E(3)=hcp
+    const tData = shT.getRange(2, 2, nextEmpty - 2, 4).getValues();
+    tData.forEach(function(row) {
+      const f = String(row[0] || '').trim();
+      const m = String(row[1] || '').trim();
+      if (f !== String(fecha) || !m || m.indexOf('INV') === 0) return;
+      if (seenMats[m]) return;
+      seenMats[m] = true;
+      const h = (row[3] !== '' && row[3] !== null && row[3] !== undefined)
+                ? (parseInt(row[3]) || 0) : 0;
+      players.push({ matricula: m, hcp: h, apodo: '' });
+    });
+  }
 
   if (players.length < 3) {
     return { ok: false, error: 'Se necesitan al menos 3 jugadores. Encontrados: ' + players.length };
