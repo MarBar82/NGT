@@ -5789,6 +5789,11 @@ function loadHome(){
 
   ngtApiGet('initData').then(r => {
     const d = (r && r.data) || {};
+    // Fecha activa (con líneas confirmadas y no completada) — fuente primaria para el botón FECHA
+    if(d.fechaActiva !== undefined){
+      applyFechaActiva(d.fechaActiva);
+      try { sessionStorage.setItem('ngt_fechaActiva', JSON.stringify(d.fechaActiva)); } catch(e){}
+    }
     if(d.proximaFecha !== undefined){
       applyHomeData(d.proximaFecha);
       try { sessionStorage.setItem('ngt_proximaFecha', JSON.stringify(d.proximaFecha)); } catch(e){}
@@ -5811,19 +5816,27 @@ function loadHome(){
 
 let HOME_FECHA_ACTIVA = null; // número de fecha activa para openVerLineas
 
-function applyHomeData(data){
-  // ── Botón FECHA activa ───────────────────────────────────────────────────
+function applyFechaActiva(fa){
+  // Muestra/oculta el botón FECHA según fechaActiva devuelta por initData
   const fechaBtn    = document.getElementById('home-fecha-btn');
   const fechaBtnTit = document.getElementById('home-fecha-btn-title');
   const fechaBtnSub = document.getElementById('home-fecha-btn-sub');
-  if(fechaBtn && data && data.fechaNum && data.hasLineas && !data.isPast){
-    HOME_FECHA_ACTIVA = parseInt(data.fechaNum) || 0;
-    if(fechaBtnTit) fechaBtnTit.textContent = 'FECHA ' + data.fechaNum;
-    const sub = [data.cancha, data.horario].filter(Boolean).join(' · ');
+  if(fechaBtn && fa && fa.fechaNum && fa.hasLineas){
+    HOME_FECHA_ACTIVA = parseInt(fa.fechaNum) || 0;
+    if(fechaBtnTit) fechaBtnTit.textContent = 'FECHA ' + fa.fechaNum;
+    const sub = [fa.cancha, fa.horario].filter(Boolean).join(' · ');
     if(fechaBtnSub) fechaBtnSub.textContent = sub || 'Ver líneas y matches';
     fechaBtn.style.display = 'flex';
   } else if(fechaBtn) {
     fechaBtn.style.display = 'none';
+  }
+}
+
+function applyHomeData(data){
+  // ── Botón FECHA activa (legacy path — normalmente viene de initData.fechaActiva) ─
+  // Solo actúa si applyFechaActiva no fue llamado aún
+  if(HOME_FECHA_ACTIVA === null && data && data.hasLineas && !data.isPast){
+    applyFechaActiva({ fechaNum: data.fechaNum, cancha: data.cancha, horario: data.horario, hasLineas: true });
   }
 
   // Legacy elements (hidden but kept to avoid JS errors)
@@ -5892,6 +5905,9 @@ function tickCountdown(){
 // Ahora: ngtInitData() (1 JSONP) → devuelve los tres conjuntos de datos juntos
 function ngtInitData(){
   // Aplicar caches sessionStorage inmediatamente (visita repetida → pantalla al instante)
+  const cachedFA = sessionStorage.getItem('ngt_fechaActiva');
+  if(cachedFA){ try { applyFechaActiva(JSON.parse(cachedFA)); } catch(e){} }
+
   const cachedPF = sessionStorage.getItem('ngt_proximaFecha');
   if(cachedPF){ try { applyHomeData(JSON.parse(cachedPF)); } catch(e){} }
 

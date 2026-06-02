@@ -866,6 +866,68 @@ function getFechaMeta_(fecha) {
 }
 
 /**
+ * Devuelve la fecha "activa" para mostrar en el home:
+ * — la más reciente que tiene líneas confirmadas en FECHA_META
+ * — y aún no está completada (no todos los jugadores cargaron tarjeta).
+ * Es independiente del calendario (CALCULOS), así funciona con fechas de prueba también.
+ */
+function getFechaActiva_() {
+  const props = PropertiesService.getDocumentProperties();
+  const meta  = JSON.parse(props.getProperty('FECHA_META') || '{}');
+
+  // Fechas con líneas confirmadas, ordenadas de mayor a menor
+  const fechasConLineas = Object.keys(meta)
+    .filter(function(f) { return Array.isArray(meta[f].lineas) && meta[f].lineas.length > 0; })
+    .map(Number)
+    .sort(function(a, b) { return b - a; });
+
+  if (!fechasConLineas.length) return null;
+
+  // Tomar la más reciente que no esté completada
+  for (var i = 0; i < fechasConLineas.length; i++) {
+    const fNum = fechasConLineas[i];
+    const m    = meta[String(fNum)];
+
+    // Verificar si todos los jugadores tienen tarjeta cargada (HCP en col E de TARJETAS)
+    const shT = getSheet_(SHEETS.TARJETAS);
+    var completada = false;
+    if (shT) {
+      try {
+        const ne = findNextEmptyRow_(shT, 2);
+        if (ne > 2) {
+          const rows = shT.getRange(2, 2, ne - 2, 4).getValues(); // B-E
+          const jugadoresFecha = rows.filter(function(r) {
+            const f = String(r[0] || '').trim();
+            const mat = String(r[1] || '').trim();
+            return f === String(fNum) && mat && mat.indexOf('INV') !== 0;
+          });
+          const conHcp = jugadoresFecha.filter(function(r) {
+            return r[3] !== '' && r[3] !== null && r[3] !== undefined;
+          });
+          // "Completada" = todos tienen HCP Y hay scores cargados
+          // Por ahora: completada si todos los jugadores tienen HCP asignado
+          // (puedes ajustar esta lógica según necesites)
+          completada = jugadoresFecha.length > 0 && conHcp.length === jugadoresFecha.length;
+        }
+      } catch(e) {}
+    }
+
+    // Devolver esta fecha si no está completada (o si no pudimos verificar)
+    if (!completada) {
+      return {
+        fechaNum: fNum,
+        cancha:   m.canchaName || '',
+        horario:  m.horario    || '',
+        greenFee: m.greenFee   || '',
+        colorTee: m.colorTee   || 'BLANCAS',
+        hasLineas: true,
+      };
+    }
+  }
+  return null; // todas las fechas con líneas ya están completadas
+}
+
+/**
  * Devuelve la información completa de una fecha para mostrar el card:
  * líneas, jugadores (nombre, apodo, HCPs), matches y meta (horario, cancha, greenfee).
  * Usa FECHA_META para líneas + TARJETAS para HCP + JUGADORES para nombres + Rating para slopes.
@@ -4021,7 +4083,8 @@ function doGet(e) {
         const iProx   = cachedRead_('proximaFecha',    300, getProximaFecha_);
         const iFechas = cachedRead_('fechasConEstado', 120, getFechasConEstado_);
         const iJugs   = cachedRead_('jugadoresHist',   300, getJugadoresHist_);
-        result = { ok: true, data: { proximaFecha: iProx, fechasConEstado: iFechas, jugadoresHist: iJugs } };
+        const iActiva = getFechaActiva_(); // fecha con líneas confirmadas, aún sin tarjetas completas
+        result = { ok: true, data: { proximaFecha: iProx, fechasConEstado: iFechas, jugadoresHist: iJugs, fechaActiva: iActiva } };
         break;
       }
       case 'jugadoresHist':     result = { ok: true, data: cachedRead_('jugadoresHist', 300, getJugadoresHist_) }; break;
