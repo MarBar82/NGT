@@ -4084,6 +4084,270 @@ function crearTriggerJueves() {
 
 // ════════════ fin HCP INDEX ════════════
 
+// ════════════ ARMAR LÍNEAS ════════════
+/**
+ * Lee las matrices de matches (MATCH!BF1:BX19) y líneas compartidas (MATCH!CA1:CS19),
+ * y arma automáticamente una propuesta de líneas + partidos para la fecha.
+ *
+ * Prioridades:
+ *   1. No repetir partidos entre 2 jugadores (hard constraint)
+ *   2. No repetir jugadores en la misma línea (soft, penalización)
+ *   3. HCP lo más parejo posible dentro de cada match (menor prioridad)
+ *
+ * Estructura de líneas:
+ *   N mod 3 == 0 → todas de 3 jugadores
+ *   N mod 3 == 1 → (N-4)/3 de 3 + 1 de 4
+ *   N mod 3 == 2 → (N-8)/3 de 3 + 2 de 4
+ *   Las líneas de 3 van antes que las de 4.
+ */
+function armarLineas_(params) {
+  const { adminKey, fecha } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha) return { ok: false, error: 'Falta fecha' };
+
+  // ── 1. Jugadores de esta fecha (solo reales, sin invitados) ──────────────
+  const shT = getSheet_(SHEETS.TARJETAS);
+  if (!shT) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
+  const nextEmpty = findNextEmptyRow_(shT, 2);
+  if (nextEmpty <= 2) return { ok: false, error: 'No hay jugadores en TARJETAS' };
+
+  // B(0)=fecha, C(1)=matricula, D(2)=nombre, E(3)=hcp
+  const tData = shT.getRange(2, 2, nextEmpty - 2, 4).getValues();
+  const players = [];
+  const seenMats = {};
+  tData.forEach(function(row) {
+    const f = String(row[0] || '').trim();
+    const m = String(row[1] || '').trim();
+    if (f !== String(fecha) || !m || m.indexOf('INV') === 0) return;
+    if (seenMats[m]) return;
+    seenMats[m] = true;
+    const h = (row[3] !== '' && row[3] !== null && row[3] !== undefined)
+              ? (parseInt(row[3]) || 0) : 0;
+    players.push({ matricula: m, hcp: h, apodo: '' });
+  });
+
+  if (players.length < 3) {
+    return { ok: false, error: 'Se necesitan al menos 3 jugadores. Encontrados: ' + players.length };
+  }
+
+  // ── 2. Apodos desde JUGADORES ────────────────────────────────────────────
+  const jugs = getJugadores_();
+  const matToApodo = {};
+  const apodoToMat = {};
+  jugs.forEach(function(j) {
+    const ap = (j.apodo || '').trim().toUpperCase();
+    matToApodo[j.matricula] = ap || j.nombre.split(' ')[0].toUpperCase();
+    if (ap) apodoToMat[ap] = j.matricula;
+    // Also map first word of nombre as fallback
+    const fw = j.nombre.split(' ')[0].toUpperCase();
+    if (!apodoToMat[fw]) apodoToMat[fw] = j.matricula;
+  });
+  players.forEach(function(p) { p.apodo = matToApodo[p.matricula] || p.matricula; });
+
+  // ── 3. Leer matrices del sheet MATCH ─────────────────────────────────────
+  const shM = getSheet_(SHEETS.MATCH);
+  if (!shM) return { ok: false, error: 'Hoja MATCH no encontrada' };
+
+  let matchRaw, lineRaw;
+  try {
+    matchRaw = shM.getRange(1, 58, 19, 19).getValues(); // BF1:BX19
+    lineRaw  = shM.getRange(1, 79, 19, 19).getValues(); // CA1:CS19
+  } catch(e) {
+    return { ok: false, error: 'Error leyendo matrices MATCH: ' + e.message };
+  }
+
+  // ── 4. Parsear matrices → sets de pares ──────────────────────────────────
+  function parseMatrix(raw) {
+    const result = {}; // "matA_matB" (sorted) → max value seen
+    const headerRow = raw[0];
+
+    // Find column index for each player apodo
+    const colToMat = {}; // col index → matricula
+    for (var c = 0; c < headerRow.length; c++) {
+      const v = String(headerRow[c] || '').trim().toUpperCase();
+      if (v && apodoToMat[v]) colToMat[c] = apodoToMat[v];
+    }
+
+    // Find which column holds the row label (apodo)
+    var labelCol = -1;
+    for (var c2 = 0; c2 <= 2; c2++) {
+      const v2 = String(raw[1] ? raw[1][c2] : '').trim().toUpperCase();
+      if (v2 && apodoToMat[v2]) { labelCol = c2; break; }
+    }
+    if (labelCol < 0) return result;
+
+    for (var r = 1; r < raw.length; r++) {
+      const rowApodo = String(raw[r][labelCol] || '').trim().toUpperCase();
+      const matA = apodoToMat[rowApodo];
+      if (!matA) continue;
+      Object.keys(colToMat).forEach(function(c3) {
+        const matB = colToMat[c3];
+        if (!matB || matB === matA) return;
+        const val = parseInt(raw[r][c3]) || 0;
+        if (val > 0) {
+          const key = [matA, matB].sort().join('|');
+          result[key] = Math.max(result[key] || 0, val);
+        }
+      });
+    }
+    return result;
+  }
+
+  const matchedPairs = parseMatrix(matchRaw); // par → 1 si ya jugaron match
+  const sharedPairs  = parseMatrix(lineRaw);  // par → N veces en misma línea
+
+  // ── 5. Algoritmo de armado de líneas ─────────────────────────────────────
+  const N = players.length;
+  const numFour  = N % 3 === 0 ? 0 : (N % 3 === 1 ? 1 : 2);
+  const numThree = (N - 4 * numFour) / 3;
+
+  // Ordenar por HCP para mejor distribución inicial
+  players.sort(function(a, b) { return a.hcp - b.hcp; });
+
+  // Todas las combinaciones de k elementos de arr
+  function getCombos(arr, k) {
+    if (k === 0) return [[]];
+    if (arr.length < k) return [];
+    var first = arr[0], rest = arr.slice(1);
+    var withFirst = getCombos(rest, k - 1).map(function(c) { return [first].concat(c); });
+    var withoutFirst = getCombos(rest, k);
+    return withFirst.concat(withoutFirst);
+  }
+
+  // Todos los pares de un grupo
+  function allPairs(group) {
+    var pairs = [];
+    for (var i = 0; i < group.length; i++)
+      for (var j = i + 1; j < group.length; j++)
+        pairs.push([group[i], group[j]]);
+    return pairs;
+  }
+
+  // Clave de par
+  function pKey(a, b) { return [a.matricula, b.matricula].sort().join('|'); }
+
+  // Para una línea de 4, busca la mejor división {A,D} vs {B,C}
+  // donde los matches son A-B, A-C, D-B, D-C.
+  // Devuelve { matches, matchScore, lineScore } o null si ninguna es válida.
+  function bestFourDiv(group) {
+    // 3 posibles divisiones de índices [0,1,2,3] en dos pares de "lados"
+    var divs = [
+      [[0,1],[2,3]],  // {g[0],g[1]} vs {g[2],g[3]}  → g0-g2,g0-g3,g1-g2,g1-g3
+      [[0,2],[1,3]],  // {g[0],g[2]} vs {g[1],g[3]}
+      [[0,3],[1,2]],  // {g[0],g[3]} vs {g[1],g[2]}
+    ];
+    var best = null, bestScore = Infinity;
+    divs.forEach(function(div) {
+      var sideA = [group[div[0][0]], group[div[0][1]]];
+      var sideB = [group[div[1][0]], group[div[1][1]]];
+      // Matches: sideA[0]-sideB[0], sideA[0]-sideB[1], sideA[1]-sideB[0], sideA[1]-sideB[1]
+      var mps = [
+        [sideA[0], sideB[0]], [sideA[0], sideB[1]],
+        [sideA[1], sideB[0]], [sideA[1], sideB[1]],
+      ];
+      // Hard: ningún match puede haber sido jugado
+      var hasMatchConflict = mps.some(function(mp) { return matchedPairs[pKey(mp[0], mp[1])]; });
+      if (hasMatchConflict) return;
+      // Score: HCP diff de los matches (menor = mejor)
+      var matchScore = mps.reduce(function(s, mp) { return s + Math.abs(mp[0].hcp - mp[1].hcp); }, 0);
+      // Soft: penalizar línea compartida previa (todos los pares de la línea)
+      var lineScore = allPairs(group).reduce(function(s, mp) {
+        return s + (sharedPairs[pKey(mp[0], mp[1])] || 0) * 10;
+      }, 0);
+      var total = matchScore + lineScore;
+      if (total < bestScore) {
+        bestScore = total;
+        best = { matches: mps, matchScore: matchScore, lineScore: lineScore };
+      }
+    });
+    return best;
+  }
+
+  // Puntaje de un grupo de 3 para la línea
+  function scoreThree(group) {
+    var hasConflict = allPairs(group).some(function(mp) { return matchedPairs[pKey(mp[0], mp[1])]; });
+    if (hasConflict) return Infinity;
+    var lineScore = allPairs(group).reduce(function(s, mp) {
+      return s + (sharedPairs[pKey(mp[0], mp[1])] || 0) * 10;
+    }, 0);
+    var hcpSpread = Math.max.apply(null, group.map(function(p){ return p.hcp; }))
+                  - Math.min.apply(null, group.map(function(p){ return p.hcp; }));
+    return lineScore + hcpSpread;
+  }
+
+  // Puntaje de un grupo de 4 para la línea
+  function scoreFour(group) {
+    var div = bestFourDiv(group);
+    if (!div) return Infinity;
+    return div.matchScore + div.lineScore;
+  }
+
+  // Backtracking: construye líneas
+  function buildLines(remaining, threeLeft, fourLeft) {
+    if (threeLeft === 0 && fourLeft === 0) return [];
+    var size = threeLeft > 0 ? 3 : 4;
+    var combos = getCombos(remaining, size);
+
+    // Ordenar por puntaje (menor primero)
+    var scoreFn = size === 3 ? scoreThree : scoreFour;
+    combos.sort(function(a, b) { return scoreFn(a) - scoreFn(b); });
+
+    for (var i = 0; i < combos.length; i++) {
+      var group = combos[i];
+      var score = scoreFn(group);
+      if (score === Infinity) continue; // inválido, saltear
+
+      var usedSet = {};
+      group.forEach(function(p) { usedSet[p.matricula] = true; });
+      var next = remaining.filter(function(p) { return !usedSet[p.matricula]; });
+
+      var sub = buildLines(
+        next,
+        threeLeft > 0 ? threeLeft - 1 : 0,
+        threeLeft === 0 ? fourLeft - 1 : fourLeft
+      );
+      if (sub === null) continue; // backtrack
+
+      // Construir objeto de línea
+      var lineObj;
+      if (size === 3) {
+        lineObj = {
+          players: group,
+          matches: allPairs(group).map(function(mp) { return { j1: mp[0].matricula, j2: mp[1].matricula }; }),
+        };
+      } else {
+        var div = bestFourDiv(group);
+        lineObj = {
+          players: group,
+          matches: div.matches.map(function(mp) { return { j1: mp[0].matricula, j2: mp[1].matricula }; }),
+        };
+      }
+      return [lineObj].concat(sub);
+    }
+    return null; // no solution found, backtrack
+  }
+
+  const lines = buildLines(players, numThree, numFour);
+  if (!lines) {
+    return { ok: false, error: 'No se pudo armar líneas sin repetir partidos. Revisá el historial de matches.' };
+  }
+
+  // ── 6. Formatear resultado ────────────────────────────────────────────────
+  return {
+    ok: true,
+    lines: lines.map(function(l, i) {
+      return {
+        lineNum: i + 1,
+        players: l.players.map(function(p) {
+          return { matricula: p.matricula, apodo: p.apodo, hcp: p.hcp };
+        }),
+        matches: l.matches,
+      };
+    }),
+  };
+}
+// ════════════ fin ARMAR LÍNEAS ════════════
+
 function doPost(e) {
   let params = {};
   try { params = JSON.parse(e.postData.contents || '{}'); }
@@ -4103,6 +4367,7 @@ function doPost(e) {
       case 'cargarMatches':       result = cargarMatches_(params); break;
       case 'editarMatches':       result = editarMatches_(params); break;
       case 'actualizarHcpIndices': result = actualizarHcpIndices_(params); break;
+      case 'armarLineas':          result = armarLineas_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }

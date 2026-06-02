@@ -1787,7 +1787,11 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           <div class="adm-card-hdr">⚔ Matches de la Fecha</div>
           <div class="adm-card-body">
             <div id="adm-mgr-matches-list"></div>
-            <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+              <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
+              <button class="adm-btn-secondary" id="adm-armar-lineas-btn" onclick="admArmarLineas()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚡ Armar líneas</button>
+            </div>
+            <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:12px;line-height:1.6;color:var(--g5);"></div>
             <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
             <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
           </div>
@@ -3663,6 +3667,51 @@ function addMgrMatchRow(pre_j1, pre_j2){
     '<select class="mgr-m-j2"><option value="">Jugador B</option>' + opts2 + '</select>' +
     '<button class="adm-match-rm" onclick="this.parentElement.remove()" title="Quitar">✕</button>';
   list.appendChild(row);
+}
+
+function admArmarLineas(){
+  const fecha = MGR_FECHA;
+  const btn = document.getElementById('adm-armar-lineas-btn');
+  const preview = document.getElementById('adm-armar-lineas-preview');
+  if(!fecha){ alert('Primero seleccioná una fecha'); return; }
+  if(btn) btn.disabled = true;
+  if(btn) btn.textContent = '⏳ Armando...';
+  if(preview){ preview.style.display = 'none'; preview.innerHTML = ''; }
+
+  ngtApiPost({ action: 'armarLineas', adminKey: ADMIN_KEY_OK, fecha: fecha }).then(r => {
+    if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar líneas'; }
+    if(!r || !r.ok){
+      alert('Error: ' + (r && r.error ? r.error : 'desconocido'));
+      return;
+    }
+
+    // Limpiar matches actuales y cargar los propuestos
+    const list = document.getElementById('adm-mgr-matches-list');
+    list.innerHTML = '';
+    r.lines.forEach(l => l.matches.forEach(m => addMgrMatchRow(m.j1, m.j2)));
+
+    // Mostrar preview de líneas
+    if(preview){
+      let html = '<strong style="color:var(--navy);">Propuesta — ' + r.lines.length + ' líneas · ' +
+        r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches</strong><br><br>';
+      r.lines.forEach(l => {
+        html += '<strong>Línea ' + l.lineNum + '</strong>: ' +
+          l.players.map(p => p.apodo + ' (' + p.hcp + ')').join(' · ') + '<br>';
+        l.matches.forEach(m => {
+          const pA = l.players.find(p => p.matricula === m.j1);
+          const pB = l.players.find(p => p.matricula === m.j2);
+          html += '&nbsp;&nbsp;⚔ ' + (pA ? pA.apodo : m.j1) + ' vs ' + (pB ? pB.apodo : m.j2) + '<br>';
+        });
+        html += '<br>';
+      });
+      html += '<span style="color:var(--g4);">Revisá los matches arriba y hacé clic en "Guardar Matches" para confirmar.</span>';
+      preview.innerHTML = html;
+      preview.style.display = 'block';
+    }
+  }).catch(e => {
+    if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar líneas'; }
+    alert('Error de red: ' + e.message);
+  });
 }
 
 function mgrGuardarMatches(){
