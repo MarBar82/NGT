@@ -2423,6 +2423,15 @@ function eliminarFecha_(params) {
   SpreadsheetApp.flush();
   audit_('ELIMINAR_FECHA', 'admin', { fecha, changes });
   try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
+
+  // Limpiar FECHA_META para que el botón FECHA desaparezca del home
+  try {
+    const props = PropertiesService.getDocumentProperties();
+    const meta  = JSON.parse(props.getProperty('FECHA_META') || '{}');
+    delete meta[String(fecha)];
+    props.setProperty('FECHA_META', JSON.stringify(meta));
+  } catch(e) {}
+
   return { ok: true, changes: changes };
 }
 
@@ -4110,6 +4119,7 @@ function doGet(e) {
       case 'dobleDisponible':  result = { ok: true, data: { tieneDoble: getJugadoresConDobleDisponible_().indexOf(String(params.matricula)) >= 0 } }; break;
       case 'jugadoresConDoble': result = { ok: true, data: cachedRead_('jugadoresConDoble', 60, getJugadoresConDobleDisponible_) }; break;
       case 'fechaDetalle':     result = { ok: true, data: getFechaDetalle_(params.fecha) }; break;
+      case 'fechaLineas':    result = { ok: true, data: getFechaLineas_(params.fecha) }; break;
       case 'tarjeta':          result = { ok: true, data: cachedRead_('tj_' + params.fecha + '_' + params.matricula, 60, function(){ return getTarjetaJugador_(params.fecha, params.matricula); }) }; break;
       case 'debugMatch':       result = { ok: true, data: debugMatch_() }; break;
       case 'debugDobles':      result = { ok: true, data: debugDobles_() }; break;

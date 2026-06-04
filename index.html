@@ -4347,6 +4347,10 @@ function _doEliminarFecha(fecha, msgEl){
       if(ch.match    != null) txt += ' · ' + ch.match    + ' match(es)';
       if(ch.stb      != null) txt += ' · ' + ch.stb      + ' STB';
       if(msgEl){ msgEl.className='adm-msg ok'; msgEl.textContent=txt; }
+      // Limpiar cache de fechaActiva para que el botón desaparezca del home
+      try { sessionStorage.removeItem('ngt_fechaActiva'); } catch(e2){}
+      HOME_FECHA_ACTIVA = null;
+      applyFechaActiva(null);
       // Cerrar panel y refrescar grilla
       setTimeout(() => { cerrarEditPanel(); renderFechasGrid(); }, 1200);
     } else {
