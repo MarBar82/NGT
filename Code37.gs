@@ -472,12 +472,16 @@ function getMisFechas_(matricula) {
     if (m === String(matricula) && f) {
       const c  = String(row[4]  || '').trim();
       const ct = String(row[31] || '').trim().toUpperCase(); // AG = colorTee
+      // hasScores: el jugador efectivamente cargó scores (col H = Hoyo 1, índice 6 en rango desde col B)
+      // HCP (col E, índice 3) NO sirve: se auto-rellena al crear la fecha
+      const hoyo1 = row[6]; // col H
       out.push({
-        fecha:    f,
-        hcp:      row[3] || '',
-        cancha:   c,
-        colorTee: ct || 'BLANCAS',
-        rowIndex: i + 2,
+        fecha:     f,
+        hcp:       row[3] || '',
+        hasScores: hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined,
+        cancha:    c,
+        colorTee:  ct || 'BLANCAS',
+        rowIndex:  i + 2,
       });
       if (c) canchasNeeded[c.toUpperCase()] = true;
     }

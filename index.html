@@ -4594,9 +4594,9 @@ function showMitFechas(preloadedPromise){
       }
     });
 
-    // OPTIMIZATION: if there's only one pending (unsigned) fecha, skip the selector
+    // OPTIMIZATION: if there's only one pending (sin scores) fecha, skip the selector
     // and jump directly to the score screen. Saves one click and one fetch round-trip.
-    const pending = fechas.filter(f => !f.hcp || f.hcp === '');
+    const pending = fechas.filter(f => !f.hasScores);
     if(pending.length === 1){
       const f = pending[0];
       openMitScore(f.fecha, f.cancha || '', f.colorTee || 'BLANCAS');
@@ -4605,7 +4605,7 @@ function showMitFechas(preloadedPromise){
 
     let html = '';
     fechas.forEach(f => {
-      const hasScore = f.hcp && f.hcp !== '';
+      const hasScore = f.hasScores; // hasScores = col H (Hoyo 1) tiene valor, no HCP que se auto-rellena
       if(hasScore){
         // Tarjeta ya firmada — solo lectura, no editable por el jugador
         html += '<div class="mit-fecha-card mit-fecha-card-locked">' +
