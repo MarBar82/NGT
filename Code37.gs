@@ -4469,11 +4469,36 @@ function armarLineas_(params) {
 
   // ── 5. Algoritmo de armado de líneas ─────────────────────────────────────
   const N = players.length;
-  const numFour  = N % 3 === 0 ? 0 : (N % 3 === 1 ? 1 : 2);
-  const numThree = (N - 4 * numFour) / 3;
 
-  // Ordenar por HCP para mejor distribución inicial
-  players.sort(function(a, b) { return a.hcp - b.hcp; });
+  // Líneas preferentemente de 4. Usar de 3 solo cuando N no es divisible por 4.
+  // Fórmula: N = 4*numFour + 3*numThree, maximizando numFour (mínimas líneas de 3).
+  // N mod 4 == 0 → 0 líneas de 3
+  // N mod 4 == 1 → 3 líneas de 3 (requiere N >= 9)
+  // N mod 4 == 2 → 2 líneas de 3
+  // N mod 4 == 3 → 1 línea de 3
+  var numThree, numFour;
+  var r = N % 4;
+  if      (r === 0) { numFour = N / 4;       numThree = 0; }
+  else if (r === 1) { numFour = (N - 9) / 4; numThree = 3; } // e.g. N=17 → 2 fours + 3 threes
+  else if (r === 2) { numFour = (N - 6) / 4; numThree = 2; } // e.g. N=18 → 3 fours + 2 threes
+  else              { numFour = (N - 3) / 4; numThree = 1; } // e.g. N=15 → 3 fours + 1 three
+
+  // Manejar prioridades de horario: jugadores que deben ir en primera o última línea
+  var primeraMats = (params.prioridades || [])
+    .filter(function(p) { return p.posicion === 'primera'; })
+    .map(function(p) { return String(p.matricula); });
+  var ultimaMats = (params.prioridades || [])
+    .filter(function(p) { return p.posicion === 'ultima'; })
+    .map(function(p) { return String(p.matricula); });
+
+  // Ordenar: primera → HCP → ultima
+  var primerPlayers = players.filter(function(p) { return primeraMats.indexOf(p.matricula) >= 0; });
+  var ultimaPlayers = players.filter(function(p) { return ultimaMats.indexOf(p.matricula)  >= 0; });
+  var midPlayers    = players.filter(function(p) {
+    return primeraMats.indexOf(p.matricula) < 0 && ultimaMats.indexOf(p.matricula) < 0;
+  });
+  midPlayers.sort(function(a, b) { return a.hcp - b.hcp; });
+  var orderedPlayers = primerPlayers.concat(midPlayers).concat(ultimaPlayers);
 
   // Todas las combinaciones de k elementos de arr
   function getCombos(arr, k) {
@@ -4599,7 +4624,7 @@ function armarLineas_(params) {
     return null; // no solution found, backtrack
   }
 
-  const lines = buildLines(players, numThree, numFour);
+  const lines = buildLines(orderedPlayers, numThree, numFour);
   if (!lines) {
     return { ok: false, error: 'Error inesperado al armar líneas. Intentá de nuevo.' };
   }
@@ -4619,6 +4644,62 @@ function armarLineas_(params) {
   };
 }
 // ════════════ fin ARMAR LÍNEAS ════════════
+
+/**
+ * Actualiza los jugadores con Doble Stableford para una fecha específica.
+ * Recibe la lista COMPLETA de jugadores que juegan doble en esa fecha
+ * (reemplaza cualquier configuración previa).
+ */
+function setDoblesFecha_(params) {
+  const { adminKey, fecha, dobles } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha) return { ok: false, error: 'Falta fecha' };
+
+  const shScore = getSheet_('SCORE');
+  if (!shScore) return { ok: false, error: 'Hoja SCORE no encontrada' };
+
+  const dbCol = getDbColForFecha_(fecha);
+  if (dbCol <= 0) return { ok: false, error: 'No se encontró columna DB para fecha ' + fecha };
+
+  const nuevosDobles  = Array.isArray(dobles) ? dobles.map(String) : [];
+  const actualesDobles = getDoblesForFecha_(fecha);
+
+  // Obtener todos los jugadores en esta fecha para limpiar los que ya no están
+  const shT = getSheet_(SHEETS.TARJETAS);
+  const todosEnFecha = [];
+  if (shT) {
+    const ne = findNextEmptyRow_(shT, 2);
+    if (ne > 2) {
+      shT.getRange(2, 2, ne - 2, 2).getValues().forEach(function(r) {
+        const f = String(r[0] || '').trim();
+        const m = String(r[1] || '').trim();
+        if (f === String(fecha) && m && m.indexOf('INV') !== 0) todosEnFecha.push(m);
+      });
+    }
+  }
+
+  const changes = { set: [], cleared: [] };
+
+  // Setear dobles para los nuevos
+  nuevosDobles.forEach(function(mat) {
+    if (actualesDobles.indexOf(mat) < 0) { // solo si no estaba ya
+      const row = getScoreRowForMat_(mat);
+      if (row > 0) { shScore.getRange(row, dbCol).setValue(true); changes.set.push(mat); }
+    }
+  });
+
+  // Limpiar dobles para los que salen de la lista
+  todosEnFecha.forEach(function(mat) {
+    if (actualesDobles.indexOf(mat) >= 0 && nuevosDobles.indexOf(mat) < 0) {
+      const row = getScoreRowForMat_(mat);
+      if (row > 0) { shScore.getRange(row, dbCol).setValue(false); changes.cleared.push(mat); }
+    }
+  });
+
+  SpreadsheetApp.flush();
+  audit_('SET_DOBLES_FECHA', 'admin', { fecha, dobles: nuevosDobles, changes });
+  return { ok: true, changes: changes };
+}
 
 function doPost(e) {
   let params = {};
@@ -4641,6 +4722,7 @@ function doPost(e) {
       case 'actualizarHcpIndices': result = actualizarHcpIndices_(params); break;
       case 'armarLineas':          result = armarLineas_(params); break;
       case 'fechaLineas':          result = { ok: true, data: getFechaLineas_(params.fecha) }; break;
+      case 'setDoblesFecha':       result = setDoblesFecha_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }

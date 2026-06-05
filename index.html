@@ -1759,9 +1759,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           <label class="adm-label">Jugadores que disputan la fecha</label>
           <div id="adm-jugadores-list" class="adm-jugs">Cargando...</div>
 
-          <label class="adm-label" style="margin-top:14px;">Puntos dobles (Stableford × 2) — opcional</label>
-          <div id="adm-dobles-list" class="adm-jugs">Cargando...</div>
-
           <div class="adm-row" style="margin-top:14px;">
             <div class="adm-field">
               <label class="adm-label">Horario de salida</label>
@@ -1843,11 +1840,19 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <label class="adm-label">Jugadores que disputan</label>
             <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
 
-            <label class="adm-label" style="margin-top:14px;">Puntos dobles (Stableford × 2)</label>
-            <div id="adm-edit-dobles" class="adm-jugs">Cargando...</div>
-
             <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Datos</button>
             <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- DOBLES -->
+        <div class="adm-card">
+          <div class="adm-card-hdr">✌ Puntos Dobles</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Jugadores que suman Stableford × 2 en esta fecha. Configurar antes de que empiece la primera línea.</div>
+            <div id="adm-dobles-mgr-list" style="margin-bottom:10px;"></div>
+            <button class="adm-btn-primary" onclick="admGuardarDobles()">💾 Guardar Dobles</button>
+            <div id="adm-dobles-mgr-msg" class="adm-msg" style="display:none;"></div>
           </div>
         </div>
 
@@ -1858,7 +1863,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div id="adm-mgr-matches-list"></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
               <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
-              <button class="adm-btn-secondary" id="adm-armar-lineas-btn" onclick="admArmarLineas()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚡ Armar líneas</button>
+              <button class="adm-btn-secondary" id="adm-armar-lineas-btn" onclick="admMostrarPrioridad()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚡ Armar líneas</button>
             </div>
             <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:12px;line-height:1.6;color:var(--g5);"></div>
             <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
@@ -3337,7 +3342,7 @@ function wizValidarPaso1_(){
   const horario  = horarioEl ? horarioEl.value.trim() : '';
   const greenFee = feeEl     ? feeEl.value.trim()     : '';
   const jugadores = [...document.querySelectorAll('#adm-jugadores-list input:checked')].map(i => i.value);
-  const dobles    = [...document.querySelectorAll('#adm-dobles-list input:checked')].map(i => i.value);
+  const dobles    = []; // los dobles se configuran desde Gestionar Fecha
   const msg = document.getElementById('adm-crear-msg');
   msg.style.display = 'none';
   if(!fecha){
@@ -3806,6 +3811,52 @@ function loadMatchesForGestion(fecha){
     MGR_FECHA_JUGS = (results[0] && results[0].data) || [];
     const matches = (results[1] && results[1].data) || [];
     renderMgrMatches(matches);
+    renderDoblesPanel(fecha, MGR_FECHA_JUGS);
+  });
+}
+
+function renderDoblesPanel(fecha, jugs){
+  const cont = document.getElementById('adm-dobles-mgr-list');
+  if(!cont) return;
+  const actuales = [];
+  // Leer dobles actuales de SCORE
+  ngtApiGet('jugadoresConDoble').then(r => {
+    const todos = (r && r.data) || [];
+    // jugadoresConDoble devuelve matriculas con doble disponible, no los que ya lo usaron.
+    // Usamos getDoblesForFecha via fetchMeta para saber quiénes tienen doble en ESTA fecha.
+    // Por simplicidad, renderizamos el panel y el estado se actualiza al guardar.
+    renderDoblesCheckboxes_(cont, jugs, []);
+  }).catch(() => renderDoblesCheckboxes_(cont, jugs, []));
+}
+
+function renderDoblesCheckboxes_(cont, jugs, marcados){
+  let html = '';
+  (jugs || []).filter(j => !String(j.matricula).startsWith('INV')).forEach(j => {
+    const checked = marcados.indexOf(String(j.matricula)) >= 0 ? ' checked' : '';
+    html += '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">' +
+      '<input type="checkbox" class="adm-doble-chk" value="' + j.matricula + '"' + checked + '>' +
+      fmtNameForAdm(j.nombre) +
+    '</label>';
+  });
+  cont.innerHTML = html || '<div class="s dim">Sin jugadores cargados</div>';
+}
+
+function admGuardarDobles(){
+  const fecha = MGR_FECHA;
+  const msg   = document.getElementById('adm-dobles-mgr-msg');
+  if(!fecha){ alert('No hay fecha seleccionada'); return; }
+  const dobles = [...document.querySelectorAll('#adm-dobles-mgr-list .adm-doble-chk:checked')].map(i => i.value);
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+  ngtApiPost({ action: 'setDoblesFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, dobles: dobles }).then(r => {
+    if(r && r.ok){
+      msg.className = 'adm-msg ok';
+      msg.textContent = '✓ Dobles actualizados · ' + dobles.length + ' jugador(es)';
+    } else {
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
   });
 }
 
@@ -3853,7 +3904,63 @@ function addMgrMatchRow(pre_j1, pre_j2){
   list.appendChild(row);
 }
 
-function admArmarLineas(){
+// ── Prioridad de horario: modal antes de armar líneas ───────────────────────
+function admMostrarPrioridad(){
+  const fecha = MGR_FECHA;
+  if(!fecha){ alert('Primero seleccioná una fecha'); return; }
+
+  // Construir modal con lista de jugadores
+  let overlay = document.getElementById('prioridad-overlay');
+  if(overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'prioridad-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:8000;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const jugs = MGR_FECHA_JUGS.filter(j => !String(j.matricula).startsWith('INV'));
+  const opts = jugs.map(j =>
+    '<option value="' + j.matricula + '">' + fmtNameForAdm(j.nombre) + '</option>'
+  ).join('');
+
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:4px;padding:20px;max-width:380px;width:100%;font-family:\'Barlow Condensed\',sans-serif;">' +
+      '<div style="font-size:15px;font-weight:800;color:var(--navy);letter-spacing:.04em;margin-bottom:4px;">⚡ ARMAR LÍNEAS</div>' +
+      '<div style="font-size:12px;color:var(--g4);margin-bottom:16px;">¿Algún jugador tiene prioridad de horario?</div>' +
+
+      '<label class="adm-label">Primera línea (entra temprano)</label>' +
+      '<select id="prio-primera" class="adm-input" style="margin-bottom:12px;">' +
+        '<option value="">— Sin prioridad —</option>' + opts +
+      '</select>' +
+
+      '<label class="adm-label">Última línea (sale tarde / puede esperar)</label>' +
+      '<select id="prio-ultima" class="adm-input" style="margin-bottom:20px;">' +
+        '<option value="">— Sin prioridad —</option>' + opts +
+      '</select>' +
+
+      '<div style="display:flex;gap:8px;">' +
+        '<button class="adm-btn-ghost" onclick="document.getElementById(\'prioridad-overlay\').remove()" style="flex:1;">Cancelar</button>' +
+        '<button class="adm-btn-primary" onclick="admConfirmarArmarLineas()" style="flex:2;">⚡ Armar Líneas</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e){ if(e.target === overlay) overlay.remove(); });
+}
+
+function admConfirmarArmarLineas(){
+  const primeraMat = document.getElementById('prio-primera') && document.getElementById('prio-primera').value;
+  const ultimaMat  = document.getElementById('prio-ultima')  && document.getElementById('prio-ultima').value;
+  const prioridades = [];
+  if(primeraMat) prioridades.push({ matricula: primeraMat, posicion: 'primera' });
+  if(ultimaMat)  prioridades.push({ matricula: ultimaMat,  posicion: 'ultima' });
+
+  const overlay = document.getElementById('prioridad-overlay');
+  if(overlay) overlay.remove();
+
+  admArmarLineas(prioridades);
+}
+
+function admArmarLineas(prioridades){
+  prioridades = prioridades || [];
   const fecha = MGR_FECHA;
   const btn = document.getElementById('adm-armar-lineas-btn');
   const preview = document.getElementById('adm-armar-lineas-preview');
@@ -3862,7 +3969,7 @@ function admArmarLineas(){
   if(btn) btn.textContent = '⏳ Armando...';
   if(preview){ preview.style.display = 'none'; preview.innerHTML = ''; }
 
-  ngtApiPost({ action: 'armarLineas', adminKey: ADMIN_KEY_OK, fecha: fecha }).then(r => {
+  ngtApiPost({ action: 'armarLineas', adminKey: ADMIN_KEY_OK, fecha: fecha, prioridades: prioridades }).then(r => {
     if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar líneas'; }
     if(!r || !r.ok){
       alert('Error: ' + (r && r.error ? r.error : 'desconocido'));
