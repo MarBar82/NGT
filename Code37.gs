@@ -4483,7 +4483,7 @@ function armarLineas_(params) {
   else if (r === 2) { numFour = (N - 6) / 4; numThree = 2; } // e.g. N=18 → 3 fours + 2 threes
   else              { numFour = (N - 3) / 4; numThree = 1; } // e.g. N=15 → 3 fours + 1 three
 
-  // Manejar prioridades de horario: jugadores que deben ir en primera o última línea
+  // Prioridades de horario — siempre comparar como strings para evitar type mismatch
   var primeraMats = (params.prioridades || [])
     .filter(function(p) { return p.posicion === 'primera'; })
     .map(function(p) { return String(p.matricula); });
@@ -4491,14 +4491,9 @@ function armarLineas_(params) {
     .filter(function(p) { return p.posicion === 'ultima'; })
     .map(function(p) { return String(p.matricula); });
 
-  // Ordenar: primera → HCP → ultima
-  var primerPlayers = players.filter(function(p) { return primeraMats.indexOf(p.matricula) >= 0; });
-  var ultimaPlayers = players.filter(function(p) { return ultimaMats.indexOf(p.matricula)  >= 0; });
-  var midPlayers    = players.filter(function(p) {
-    return primeraMats.indexOf(p.matricula) < 0 && ultimaMats.indexOf(p.matricula) < 0;
-  });
-  midPlayers.sort(function(a, b) { return a.hcp - b.hcp; });
-  var orderedPlayers = primerPlayers.concat(midPlayers).concat(ultimaPlayers);
+  // El backtracking opera sobre todos los jugadores ordenados por HCP
+  // La prioridad se aplica DESPUÉS (post-proceso) reordenando las líneas resultantes
+  var orderedPlayers = players.slice(); // copia, ya ordenada por HCP arriba
 
   // Todas las combinaciones de k elementos de arr
   function getCombos(arr, k) {
@@ -4624,12 +4619,30 @@ function armarLineas_(params) {
     return null; // no solution found, backtrack
   }
 
-  const lines = buildLines(orderedPlayers, numThree, numFour);
+  var lines = buildLines(orderedPlayers, numThree, numFour);
   if (!lines) {
     return { ok: false, error: 'Error inesperado al armar líneas. Intentá de nuevo.' };
   }
 
-  // ── 6. Formatear resultado ────────────────────────────────────────────────
+  // ── 6. Reordenar líneas según prioridades de horario ────────────────────
+  // Este es el paso confiable: independientemente de cómo el backtracking
+  // armó las líneas, las reorganizamos para que las prioritarias queden al inicio/final.
+  if (primeraMats.length || ultimaMats.length) {
+    var primerSet = {};
+    primeraMats.forEach(function(m) { primerSet[m] = true; });
+    var ultimaSet = {};
+    ultimaMats.forEach(function(m) { ultimaSet[m] = true; });
+
+    var hasFirst = function(l) { return l.players.some(function(p) { return primerSet[String(p.matricula)]; }); };
+    var hasLast  = function(l) { return l.players.some(function(p) { return ultimaSet[String(p.matricula)]; }); };
+
+    var firstLines  = lines.filter(hasFirst);
+    var lastLines   = lines.filter(hasLast);
+    var middleLines = lines.filter(function(l) { return !hasFirst(l) && !hasLast(l); });
+    lines = firstLines.concat(middleLines).concat(lastLines);
+  }
+
+  // ── 7. Formatear resultado ────────────────────────────────────────────────
   return {
     ok: true,
     lines: lines.map(function(l, i) {
