@@ -3594,10 +3594,12 @@ function finalizarWizard(rFecha, rMatches){
   setTimeout(function(){
     document.getElementById('adm-fecha').value = '';
     document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
-    document.querySelectorAll('#adm-dobles-list input:checked').forEach(i => i.checked = false);
     document.getElementById('wiz-matches-list').innerHTML = '';
     WIZ_PASO1_DATA = null;
     wizPaso1Back();
+    // Limpiar caches y refrescar home con la nueva fecha
+    try { sessionStorage.removeItem('ngt_fechaActiva'); } catch(e){}
+    ngtInitData(); // recarga home con el nuevo botón FECHA
     // Refresh admin data
     loadAdminData();
     // Redirect to Leader Board

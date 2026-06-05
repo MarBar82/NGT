@@ -1478,6 +1478,16 @@ function crearFecha_(params) {
     } catch(e) { /* no bloquear si falla la escritura de líneas */ }
   }
 
+  // Invalidar caches que dependen de fechas/jugadores
+  try {
+    const cache = CacheService.getScriptCache();
+    cache.remove('fechaRes_' + String(fecha));
+    cache.remove('fechas');
+    cache.remove('fechasConEstado');
+    // Nota: getFechaActiva_ no está en cache, pero su resultado se cachea
+    // en sessionStorage del frontend, que debe limpiarse allí
+  } catch(e) {}
+
   return {
     ok: true,
     added: added,
