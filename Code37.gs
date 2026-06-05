@@ -971,20 +971,24 @@ function getFechaLineas_(fecha) {
   }
 
   // ── Matches de esta fecha desde MATCH sheet ───────────────────────────────
+  // Cada match ocupa 2 filas consecutivas con la misma fecha:
+  //   fila N:   [fecha, mat1, nombre1]
+  //   fila N+1: [fecha, mat2, nombre2]
   const shM = getSheet_(SHEETS.MATCH);
   const matchPairsSet = {}; // "matA|matB" sorted → true
   if (shM) {
     try {
       const ne2 = shM.getLastRow();
-      if (ne2 >= 2) {
-        // Read cols B(2)=fecha, C(3)=j1mat, D(4)=j2mat (standard MATCH layout)
-        const mData = shM.getRange(2, 2, ne2 - 1, 4).getValues();
-        mData.forEach(function(row) {
-          if (String(row[0] || '').trim() !== String(fecha)) return;
-          const j1 = String(row[1] || '').trim();
-          const j2 = String(row[2] || '').trim(); // approx — actual col depends on MATCH layout
+      if (ne2 >= 3) {
+        const mData = shM.getRange(2, 2, ne2 - 1, 2).getValues(); // cols B(fecha), C(mat)
+        for (var ri = 0; ri + 1 < mData.length; ri += 2) {
+          const f1 = String(mData[ri][0]     || '').trim();
+          const f2 = String(mData[ri + 1][0] || '').trim();
+          if (f1 !== String(fecha) || f2 !== String(fecha)) continue;
+          const j1 = String(mData[ri][1]     || '').trim();
+          const j2 = String(mData[ri + 1][1] || '').trim();
           if (j1 && j2) matchPairsSet[[j1, j2].sort().join('|')] = true;
-        });
+        }
       }
     } catch(e) {}
   }
