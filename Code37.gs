@@ -888,26 +888,29 @@ function getFechaActiva_() {
     const fNum = fechasConLineas[i];
     const m    = meta[String(fNum)];
 
-    // Verificar si todos los jugadores tienen tarjeta cargada (HCP en col E de TARJETAS)
+    // Una fecha está "completada" cuando TODOS los jugadores cargaron sus scores.
+    // Col H (Hoyo 1) es el indicador — si tiene valor, el jugador cargó tarjeta.
+    // El HCP (col E) NO sirve porque se auto-rellena al crear la fecha.
     const shT = getSheet_(SHEETS.TARJETAS);
     var completada = false;
     if (shT) {
       try {
         const ne = findNextEmptyRow_(shT, 2);
         if (ne > 2) {
-          const rows = shT.getRange(2, 2, ne - 2, 4).getValues(); // B-E
+          // B(0)=fecha, C(1)=mat, D(2)=nombre, E(3)=hcp, F(4)=cancha, G(5)=canchaId, H(6)=hoyo1
+          const rows = shT.getRange(2, 2, ne - 2, 7).getValues();
           const jugadoresFecha = rows.filter(function(r) {
-            const f = String(r[0] || '').trim();
+            const f   = String(r[0] || '').trim();
             const mat = String(r[1] || '').trim();
             return f === String(fNum) && mat && mat.indexOf('INV') !== 0;
           });
-          const conHcp = jugadoresFecha.filter(function(r) {
-            return r[3] !== '' && r[3] !== null && r[3] !== undefined;
-          });
-          // "Completada" = todos tienen HCP Y hay scores cargados
-          // Por ahora: completada si todos los jugadores tienen HCP asignado
-          // (puedes ajustar esta lógica según necesites)
-          completada = jugadoresFecha.length > 0 && conHcp.length === jugadoresFecha.length;
+          if (jugadoresFecha.length > 0) {
+            const conScores = jugadoresFecha.filter(function(r) {
+              const hoyo1 = r[6]; // col H
+              return hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined;
+            });
+            completada = conScores.length === jugadoresFecha.length;
+          }
         }
       } catch(e) {}
     }
