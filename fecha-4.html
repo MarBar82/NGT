@@ -2,445 +2,388 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=420, initial-scale=1">
-<title>NGT XIV · Fecha 4 · La Providencia</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NGT XIV · Fecha 4 · 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800;900&family=Roboto+Slab:wght@400;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Roboto+Slab:wght@700;900&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --navy:#00234b;
-    --red:#c8102e;
-    --gold:#c9a84c;
-    --blue:#3b82c4;
-    --blue-bg:#dbe7f5;
-    --white:#fff;
-    --off:#f7f6f3;
-    --g1:#f0eeea;
-    --g2:#e3e0d8;
-    --g4:#8a8780;
-    --g5:#3d3c38;
-    --text:#1a1918;
+  :root {
+    --navy: #00234B;
+    --red:  #C8102E;
+    --gold: #C9A84C;
+    --off:  #F5F5F5;
+    --g1:   #F0F0F0;
+    --g2:   #E0E0E0;
+    --g4:   #888;
+    --g5:   #333;
   }
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{
-    font-family:'Barlow Condensed',sans-serif;
-    background:#dcd8cf;
-    padding:20px;
-    display:flex;
-    justify-content:center;
-    color:var(--text);
-  }
-  .card{
-    width:420px;
-    background:var(--white);
-    border:1px solid var(--g2);
-    box-shadow:0 8px 30px rgba(0,0,0,.18);
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--off);
+    font-family: 'Barlow Condensed', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 24px 12px;
   }
 
-  /* HEADER with logo */
-  .hdr{
-    background:var(--navy);
-    color:var(--white);
-    padding:14px 18px;
-    border-bottom:3px solid var(--red);
-    display:flex;
-    align-items:center;
-    gap:14px;
-  }
-  .hdr-logo{
-    width:50px;
-    height:50px;
-    flex-shrink:0;
-    object-fit:contain;
-  }
-  .hdr-text{
-    flex:1;
-    text-align:center;
-  }
-  .hdr-tour{
-    font-size:9px;letter-spacing:.32em;font-weight:700;
-    color:var(--gold);margin-bottom:3px;text-transform:uppercase;
-  }
-  .hdr-fecha{
-    font-family:'Roboto Slab',serif;font-size:26px;font-weight:900;
-    letter-spacing:.06em;line-height:1;color:var(--white);
-  }
-  .hdr-line{ width:42px;height:2px;background:var(--gold);margin:6px auto 0; }
-  .hdr-spacer{ width:50px; flex-shrink:0; }
-
-  /* INFO BOXES */
-  .info-boxes{
-    padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;
-    background:var(--off);border-bottom:1px solid var(--g2);
-  }
-  .info-box{
-    background:var(--white);border:1px solid var(--g2);padding:11px 12px;
-    display:flex;align-items:center;gap:10px;
-    text-decoration:none;color:var(--text);transition:border-color .15s;
-  }
-  .info-box.clickable:hover{border-color:var(--red);}
-  .info-icon{
-    flex-shrink:0;width:24px;height:24px;
-    display:flex;align-items:center;justify-content:center;color:var(--navy);
-  }
-  .info-text{ display:flex;flex-direction:column;line-height:1.15;min-width:0; }
-  .info-label{
-    color:var(--g4);font-weight:600;text-transform:uppercase;
-    letter-spacing:.14em;font-size:8.5px;margin-bottom:2px;
-  }
-  .info-value{
-    color:var(--navy);font-weight:800;font-size:13px;
-    letter-spacing:.02em;text-transform:uppercase;
-  }
-  .info-value.fee{ color:var(--red);font-size:14px; }
-
-  /* LÍNEAS */
-  .lineas{padding:12px 12px 8px;}
-  .linea{ background:var(--white);border:1px solid var(--g2);margin-bottom:12px; }
-  .linea-hdr{
-    background:var(--navy);color:var(--white);padding:9px 14px;
-    display:flex;justify-content:space-between;align-items:center;
-  }
-  .linea-num{
-    font-family:'Roboto Slab',serif;font-size:16px;font-weight:900;
-    letter-spacing:.04em;color:var(--gold);text-transform:uppercase;
-  }
-  .linea-tee{
-    font-size:13px;font-weight:700;letter-spacing:.08em;
-    color:var(--white);text-transform:uppercase;
-  }
-  .linea-body{padding:8px;}
-
-  /* PLAYERS */
-  .players{ display:flex;flex-direction:column;gap:5px; }
-  .player{
-    display:grid;
-    grid-template-columns:1fr 92px 92px;
-    background:var(--white);
-    border:1px solid var(--g2);
-    border-left:3px solid var(--red);
-    overflow:hidden;
-    min-height:38px;
-  }
-  .p-name{
-    display:flex;
-    align-items:center;
-    padding:6px 12px;
-    font-weight:800;
-    font-size:14px;
-    letter-spacing:.05em;
-    color:var(--navy);
-    text-transform:uppercase;
-    border-right:1px solid var(--g2);
-  }
-  .p-tee{
-    display:grid;
-    grid-template-columns:1fr auto 1fr;
-    align-items:center;
-    justify-items:center;
-    padding:6px 8px;
-    font-size:12.5px;
-    font-weight:700;
-    letter-spacing:.04em;
-  }
-  .p-tee.blancas{ background:var(--white); color:var(--navy); border-right:1px solid var(--g2); }
-  .p-tee.azules{ background:var(--blue-bg); color:var(--navy); }
-  .p-hcp{ font-weight:800;font-size:13px;color:var(--navy); }
-  .p-arrow{ color:var(--g4);font-size:10px; }
-  .p-85-wrap{ display:flex;align-items:baseline;gap:2px; }
-  .p-85{ font-weight:800;color:var(--red);font-size:13px; }
-  .p-85-tag{
-    font-size:8px;color:var(--g4);font-weight:600;letter-spacing:.06em;
+  .fc-card {
+    background: #fff;
+    max-width: 440px;
+    width: 100%;
+    box-shadow: 0 4px 24px rgba(0,0,0,.12);
   }
 
-  /* Match section */
-  .sec-match{
-    background:var(--g1);color:var(--navy);padding:6px 8px;
-    font-size:10px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;
-    border-top:1px solid var(--g2);margin-top:10px;text-align:center;
+  /* ── Header ── */
+  .fc-hdr {
+    background: var(--navy);
+    color: #fff;
+    padding: 16px 20px;
+    border-bottom: 3px solid var(--red);
+    display: flex;
+    align-items: center;
+    gap: 14px;
   }
-  .matches{
-    padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:5px;
+  .fc-logo {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    flex-shrink: 0;
   }
-  .match{
-    background:var(--white);border:1px solid var(--g2);
-    border-left:3px solid var(--gold);padding:7px 6px;
-    font-size:12px;line-height:1.25;text-align:center;
-    display:flex;align-items:center;justify-content:center;
+  .fc-hdr-txt { flex: 1; text-align: center; }
+  .fc-tour {
+    font-size: 9px;
+    letter-spacing: .3em;
+    font-weight: 700;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 3px;
   }
-  .match-pair{
-    color:var(--navy);font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  .fc-num {
+    font-family: 'Roboto Slab', serif;
+    font-size: 26px;
+    font-weight: 900;
+    letter-spacing: .06em;
   }
-  .match-vs{
-    color:var(--red);font-weight:900;font-size:9px;
-    margin:0 5px;letter-spacing:.06em;
+  .fc-line {
+    width: 40px;
+    height: 2px;
+    background: var(--gold);
+    margin: 6px auto 0;
+  }
+  .fc-spacer { width: 50px; }
+
+  /* ── Info strip ── */
+  .fc-info {
+    padding: 10px 12px;
+    background: var(--off);
+    border-bottom: 1px solid var(--g2);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+  }
+  .fc-inf-box {
+    background: #fff;
+    border: 1px solid var(--g2);
+    padding: 8px 10px;
+  }
+  .fc-inf-lbl {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    color: var(--g4);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .fc-inf-val {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--navy);
+    text-transform: uppercase;
+  }
+  .fc-fee { color: var(--red); }
+
+  /* ── Líneas ── */
+  .fc-lineas { padding: 10px 10px 6px; }
+
+  .fc-linea {
+    border: 1px solid var(--g2);
+    margin-bottom: 10px;
+  }
+  .fc-linea-hdr {
+    background: var(--navy);
+    color: #fff;
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .fc-lnum {
+    font-family: 'Roboto Slab', serif;
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+  .fc-ltee {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
   }
 
-  /* FOOTER */
-  .ftr{
-    background:var(--navy);color:var(--white);padding:10px;
-    text-align:center;font-size:9px;letter-spacing:.2em;
-    text-transform:uppercase;border-top:2px solid var(--gold);
+  /* ── Players ── */
+  .fc-linea-body { padding: 7px; }
+  .fc-players {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
-  .ftr-tour{color:var(--gold);font-weight:700;}
+  .fc-player {
+    display: grid;
+    grid-template-columns: 1fr 80px 80px;
+    border: 1px solid var(--g2);
+    border-left: 3px solid var(--red);
+    min-height: 34px;
+  }
+  .fc-pname {
+    display: flex;
+    align-items: center;
+    padding: 5px 10px;
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: .04em;
+    color: var(--navy);
+    text-transform: uppercase;
+    border-right: 1px solid var(--g2);
+  }
+  .fc-ptee {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 5px 6px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .fc-blancas {
+    background: #fff;
+    border-right: 1px solid var(--g2);
+    color: var(--navy);
+  }
+  .fc-azules {
+    background: #dbe7f5;
+    color: var(--navy);
+  }
+  .fc-phcp   { font-weight: 800; font-size: 12px; }
+  .fc-parrow { color: var(--g4); font-size: 9px; }
+  .fc-p85    { font-weight: 800; color: var(--red); font-size: 12px; }
+  .fc-p85t   { font-size: 7px; color: var(--g4); font-weight: 600; }
+
+  /* ── Matches ── */
+  .fc-match-hdr {
+    background: var(--g1);
+    border: 1px solid var(--g2);
+    border-top: none;
+    padding: 5px 8px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--navy);
+    text-align: center;
+    margin-top: 8px;
+  }
+  .fc-matches {
+    padding: 7px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+  .fc-match {
+    background: #fff;
+    border: 1px solid var(--g2);
+    border-left: 3px solid var(--gold);
+    padding: 6px 5px;
+    text-align: center;
+  }
+  .fc-match.full { grid-column: 1 / -1; }
+  .fc-mpair {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+  .fc-mvs {
+    color: var(--red);
+    font-weight: 900;
+    font-size: 8px;
+    margin: 0 4px;
+    letter-spacing: .05em;
+  }
+
+  /* ── Footer ── */
+  .fc-ftr {
+    background: var(--navy);
+    color: #fff;
+    padding: 10px;
+    text-align: center;
+    font-size: 9px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    border-top: 2px solid var(--gold);
+  }
+  .fc-ftour { color: var(--gold); font-weight: 700; }
+
+  /* ── Maps link ── */
+  .fc-maps {
+    display: block;
+    text-align: center;
+    padding: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--navy);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    background: var(--g1);
+    border-top: 1px solid var(--g2);
+  }
+  .fc-maps:hover { background: var(--g2); }
+
+  @media (max-width: 440px) {
+    body { padding: 0; }
+    .fc-card { box-shadow: none; }
+  }
 </style>
 </head>
 <body>
-<div class="card">
+<div class="fc-card">
 
-  <!-- HEADER -->
-  <div class="hdr">
-    <img src="logo.png" alt="NGT" class="hdr-logo" onerror="this.style.display='none'">
-    <div class="hdr-text">
-      <div class="hdr-tour">Numa Golf Tour · XIV · 2026</div>
-      <div class="hdr-fecha">FECHA 4</div>
-      <div class="hdr-line"></div>
+  <!-- Header -->
+  <div class="fc-hdr">
+    <img src="logo.png" alt="NGT" class="fc-logo" onerror="this.style.display='none'">
+    <div class="fc-hdr-txt">
+      <div class="fc-tour">Numa Golf Tour · XIV · 2026</div>
+      <div class="fc-num">FECHA 4</div>
+      <div class="fc-line"></div>
     </div>
-    <div class="hdr-spacer"></div>
+    <div class="fc-spacer"></div>
   </div>
 
-  <!-- INFO BOXES -->
-  <div class="info-boxes">
-    <div class="info-box">
-      <div class="info-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 22V4a2 2 0 0 1 2-2h11l-2 5h7l-2 5H6"/>
-          <path d="M4 22h6"/>
-        </svg>
-      </div>
-      <div class="info-text">
-        <span class="info-label">Fecha 4 · Cancha</span>
-        <span class="info-value">La Providencia</span>
-      </div>
+  <!-- Info -->
+  <div class="fc-info">
+    <div class="fc-inf-box">
+      <div class="fc-inf-lbl">Cancha</div>
+      <div class="fc-inf-val">San Andrés</div>
     </div>
-
-    <div class="info-box">
-      <div class="info-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="9"/>
-          <circle cx="9" cy="9" r=".7" fill="currentColor"/>
-          <circle cx="14.5" cy="10" r=".7" fill="currentColor"/>
-          <circle cx="10.5" cy="13.5" r=".7" fill="currentColor"/>
-          <circle cx="15" cy="14.5" r=".7" fill="currentColor"/>
-        </svg>
-      </div>
-      <div class="info-text">
-        <span class="info-label">Modalidad</span>
-        <span class="info-value">Stableford + Match</span>
-      </div>
+    <div class="fc-inf-box">
+      <div class="fc-inf-lbl">Fecha · Horario</div>
+      <div class="fc-inf-val">07/06 · 09:40</div>
     </div>
-
-    <div class="info-box">
-      <div class="info-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="1" x2="12" y2="23"/>
-          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-        </svg>
-      </div>
-      <div class="info-text">
-        <span class="info-label">Green Fee</span>
-        <span class="info-value fee">$45.000</span>
-      </div>
+    <div class="fc-inf-box">
+      <div class="fc-inf-lbl">Green Fee</div>
+      <div class="fc-inf-val fc-fee">$45.000</div>
     </div>
-
-    <a class="info-box clickable" href="https://maps.app.goo.gl/tkWRr62suddxzXhn6" target="_blank">
-      <div class="info-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-          <circle cx="12" cy="10" r="3"/>
-        </svg>
-      </div>
-      <div class="info-text">
-        <span class="info-label">Ubicación</span>
-        <span class="info-value">Cómo llegar →</span>
-      </div>
-    </a>
+    <div class="fc-inf-box">
+      <div class="fc-inf-lbl">Modalidad</div>
+      <div class="fc-inf-val">Stableford + Match</div>
+    </div>
   </div>
 
-  <div class="lineas">
+  <!-- Líneas -->
+  <div class="fc-lineas">
 
-    <!-- LÍNEA 1 — Luis · Marta · Juanse -->
-    <div class="linea">
-      <div class="linea-hdr">
-        <span class="linea-num">Línea 1</span>
-        <span class="linea-tee">9:40 · Hoyo 1</span>
+    <!-- LÍNEA 1 -->
+    <div class="fc-linea">
+      <div class="fc-linea-hdr">
+        <span class="fc-lnum">Línea 1</span>
+        <span class="fc-ltee">09:40 · Hoyo 1</span>
       </div>
-      <div class="linea-body">
-        <div class="players">
-          <div class="player">
-            <div class="p-name">Luis</div>
-            <div class="p-tee blancas"><span class="p-hcp">5</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">4</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">8</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">7</span><span class="p-85-tag">85%</span></span></div>
+      <div class="fc-linea-body">
+        <div class="fc-players">
+          <div class="fc-player">
+            <div class="fc-pname">Jugador A</div>
+            <div class="fc-ptee fc-blancas"><span class="fc-phcp">—</span></div>
+            <div class="fc-ptee fc-azules"><span class="fc-phcp">—</span></div>
           </div>
-          <div class="player">
-            <div class="p-name">Marta</div>
-            <div class="p-tee blancas"><span class="p-hcp">18</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">15</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">22</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">19</span><span class="p-85-tag">85%</span></span></div>
+          <div class="fc-player">
+            <div class="fc-pname">Jugador B</div>
+            <div class="fc-ptee fc-blancas"><span class="fc-phcp">—</span></div>
+            <div class="fc-ptee fc-azules"><span class="fc-phcp">—</span></div>
           </div>
-          <div class="player">
-            <div class="p-name">Juanse</div>
-            <div class="p-tee blancas"><span class="p-hcp">31</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">26</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">36</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">31</span><span class="p-85-tag">85%</span></span></div>
+          <div class="fc-player">
+            <div class="fc-pname">Jugador C</div>
+            <div class="fc-ptee fc-blancas"><span class="fc-phcp">—</span></div>
+            <div class="fc-ptee fc-azules"><span class="fc-phcp">—</span></div>
+          </div>
+          <div class="fc-player">
+            <div class="fc-pname">Jugador D</div>
+            <div class="fc-ptee fc-blancas"><span class="fc-phcp">—</span></div>
+            <div class="fc-ptee fc-azules"><span class="fc-phcp">—</span></div>
           </div>
         </div>
-        <div class="sec-match">⚔ Match</div>
-        <div class="matches">
-          <div class="match"><span class="match-pair">Luis<span class="match-vs">vs</span>Marta</span></div>
-          <div class="match"><span class="match-pair">Luis<span class="match-vs">vs</span>Juanse</span></div>
-          <div class="match"><span class="match-pair">Marta<span class="match-vs">vs</span>Juanse</span></div>
+        <div class="fc-match-hdr">⚔ Match</div>
+        <div class="fc-matches">
+          <div class="fc-match"><span class="fc-mpair">A <span class="fc-mvs">VS</span> C</span></div>
+          <div class="fc-match"><span class="fc-mpair">A <span class="fc-mvs">VS</span> D</span></div>
+          <div class="fc-match"><span class="fc-mpair">B <span class="fc-mvs">VS</span> C</span></div>
+          <div class="fc-match"><span class="fc-mpair">B <span class="fc-mvs">VS</span> D</span></div>
         </div>
       </div>
     </div>
 
-    <!-- LÍNEA 2 — Caco · Picho · Negro -->
-    <div class="linea">
-      <div class="linea-hdr">
-        <span class="linea-num">Línea 2</span>
-        <span class="linea-tee">9:50 · Hoyo 1</span>
+    <!-- LÍNEA 2 -->
+    <div class="fc-linea">
+      <div class="fc-linea-hdr">
+        <span class="fc-lnum">Línea 2</span>
+        <span class="fc-ltee">09:50 · Hoyo 1</span>
       </div>
-      <div class="linea-body">
-        <div class="players">
-          <div class="player">
-            <div class="p-name">Caco</div>
-            <div class="p-tee blancas"><span class="p-hcp">7</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">6</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">10</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">9</span><span class="p-85-tag">85%</span></span></div>
+      <div class="fc-linea-body">
+        <div class="fc-players">
+          <div class="fc-player">
+            <div class="fc-pname">Jugador E</div>
+            <div class="fc-ptee fc-blancas"><span class="fc-phcp">—</span></div>
+            <div class="fc-ptee fc-azules"><span class="fc-phcp">—</span></div>
           </div>
-          <div class="player">
-            <div class="p-name">Picho</div>
-            <div class="p-tee blancas"><span class="p-hcp">14</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">12</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">17</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">14</span><span class="p-85-tag">85%</span></span></div>
+          <div class="fc-player">
+            <div class="fc-pname">Jugador F</div>
+            <div class="fc-ptee fc-blancas"><span class="fc-phcp">—</span></div>
+            <div class="fc-ptee fc-azules"><span class="fc-phcp">—</span></div>
           </div>
-          <div class="player">
-            <div class="p-name">Negro</div>
-            <div class="p-tee blancas"><span class="p-hcp">33</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">28</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">38</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">32</span><span class="p-85-tag">85%</span></span></div>
+          <div class="fc-player">
+            <div class="fc-pname">Jugador G</div>
+            <div class="fc-ptee fc-blancas"><span class="fc-phcp">—</span></div>
+            <div class="fc-ptee fc-azules"><span class="fc-phcp">—</span></div>
+          </div>
+          <div class="fc-player">
+            <div class="fc-pname">Jugador H</div>
+            <div class="fc-ptee fc-blancas"><span class="fc-phcp">—</span></div>
+            <div class="fc-ptee fc-azules"><span class="fc-phcp">—</span></div>
           </div>
         </div>
-        <div class="sec-match">⚔ Match</div>
-        <div class="matches">
-          <div class="match"><span class="match-pair">Caco<span class="match-vs">vs</span>Picho</span></div>
-          <div class="match"><span class="match-pair">Caco<span class="match-vs">vs</span>Negro</span></div>
-          <div class="match"><span class="match-pair">Picho<span class="match-vs">vs</span>Negro</span></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- LÍNEA 3 — Persa · Bebe · Ruete -->
-    <div class="linea">
-      <div class="linea-hdr">
-        <span class="linea-num">Línea 3</span>
-        <span class="linea-tee">10:00 · Hoyo 1</span>
-      </div>
-      <div class="linea-body">
-        <div class="players">
-          <div class="player">
-            <div class="p-name">Persa</div>
-            <div class="p-tee blancas"><span class="p-hcp">8</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">7</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">11</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">9</span><span class="p-85-tag">85%</span></span></div>
-          </div>
-          <div class="player">
-            <div class="p-name">Bebe</div>
-            <div class="p-tee blancas"><span class="p-hcp">17</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">14</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">21</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">18</span><span class="p-85-tag">85%</span></span></div>
-          </div>
-          <div class="player">
-            <div class="p-name">Ruete</div>
-            <div class="p-tee blancas"><span class="p-hcp">29</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">25</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">33</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">28</span><span class="p-85-tag">85%</span></span></div>
-          </div>
-        </div>
-        <div class="sec-match">⚔ Match</div>
-        <div class="matches">
-          <div class="match"><span class="match-pair">Persa<span class="match-vs">vs</span>Bebe</span></div>
-          <div class="match"><span class="match-pair">Persa<span class="match-vs">vs</span>Ruete</span></div>
-          <div class="match"><span class="match-pair">Bebe<span class="match-vs">vs</span>Ruete</span></div>
+        <div class="fc-match-hdr">⚔ Match</div>
+        <div class="fc-matches">
+          <div class="fc-match"><span class="fc-mpair">E <span class="fc-mvs">VS</span> G</span></div>
+          <div class="fc-match"><span class="fc-mpair">E <span class="fc-mvs">VS</span> H</span></div>
+          <div class="fc-match"><span class="fc-mpair">F <span class="fc-mvs">VS</span> G</span></div>
+          <div class="fc-match"><span class="fc-mpair">F <span class="fc-mvs">VS</span> H</span></div>
         </div>
       </div>
     </div>
 
-    <!-- LÍNEA 4 — Queque · Bocha · Racho · Uru -->
-    <div class="linea">
-      <div class="linea-hdr">
-        <span class="linea-num">Línea 4</span>
-        <span class="linea-tee">10:10 · Hoyo 1</span>
-      </div>
-      <div class="linea-body">
-        <div class="players">
-          <div class="player">
-            <div class="p-name">Queque</div>
-            <div class="p-tee blancas"><span class="p-hcp">9</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">8</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">12</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">10</span><span class="p-85-tag">85%</span></span></div>
-          </div>
-          <div class="player">
-            <div class="p-name">Bocha</div>
-            <div class="p-tee blancas"><span class="p-hcp">16</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">14</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">20</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">17</span><span class="p-85-tag">85%</span></span></div>
-          </div>
-          <div class="player">
-            <div class="p-name">Racho</div>
-            <div class="p-tee blancas"><span class="p-hcp">17</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">14</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">21</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">18</span><span class="p-85-tag">85%</span></span></div>
-          </div>
-          <div class="player">
-            <div class="p-name">Uru</div>
-            <div class="p-tee blancas"><span class="p-hcp">30</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">26</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">35</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">30</span><span class="p-85-tag">85%</span></span></div>
-          </div>
-        </div>
-        <div class="sec-match">⚔ Match</div>
-        <div class="matches">
-          <div class="match"><span class="match-pair">Racho<span class="match-vs">vs</span>Queque</span></div>
-          <div class="match"><span class="match-pair">Racho<span class="match-vs">vs</span>Bocha</span></div>
-          <div class="match"><span class="match-pair">Uru<span class="match-vs">vs</span>Queque</span></div>
-          <div class="match"><span class="match-pair">Uru<span class="match-vs">vs</span>Bocha</span></div>
-        </div>
-      </div>
-    </div>
+  </div><!-- /.fc-lineas -->
 
-    <!-- LÍNEA 5 — Pollo · Pierre · Trinche · Polaco -->
-    <div class="linea">
-      <div class="linea-hdr">
-        <span class="linea-num">Línea 5</span>
-        <span class="linea-tee">10:20 · Hoyo 1</span>
-      </div>
-      <div class="linea-body">
-        <div class="players">
-          <div class="player">
-            <div class="p-name">Pollo</div>
-            <div class="p-tee blancas"><span class="p-hcp">9</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">8</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">13</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">11</span><span class="p-85-tag">85%</span></span></div>
-          </div>
-          <div class="player">
-            <div class="p-name">Pierre</div>
-            <div class="p-tee blancas"><span class="p-hcp">21</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">18</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">25</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">21</span><span class="p-85-tag">85%</span></span></div>
-          </div>
-          <div class="player">
-            <div class="p-name">Trinche</div>
-            <div class="p-tee blancas"><span class="p-hcp">24</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">20</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">29</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">25</span><span class="p-85-tag">85%</span></span></div>
-          </div>
-          <div class="player">
-            <div class="p-name">Polaco</div>
-            <div class="p-tee blancas"><span class="p-hcp">24</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">20</span><span class="p-85-tag">85%</span></span></div>
-            <div class="p-tee azules"><span class="p-hcp">28</span><span class="p-arrow">→</span><span class="p-85-wrap"><span class="p-85">24</span><span class="p-85-tag">85%</span></span></div>
-          </div>
-        </div>
-        <div class="sec-match">⚔ Match</div>
-        <div class="matches">
-          <div class="match"><span class="match-pair">Pierre<span class="match-vs">vs</span>Pollo</span></div>
-          <div class="match"><span class="match-pair">Pierre<span class="match-vs">vs</span>Polaco</span></div>
-          <div class="match"><span class="match-pair">Trinche<span class="match-vs">vs</span>Pollo</span></div>
-          <div class="match"><span class="match-pair">Trinche<span class="match-vs">vs</span>Polaco</span></div>
-        </div>
-      </div>
-    </div>
+  <!-- Maps -->
+  <a class="fc-maps" href="https://maps.app.goo.gl/tkWRr62suddxzXhn6" target="_blank">
+    📍 Cómo llegar a San Andrés →
+  </a>
 
-  </div>
-
-  <div class="ftr">
-    <span class="ftr-tour">NGT XIV</span> · 17 jugadores · 17 matches
+  <!-- Footer -->
+  <div class="fc-ftr">
+    <span class="fc-ftour">NGT XIV</span> · 2 líneas · 8 matches
   </div>
 
 </div>
