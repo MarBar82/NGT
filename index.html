@@ -4126,7 +4126,8 @@ function abrirEditPanel(fecha){
   document.getElementById('adm-edit-msg').style.display = 'none';
   document.getElementById('adm-reset-msg').style.display = 'none';
   document.getElementById('adm-edit-jugs').innerHTML = 'Cargando...';
-  document.getElementById('adm-edit-dobles').innerHTML = 'Cargando...';
+  const _doblesEl = document.getElementById('adm-edit-dobles');
+  if(_doblesEl) _doblesEl.innerHTML = 'Cargando...';
 
   // Load matches for this fecha
   loadMatchesForGestion(fecha);
@@ -4199,21 +4200,23 @@ function abrirEditPanel(fecha){
     });
     jl.innerHTML = jugHtml;
 
-    // Render dobles — include anyone currently marked OR who has it available
+    // Render dobles (solo si el elemento todavía existe — fue movido a card separada)
     const dl = document.getElementById('adm-edit-dobles');
-    let dobHtml = '';
-    const eligibleForDoble = new Set([...disponibles.map(String), ...curDobles]);
-    if(!eligibleForDoble.size){
-      dobHtml = '<div class="s dim" style="padding:10px;">No hay jugadores disponibles para doble</div>';
-    } else {
-      jugadores.forEach(j => {
-        if(!eligibleForDoble.has(String(j.matricula))) return;
-        const checked = curDobles.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
-        const lbl = formatPlayerLabel(j.nombre);
-        dobHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-dob" value="' + j.matricula + '" id="edob-' + j.matricula + '" ' + checked + '><label for="edob-' + j.matricula + '">' + lbl + '</label></div>';
-      });
+    if(dl) {
+      let dobHtml = '';
+      const eligibleForDoble = new Set([...disponibles.map(String), ...curDobles]);
+      if(!eligibleForDoble.size){
+        dobHtml = '<div class="s dim" style="padding:10px;">No hay jugadores disponibles para doble</div>';
+      } else {
+        jugadores.forEach(j => {
+          if(!eligibleForDoble.has(String(j.matricula))) return;
+          const checked = curDobles.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
+          const lbl = formatPlayerLabel(j.nombre);
+          dobHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-dob" value="' + j.matricula + '" id="edob-' + j.matricula + '" ' + checked + '><label for="edob-' + j.matricula + '">' + lbl + '</label></div>';
+        });
+      }
+      dl.innerHTML = dobHtml;
     }
-    dl.innerHTML = dobHtml;
 
     document.getElementById('adm-edit-msg').style.display = 'none';
   }).catch(e => {
