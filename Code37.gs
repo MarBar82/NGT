@@ -208,24 +208,29 @@ function getDbColForFecha_(fechaNum) {
 }
 
 function getJugadoresConDobleDisponible_() {
-  // Returns list of matriculas that have NOT used their doble yet
-  // Check SCORE column AT (col 46) — TRUE means already used
+  // Returns list of matriculas that have NOT used their doble in ANY fecha.
+  // Checks: col AT (46, manual global flag) AND each fecha's DB column (8,12,16,20,24,28,32,36).
+  // A player is "disponible" only if they have no TRUE in AT and no TRUE in any DB column.
   const sh = getSheet_('SCORE');
   if (!sh) return [];
   const data = sh.getRange(2, 1, 19, 46).getValues(); // A2:AT20
+  // 0-based indices of the DB column for each fecha (cols 8,12,16,20,24,28,32,36 → idx 7,11,15,19,23,27,31,35)
+  const DB_COL_IDX = [7, 11, 15, 19, 23, 27, 31, 35];
+
+  function isTrue_(v) {
+    return (v === true) || (v === 1) ||
+      (typeof v === 'string' && (v.toUpperCase() === 'TRUE' || v.toUpperCase() === 'VERDADERO'));
+  }
+
   const available = [];
-  data.forEach(row => {
+  data.forEach(function(row) {
     const mat = String(row[0] || '').trim();
     if (!mat) return;
-    // Check various TRUE representations — checkbox, formula result, text
-    const v = row[45];
-    const isTrue = (v === true)
-      || (v === 1)
-      || (v === 'TRUE')
-      || (v === 'VERDADERO')
-      || (typeof v === 'string' && v.toUpperCase() === 'TRUE')
-      || (typeof v === 'string' && v.toUpperCase() === 'VERDADERO');
-    if (!isTrue) available.push(mat);
+    // Check AT (global flag)
+    if (isTrue_(row[45])) return;
+    // Check any fecha DB column — if any is TRUE, the player already used their doble
+    if (DB_COL_IDX.some(function(ci) { return isTrue_(row[ci]); })) return;
+    available.push(mat);
   });
   return available;
 }
@@ -4731,6 +4736,8 @@ function setDoblesFecha_(params) {
   });
 
   SpreadsheetApp.flush();
+  // Invalidate cache so jugadoresConDoble reflects the updated state immediately
+  try { CacheService.getScriptCache().remove('jugadoresConDoble'); } catch(e) {}
   audit_('SET_DOBLES_FECHA', 'admin', { fecha, dobles: nuevosDobles, changes });
   return { ok: true, changes: changes };
 }

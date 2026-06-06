@@ -3827,15 +3827,25 @@ function loadMatchesForGestion(fecha){
 function renderDoblesPanel(fecha, jugs){
   const cont = document.getElementById('adm-dobles-mgr-list');
   if(!cont) return;
-  const actuales = [];
-  // Leer dobles actuales de SCORE
-  ngtApiGet('jugadoresConDoble').then(r => {
-    const todos = (r && r.data) || [];
-    // jugadoresConDoble devuelve matriculas con doble disponible, no los que ya lo usaron.
-    // Usamos getDoblesForFecha via fetchMeta para saber quiénes tienen doble en ESTA fecha.
-    // Por simplicidad, renderizamos el panel y el estado se actualiza al guardar.
-    renderDoblesCheckboxes_(cont, jugs, []);
-  }).catch(() => renderDoblesCheckboxes_(cont, jugs, []));
+  cont.innerHTML = '<div class="s dim" style="padding:8px;">Cargando...</div>';
+  // Parallel: jugadoresConDoble (sin doble en ninguna fecha) + fechaDetalle (dobles de esta fecha)
+  Promise.all([
+    ngtApiGet('jugadoresConDoble'),
+    ngtApiGet('fechaDetalle', { fecha: fecha })
+  ]).then(function(results){
+    const disponibles   = (results[0] && results[0].data) || [];   // sin doble en ninguna fecha
+    const detalle       = (results[1] && results[1].data) || {};
+    const enEstaFecha   = detalle.dobles || [];                     // ya asignados a esta fecha
+
+    // Mostrar jugador si: no usó doble en ninguna fecha (disponible) O ya tiene doble en ESTA fecha.
+    // Excluir a quienes usaron doble en UNA FECHA DISTINTA (no están en disponibles ni en enEstaFecha).
+    const mostrar = (jugs || []).filter(function(j){
+      if(String(j.matricula).startsWith('INV')) return false;
+      const mat = String(j.matricula);
+      return disponibles.indexOf(mat) >= 0 || enEstaFecha.indexOf(mat) >= 0;
+    });
+    renderDoblesCheckboxes_(cont, mostrar, enEstaFecha);
+  }).catch(function(){ renderDoblesCheckboxes_(cont, jugs, []); });
 }
 
 function renderDoblesCheckboxes_(cont, jugs, marcados){
