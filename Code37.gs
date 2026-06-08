@@ -672,7 +672,30 @@ function buildHcpJuegoMap_(canchaId, canchaName, teeColor) {
   }
   if (!slope) return null;
 
-  // ── 2. Read hcpIndex for every player from JUGADORES ─────────────────────
+  // ── 2. Read par total from CANCHAS sheet (sum of 18-hole pars, cols C-T) ──
+  let par = null;
+  const shCanchas = getSheet_(SHEETS.CANCHAS);
+  if (shCanchas) {
+    const clr = shCanchas.getLastRow();
+    if (clr >= 2) {
+      const cData = shCanchas.getRange(2, 1, clr - 1, 20).getValues();
+      for (const cr of cData) {
+        const cId  = String(cr[0] || '').trim();
+        const cNom = String(cr[1] || '').trim().toUpperCase();
+        if (cId === idKey || cNom === nomKey) {
+          const pares = cr.slice(2, 20).map(v => parseInt(v) || 0);
+          const total = pares.reduce((s, v) => s + v, 0);
+          if (total > 0) par = total;
+          break;
+        }
+      }
+    }
+  }
+
+  // ── 3. Read hcpIndex for every player from JUGADORES ─────────────────────
+  // Fórmula WHS completa: round(HCPindex × slope/113 + (courseRating − par))
+  // El ajuste (rating − par) corrige diferencias entre el rating y el par del
+  // campo, que pueden ser positivas o negativas.
   const jugSh = getSheet_(SHEETS.JUGADORES);
   const hcpMap = {};
   if (jugSh) {
@@ -686,12 +709,14 @@ function buildHcpJuegoMap_(canchaId, canchaName, teeColor) {
         if (!mat || rawHcp === '' || rawHcp === null || rawHcp === undefined) return;
         const hcpIndex = parseFloat(rawHcp);
         if (isNaN(hcpIndex)) return;
-        hcpMap[mat] = Math.round(hcpIndex * slope / 113);
+        let ch = hcpIndex * slope / 113;
+        if (rating !== null && par !== null) ch += (rating - par);
+        hcpMap[mat] = Math.round(ch);
       });
     }
   }
 
-  return { slope, rating, tee: matchedTee, hcpMap };
+  return { slope, rating, par, tee: matchedTee, hcpMap };
 }
 
 function debugHcpCanchas_() {
