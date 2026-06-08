@@ -5149,6 +5149,26 @@ function loadFechasMenu(){
 
 const FECHA_CACHE = {};
 
+function refreshFecha(num){
+  if(!num) return;
+  // Limpiar caché local y backend
+  delete FECHA_CACHE[num];
+  try { sessionStorage.removeItem('ngt_fecha_' + num); } catch(e){}
+  const container = document.getElementById('fecha-content');
+  container.innerHTML = '<div class="lb-status"><div class="spinner"></div>Actualizando...</div>';
+  ngtApiGet('fechaResultados', { fecha: num, nocache: 1 }).then(r => {
+    if(!r || !r.ok || !r.data){
+      container.innerHTML = '<div class="lb-error">No se pudo actualizar la fecha.</div>';
+      return;
+    }
+    try { sessionStorage.setItem('ngt_fecha_' + num, JSON.stringify(r.data)); } catch(e){}
+    FECHA_CACHE[num] = r.data;
+    renderFechaDinamica(r.data);
+  }).catch(e => {
+    container.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+  });
+}
+
 function loadFechaDinamica(num){
   if(!num) return;
   const container = document.getElementById('fecha-content');
@@ -5223,26 +5243,36 @@ function renderFechaDinamica(data){
     '</div>' +
   '</div>';
 
-  // ─── TWO COL: Stableford + Match ───
-  html += '<div class="two-col">';
+  // ─── TABLA RESULTADOS (full-width) ───
+  const stb = data.stableford || [];
+  const canchaId = data.canchaId || '';
+  const fechaNum = data.fecha;
 
-  // Stableford
-  html += '<div class="card">' +
-    '<div class="card-hdr"><div class="card-hdr-title">Stableford</div></div>' +
+  html += '<div class="card" style="margin-bottom:14px;">' +
+    '<div class="card-hdr" style="display:flex;align-items:center;justify-content:space-between;">' +
+      '<div class="card-hdr-title">Resultados Fecha ' + fechaNum + '</div>' +
+      '<button onclick="refreshFecha(' + fechaNum + ')" style="' +
+        'background:none;border:1px solid var(--g2);border-radius:3px;padding:3px 10px;' +
+        'font-size:11px;font-weight:700;font-family:\'Barlow Condensed\',sans-serif;' +
+        'color:var(--navy);cursor:pointer;letter-spacing:.06em;' +
+      '">↻ Actualizar</button>' +
+    '</div>' +
     '<div class="stb-scroll">' +
-    '<table class="stb">' +
+    '<table class="stb" style="min-width:520px;">' +
       '<thead><tr>' +
-        '<th class="c" style="width:32px">Pos</th>' +
-        '<th>Jugador</th>' +
-        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
-        '<th class="c" style="width:1%;white-space:nowrap;">STB</th>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th style="min-width:110px;">Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Puntos acumulados antes de esta fecha">Puntos</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Stableford de la fecha">STB</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Puntos de Match Play">Match</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Puntos de Bonus (LD/BA)">Bonus</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Doble Stableford (si aplica)">Dobles</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;background:var(--navy);color:#fff;border-radius:0;" title="Total de la fecha">Total</th>' +
       '</tr></thead>' +
       '<tbody>';
 
-  const stb = data.stableford || [];
-  const canchaId = data.canchaId || '';
   if(!stb.length){
-    html += '<tr><td colspan="4" class="c"><span class="s dim">Sin datos de Stableford todavía</span></td></tr>';
+    html += '<tr><td colspan="8" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
   } else {
     stb.forEach((row, i) => {
       const pos = i + 1;
@@ -5250,25 +5280,31 @@ function renderFechaDinamica(data){
       if(pos === 1) posCell = '<span class="pos-dot d1"></span>';
       else if(pos === 2) posCell = '<span class="pos-dot d2"></span>';
       else if(pos === 3) posCell = '<span class="pos-dot d3"></span>';
-      else posCell = '<span class="s dim">' + pos + '</span>';
+      else posCell = '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
 
       const nombreHtml = fmtHistName(row.nombre);
-      // Show HCP at 85% (same basis used for stableford calculation)
-      const hcpTxt = (row.hcp === '' || row.hcp === null || row.hcp === undefined) ? '–' : hcp85(row.hcp);
+      const ma  = row.ma  || 0;
+      const pb  = row.pb  || 0;
+      const dbl = row.db  ? row.stb : 0;
+      const tot = row.stb + ma + pb + dbl;
 
       html += '<tr style="cursor:pointer;" onclick="openTarjetaModal(\'' +
         row.matricula + '\',' + row.hcp + ',\'' + data.fecha + '\',\'' + canchaId + '\',\'' + (row.nombre||'').replace(/'/g,"\\'") + '\')">' +
-        '<td class="c">' + posCell + '</td>' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
         '<td>' + nombreHtml + '</td>' +
-        '<td class="c"><span class="s">' + hcpTxt + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + (row.puntosAntes || 0) + '</span></td>' +
         '<td class="c"><span class="s big">' + row.stb + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + (ma > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (ma > 0 ? '+'+ma : '—') + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + (pb > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (pb > 0 ? '+'+pb : '—') + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + (dbl > 0 ? 'var(--gold)' : 'var(--g4)') + ';font-weight:' + (dbl > 0 ? '800' : '400') + ';">' + (dbl > 0 ? '+'+dbl : '—') + '</span></td>' +
+        '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + tot + '</span></td>' +
       '</tr>';
     });
   }
 
   html += '</tbody></table></div></div>';
 
-  // Match Play
+  // ─── MATCH PLAY (full-width below) ───
   html += '<div class="rc-card">' +
     '<div class="rc-hdr"><div class="rc-hdr-title">⚔ Match Play</div></div>' +
     '<div class="rc-list">';
@@ -5277,10 +5313,6 @@ function renderFechaDinamica(data){
   if(!matches.length){
     html += '<div class="s dim" style="padding:20px;text-align:center;">Sin matches todavía</div>';
   } else {
-    // For each match pair we need the actual hole-by-hole scores to compute the result.
-    // Fetch them from the MATCH sheet via gviz (the Match section already does this).
-    // For simplicity here: we render with the jugador names + "—" for result, and trigger
-    // a separate fetch to fill in the resultados.
     matches.forEach((m, i) => {
       let holesPlaceholder = '';
       for(let h = 1; h <= 18; h++) holesPlaceholder += '<div class="fd-hb empty" style="color:transparent;">'+h+'</div>';
@@ -5297,8 +5329,6 @@ function renderFechaDinamica(data){
   }
 
   html += '</div></div>';
-
-  html += '</div>'; // close two-col
 
   container.innerHTML = html;
 

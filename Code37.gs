@@ -2798,6 +2798,35 @@ function getFechaResultados_(fecha) {
     }
   }
 
+  // ── SCORE — MA, PB, DB, puntos acumulados antes de esta fecha ────────────
+  // 0-indexed from col A (reading 45 cols):
+  //   Fecha N: ST=4*N, MA=4*N+1, PB=4*N+2, DB=4*N+3
+  //   AL:AS per-fecha subtotals: AL=index37 (fecha1), +1 per fecha → index 36+N for fecha N
+  //   C (grand total) = index 2
+  const scoreMap = {}; // mat → { ma, pb, db, puntosAntes }
+  const shScore = getSheet_('SCORE');
+  if (shScore) {
+    const fecN  = parseInt(fStr);
+    const maIdx = 4 * fecN + 1;
+    const pbIdx = 4 * fecN + 2;
+    const dbIdx = 4 * fecN + 3;
+    const alIdx = 36 + fecN; // AL:AS index for this fecha (0-based from A)
+    var scoreRows = shScore.getRange(3, 1, 18, 45).getValues();
+    scoreRows.forEach(function(row) {
+      var mat = String(row[0] || '').trim();
+      if (!mat) return;
+      var ma = Number(row[maIdx]) || 0;
+      var pb = Number(row[pbIdx]) || 0;
+      var dbVal = row[dbIdx];
+      var db = (dbVal === true || dbVal === 1 ||
+        (typeof dbVal === 'string' && (dbVal.toUpperCase() === 'TRUE' || dbVal.toUpperCase() === 'VERDADERO')));
+      var cTotal           = Number(row[2]) || 0;
+      var thisFechaSubtot  = Number(row[alIdx]) || 0;
+      var puntosAntes      = Math.max(0, cTotal - thisFechaSubtot);
+      scoreMap[mat] = { ma: ma, pb: pb, db: db, puntosAntes: puntosAntes };
+    });
+  }
+
   // ── STB B:K (10 cols) — stableford ranking ───────────────────────────────
   const stableford = [];
   const shS = getSheet_('STB');
@@ -2812,15 +2841,25 @@ function getFechaResultados_(fecha) {
         const stb = row[9]; // col K
         if (stb === '' || stb === null || stb === undefined) return;
         const jug = jugMap[m];
+        const sc  = scoreMap[m] || {};
         stableford.push({
-          matricula: m,
-          nombre: (jug && jug.nombre) || String(row[2] || '').trim(),
-          apodo:  (jug && jug.apodo)  || '',
-          stb:    parseFloat(stb) || 0,
-          hcp:    hcpMap[m] !== undefined ? hcpMap[m] : '',
+          matricula:   m,
+          nombre:      (jug && jug.nombre) || String(row[2] || '').trim(),
+          apodo:       (jug && jug.apodo)  || '',
+          stb:         parseFloat(stb) || 0,
+          hcp:         hcpMap[m] !== undefined ? hcpMap[m] : '',
+          ma:          sc.ma          || 0,
+          pb:          sc.pb          || 0,
+          db:          sc.db          || false,
+          puntosAntes: sc.puntosAntes || 0,
         });
       });
-      stableford.sort(function(a, b) { return b.stb - a.stb; });
+      // Ordenar por total de fecha desc (STB+MA+PB+Dobles), luego por STB
+      stableford.sort(function(a, b) {
+        var totA = a.stb + a.ma + a.pb + (a.db ? a.stb : 0);
+        var totB = b.stb + b.ma + b.pb + (b.db ? b.stb : 0);
+        return totB - totA || b.stb - a.stb;
+      });
     }
   }
 
@@ -4165,7 +4204,7 @@ function doGet(e) {
       case 'canchaPares':      result = { ok: true, data: cachedRead_('cp2_' + params.cancha, 1800, function(){ return getCanchaPares_(params.cancha); }) }; break;
       case 'fechas':           result = { ok: true, data: cachedRead_('fechas', 60, getFechasActivas_) }; break;
       case 'fechasConEstado':  result = { ok: true, data: cachedRead_('fechasConEstado', 120, getFechasConEstado_) }; break;
-      case 'fechaResultados':  result = { ok: true, data: cachedRead_('fechaRes_' + params.fecha, 300, function(){ return getFechaResultados_(params.fecha); }) }; break;
+      case 'fechaResultados':  result = { ok: true, data: params.nocache ? getFechaResultados_(params.fecha) : cachedRead_('fechaRes_' + params.fecha, 300, function(){ return getFechaResultados_(params.fecha); }) }; break;
       case 'fechaMeta':        result = { ok: true, data: getFechaMeta_(params.fecha) }; break;
       case 'jugadoresEnFecha': result = { ok: true, data: getJugadoresEnFecha_(params.fecha) }; break;
       case 'bonusWinners':     result = { ok: true, data: cachedRead_('bw_' + params.fecha, 30, function(){ return getBonusWinners_(params.fecha); }) }; break;
