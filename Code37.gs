@@ -2820,9 +2820,14 @@ function getFechaResultados_(fecha) {
       var dbVal = row[dbIdx];
       var db = (dbVal === true || dbVal === 1 ||
         (typeof dbVal === 'string' && (dbVal.toUpperCase() === 'TRUE' || dbVal.toUpperCase() === 'VERDADERO')));
-      var cTotal           = Number(row[2]) || 0;
-      var thisFechaSubtot  = Number(row[alIdx]) || 0;
-      var puntosAntes      = Math.max(0, cTotal - thisFechaSubtot);
+      // Sumar directamente los subtotales AL:AS de fechas ANTERIORES a esta.
+      // Más robusto que C - AL:AS[N]: no depende de que C esté actualizado.
+      // AL:AS (0-based desde col A): fecha n → index 36+n
+      //   n=1 → idx37=AL, n=2 → idx38=AM, n=3 → idx39=AN, n=4 → idx40=AO, ...
+      var puntosAntes = 0;
+      for (var nPrev = 1; nPrev < fecN; nPrev++) {
+        puntosAntes += Number(row[36 + nPrev]) || 0;
+      }
       scoreMap[mat] = { ma: ma, pb: pb, db: db, puntosAntes: puntosAntes };
     });
   }
