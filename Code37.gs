@@ -915,10 +915,14 @@ function getFechaActiva_() {
           });
           if (jugadoresFecha.length > 0) {
             const conScores = jugadoresFecha.filter(function(r) {
-              const hoyo1 = r[6]; // col H
-              return hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined;
+              const hoyo1 = r[6]; // col H — solo tiene valor cuando el jugador cargó su tarjeta
+              return hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined && hoyo1 !== false;
             });
             completada = conScores.length === jugadoresFecha.length;
+          } else {
+            // Sin jugadores no-INV encontrados para esta fecha → la tratamos como completada
+            // para no mostrar el botón innecesariamente (edge case: líneas solo con INV).
+            completada = true;
           }
         }
       } catch(e) {}

@@ -6039,6 +6039,9 @@ function applyFechaActiva(fa){
     if(fechaBtnSub) fechaBtnSub.textContent = sub || 'Ver líneas y matches';
     fechaBtn.style.display = 'flex';
   } else if(fechaBtn) {
+    // Marcar HOME_FECHA_ACTIVA = 0 (no-null) para bloquear que applyHomeData
+    // reactive el botón via el path legacy de proximaFecha.hasLineas.
+    HOME_FECHA_ACTIVA = 0;
     fechaBtn.style.display = 'none';
   }
 }
@@ -6137,6 +6140,12 @@ function ngtInitData(){
   // Un solo JSONP al backend → proximaFecha + fechasConEstado + jugadoresHist
   ngtApiGet('initData').then(r => {
     const d = (r && r.data) || {};
+
+    // Fecha activa (con líneas confirmadas, aún sin tarjetas completas) — fuente primaria del botón FECHA
+    if(d.fechaActiva !== undefined){
+      applyFechaActiva(d.fechaActiva);
+      try { sessionStorage.setItem('ngt_fechaActiva', JSON.stringify(d.fechaActiva)); } catch(e){}
+    }
 
     // Home
     if(d.proximaFecha !== undefined){
