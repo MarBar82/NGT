@@ -4879,11 +4879,11 @@ function recalcularTotalesScore_(params) {
           gVals.push(['']); jVals.push([0]); kVals.push([0]); lVals.push([0]); mVals.push([0]);
         }
       }
-      lbSh.getRange(3, 7, 18, 1).setValues(gVals);
-      lbSh.getRange(3, 10, 18, 1).setValues(jVals);
-      lbSh.getRange(3, 11, 18, 1).setValues(kVals);
-      lbSh.getRange(3, 12, 18, 1).setValues(lVals);
-      lbSh.getRange(3, 13, 18, 1).setValues(mVals);
+      lbSh.getRange(2, 7, 18, 1).setValues(gVals);
+      lbSh.getRange(2, 10, 18, 1).setValues(jVals);
+      lbSh.getRange(2, 11, 18, 1).setValues(kVals);
+      lbSh.getRange(2, 12, 18, 1).setValues(lVals);
+      lbSh.getRange(2, 13, 18, 1).setValues(mVals);
     }
   } catch(eLb) {}
 
