@@ -2863,11 +2863,12 @@ function getFechaResultados_(fecha) {
           puntosAntes: sc.puntosAntes || 0,
         });
       });
-      // Ordenar por total de fecha desc (STB+MA+PB+Dobles), luego por STB
+      // Ordenar por STB desc; en caso de empate, por total de fecha desc
       stableford.sort(function(a, b) {
+        if (b.stb !== a.stb) return b.stb - a.stb;
         var totA = a.stb + a.ma + a.pb + (a.db ? a.stb : 0);
         var totB = b.stb + b.ma + b.pb + (b.db ? b.stb : 0);
-        return totB - totA || b.stb - a.stb;
+        return totB - totA;
       });
     }
   }
