@@ -5293,7 +5293,7 @@ function renderFechaDinamica(data){
         row.matricula + '\',' + row.hcp + ',\'' + data.fecha + '\',\'' + canchaId + '\',\'' + (row.nombre||'').replace(/'/g,"\\'") + '\')">' +
         '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
         '<td>' + nombreHtml + '</td>' +
-        '<td class="c"><span class="s" style="color:var(--g4);">' + (row.puntosAntes || 0) + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--red);font-weight:700;">' + (row.puntosAntes || 0) + '</span></td>' +
         '<td class="c"><span class="s big">' + row.stb + '</span></td>' +
         '<td class="c"><span class="s" style="color:' + (ma > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (ma > 0 ? '+'+ma : '—') + '</span></td>' +
         '<td class="c"><span class="s" style="color:' + (pb > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (pb > 0 ? '+'+pb : '—') + '</span></td>' +
