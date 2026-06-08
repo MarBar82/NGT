@@ -1871,6 +1871,16 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           </div>
         </div>
 
+        <!-- RECALCULAR SCORE -->
+        <div class="adm-card" id="adm-recalc-card">
+          <div class="adm-card-hdr">🔄 Recalcular Totales</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Recalcula ST+MA+PB total, rankings y leaderboard para todos los jugadores. Usar si algún jugador quedó sin los puntos de match correctos.</div>
+            <button class="adm-btn-secondary" onclick="admRecalcularScore()" style="background:var(--navy);color:#fff;border-color:var(--navy);">🔄 Recalcular Score</button>
+            <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
+
         <!-- TARJETAS: editar por jugador -->
         <div class="adm-card" id="adm-edit-tarjetas-card">
           <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
@@ -3870,6 +3880,22 @@ function admGuardarDobles(){
     if(r && r.ok){
       msg.className = 'adm-msg ok';
       msg.textContent = '✓ Dobles actualizados · ' + dobles.length + ' jugador(es)';
+    } else {
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+function admRecalcularScore(){
+  const msg = document.getElementById('adm-recalc-msg');
+  msg.className = 'adm-msg'; msg.textContent = 'Recalculando...'; msg.style.display = 'block';
+  ngtApiPost({ action: 'recalcularScore', adminKey: ADMIN_KEY_OK }).then(r => {
+    if(r && r.ok){
+      msg.className = 'adm-msg ok';
+      msg.textContent = '✓ Totales recalculados para ' + (r.totales ? r.totales.length : '?') + ' jugadores';
     } else {
       msg.className = 'adm-msg err';
       msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');

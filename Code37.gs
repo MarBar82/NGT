@@ -2017,6 +2017,39 @@ function cargarTarjeta_(params) {
         }
       }
 
+      // 5b. Recalcular total (AL:AS + col C) para los oponentes afectados.
+      // El paso 7 solo recalcula el total del jugador actual (preScoreRow).
+      // Si el oponente cargó antes, su MA queda actualizado pero su total no — este paso lo corrige.
+      try {
+        const scoreSh5b = scoreSh || getSheet_('SCORE');
+        const otherMaOps = maWriteOps.filter(function(op) { return op.mat !== mStr; });
+        if (scoreSh5b && otherMaOps.length > 0) {
+          const fecN5b = parseInt(fecha);
+          const bOther = 4 * (fecN5b - 1); // offset into 41-col E..AS array
+          // Batch-read all score rows at once (rows 3..20, cols E..AS = 41 cols)
+          const allScoreRows5b = scoreSh5b.getRange(3, 5, 18, 41).getValues();
+          otherMaOps.forEach(function(mop) {
+            const rowOffset = mop.scoreRow - 3; // SCORE data rows start at row 3
+            if (rowOffset < 0 || rowOffset >= 18) return;
+            var rowData = allScoreRows5b[rowOffset].slice(); // copy
+            rowData[bOther + 1] = mop.totalMA;              // patch MA for this fecha
+            // Recalculate per-fecha total (AL:AS)
+            var alVals5b = [];
+            for (var nf = 1; nf <= 8; nf++) {
+              var bx  = 4 * (nf - 1);
+              var st5 = Number(rowData[bx])     || 0;
+              var ma5 = Number(rowData[bx + 1]) || 0;
+              var pb5 = Number(rowData[bx + 2]) || 0;
+              var db5 = (rowData[bx + 3] === true || rowData[bx + 3] === 1);
+              alVals5b.push(st5 + ma5 + pb5 + (db5 ? st5 : 0));
+            }
+            var totalC5b = alVals5b.reduce(function(a, v) { return a + v; }, 0);
+            scoreSh5b.getRange(mop.scoreRow, 38, 1, 8).setValues([alVals5b]);
+            scoreSh5b.getRange(mop.scoreRow, 3).setValue(totalC5b);
+          });
+        }
+      } catch (e5b) { /* no bloquear el flujo principal si falla el recálculo del oponente */ }
+
       // 6. PB!E + SCORE!PB
       try {
         const myPbWritten = pbPoints_;
@@ -4761,6 +4794,7 @@ function doPost(e) {
       case 'cargarMatches':       result = cargarMatches_(params); break;
       case 'editarMatches':       result = editarMatches_(params); break;
       case 'actualizarHcpIndices': result = actualizarHcpIndices_(params); break;
+      case 'recalcularScore':      result = recalcularTotalesScore_(params); break;
       case 'armarLineas':          result = armarLineas_(params); break;
       case 'fechaLineas':          result = { ok: true, data: getFechaLineas_(params.fecha) }; break;
       case 'setDoblesFecha':       result = setDoblesFecha_(params); break;
@@ -4768,6 +4802,93 @@ function doPost(e) {
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }
   return jsonResponse_(result);
+}
+
+/**
+ * Recalcula ST+MA+PB+DB total (col C, AL:AS) y rankings (col D) para los 18 jugadores en SCORE.
+ * Útil para corregir totales que quedaron desincronizados cuando el match del oponente
+ * se calculó después de que el jugador ya había cargado su tarjeta.
+ * Se puede llamar desde el admin (acción 'recalcularScore') o directamente desde el editor de AS.
+ */
+function recalcularTotalesScore_(params) {
+  if (params && !checkAdmin_(params.adminKey)) return { ok: false, error: 'No autorizado' };
+  const sh = getSheet_('SCORE');
+  if (!sh) return { ok: false, error: 'SCORE no encontrada' };
+
+  // Filas 3..20 = 18 jugadores. Leer cols E..AS (col 5, 41 cols).
+  const raw = sh.getRange(3, 5, 18, 41).getValues();
+
+  const alMatrix = []; // 18 filas × 8 cols
+  const cVals    = [];
+
+  for (var i = 0; i < 18; i++) {
+    var row = raw[i];
+    var alRow = [];
+    for (var n = 1; n <= 8; n++) {
+      var b  = 4 * (n - 1);
+      var st = Number(row[b])     || 0;
+      var ma = Number(row[b + 1]) || 0;
+      var pb = Number(row[b + 2]) || 0;
+      var db = (row[b + 3] === true || row[b + 3] === 1);
+      alRow.push(st + ma + pb + (db ? st : 0));
+    }
+    alMatrix.push(alRow);
+    cVals.push(alRow.reduce(function(a, v) { return a + v; }, 0));
+  }
+
+  // Escribir AL:AS (col 38, 8 cols) y C (col 3)
+  sh.getRange(3, 38, 18, 8).setValues(alMatrix);
+  sh.getRange(3, 3, 18, 1).setValues(cVals.map(function(v) { return [v]; }));
+
+  // Recalcular rankings (col D)
+  var allRanks = cVals.map(function(ci, i) {
+    var rank = 1;
+    for (var j = 0; j < cVals.length; j++) { if (cVals[j] > ci) rank++; }
+    var cntBefore = 0;
+    for (var j = 0; j <= i; j++) { if (cVals[j] === ci) cntBefore++; }
+    return rank + cntBefore - 1;
+  });
+  sh.getRange(3, 4, 18, 1).setValues(allRanks.map(function(r) { return [r]; }));
+
+  // Actualizar LEADERBOARD G, J, K, L, M
+  try {
+    const lbSh = getSheet_('LEADERBOARD');
+    if (lbSh) {
+      const scoreNames   = sh.getRange(3, 2, 18, 1).getValues();
+      const allScoreData = sh.getRange(3, 5, 18, 32).getValues();
+      const stbTot = new Array(18).fill(0);
+      const maTot  = new Array(18).fill(0);
+      const pbTot  = new Array(18).fill(0);
+      for (var i2 = 0; i2 < 18; i2++) {
+        for (var n2 = 0; n2 < 8; n2++) {
+          stbTot[i2] += Number(allScoreData[i2][4 * n2])     || 0;
+          maTot[i2]  += Number(allScoreData[i2][4 * n2 + 1]) || 0;
+          pbTot[i2]  += Number(allScoreData[i2][4 * n2 + 2]) || 0;
+        }
+      }
+      var gVals = [], jVals = [], kVals = [], lVals = [], mVals = [];
+      for (var r2 = 1; r2 <= 18; r2++) {
+        var idx2 = allRanks.indexOf(r2);
+        if (idx2 >= 0) {
+          gVals.push([String(scoreNames[idx2][0] || '')]);
+          jVals.push([cVals[idx2]]);
+          kVals.push([stbTot[idx2]]);
+          lVals.push([maTot[idx2]]);
+          mVals.push([pbTot[idx2]]);
+        } else {
+          gVals.push(['']); jVals.push([0]); kVals.push([0]); lVals.push([0]); mVals.push([0]);
+        }
+      }
+      lbSh.getRange(3, 7, 18, 1).setValues(gVals);
+      lbSh.getRange(3, 10, 18, 1).setValues(jVals);
+      lbSh.getRange(3, 11, 18, 1).setValues(kVals);
+      lbSh.getRange(3, 12, 18, 1).setValues(lVals);
+      lbSh.getRange(3, 13, 18, 1).setValues(mVals);
+    }
+  } catch(eLb) {}
+
+  audit_('RECALCULAR_SCORE', (params && params.adminKey) || 'system', { cVals: cVals });
+  return { ok: true, totales: cVals };
 }
 
 function test() {
