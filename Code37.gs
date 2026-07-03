@@ -4534,31 +4534,23 @@ function armarLineas_(params) {
   const shM = getSheet_(SHEETS.MATCH);
   if (!shM) return { ok: false, error: 'Hoja MATCH no encontrada' };
 
-  // 3a. Match history: BF1:BX19 — matriz 18×18 con 1 si ya jugaron
-  const matchedPairs = {}; // "matA|matB" → true
+  // 3a. Match history: lectura directa de filas (B=fecha, C=matricula).
+  // Pares de filas consecutivas con la misma fecha = un match.
+  // matchedPairs[key] = cantidad de veces que ese par jugó entre sí.
+  const matchedPairs = {}; // "matA|matB" sorted → número de veces
   try {
-    const matchRaw = shM.getRange(1, 58, 19, 19).getValues(); // BF1:BX19
-    const headerRow = matchRaw[0];
-    const colToMat = {};
-    for (var c = 0; c < headerRow.length; c++) {
-      const v = String(headerRow[c] || '').trim().toUpperCase();
-      if (v && apodoToMat[v]) colToMat[c] = apodoToMat[v];
-    }
-    var labelCol = -1;
-    for (var c2 = 0; c2 <= 2; c2++) {
-      if (matchRaw[1] && apodoToMat[String(matchRaw[1][c2] || '').trim().toUpperCase()]) {
-        labelCol = c2; break;
-      }
-    }
-    if (labelCol >= 0) {
-      for (var r = 1; r < matchRaw.length; r++) {
-        const matA = apodoToMat[String(matchRaw[r][labelCol] || '').trim().toUpperCase()];
-        if (!matA) continue;
-        Object.keys(colToMat).forEach(function(c3) {
-          const matB = colToMat[c3];
-          if (!matB || matB === matA) return;
-          if (parseInt(matchRaw[r][c3]) > 0) matchedPairs[[matA, matB].sort().join('|')] = true;
-        });
+    const lastRowM = shM.getLastRow();
+    if (lastRowM >= 3) {
+      const mRows = shM.getRange(2, 2, lastRowM - 1, 2).getValues(); // B, C
+      for (var mi = 0; mi + 1 < mRows.length; mi += 2) {
+        const f1 = String(mRows[mi][0]     || '').trim();
+        const f2 = String(mRows[mi + 1][0] || '').trim();
+        const m1 = String(mRows[mi][1]     || '').trim();
+        const m2 = String(mRows[mi + 1][1] || '').trim();
+        if (f1 && f1 === f2 && m1 && m2 && m1 !== m2) {
+          const key = [m1, m2].sort().join('|');
+          matchedPairs[key] = (matchedPairs[key] || 0) + 1;
+        }
       }
     }
   } catch(e) { /* continuar sin historial de matches */ }
@@ -4624,9 +4616,27 @@ function armarLineas_(params) {
     .filter(function(p) { return p.posicion === 'ultima'; })
     .map(function(p) { return String(p.matricula); });
 
-  // El backtracking opera sobre todos los jugadores ordenados por HCP
-  // La prioridad se aplica DESPUÉS (post-proceso) reordenando las líneas resultantes
-  var orderedPlayers = players.slice(); // copia, ya ordenada por HCP arriba
+  // Seed para producir variantes distintas (0 = orden por HCP; N > 0 = shuffle)
+  var seed = parseInt(params.seed) || 0;
+  function seededRand_(s) {
+    // mulberry32 PRNG — devuelve [0,1) con estado mutable vía closure
+    var t = s >>> 0;
+    return function() {
+      t += 0x6D2B79F5;
+      var r = Math.imul(t ^ t >>> 15, 1 | t);
+      r ^= r + Math.imul(r ^ r >>> 7, 61 | r);
+      return ((r ^ r >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  // El backtracking opera sobre todos los jugadores, con shuffle opcional según seed
+  var orderedPlayers = players.slice();
+  if (seed > 0) {
+    var rand_ = seededRand_(seed);
+    for (var si = orderedPlayers.length - 1; si > 0; si--) {
+      var sj = Math.floor(rand_() * (si + 1));
+      var tmp = orderedPlayers[si]; orderedPlayers[si] = orderedPlayers[sj]; orderedPlayers[sj] = tmp;
+    }
+  }
 
   // Todas las combinaciones de k elementos de arr
   function getCombos(arr, k) {
@@ -4652,7 +4662,8 @@ function armarLineas_(params) {
 
   // Penalizaciones — son SOFT (nunca bloquean, solo ordenan preferencias).
   // El algoritmo siempre encuentra una solución; simplemente prefiere evitar repeticiones.
-  var PEN_MATCH_REPEAT = 10000; // partido ya jugado: muy indeseable
+  // matchedPairs[key] es un CONTADOR: penalizamos en proporción a las veces que jugaron.
+  var PEN_MATCH_REPEAT = 10000; // por cada vez que ese par ya jugó: muy indeseable
   var PEN_LINE_REPEAT  = 1000;  // línea compartida en últimas 2 fechas: indeseable
 
   // Para una línea de 4: busca la mejor división {A,D} vs {B,C}.
@@ -4671,10 +4682,10 @@ function armarLineas_(params) {
         [sideA[0], sideB[0]], [sideA[0], sideB[1]],
         [sideA[1], sideB[0]], [sideA[1], sideB[1]],
       ];
-      // Penalizar matches repetidos (no bloquear)
+      // Penalizar matches repetidos (proporcional a la cantidad de veces que ya jugaron)
       var matchScore = mps.reduce(function(s, mp) {
         return s + Math.abs(mp[0].hcp - mp[1].hcp)
-                 + (matchedPairs[pKey(mp[0], mp[1])] ? PEN_MATCH_REPEAT : 0);
+                 + (matchedPairs[pKey(mp[0], mp[1])] || 0) * PEN_MATCH_REPEAT;
       }, 0);
       // Penalizar línea compartida en últimas 2 fechas
       var lineScore = allPairs(group).reduce(function(s, mp) {
@@ -4693,7 +4704,7 @@ function armarLineas_(params) {
   function scoreThree(group) {
     var pairs = allPairs(group);
     var matchScore = pairs.reduce(function(s, mp) {
-      return s + (matchedPairs[pKey(mp[0], mp[1])] ? PEN_MATCH_REPEAT : 0);
+      return s + (matchedPairs[pKey(mp[0], mp[1])] || 0) * PEN_MATCH_REPEAT;
     }, 0);
     var lineScore = pairs.reduce(function(s, mp) {
       return s + (recentLinePairs[pKey(mp[0], mp[1])] ? PEN_LINE_REPEAT : 0);
@@ -4775,9 +4786,19 @@ function armarLineas_(params) {
     lines = firstLines.concat(middleLines).concat(lastLines);
   }
 
-  // ── 7. Formatear resultado ────────────────────────────────────────────────
+  // ── 7. Contar matches repetidos en la solución ───────────────────────────
+  var repeatCount = 0;
+  lines.forEach(function(l) {
+    l.matches.forEach(function(m) {
+      var key = [m.j1, m.j2].sort().join('|');
+      if (matchedPairs[key]) repeatCount++;
+    });
+  });
+
+  // ── 8. Formatear resultado ────────────────────────────────────────────────
   return {
     ok: true,
+    repeatCount: repeatCount,
     lines: lines.map(function(l, i) {
       return {
         lineNum: i + 1,

@@ -3339,6 +3339,7 @@ function loadColoresCancha(){
 
 // Valida y recopila datos de Paso 1. Devuelve el objeto de datos o null si hay error.
 let WIZ_LINEAS_RESULT = null; // resultado de armarLineas: { lines: [...] }
+let WIZ_LAST_ARMAR_PARAMS = null; // para poder rearmar con otro seed
 
 function wizValidarPaso1_(){
   const fechaEl   = document.getElementById('adm-fecha');
@@ -3413,9 +3414,12 @@ function wizArmarLineas(){
   });
 }
 
-function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canchaName, data){
+function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canchaName, data, seed){
   const btn = document.getElementById('wiz-armar-btn');
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Armando líneas...'; }
+
+  seed = seed || 0;
+  WIZ_LAST_ARMAR_PARAMS = { jugadoresConHcp, prioridades, jugsInFecha, canchaName, data };
 
   ngtApiPost({
     action: 'armarLineas',
@@ -3423,6 +3427,7 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
     fecha: data.fecha,
     jugadores: jugadoresConHcp,
     prioridades: prioridades,
+    seed: seed,
   }).then(r => {
     if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar Líneas →'; }
     if(!r || !r.ok){
@@ -3449,8 +3454,16 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
     // Mostrar preview de líneas
     const preview = document.getElementById('adm-s2-lineas-preview');
     if(preview){
-      let html = '<strong style="color:var(--navy);">⚡ ' + r.lines.length + ' líneas · ' +
-        r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches · 0 repeticiones</strong><br>';
+      const repeats = r.repeatCount || 0;
+      const repeatColor = repeats > 0 ? 'var(--red)' : 'var(--navy)';
+      const repeatTxt = repeats > 0
+        ? ' · <span style="color:var(--red);">⚠ ' + repeats + ' match' + (repeats > 1 ? 'es' : '') + ' repetido' + (repeats > 1 ? 's' : '') + '</span>'
+        : ' · <span style="color:green;">✓ sin repeticiones</span>';
+      let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+        '<strong style="color:' + repeatColor + ';">⚡ ' + r.lines.length + ' líneas · ' +
+        r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches' + repeatTxt + '</strong>' +
+        '<button onclick="wizRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
+        '</div>';
       r.lines.forEach(l => {
         html += '<strong>L' + l.lineNum + '</strong>: ' +
           l.players.map(p => p.apodo + ' <span style="color:var(--g4);">(' + p.hcp + ')</span>').join(' · ') +
@@ -3469,6 +3482,13 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
     const msg = document.getElementById('adm-crear-msg');
     msg.className = 'adm-msg err'; msg.textContent = 'Error de red: ' + e.message; msg.style.display = 'block';
   });
+}
+
+function wizRearmarLineas_(){
+  if(!WIZ_LAST_ARMAR_PARAMS) return;
+  const { jugadoresConHcp, prioridades, jugsInFecha, canchaName, data } = WIZ_LAST_ARMAR_PARAMS;
+  document.getElementById('wiz-matches-list').innerHTML = '';
+  wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canchaName, data, Date.now());
 }
 
 // Agrega una fila de match con jugadores pre-seleccionados
@@ -4025,8 +4045,12 @@ function admMostrarPrioridad(){
   mostrarModalPrioridad_(jugs, function(prioridades){ admArmarLineas(prioridades); });
 }
 
-function admArmarLineas(prioridades){
+let ADM_LAST_ARMAR_PRIORIDADES = [];
+
+function admArmarLineas(prioridades, seed){
   prioridades = prioridades || [];
+  seed = seed || 0;
+  ADM_LAST_ARMAR_PRIORIDADES = prioridades;
   const fecha = MGR_FECHA;
   const btn = document.getElementById('adm-armar-lineas-btn');
   const preview = document.getElementById('adm-armar-lineas-preview');
@@ -4035,7 +4059,7 @@ function admArmarLineas(prioridades){
   if(btn) btn.textContent = '⏳ Armando...';
   if(preview){ preview.style.display = 'none'; preview.innerHTML = ''; }
 
-  ngtApiPost({ action: 'armarLineas', adminKey: ADMIN_KEY_OK, fecha: fecha, prioridades: prioridades }).then(r => {
+  ngtApiPost({ action: 'armarLineas', adminKey: ADMIN_KEY_OK, fecha: fecha, prioridades: prioridades, seed: seed }).then(r => {
     if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar líneas'; }
     if(!r || !r.ok){
       alert('Error: ' + (r && r.error ? r.error : 'desconocido'));
@@ -4049,8 +4073,16 @@ function admArmarLineas(prioridades){
 
     // Mostrar preview de líneas
     if(preview){
-      let html = '<strong style="color:var(--navy);">Propuesta — ' + r.lines.length + ' líneas · ' +
-        r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches</strong><br><br>';
+      const repeats = r.repeatCount || 0;
+      const repeatColor = repeats > 0 ? 'var(--red)' : 'var(--navy)';
+      const repeatTxt = repeats > 0
+        ? ' · <span style="color:var(--red);">⚠ ' + repeats + ' match' + (repeats > 1 ? 'es' : '') + ' repetido' + (repeats > 1 ? 's' : '') + '</span>'
+        : ' · <span style="color:green;">✓ sin repeticiones</span>';
+      let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+        '<strong style="color:' + repeatColor + ';">Propuesta — ' + r.lines.length + ' líneas · ' +
+        r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches' + repeatTxt + '</strong>' +
+        '<button onclick="admRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
+        '</div>';
       r.lines.forEach(l => {
         html += '<strong>Línea ' + l.lineNum + '</strong>: ' +
           l.players.map(p => p.apodo + ' (' + p.hcp + ')').join(' · ') + '<br>';
@@ -4069,6 +4101,11 @@ function admArmarLineas(prioridades){
     if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar líneas'; }
     alert('Error de red: ' + e.message);
   });
+}
+
+function admRearmarLineas_(){
+  document.getElementById('adm-mgr-matches-list').innerHTML = '';
+  admArmarLineas(ADM_LAST_ARMAR_PRIORIDADES, Date.now());
 }
 
 function mgrGuardarMatches(){
