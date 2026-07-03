@@ -719,6 +719,89 @@ function buildHcpJuegoMap_(canchaId, canchaName, teeColor) {
   return { slope, rating, par, tee: matchedTee, hcpMap };
 }
 
+function debugHcpCalculo_(params) {
+  const canchaId   = String(params.canchaId   || '').trim();
+  const canchaName = String(params.canchaName || '').trim();
+  const teeColor   = String(params.teeColor   || 'BLANCAS').trim().toUpperCase();
+
+  // ── Slope y Rating desde NGT DB Rating ───────────────────────────────────
+  const shRating = getHistSheet_('Rating');
+  const ratingRows = [];
+  let slope = null, rating = null, matchedTee = null;
+  if (shRating) {
+    const rlr = shRating.getLastRow();
+    if (rlr >= 2) {
+      const rData = shRating.getRange(2, 1, rlr - 1, 5).getValues();
+      rData.forEach(r => ratingRows.push({ id: r[0], nombre: r[1], tee: r[2], rating: r[3], slope: r[4] }));
+      const idKey  = canchaId.toUpperCase();
+      const nomKey = canchaName.toUpperCase();
+      for (const r of rData) {
+        const id  = String(r[0] || '').trim().toUpperCase();
+        const nom = String(r[1] || '').trim().toUpperCase();
+        if (id !== idKey && nom !== nomKey) continue;
+        if (String(r[2] || '').trim().toUpperCase() !== teeColor) continue;
+        slope = parseInt(r[4]) || null;
+        rating = parseFloat(r[3]) || null;
+        matchedTee = r[2];
+        break;
+      }
+    }
+  }
+
+  // ── Par desde CANCHAS ─────────────────────────────────────────────────────
+  const shCanchas = getSheet_(SHEETS.CANCHAS);
+  const canchasRows = [];
+  let par = null, paresRaw = [];
+  if (shCanchas) {
+    const clr = shCanchas.getLastRow();
+    if (clr >= 2) {
+      const cData = shCanchas.getRange(2, 1, clr - 1, 20).getValues();
+      cData.forEach(cr => canchasRows.push({ id: cr[0], nombre: cr[1], pares: cr.slice(2, 20) }));
+      const idKey  = canchaId.toUpperCase();
+      const nomKey = canchaName.toUpperCase();
+      for (const cr of cData) {
+        const cId  = String(cr[0] || '').trim().toUpperCase();
+        const cNom = String(cr[1] || '').trim().toUpperCase();
+        if (cId !== idKey && cNom !== nomKey) continue;
+        paresRaw = cr.slice(2, 20).map(v => parseInt(v) || 0);
+        const total = paresRaw.reduce((s, v) => s + v, 0);
+        if (total > 0) par = total;
+        break;
+      }
+    }
+  }
+
+  // ── Muestra de jugadores ──────────────────────────────────────────────────
+  const jugSh = getSheet_(SHEETS.JUGADORES);
+  const sampleCalcs = [];
+  if (jugSh && slope) {
+    const jlr = jugSh.getLastRow();
+    if (jlr >= 2) {
+      const cols = COL_J.HCP_INDEX + 1;
+      const jData = jugSh.getRange(2, 1, Math.min(jlr - 1, 5), cols).getValues();
+      jData.forEach(row => {
+        const mat = String(row[COL_J.MATRICULA] || '').trim();
+        const rawHcp = row[COL_J.HCP_INDEX];
+        if (!mat || rawHcp === '' || rawHcp === null) return;
+        const hcpIndex = parseFloat(rawHcp);
+        if (isNaN(hcpIndex)) return;
+        let ch = hcpIndex * slope / 113;
+        const ajuste = (rating !== null && par !== null) ? (rating - par) : null;
+        if (ajuste !== null) ch += ajuste;
+        sampleCalcs.push({ mat, hcpIndex, formula: hcpIndex + ' × ' + slope + '/113' + (ajuste !== null ? ' + (' + rating + '-' + par + ')' : ''), result: Math.round(ch) });
+      });
+    }
+  }
+
+  return {
+    input:       { canchaId, canchaName, teeColor },
+    ratingSheet: { found: !!slope, slope, rating, matchedTee, allRows: ratingRows.slice(0, 10) },
+    canchasSheet:{ found: par !== null, par, paresRaw, allRows: canchasRows.slice(0, 5) },
+    sampleCalcs,
+    formula:     slope ? ('round(HCPindex × ' + slope + '/113' + (par !== null ? ' + (' + rating + '-' + par + '))' : ')') + ' — ajuste=' + (par !== null ? (rating - par) : 'N/A (par no encontrado)')) : 'slope no encontrado',
+  };
+}
+
 function debugHcpCanchas_() {
   // Lists all sheets that might match, and shows their data
   const all = SpreadsheetApp.getActive().getSheets();
@@ -4257,6 +4340,7 @@ function doGet(e) {
       case 'debugMatch':       result = { ok: true, data: debugMatch_() }; break;
       case 'debugDobles':      result = { ok: true, data: debugDobles_() }; break;
       case 'debugHcpCanchas':  result = { ok: true, data: debugHcpCanchas_() }; break;
+      case 'debugHcpCalculo':  result = { ok: true, data: debugHcpCalculo_(params) }; break;
       case 'login': {
         const p = checkPlayerByMat_(params.matricula);
         result = { ok: !!p, player: p };
