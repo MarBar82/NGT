@@ -1085,10 +1085,15 @@ function getFechaLineas_(fecha) {
   const canchaName = meta.canchaName || '';
   const cd = getCanchaPares_(canchaId || canchaName);
   const ratings = (cd && cd.ratings) || [];
+  const parTotal = (cd && cd.pares)
+    ? cd.pares.filter(function(v){ return v !== null && v > 0; }).reduce(function(s,v){ return s+v; }, 0)
+    : null;
 
-  function computeHcp(hcpIndex, slope) {
+  function computeHcp(hcpIndex, slope, rating) {
     if (!hcpIndex || !slope) return null;
-    return Math.round(hcpIndex * slope / 113);
+    var ch = hcpIndex * slope / 113;
+    if (rating !== null && rating !== undefined && parTotal) ch += (rating - parTotal);
+    return Math.round(ch);
   }
 
   // ── Matches de esta fecha desde MATCH sheet ───────────────────────────────
@@ -1124,9 +1129,10 @@ function getFechaLineas_(fecha) {
       const teeData = {};
       ratings.forEach(function(r) {
         const key = (r.tee || '').toUpperCase();
+        const teeHcp = computeHcp(hcpIndex, r.slope, r.rating);
         teeData[key] = {
-          hcp:   computeHcp(hcpIndex, r.slope),
-          pct85: computeHcp(hcpIndex, r.slope) !== null ? Math.round(computeHcp(hcpIndex, r.slope) * 0.85) : null,
+          hcp:   teeHcp,
+          pct85: teeHcp !== null ? Math.round(teeHcp * 0.85) : null,
           slope: r.slope,
           rating: r.rating,
         };
