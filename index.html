@@ -1881,6 +1881,16 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           </div>
         </div>
 
+        <!-- RECALCULAR HCP -->
+        <div class="adm-card" id="adm-recalc-hcp-card">
+          <div class="adm-card-hdr">🔢 HCP de Juego</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Recalcula el HCP de juego en TARJETAS usando la fórmula WHS completa (slope/113 + rating−par). Usalo si la fecha fue creada con una versión anterior.</div>
+            <button class="adm-btn-secondary" onclick="admRecalcularHcp()" style="background:var(--navy);color:#fff;border-color:var(--navy);">🔢 Recalcular HCP</button>
+            <div id="adm-recalc-hcp-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
+
         <!-- TARJETAS: editar por jugador -->
         <div class="adm-card" id="adm-edit-tarjetas-card">
           <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
@@ -3922,6 +3932,25 @@ function admGuardarDobles(){
   }).catch(e => {
     msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
   });
+}
+
+function admRecalcularHcp(){
+  const fecha = MGR_FECHA;
+  const msg = document.getElementById('adm-recalc-hcp-msg');
+  if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
+  msg.className='adm-msg'; msg.textContent='Recalculando...'; msg.style.display='block';
+  ngtApiPost({ action:'recalcularHcpFecha', adminKey:ADMIN_KEY_OK, fecha:fecha }).then(r => {
+    if(r && r.ok){
+      const d = r.data || {};
+      msg.className='adm-msg ok';
+      msg.textContent='✓ ' + d.updated + ' jugadores actualizados · ' + d.cancha + ' ' + d.colorTee +
+        ' · slope ' + d.slope + ' / rating ' + d.rating + ' / par ' + d.par +
+        ' · ajuste ' + (d.ajuste >= 0 ? '+' : '') + d.ajuste;
+    } else {
+      msg.className='adm-msg err';
+      msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
 }
 
 function admRecalcularScore(){

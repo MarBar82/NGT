@@ -5000,6 +5000,7 @@ function doPost(e) {
       case 'editarMatches':       result = editarMatches_(params); break;
       case 'actualizarHcpIndices': result = actualizarHcpIndices_(params); break;
       case 'recalcularScore':      result = recalcularTotalesScore_(params); break;
+      case 'recalcularHcpFecha':   result = recalcularHcpFecha_(params); break;
       case 'armarLineas':          result = armarLineas_(params); break;
       case 'fechaLineas':          result = { ok: true, data: getFechaLineas_(params.fecha) }; break;
       case 'setDoblesFecha':       result = setDoblesFecha_(params); break;
@@ -5007,6 +5008,71 @@ function doPost(e) {
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }
   return jsonResponse_(result);
+}
+
+/**
+ * Recalcula y sobreescribe el HCP de juego (col E de TARJETAS) para todos los jugadores
+ * de una fecha, usando la fórmula WHS completa: round(HCPindex × slope/113 + (rating−par)).
+ * Útil cuando la fecha fue creada con una versión anterior del código sin el ajuste (rating−par).
+ */
+function recalcularHcpFecha_(params) {
+  const { adminKey, fecha } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha) return { ok: false, error: 'Falta fecha' };
+
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
+  const nextEmpty = findNextEmptyRow_(sh, 2);
+  if (nextEmpty <= 2) return { ok: false, error: 'TARJETAS vacía' };
+
+  // B(0)=fecha, C(1)=mat, D(2)=nombre, E(3)=hcp, F(4)=cancha, G(5)=canchaId ... AG(31)=colorTee
+  const data = sh.getRange(2, 2, nextEmpty - 2, 32).getValues();
+
+  // Leer cancha + colorTee de las filas de esta fecha
+  var canchaName = '', canchaId = '', colorTee = 'BLANCAS';
+  for (var ri = 0; ri < data.length; ri++) {
+    var row = data[ri];
+    if (String(row[0] || '').trim() !== String(fecha)) continue;
+    if (!canchaName) canchaName = String(row[4] || '').trim();
+    if (!canchaId)   canchaId   = String(row[5] || '').trim();
+    var ct = String(row[31] || '').trim().toUpperCase();
+    if (ct) colorTee = ct;
+    if (canchaName && colorTee !== 'BLANCAS') break;
+  }
+
+  if (!canchaName && !canchaId) {
+    return { ok: false, error: 'No se encontró cancha para fecha ' + fecha };
+  }
+
+  var hcpInfo = buildHcpJuegoMap_(canchaId, canchaName, colorTee);
+  if (!hcpInfo || !Object.keys(hcpInfo.hcpMap).length) {
+    return { ok: false, error: 'Sin datos de slope/rating para ' + (canchaName || canchaId) + ' (' + colorTee + ')' };
+  }
+
+  var updated = 0;
+  data.forEach(function(row, i) {
+    var f = String(row[0] || '').trim();
+    var m = String(row[1] || '').trim();
+    if (f !== String(fecha) || !m || m.indexOf('INV') === 0) return;
+    var newHcp = hcpInfo.hcpMap[m];
+    if (newHcp !== undefined) {
+      sh.getRange(i + 2, 5).setValue(newHcp); // col E
+      updated++;
+    }
+  });
+
+  return {
+    ok: true,
+    data: {
+      cancha: canchaName,
+      colorTee: colorTee,
+      slope: hcpInfo.slope,
+      rating: hcpInfo.rating,
+      par: hcpInfo.par,
+      ajuste: hcpInfo.rating !== null && hcpInfo.par !== null ? +(hcpInfo.rating - hcpInfo.par).toFixed(1) : null,
+      updated: updated,
+    }
+  };
 }
 
 /**
