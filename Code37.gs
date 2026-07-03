@@ -4314,7 +4314,7 @@ function doGet(e) {
         const iProx   = cachedRead_('proximaFecha',    300, getProximaFecha_);
         const iFechas = cachedRead_('fechasConEstado', 120, getFechasConEstado_);
         const iJugs   = cachedRead_('jugadoresHist',   300, getJugadoresHist_);
-        const iActiva = getFechaActiva_(); // fecha con líneas confirmadas, aún sin tarjetas completas
+        const iActiva = cachedRead_('fechaActiva', 60, getFechaActiva_); // TTL 60s; se invalida en cargarTarjeta_
         result = { ok: true, data: { proximaFecha: iProx, fechasConEstado: iFechas, jugadoresHist: iJugs, fechaActiva: iActiva } };
         break;
       }
@@ -4991,7 +4991,12 @@ function doPost(e) {
     switch (action) {
       case 'crearFecha':     result = crearFecha_(params); break;
       case 'editarFecha':    result = editarFecha_(params); break;
-      case 'cargarTarjeta':  result = cargarTarjeta_(params); break;
+      case 'cargarTarjeta':
+        result = cargarTarjeta_(params);
+        if (result && result.ok) {
+          try { CacheService.getScriptCache().removeAll(['fechaActiva', 'fl_' + params.fecha]); } catch(e) {}
+        }
+        break;
       case 'resetFecha':            result = resetFecha_(params); break;
       case 'eliminarFecha':         result = eliminarFecha_(params); break;
       case 'getTarjetasForFecha':   result = getTarjetasForFecha_(params); break;
