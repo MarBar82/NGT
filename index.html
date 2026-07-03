@@ -3645,6 +3645,18 @@ function admGoTo(section) {
   document.getElementById('adm-crear').style.display = section === 'crear' ? 'block' : 'none';
   document.getElementById('adm-editar').style.display = section === 'editar' ? 'block' : 'none';
   if(section === 'editar') renderFechasGrid();
+  if(section === 'crear') wizAutoFecha_();
+}
+
+function wizAutoFecha_(){
+  // Auto-fill número de fecha = max(fechas existentes) + 1
+  const el = document.getElementById('adm-fecha');
+  if(!el || el.value.trim()) return; // no pisar si ya tiene valor
+  ngtApiGet('fechas').then(r => {
+    const fechas = (r && r.data) || [];
+    const max = fechas.reduce((m, f) => Math.max(m, parseInt(f) || 0), 0);
+    el.value = max + 1;
+  }).catch(() => {});
 }
 
 function admGoHome() {

@@ -4768,25 +4768,27 @@ function armarLineas_(params) {
     return { ok: false, error: 'Error inesperado al armar líneas. Intentá de nuevo.' };
   }
 
-  // ── 6. Reordenar líneas: primero las de 3, luego las de 4.
-  //       Dentro de cada grupo de tamaño, aplicar prioridades de horario.
+  // ── 6. Reordenar líneas según prioridades de horario ────────────────────
+  // Regla: líneas de 3 van antes que las de 4, SALVO que un jugador prioritario
+  // esté en una línea de 4 — en ese caso su línea va al inicio/final igualmente.
   var primerSet = {}, ultimaSet = {};
   primeraMats.forEach(function(m) { primerSet[m] = true; });
   ultimaMats.forEach(function(m)  { ultimaSet[m] = true; });
   var hasFirst = function(l) { return l.players.some(function(p) { return primerSet[String(p.matricula)]; }); };
   var hasLast  = function(l) { return l.players.some(function(p) { return ultimaSet[String(p.matricula)]; }); };
 
-  function applyPriority_(group) {
-    if (!primeraMats.length && !ultimaMats.length) return group;
-    var f = group.filter(hasFirst);
-    var la = group.filter(hasLast);
-    var mid = group.filter(function(l) { return !hasFirst(l) && !hasLast(l); });
-    return f.concat(mid).concat(la);
+  if (primeraMats.length || ultimaMats.length) {
+    // Prioridad siempre gana — la línea del prioritario va primero/último sin importar tamaño
+    var firstLines  = lines.filter(hasFirst);
+    var lastLines   = lines.filter(hasLast);
+    var middleLines = lines.filter(function(l) { return !hasFirst(l) && !hasLast(l); });
+    // Dentro del grupo del medio (sin prioritarios), las de 3 van antes que las de 4
+    middleLines.sort(function(a, b) { return a.players.length - b.players.length; });
+    lines = firstLines.concat(middleLines).concat(lastLines);
+  } else {
+    // Sin prioridades: las de 3 van antes que las de 4
+    lines.sort(function(a, b) { return a.players.length - b.players.length; });
   }
-
-  var threeLines = applyPriority_(lines.filter(function(l) { return l.players.length === 3; }));
-  var fourLines  = applyPriority_(lines.filter(function(l) { return l.players.length === 4; }));
-  lines = threeLines.concat(fourLines);
 
   // ── 7. Contar matches repetidos en la solución ───────────────────────────
   var repeatCount = 0;
