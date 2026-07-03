@@ -19,6 +19,34 @@ const SHEETS = {
 const COL_J = { ORDEN: 0, MATRICULA: 1, NOMBRE: 2, APODO: 3, HCP_INDEX: 4, HCP_UPDATED: 5 };
 const COL_C = { ID: 0, NOMBRE: 1 }; // Slope/Rating leídos desde NGT DB hoja "Rating"
 
+// ════════════ WARM-UP ════════════
+/**
+ * Mantiene el runtime V8 caliente para evitar cold starts (~15-20s).
+ * Instalar UNA VEZ desde el editor de Apps Script:
+ *   1. Abrir Code37.gs en script.google.com
+ *   2. Ejecutar la función instalarTriggerWarmup_ manualmente
+ *   3. Autorizar los permisos cuando se solicite
+ * El trigger llama warmUpScript_ cada 5 minutos automáticamente.
+ */
+function warmUpScript_() {
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().getName();
+    CacheService.getScriptCache().put('warmup_ts', String(Date.now()), 300);
+  } catch(e) {}
+}
+
+function instalarTriggerWarmup_() {
+  // Eliminar triggers existentes de warmup para no duplicar
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'warmUpScript_') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('warmUpScript_')
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+  Logger.log('Trigger warmup instalado: cada 5 minutos.');
+}
+
 // ════════════ UTILS ════════════
 function jsonResponse_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))

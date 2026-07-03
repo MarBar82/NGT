@@ -233,14 +233,26 @@ function render(d){
   document.title = 'NGT XIV · Fecha ' + d.fecha + ' · ' + (d.cancha || '2026');
 }
 
+var LS_KEY = 'ngt_fl_' + FECHA_NUM;
+
+// Render from localStorage instantly (repeat visits)
+try {
+  var lsCached = localStorage.getItem(LS_KEY);
+  if(lsCached){ render(JSON.parse(lsCached)); }
+} catch(e){}
+
+// Always fetch fresh in background to pick up any HCP/match updates
 ngtGet('fechaLineas', { fecha: FECHA_NUM }).then(function(r){
   if(r && r.ok && r.data && r.data.lineas && r.data.lineas.length){
+    try { localStorage.setItem(LS_KEY, JSON.stringify(r.data)); } catch(e){}
     render(r.data);
-  } else {
+  } else if(!document.querySelector('.fc-card')){
     document.getElementById('root').innerHTML = '<div class="loading">⚠ Sin datos para Fecha ' + FECHA_NUM + '</div>';
   }
 }).catch(function(e){
-  document.getElementById('root').innerHTML = '<div class="loading">⚠ Error cargando datos</div>';
+  if(!document.querySelector('.fc-card')){
+    document.getElementById('root').innerHTML = '<div class="loading">⚠ Error cargando datos</div>';
+  }
 });
 </script>
 </body>

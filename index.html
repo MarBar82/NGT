@@ -1464,14 +1464,13 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
       <div class="home-actions">
 
-        <!-- Botón FECHA activa — mostrado cuando hay fecha con líneas confirmadas y no completada -->
+        <!-- Botón FECHA — siempre visible, apunta al último fecha-N.html creado -->
         <button class="home-btn home-btn-fecha" id="home-fecha-btn"
-                style="display:none;"
                 onclick="window.open('fecha-'+HOME_FECHA_ACTIVA+'.html','_blank')">
           <span class="hb-icon">📅</span>
           <span class="hb-txt">
-            <span class="hb-title" id="home-fecha-btn-title">FECHA —</span>
-            <span class="hb-sub" id="home-fecha-btn-sub">Ver líneas y matches</span>
+            <span class="hb-title">Ver Fecha</span>
+            <span class="hb-sub">Ver líneas y matches</span>
           </span>
         </button>
 
@@ -3644,7 +3643,7 @@ function finalizarWizard(rFecha, rMatches){
     WIZ_PASO1_DATA = null;
     wizPaso1Back();
     // Limpiar caches y refrescar home con la nueva fecha
-    try { sessionStorage.removeItem('ngt_fechaActiva'); } catch(e){}
+    try { localStorage.removeItem('ngt_fechaActiva'); } catch(e){}
     ngtInitData(); // recarga home con el nuevo botón FECHA
     // Refresh admin data
     loadAdminData();
@@ -4607,10 +4606,9 @@ function _doEliminarFecha(fecha, msgEl){
       if(ch.match    != null) txt += ' · ' + ch.match    + ' match(es)';
       if(ch.stb      != null) txt += ' · ' + ch.stb      + ' STB';
       if(msgEl){ msgEl.className='adm-msg ok'; msgEl.textContent=txt; }
-      // Limpiar cache de fechaActiva para que el botón desaparezca del home
-      try { sessionStorage.removeItem('ngt_fechaActiva'); } catch(e2){}
-      HOME_FECHA_ACTIVA = null;
-      applyFechaActiva(null);
+      // Refrescar home para que el botón apunte a la fecha anterior si la hay
+      try { localStorage.removeItem('ngt_fechaActiva'); } catch(e2){}
+      ngtInitData();
       // Cerrar panel y refrescar grilla
       setTimeout(() => { cerrarEditPanel(); renderFechasGrid(); }, 1200);
     } else {
@@ -5215,12 +5213,12 @@ function applyFechasMenu(data){
 
 function loadFechasMenu(){
   // Muestra caché inmediatamente, actualiza en background
-  const cached = sessionStorage.getItem('ngt_fechasEstado');
+  const cached = localStorage.getItem('ngt_fechasEstado');
   if(cached){ try { applyFechasMenu(JSON.parse(cached)); } catch(e){} }
 
   ngtApiGet('fechasConEstado').then(r => {
     const data = (r && r.data) || [];
-    try { sessionStorage.setItem('ngt_fechasEstado', JSON.stringify(data)); } catch(e){}
+    try { localStorage.setItem('ngt_fechasEstado', JSON.stringify(data)); } catch(e){}
     applyFechasMenu(data);
   }).catch(e => {
     console.error('loadFechasMenu error:', e);
@@ -5603,8 +5601,8 @@ function loadPerfPicker(){
   if(cont) cont.innerHTML = '';
 
   if(PERF_JUGADORES){ renderPerfPicker(); return; }
-  // sessionStorage cache: muestra la lista al instante en visitas repetidas
-  const cachedJH = sessionStorage.getItem('ngt_jugadoresHist');
+  // localStorage cache: muestra la lista al instante en visitas repetidas
+  const cachedJH = localStorage.getItem('ngt_jugadoresHist');
   if(cachedJH){
     try {
       const list = JSON.parse(cachedJH);
@@ -5618,7 +5616,7 @@ function loadPerfPicker(){
     const list = (r && r.data) || [];
     list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
     PERF_JUGADORES = list;
-    try { sessionStorage.setItem('ngt_jugadoresHist', JSON.stringify(list)); } catch(e){}
+    try { localStorage.setItem('ngt_jugadoresHist', JSON.stringify(list)); } catch(e){}
     renderPerfPicker();
   }).catch(e => {
     const cont = document.getElementById('perf-picker-list');
@@ -6079,7 +6077,7 @@ let HOME_TICK_INTERVAL = null;
 function loadHome(){
   // Muestra cache inmediatamente, refresca en background con initData
   // (así también actualiza el menú de fechas sin costo extra)
-  const cached = sessionStorage.getItem('ngt_proximaFecha');
+  const cached = localStorage.getItem('ngt_proximaFecha');
   if(cached){ try { applyHomeData(JSON.parse(cached)); } catch(e){} }
 
   ngtApiGet('initData').then(r => {
@@ -6087,21 +6085,21 @@ function loadHome(){
     // Fecha activa (con líneas confirmadas y no completada) — fuente primaria para el botón FECHA
     if(d.fechaActiva !== undefined){
       applyFechaActiva(d.fechaActiva);
-      try { sessionStorage.setItem('ngt_fechaActiva', JSON.stringify(d.fechaActiva)); } catch(e){}
+      try { localStorage.setItem('ngt_fechaActiva', JSON.stringify(d.fechaActiva)); } catch(e){}
     }
     if(d.proximaFecha !== undefined){
       applyHomeData(d.proximaFecha);
-      try { sessionStorage.setItem('ngt_proximaFecha', JSON.stringify(d.proximaFecha)); } catch(e){}
+      try { localStorage.setItem('ngt_proximaFecha', JSON.stringify(d.proximaFecha)); } catch(e){}
     }
     if(d.fechasConEstado){
       applyFechasMenu(d.fechasConEstado);
-      try { sessionStorage.setItem('ngt_fechasEstado', JSON.stringify(d.fechasConEstado)); } catch(e){}
+      try { localStorage.setItem('ngt_fechasEstado', JSON.stringify(d.fechasConEstado)); } catch(e){}
     }
     if(d.jugadoresHist && !PERF_JUGADORES){
       const list = d.jugadoresHist;
       list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
       PERF_JUGADORES = list;
-      try { sessionStorage.setItem('ngt_jugadoresHist', JSON.stringify(list)); } catch(e){}
+      try { localStorage.setItem('ngt_jugadoresHist', JSON.stringify(list)); } catch(e){}
     }
   }).catch(e => {
     console.error('loadHome error:', e);
@@ -6109,34 +6107,14 @@ function loadHome(){
   });
 }
 
-let HOME_FECHA_ACTIVA = null; // número de fecha activa para openVerLineas
+let HOME_FECHA_ACTIVA = 5; // número de fecha — default 5, se actualiza desde localStorage/API
 
 function applyFechaActiva(fa){
-  // Muestra/oculta el botón FECHA según fechaActiva devuelta por initData
-  const fechaBtn    = document.getElementById('home-fecha-btn');
-  const fechaBtnTit = document.getElementById('home-fecha-btn-title');
-  const fechaBtnSub = document.getElementById('home-fecha-btn-sub');
-  if(fechaBtn && fa && fa.fechaNum && fa.hasLineas){
-    HOME_FECHA_ACTIVA = parseInt(fa.fechaNum) || 0;
-    if(fechaBtnTit) fechaBtnTit.textContent = 'FECHA ' + fa.fechaNum;
-    const sub = [fa.cancha, fa.horario].filter(Boolean).join(' · ');
-    if(fechaBtnSub) fechaBtnSub.textContent = sub || 'Ver líneas y matches';
-    fechaBtn.style.display = 'flex';
-  } else if(fechaBtn) {
-    // Marcar HOME_FECHA_ACTIVA = 0 (no-null) para bloquear que applyHomeData
-    // reactive el botón via el path legacy de proximaFecha.hasLineas.
-    HOME_FECHA_ACTIVA = 0;
-    fechaBtn.style.display = 'none';
-  }
+  if(!fa || !fa.fechaNum) return;
+  HOME_FECHA_ACTIVA = parseInt(fa.fechaNum) || HOME_FECHA_ACTIVA;
 }
 
 function applyHomeData(data){
-  // ── Botón FECHA activa (legacy path — normalmente viene de initData.fechaActiva) ─
-  // Solo actúa si applyFechaActiva no fue llamado aún
-  if(HOME_FECHA_ACTIVA === null && data && data.hasLineas && !data.isPast){
-    applyFechaActiva({ fechaNum: data.fechaNum, cancha: data.cancha, horario: data.horario, hasLineas: true });
-  }
-
   // Legacy elements (hidden but kept to avoid JS errors)
   const numEl = document.getElementById('hfi-num');
   const canchaEl = document.getElementById('hfi-cancha');
@@ -6202,18 +6180,18 @@ function tickCountdown(){
 // Antes: loadHome() (1 JSONP) + setTimeout(loadFechasMenu, 400) (1 JSONP extra)
 // Ahora: ngtInitData() (1 JSONP) → devuelve los tres conjuntos de datos juntos
 function ngtInitData(){
-  // Aplicar caches sessionStorage inmediatamente (visita repetida → pantalla al instante)
-  const cachedFA = sessionStorage.getItem('ngt_fechaActiva');
+  // Aplicar caches localStorage inmediatamente (visita repetida → pantalla al instante)
+  const cachedFA = localStorage.getItem('ngt_fechaActiva');
   if(cachedFA){ try { applyFechaActiva(JSON.parse(cachedFA)); } catch(e){} }
 
-  const cachedPF = sessionStorage.getItem('ngt_proximaFecha');
+  const cachedPF = localStorage.getItem('ngt_proximaFecha');
   if(cachedPF){ try { applyHomeData(JSON.parse(cachedPF)); } catch(e){} }
 
-  const cachedFE = sessionStorage.getItem('ngt_fechasEstado');
+  const cachedFE = localStorage.getItem('ngt_fechasEstado');
   if(cachedFE){ try { applyFechasMenu(JSON.parse(cachedFE)); } catch(e){} }
 
   if(!PERF_JUGADORES){
-    const cachedJH = sessionStorage.getItem('ngt_jugadoresHist');
+    const cachedJH = localStorage.getItem('ngt_jugadoresHist');
     if(cachedJH){ try {
       const list = JSON.parse(cachedJH);
       list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
@@ -6228,25 +6206,25 @@ function ngtInitData(){
     // Fecha activa (con líneas confirmadas, aún sin tarjetas completas) — fuente primaria del botón FECHA
     if(d.fechaActiva !== undefined){
       applyFechaActiva(d.fechaActiva);
-      try { sessionStorage.setItem('ngt_fechaActiva', JSON.stringify(d.fechaActiva)); } catch(e){}
+      try { localStorage.setItem('ngt_fechaActiva', JSON.stringify(d.fechaActiva)); } catch(e){}
     }
 
     // Home
     if(d.proximaFecha !== undefined){
       applyHomeData(d.proximaFecha);
-      try { sessionStorage.setItem('ngt_proximaFecha', JSON.stringify(d.proximaFecha)); } catch(e){}
+      try { localStorage.setItem('ngt_proximaFecha', JSON.stringify(d.proximaFecha)); } catch(e){}
     }
     // Menú de fechas
     if(d.fechasConEstado){
       applyFechasMenu(d.fechasConEstado);
-      try { sessionStorage.setItem('ngt_fechasEstado', JSON.stringify(d.fechasConEstado)); } catch(e){}
+      try { localStorage.setItem('ngt_fechasEstado', JSON.stringify(d.fechasConEstado)); } catch(e){}
     }
     // Lista de jugadores para Perfiles
     if(d.jugadoresHist && !PERF_JUGADORES){
       const list = d.jugadoresHist;
       list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
       PERF_JUGADORES = list;
-      try { sessionStorage.setItem('ngt_jugadoresHist', JSON.stringify(list)); } catch(e){}
+      try { localStorage.setItem('ngt_jugadoresHist', JSON.stringify(list)); } catch(e){}
     }
   }).catch(e => {
     console.error('ngtInitData error:', e);
@@ -6254,7 +6232,7 @@ function ngtInitData(){
     if(!cachedPF){
       ngtApiGet('proximaFecha').then(r => {
         const data = (r && r.data) || null;
-        if(data){ try { sessionStorage.setItem('ngt_proximaFecha', JSON.stringify(data)); } catch(e2){} }
+        if(data){ try { localStorage.setItem('ngt_proximaFecha', JSON.stringify(data)); } catch(e2){} }
         applyHomeData(data);
       }).catch(() => applyHomeData(null));
     }
