@@ -1780,7 +1780,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <div class="adm-card-hdr">⚔ Paso 2 · Matches de la Fecha</div>
         <div class="adm-card-body">
           <div class="adm-s2-summary" id="adm-s2-summary"></div>
-          <div id="adm-s2-lineas-preview" style="display:none;margin:10px 0 6px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:12px;line-height:1.6;color:var(--g5);"></div>
+          <div id="adm-s2-lineas-preview" style="display:none;margin:10px 0 6px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
           <label class="adm-label" style="margin-top:6px;">Partidos (jugador A vs jugador B)</label>
           <div id="wiz-matches-list"></div>
           <button class="adm-btn-secondary" onclick="wizAddMatch()" style="margin-top:4px;">+ Agregar match</button>
@@ -1865,7 +1865,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
               <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
               <button class="adm-btn-secondary" id="adm-armar-lineas-btn" onclick="admMostrarPrioridad()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚡ Armar líneas</button>
             </div>
-            <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:12px;line-height:1.6;color:var(--g5);"></div>
+            <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
             <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
             <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
           </div>
@@ -3428,6 +3428,9 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
     jugadores: jugadoresConHcp,
     prioridades: prioridades,
     seed: seed,
+    canchaId:   data.canchaId   || '',
+    canchaName: canchaName      || '',
+    colorTee:   data.colorTee   || 'BLANCAS',
   }).then(r => {
     if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar Líneas →'; }
     if(!r || !r.ok){

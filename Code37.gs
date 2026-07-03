@@ -4569,13 +4569,29 @@ function armarLineas_(params) {
   const seenMats = {};
 
   if (Array.isArray(params.jugadores) && params.jugadores.length) {
-    // Modo wizard: lista enviada directamente desde el frontend con HCP ya calculado
+    // Modo wizard: lista enviada desde el frontend
     params.jugadores.forEach(function(item) {
       const m = String(item.matricula || '').trim();
       if (!m || m.indexOf('INV') === 0 || seenMats[m]) return;
       seenMats[m] = true;
       players.push({ matricula: m, hcp: parseInt(item.hcp) || 0, apodo: '' });
     });
+    // Recalcular HCP con fórmula WHS completa si vienen parámetros de cancha
+    const cId   = String(params.canchaId   || '').trim();
+    const cName = String(params.canchaName || '').trim();
+    const cTee  = String(params.colorTee   || 'BLANCAS').trim();
+    if (cId || cName) {
+      try {
+        const hcpInfo = buildHcpJuegoMap_(cId, cName, cTee);
+        if (hcpInfo && Object.keys(hcpInfo.hcpMap).length > 0) {
+          players.forEach(function(p) {
+            if (hcpInfo.hcpMap[p.matricula] !== undefined) {
+              p.hcp = hcpInfo.hcpMap[p.matricula];
+            }
+          });
+        }
+      } catch(e) { /* continuar con HCP del frontend si falla */ }
+    }
   } else {
     // Modo gestionar: lee de TARJETAS para la fecha indicada
     const shT = getSheet_(SHEETS.TARJETAS);
