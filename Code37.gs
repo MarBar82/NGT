@@ -4616,27 +4616,18 @@ function armarLineas_(params) {
     .filter(function(p) { return p.posicion === 'ultima'; })
     .map(function(p) { return String(p.matricula); });
 
-  // Seed para producir variantes distintas (0 = orden por HCP; N > 0 = shuffle)
+  // Seed para producir variantes distintas (0 = determinístico; N > 0 = aleatorio)
   var seed = parseInt(params.seed) || 0;
-  function seededRand_(s) {
-    // mulberry32 PRNG — devuelve [0,1) con estado mutable vía closure
-    var t = s >>> 0;
-    return function() {
-      t += 0x6D2B79F5;
-      var r = Math.imul(t ^ t >>> 15, 1 | t);
-      r ^= r + Math.imul(r ^ r >>> 7, 61 | r);
-      return ((r ^ r >>> 14) >>> 0) / 4294967296;
-    };
+  // PRNG mutable (mulberry32) — siempre inicializado; con seed=0 usa seed=1 (no importa
+  // porque solo se invoca dentro de buildLines cuando seed > 0).
+  var _rngState = (seed > 0 ? seed : 1) >>> 0;
+  function rand_() {
+    _rngState += 0x6D2B79F5;
+    var r = Math.imul(_rngState ^ _rngState >>> 15, 1 | _rngState);
+    r ^= r + Math.imul(r ^ r >>> 7, 61 | r);
+    return ((r ^ r >>> 14) >>> 0) / 4294967296;
   }
-  // El backtracking opera sobre todos los jugadores, con shuffle opcional según seed
   var orderedPlayers = players.slice();
-  if (seed > 0) {
-    var rand_ = seededRand_(seed);
-    for (var si = orderedPlayers.length - 1; si > 0; si--) {
-      var sj = Math.floor(rand_() * (si + 1));
-      var tmp = orderedPlayers[si]; orderedPlayers[si] = orderedPlayers[sj]; orderedPlayers[sj] = tmp;
-    }
-  }
 
   // Todas las combinaciones de k elementos de arr
   function getCombos(arr, k) {
@@ -4726,7 +4717,16 @@ function armarLineas_(params) {
     var size = threeLeft > 0 ? 3 : 4;
     var combos = getCombos(remaining, size);
 
-    // Ordenar por puntaje (menor primero)
+    // Con seed > 0: mezclar antes de ordenar por score para que combos de igual
+    // puntaje se prueben en orden distinto cada llamada → resultados diferentes.
+    if (seed > 0) {
+      for (var ri = combos.length - 1; ri > 0; ri--) {
+        var rj = Math.floor(rand_() * (ri + 1));
+        var rt = combos[ri]; combos[ri] = combos[rj]; combos[rj] = rt;
+      }
+    }
+
+    // Ordenar por puntaje (menor primero) — el shuffle previo randomiza empates
     var scoreFn = size === 3 ? scoreThree : scoreFour;
     combos.sort(function(a, b) { return scoreFn(a) - scoreFn(b); });
 
@@ -4768,23 +4768,25 @@ function armarLineas_(params) {
     return { ok: false, error: 'Error inesperado al armar líneas. Intentá de nuevo.' };
   }
 
-  // ── 6. Reordenar líneas según prioridades de horario ────────────────────
-  // Este es el paso confiable: independientemente de cómo el backtracking
-  // armó las líneas, las reorganizamos para que las prioritarias queden al inicio/final.
-  if (primeraMats.length || ultimaMats.length) {
-    var primerSet = {};
-    primeraMats.forEach(function(m) { primerSet[m] = true; });
-    var ultimaSet = {};
-    ultimaMats.forEach(function(m) { ultimaSet[m] = true; });
+  // ── 6. Reordenar líneas: primero las de 3, luego las de 4.
+  //       Dentro de cada grupo de tamaño, aplicar prioridades de horario.
+  var primerSet = {}, ultimaSet = {};
+  primeraMats.forEach(function(m) { primerSet[m] = true; });
+  ultimaMats.forEach(function(m)  { ultimaSet[m] = true; });
+  var hasFirst = function(l) { return l.players.some(function(p) { return primerSet[String(p.matricula)]; }); };
+  var hasLast  = function(l) { return l.players.some(function(p) { return ultimaSet[String(p.matricula)]; }); };
 
-    var hasFirst = function(l) { return l.players.some(function(p) { return primerSet[String(p.matricula)]; }); };
-    var hasLast  = function(l) { return l.players.some(function(p) { return ultimaSet[String(p.matricula)]; }); };
-
-    var firstLines  = lines.filter(hasFirst);
-    var lastLines   = lines.filter(hasLast);
-    var middleLines = lines.filter(function(l) { return !hasFirst(l) && !hasLast(l); });
-    lines = firstLines.concat(middleLines).concat(lastLines);
+  function applyPriority_(group) {
+    if (!primeraMats.length && !ultimaMats.length) return group;
+    var f = group.filter(hasFirst);
+    var la = group.filter(hasLast);
+    var mid = group.filter(function(l) { return !hasFirst(l) && !hasLast(l); });
+    return f.concat(mid).concat(la);
   }
+
+  var threeLines = applyPriority_(lines.filter(function(l) { return l.players.length === 3; }));
+  var fourLines  = applyPriority_(lines.filter(function(l) { return l.players.length === 4; }));
+  lines = threeLines.concat(fourLines);
 
   // ── 7. Contar matches repetidos en la solución ───────────────────────────
   var repeatCount = 0;
