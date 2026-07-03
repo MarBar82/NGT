@@ -1083,7 +1083,7 @@ function getFechaLineas_(fecha) {
   // ── Slopes desde Rating (para mostrar HCP blancas y azules) ─────────────
   const canchaId = meta.canchaId || '';
   const canchaName = meta.canchaName || '';
-  const cd = getCanchaPares_(canchaId || canchaName);
+  const cd = cachedRead_('cp2_' + (canchaId || canchaName), 600, function(){ return getCanchaPares_(canchaId || canchaName); });
   const ratings = (cd && cd.ratings) || [];
   const parTotal = (cd && cd.pares)
     ? cd.pares.filter(function(v){ return v !== null && v > 0; }).reduce(function(s,v){ return s+v; }, 0)
@@ -4341,7 +4341,7 @@ function doGet(e) {
       case 'dobleDisponible':  result = { ok: true, data: { tieneDoble: getJugadoresConDobleDisponible_().indexOf(String(params.matricula)) >= 0 } }; break;
       case 'jugadoresConDoble': result = { ok: true, data: cachedRead_('jugadoresConDoble', 60, getJugadoresConDobleDisponible_) }; break;
       case 'fechaDetalle':     result = { ok: true, data: getFechaDetalle_(params.fecha) }; break;
-      case 'fechaLineas':    result = { ok: true, data: getFechaLineas_(params.fecha) }; break;
+      case 'fechaLineas':    result = { ok: true, data: cachedRead_('fl_' + params.fecha, 300, function(){ return getFechaLineas_(params.fecha); }) }; break;
       case 'tarjeta':          result = { ok: true, data: cachedRead_('tj_' + params.fecha + '_' + params.matricula, 60, function(){ return getTarjetaJugador_(params.fecha, params.matricula); }) }; break;
       case 'debugMatch':       result = { ok: true, data: debugMatch_() }; break;
       case 'debugDobles':      result = { ok: true, data: debugDobles_() }; break;
@@ -5002,7 +5002,7 @@ function doPost(e) {
       case 'recalcularScore':      result = recalcularTotalesScore_(params); break;
       case 'recalcularHcpFecha':   result = recalcularHcpFecha_(params); break;
       case 'armarLineas':          result = armarLineas_(params); break;
-      case 'fechaLineas':          result = { ok: true, data: getFechaLineas_(params.fecha) }; break;
+      case 'fechaLineas':          result = { ok: true, data: cachedRead_('fl_' + params.fecha, 300, function(){ return getFechaLineas_(params.fecha); }) }; break;
       case 'setDoblesFecha':       result = setDoblesFecha_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
