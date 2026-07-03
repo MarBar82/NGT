@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NGT XIV · Fecha 5 · 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Roboto+Slab:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy:#00234B; --red:#C8102E; --gold:#C9A84C;
+    --off:#F5F5F5;  --g1:#F0F0F0; --g2:#E0E0E0; --g4:#888; --g5:#333;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{
+    background:var(--off);
+    font-family:'Barlow Condensed',sans-serif;
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:24px 12px;
+  }
+  /* ── Loading ── */
+  .loading{
+    display:flex; align-items:center; justify-content:center;
+    min-height:200px; flex-direction:column; gap:12px; color:var(--navy);
+    font-size:14px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  }
+  .spinner{
+    width:32px; height:32px;
+    border:3px solid var(--g2);
+    border-top-color:var(--navy);
+    border-radius:50%;
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* ── Card ── */
+  .fc-card{ background:#fff; max-width:440px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,.12); }
+
+  /* Header */
+  .fc-hdr{ background:var(--navy); color:#fff; padding:16px 20px; border-bottom:3px solid var(--red); display:flex; align-items:center; gap:14px; }
+  .fc-logo{ width:50px; height:50px; object-fit:contain; flex-shrink:0; }
+  .fc-hdr-txt{ flex:1; text-align:center; }
+  .fc-tour{ font-size:9px; letter-spacing:.3em; font-weight:700; color:var(--gold); text-transform:uppercase; margin-bottom:3px; }
+  .fc-num{ font-family:'Roboto Slab',serif; font-size:26px; font-weight:900; letter-spacing:.06em; }
+  .fc-line{ width:40px; height:2px; background:var(--gold); margin:6px auto 0; }
+  .fc-spacer{ width:50px; }
+
+  /* Info strip */
+  .fc-info{ padding:10px 12px; background:var(--off); border-bottom:1px solid var(--g2); display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .fc-inf-box{ background:#fff; border:1px solid var(--g2); padding:8px 10px; }
+  .fc-inf-lbl{ font-size:8px; font-weight:700; letter-spacing:.14em; color:var(--g4); text-transform:uppercase; margin-bottom:2px; }
+  .fc-inf-val{ font-size:12px; font-weight:800; color:var(--navy); text-transform:uppercase; }
+  .fc-fee{ color:var(--red); }
+
+  /* Líneas */
+  .fc-lineas{ padding:10px 10px 6px; }
+  .fc-linea{ border:1px solid var(--g2); margin-bottom:10px; }
+  .fc-linea-hdr{ background:var(--navy); color:#fff; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; }
+  .fc-lnum{ font-family:'Roboto Slab',serif; font-size:14px; font-weight:900; color:var(--gold); text-transform:uppercase; }
+  .fc-ltee{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+  .fc-linea-body{ padding:7px; }
+
+  /* Players */
+  .fc-players{ display:flex; flex-direction:column; gap:4px; }
+  .fc-player{ display:grid; grid-template-columns:1fr 80px 80px; border:1px solid var(--g2); border-left:3px solid var(--red); min-height:34px; }
+  .fc-pname{ display:flex; align-items:center; padding:5px 10px; font-weight:800; font-size:13px; letter-spacing:.04em; color:var(--navy); text-transform:uppercase; border-right:1px solid var(--g2); }
+  .fc-ptee{ display:flex; align-items:center; justify-content:center; gap:3px; padding:5px 6px; font-size:11px; font-weight:700; }
+  .fc-blancas{ background:#fff; border-right:1px solid var(--g2); color:var(--navy); }
+  .fc-azules{ background:#dbe7f5; color:var(--navy); }
+  .fc-phcp{ font-weight:800; font-size:12px; }
+  .fc-parrow{ color:var(--g4); font-size:9px; }
+  .fc-p85{ font-weight:800; color:var(--red); font-size:12px; }
+  .fc-p85t{ font-size:7px; color:var(--g4); font-weight:600; }
+
+  /* Tee column headers */
+  .fc-tee-hdrs{ display:grid; grid-template-columns:1fr 80px 80px; margin-bottom:3px; }
+  .fc-tee-hdr{ font-size:8px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; text-align:center; color:var(--g4); padding:0 6px; }
+  .fc-tee-hdr:first-child{ text-align:left; padding-left:10px; }
+
+  /* Matches */
+  .fc-match-hdr{ background:var(--g1); border:1px solid var(--g2); border-top:none; padding:5px 8px; font-size:9px; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--navy); text-align:center; margin-top:8px; }
+  .fc-matches{ padding:7px; display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+  .fc-match{ background:#fff; border:1px solid var(--g2); border-left:3px solid var(--gold); padding:6px 5px; text-align:center; }
+  .fc-mpair{ font-size:11px; font-weight:800; color:var(--navy); text-transform:uppercase; letter-spacing:.03em; }
+  .fc-mvs{ color:var(--red); font-weight:900; font-size:8px; margin:0 4px; }
+
+  /* Maps + Footer */
+  .fc-maps{ display:block; text-align:center; padding:10px; font-size:11px; font-weight:700; color:var(--navy); letter-spacing:.06em; text-transform:uppercase; text-decoration:none; background:var(--g1); border-top:1px solid var(--g2); }
+  .fc-maps:hover{ background:var(--g2); }
+  .fc-ftr{ background:var(--navy); color:#fff; padding:10px; text-align:center; font-size:9px; letter-spacing:.18em; text-transform:uppercase; border-top:2px solid var(--gold); }
+  .fc-ftour{ color:var(--gold); font-weight:700; }
+
+  @media(max-width:440px){ body{ padding:0; } .fc-card{ box-shadow:none; } }
+</style>
+</head>
+<body>
+
+<div id="root"><div class="loading"><div class="spinner"></div>Cargando fecha 5...</div></div>
+
+<script>
+const NGT_API = 'https://script.google.com/macros/s/AKfycbyIbhULvVIRemKLsPMsIMBWlr8CGeiZkp66Menwl9Gh5DcQlyhjitcPLxjRkO6ww80W/exec';
+const FECHA_NUM = 5;
+const MAPS_URL  = '';
+
+function ngtGet(action, params){
+  const cb = 'cb' + Date.now();
+  return new Promise(function(resolve, reject){
+    const q = Object.assign({ action: action, callback: cb }, params || {});
+    const qs = Object.keys(q).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(q[k])).join('&');
+    const script = document.createElement('script');
+    script.src = NGT_API + '?' + qs;
+    window[cb] = function(data){ delete window[cb]; document.head.removeChild(script); resolve(data); };
+    script.onerror = function(){ delete window[cb]; document.head.removeChild(script); reject(new Error('Network error')); };
+    document.head.appendChild(script);
+  });
+}
+
+function calcTeeTime(horario, lineIdx){
+  if(!horario) return '—';
+  try {
+    const parts = horario.split(':');
+    const totalMin = parseInt(parts[0]) * 60 + parseInt(parts[1]) + lineIdx * 10;
+    const hh = Math.floor(totalMin / 60) % 24;
+    const mm = totalMin % 60;
+    return (hh < 10 ? '0' + hh : hh) + ':' + (mm < 10 ? '0' + mm : mm);
+  } catch(e){ return horario; }
+}
+
+function render(d){
+  const totalMatches = d.lineas.reduce(function(s, l){ return s + l.matches.length; }, 0);
+
+  let html = '<div class="fc-card">';
+
+  // Header
+  html += '<div class="fc-hdr">' +
+    '<img src="logo.png" alt="NGT" class="fc-logo" onerror="this.style.display=\'none\'">' +
+    '<div class="fc-hdr-txt">' +
+      '<div class="fc-tour">Numa Golf Tour · XIV · 2026</div>' +
+      '<div class="fc-num">FECHA ' + d.fecha + '</div>' +
+      '<div class="fc-line"></div>' +
+    '</div>' +
+    '<div class="fc-spacer"></div>' +
+  '</div>';
+
+  // Info
+  html += '<div class="fc-info">' +
+    '<div class="fc-inf-box"><div class="fc-inf-lbl">Cancha</div><div class="fc-inf-val">' + (d.cancha || '—') + '</div></div>' +
+    '<div class="fc-inf-box"><div class="fc-inf-lbl">Fecha · Horario</div><div class="fc-inf-val">' + (d.dia || '') + (d.horario ? ' · ' + d.horario : '') + '</div></div>' +
+    (d.greenFee ? '<div class="fc-inf-box"><div class="fc-inf-lbl">Green Fee</div><div class="fc-inf-val fc-fee">' + d.greenFee + '</div></div>' : '') +
+    '<div class="fc-inf-box"><div class="fc-inf-lbl">Modalidad</div><div class="fc-inf-val">Stableford + Match</div></div>' +
+  '</div>';
+
+  // Líneas
+  html += '<div class="fc-lineas">';
+  d.lineas.forEach(function(l, li){
+    const teeTime = calcTeeTime(d.horario, li);
+    html += '<div class="fc-linea">' +
+      '<div class="fc-linea-hdr">' +
+        '<span class="fc-lnum">Línea ' + l.lineNum + '</span>' +
+        '<span class="fc-ltee">' + teeTime + ' · Hoyo 1</span>' +
+      '</div>' +
+      '<div class="fc-linea-body">';
+
+    // Tee column headers
+    html += '<div class="fc-tee-hdrs">' +
+      '<div class="fc-tee-hdr">Jugador</div>' +
+      '<div class="fc-tee-hdr">Blancas</div>' +
+      '<div class="fc-tee-hdr">Azules</div>' +
+    '</div>';
+
+    // Players
+    html += '<div class="fc-players">';
+    l.players.forEach(function(p){
+      const b  = (p.tees && p.tees['BLANCAS']) || {};
+      const az = (p.tees && p.tees['AZULES'])  || {};
+      html += '<div class="fc-player">' +
+        '<div class="fc-pname">' + p.apodo + '</div>';
+      // Blancas
+      if(b.hcp !== null && b.hcp !== undefined){
+        html += '<div class="fc-ptee fc-blancas">' +
+          '<span class="fc-phcp">' + b.hcp + '</span>' +
+          '<span class="fc-parrow">›</span>' +
+          '<span class="fc-p85">' + (b.pct85 !== null && b.pct85 !== undefined ? b.pct85 : '') + '</span>' +
+          '<span class="fc-p85t">85%</span>' +
+        '</div>';
+      } else {
+        html += '<div class="fc-ptee fc-blancas"><span class="fc-phcp">—</span></div>';
+      }
+      // Azules
+      if(az.hcp !== null && az.hcp !== undefined){
+        html += '<div class="fc-ptee fc-azules">' +
+          '<span class="fc-phcp">' + az.hcp + '</span>' +
+          '<span class="fc-parrow">›</span>' +
+          '<span class="fc-p85">' + (az.pct85 !== null && az.pct85 !== undefined ? az.pct85 : '') + '</span>' +
+          '<span class="fc-p85t">85%</span>' +
+        '</div>';
+      } else {
+        html += '<div class="fc-ptee fc-azules"><span class="fc-phcp">—</span></div>';
+      }
+      html += '</div>';
+    });
+    html += '</div>'; // fc-players
+
+    // Matches
+    if(l.matches && l.matches.length){
+      html += '<div class="fc-match-hdr">⚔ Match</div><div class="fc-matches">';
+      l.matches.forEach(function(m){
+        html += '<div class="fc-match"><span class="fc-mpair">' +
+          m.apodo1 + '<span class="fc-mvs">vs</span>' + m.apodo2 +
+        '</span></div>';
+      });
+      html += '</div>';
+    }
+
+    html += '</div></div>'; // fc-linea-body + fc-linea
+  });
+  html += '</div>'; // fc-lineas
+
+  // Maps
+  if(MAPS_URL){
+    html += '<a class="fc-maps" href="' + MAPS_URL + '" target="_blank">📍 Cómo llegar a ' + (d.cancha || 'la cancha') + ' →</a>';
+  }
+
+  // Footer
+  html += '<div class="fc-ftr"><span class="fc-ftour">NGT XIV</span> · ' +
+    d.lineas.length + ' líneas · ' + totalMatches + ' matches</div>';
+
+  html += '</div>'; // fc-card
+
+  document.getElementById('root').innerHTML = html;
+  document.title = 'NGT XIV · Fecha ' + d.fecha + ' · ' + (d.cancha || '2026');
+}
+
+// Cargar datos reales
+ngtGet('fechaLineas', { fecha: FECHA_NUM }).then(function(r){
+  if(r && r.ok && r.data && r.data.lineas && r.data.lineas.length){
+    render(r.data);
+  } else {
+    document.getElementById('root').innerHTML =
+      '<div class="loading">⚠ Sin datos para Fecha ' + FECHA_NUM + '</div>';
+  }
+}).catch(function(e){
+  document.getElementById('root').innerHTML =
+    '<div class="loading">⚠ Error cargando datos</div>';
+});
+</script>
+</body>
+</html>
