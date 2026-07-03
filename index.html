@@ -845,7 +845,10 @@ body.home-mode{
 .fc-line{width:40px;height:2px;background:#c9a84c;margin:5px auto 0;}
 .fc-spacer{width:46px;}
 .fc-info{padding:10px 12px;background:var(--off);border-bottom:1px solid var(--g2);display:grid;grid-template-columns:1fr 1fr;gap:7px;}
-.fc-inf-box{background:#fff;border:1px solid var(--g2);padding:8px 10px;}
+.fc-inf-box{background:#fff;border:1px solid var(--g2);padding:11px 12px;display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--g5);transition:border-color .15s;}
+.fc-inf-box.clickable:hover{border-color:var(--red);}
+.fc-inf-icon{flex-shrink:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:var(--navy);}
+.fc-inf-text{display:flex;flex-direction:column;line-height:1.15;min-width:0;}
 .fc-inf-lbl{font-size:8px;font-weight:700;letter-spacing:.14em;color:var(--g4);text-transform:uppercase;margin-bottom:2px;}
 .fc-inf-val{font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;}
 .fc-fee{color:var(--red);}
@@ -6315,12 +6318,28 @@ function renderFechaCard_(d){
       '</div>' +
       '<div class="fc-spacer"></div>' +
     '</div>' +
-    '<div class="fc-info">' +
-      '<div class="fc-inf-box"><div class="fc-inf-lbl">Cancha</div><div class="fc-inf-val">' + (d.cancha||'—') + '</div></div>' +
-      '<div class="fc-inf-box"><div class="fc-inf-lbl">Fecha · Horario</div><div class="fc-inf-val">' + (d.dia||'') + (d.horario ? ' · ' + d.horario : '') + '</div></div>' +
-      (d.greenFee ? '<div class="fc-inf-box"><div class="fc-inf-lbl">Green Fee</div><div class="fc-inf-val fc-fee">' + d.greenFee + '</div></div>' : '') +
-      '<div class="fc-inf-box"><div class="fc-inf-lbl">Modalidad</div><div class="fc-inf-val">Stableford + Match</div></div>' +
-    '</div>' +
+    (function(){
+      const SVG_C = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4a2 2 0 0 1 2-2h11l-2 5h7l-2 5H6"/><path d="M4 22h6"/></svg>';
+      const SVG_M = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="9" r=".7" fill="currentColor"/><circle cx="14.5" cy="10" r=".7" fill="currentColor"/><circle cx="10.5" cy="13.5" r=".7" fill="currentColor"/><circle cx="15" cy="14.5" r=".7" fill="currentColor"/></svg>';
+      const SVG_F = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+      const SVG_P = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+      const ib = (icon, lbl, val, cls, href) => {
+        const tag = href ? 'a' : 'div';
+        const att = href ? ' href="' + href + '" target="_blank"' : '';
+        return '<' + tag + ' class="fc-inf-box' + (href ? ' clickable' : '') + '"' + att + '>' +
+          '<div class="fc-inf-icon">' + icon + '</div>' +
+          '<div class="fc-inf-text"><span class="fc-inf-lbl">' + lbl + '</span>' +
+          '<span class="fc-inf-val' + (cls ? ' ' + cls : '') + '">' + val + '</span></div>' +
+        '</' + tag + '>';
+      };
+      const mapsUrl = d.mapsUrl || ('https://www.google.com/maps/search/' + encodeURIComponent(d.cancha || 'cancha golf'));
+      return '<div class="fc-info">' +
+        ib(SVG_C, 'Fecha ' + d.fecha + ' · Cancha', d.cancha || '—') +
+        ib(SVG_M, 'Modalidad', 'Stableford + Match') +
+        (d.greenFee ? ib(SVG_F, 'Green Fee', d.greenFee, 'fc-fee') : '') +
+        ib(SVG_P, 'Ubicación', 'Cómo llegar →', '', mapsUrl) +
+      '</div>';
+    })() +
     '<div class="fc-lineas">';
 
   d.lineas.forEach(function(l, li){
