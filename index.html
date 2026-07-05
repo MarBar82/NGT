@@ -1394,6 +1394,10 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 /* Puntos stableford en tabla */
 .tcard-stb-tbl{font-size:12px;font-weight:700;color:var(--red);font-family:'Barlow Condensed',sans-serif;}
 .tcard-stb-tbl.stb-tot{color:var(--navy);}
+/* Fila HCP (índice de dificultad) en tarjeta modal */
+.tcard-hcp-row td{background:var(--off);}
+.tcard-hcp-idx{font-size:11px;font-weight:600;color:var(--g4);font-family:'Barlow Condensed',sans-serif;}
+.tcard-hcp-dot{font-size:8px;color:var(--navy);display:block;line-height:1;}
 /* Ocultar el par dentro del círculo en resultado par (sin fondo = no hace falta) */
 .tcard-circle.tc-par .tc-par{display:none;}
 .tcard-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
@@ -6477,6 +6481,18 @@ function openTarjetaModal(matricula, hcp, fecha, canchaId, nombre){
         if(p) parTot += p;
       }
       h += '<td><span class="perf-ecl-par">' + parTot + '</span></td></tr>';
+      // HCP row (índice de dificultad + golpe si aplica)
+      if(indices.length === 18){
+        const hcp85val = Math.round(hcpVal * 0.85);
+        h += '<tr class="tcard-hcp-row"><td class="lbl">HCP</td>';
+        for(let i = from; i < to; i++){
+          const ind = indices[i] || null;
+          const extras = (ind && hcp85val) ? Math.floor((hcp85val + 18 - ind) / 18) : 0;
+          const dot = extras > 0 ? '<span class="tcard-hcp-dot">' + '●'.repeat(extras) + '</span>' : '';
+          h += '<td><span class="tcard-hcp-idx">' + (ind || '—') + '</span>' + dot + '</td>';
+        }
+        h += '<td></td></tr>';
+      }
       // Score row
       h += '<tr><td class="lbl">Score</td>';
       let scoreTot = 0; let scOk = true;
