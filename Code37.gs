@@ -28,19 +28,19 @@ const COL_C = { ID: 0, NOMBRE: 1 }; // Slope/Rating leídos desde NGT DB hoja "R
  *   3. Autorizar los permisos cuando se solicite
  * El trigger llama warmUpScript_ cada 5 minutos automáticamente.
  */
-function warmUpScript_() {
+function warmUpScript() {
   try {
     SpreadsheetApp.getActiveSpreadsheet().getName();
     CacheService.getScriptCache().put('warmup_ts', String(Date.now()), 300);
   } catch(e) {}
 }
 
-function instalarTriggerWarmup_() {
+function instalarTriggerWarmup() {
   // Eliminar triggers existentes de warmup para no duplicar
   ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === 'warmUpScript_') ScriptApp.deleteTrigger(t);
+    if (t.getHandlerFunction() === 'warmUpScript') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('warmUpScript_')
+  ScriptApp.newTrigger('warmUpScript')
     .timeBased()
     .everyMinutes(5)
     .create();
@@ -5034,6 +5034,7 @@ function doPost(e) {
       case 'actualizarHcpIndices': result = actualizarHcpIndices_(params); break;
       case 'recalcularScore':      result = recalcularTotalesScore_(params); break;
       case 'recalcularHcpFecha':   result = recalcularHcpFecha_(params); break;
+      case 'recalcularStbFecha':   result = recalcularStbFecha_(params); break;
       case 'armarLineas':          result = armarLineas_(params); break;
       case 'fechaLineas':          result = { ok: true, data: cachedRead_('fl_' + params.fecha, 300, function(){ return getFechaLineas_(params.fecha); }) }; break;
       case 'setDoblesFecha':       result = setDoblesFecha_(params); break;
@@ -5106,6 +5107,94 @@ function recalcularHcpFecha_(params) {
       updated: updated,
     }
   };
+}
+
+/**
+ * Recalcula Stableford hoyo a hoyo para todos los jugadores de una fecha.
+ * Útil cuando el HCP de juego fue corregido después de que las tarjetas ya estaban cargadas.
+ * Actualiza STB!E:K, SCORE!ST_col, y llama a recalcularTotalesScore_ al final.
+ */
+function recalcularStbFecha_(params) {
+  const { adminKey, fecha } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha) return { ok: false, error: 'Falta fecha' };
+
+  const fStr = String(fecha);
+  const fecN = parseInt(fecha);
+  const stCol = 4 * fecN + 1; // columna STB en SCORE para esta fecha
+
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return { ok: false, error: 'Sin TARJETAS' };
+  const last = findNextEmptyRow_(sh, 2);
+  if (last <= 2) return { ok: false, error: 'Sin filas en TARJETAS' };
+
+  // B..AG: 0=fecha, 1=mat, 2=nombre, 3=hcp, 4=cancha, 5=canchaId, 6..23=H1..H18
+  const allRows = sh.getRange(2, 2, last - 2, 32).getValues();
+  const fechaRows = allRows.filter(function(r){ return String(r[0]).trim() === fStr; });
+  if (!fechaRows.length) return { ok: false, error: 'Sin tarjetas para fecha ' + fStr };
+
+  // Cancha (pares + índices) — misma para todos
+  const canchaId   = String(fechaRows[0][5] || '').trim();
+  const canchaName = String(fechaRows[0][4] || '').trim();
+  const cacheKey   = 'cp2_' + (canchaId || canchaName);
+  const cd = cachedRead_(cacheKey, 300, function(){
+    return getCanchaPares_(canchaId || canchaName);
+  });
+  if (!cd || !cd.pares || !cd.indices || cd.pares.length < 18 || cd.indices.length < 18) {
+    return { ok: false, error: 'No se pudo leer pares/índices de la cancha' };
+  }
+
+  // Mapear STB rows (B=fecha, C=mat) → número de fila
+  const stbSh = getSheet_('STB');
+  if (!stbSh) return { ok: false, error: 'Sin hoja STB' };
+  const stbLast = stbSh.getLastRow();
+  const stbMap = {};
+  if (stbLast >= 2) {
+    stbSh.getRange(2, 2, stbLast - 1, 2).getValues().forEach(function(r, i){
+      stbMap[String(r[0]).trim() + '_' + String(r[1]).trim()] = i + 2;
+    });
+  }
+
+  const scoreSh = getSheet_('SCORE');
+  let updated = 0;
+  const details = [];
+
+  fechaRows.forEach(function(r){
+    const mat    = String(r[1]).trim();
+    const nombre = String(r[2]).trim();
+    const hcp    = r[3];
+    if (!mat || mat === 'INV') return;
+
+    const scores18 = r.slice(6, 24).map(function(v){ return (v === '' || v == null) ? null : Number(v); });
+    const stbBreak = calcStbBreakdown_(scores18, cd.pares, cd.indices, hcp);
+    if (!stbBreak) return; // sin scores aún
+
+    // Actualizar STB E:K
+    const key = fStr + '_' + mat;
+    if (stbMap[key]) {
+      stbSh.getRange(stbMap[key], 5, 1, 7).setValues([[
+        stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
+        stbBreak.i, stbBreak.j, stbBreak.k
+      ]]);
+    }
+
+    // Actualizar SCORE col STB para esta fecha
+    if (scoreSh) {
+      const scoreRow = getScoreRowForMat_(mat);
+      if (scoreRow > 0) scoreSh.getRange(scoreRow, stCol, 1, 1).setValue(stbBreak.k);
+    }
+
+    updated++;
+    details.push({ mat: mat, nombre: nombre, hcp: hcp, stb: stbBreak.k });
+  });
+
+  if (updated > 0) {
+    recalcularTotalesScore_(null);
+    try { CacheService.getScriptCache().remove('fl_' + fStr); } catch(e){}
+  }
+
+  audit_('RECALCULAR_STB', adminKey, { fecha: fStr, updated: updated });
+  return { ok: true, updated: updated, details: details };
 }
 
 /**

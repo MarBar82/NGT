@@ -612,6 +612,8 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .mit-sum-net .mit-sum-val{font-size:28px;color:var(--red);}
 .hole-cell{display:flex;flex-direction:column;align-items:center;gap:3px;}
 .hole-num{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--g4);text-transform:uppercase;}
+.hole-meta{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:600;color:var(--g4);letter-spacing:.04em;line-height:1;}
+.hole-dots{color:var(--navy);font-size:8px;letter-spacing:1px;}
 .hole-circle{
   width:48px;height:48px;border-radius:50%;
   background:var(--white);border:2px solid var(--g2);
@@ -1890,6 +1892,16 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div class="s dim" style="margin-bottom:10px;font-size:12px;">Recalcula el HCP de juego en TARJETAS usando la fórmula WHS completa (slope/113 + rating−par). Usalo si la fecha fue creada con una versión anterior.</div>
             <button class="adm-btn-secondary" onclick="admRecalcularHcp()" style="background:var(--navy);color:#fff;border-color:var(--navy);">🔢 Recalcular HCP</button>
             <div id="adm-recalc-hcp-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <!-- RECALCULAR STB -->
+        <div class="adm-card" id="adm-recalc-stb-card">
+          <div class="adm-card-hdr">📊 Stableford por Hoyo</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Recalcula el Stableford de cada jugador usando el HCP actualizado. Ejecutá primero "Recalcular HCP" y luego este.</div>
+            <button class="adm-btn-secondary" onclick="admRecalcularStb()" style="background:var(--navy);color:#fff;border-color:var(--navy);">📊 Recalcular STB</button>
+            <div id="adm-recalc-stb-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
           </div>
         </div>
 
@@ -3955,6 +3967,23 @@ function admRecalcularHcp(){
   }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
 }
 
+function admRecalcularStb(){
+  const fecha = MGR_FECHA;
+  const msg = document.getElementById('adm-recalc-stb-msg');
+  if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
+  msg.className='adm-msg'; msg.textContent='Recalculando...'; msg.style.display='block';
+  ngtApiPost({ action:'recalcularStbFecha', adminKey:ADMIN_KEY_OK, fecha:fecha }).then(r => {
+    if(r && r.ok){
+      const rows = (r.details || []).map(d => d.nombre + ': ' + d.stb + ' pts (HCP ' + d.hcp + ')').join(' · ');
+      msg.className='adm-msg ok';
+      msg.textContent='✓ ' + r.updated + ' jugadores actualizados · ' + rows;
+    } else {
+      msg.className='adm-msg err';
+      msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
+}
+
 function admRecalcularScore(){
   const msg = document.getElementById('adm-recalc-msg');
   msg.className = 'adm-msg'; msg.textContent = 'Recalculando...'; msg.style.display = 'block';
@@ -4917,8 +4946,17 @@ function renderHoleHtml(h){
   const stb = calcStablefordHoyo(score, par, indice, hcp);
   const stbLabel = stb !== null ? '<span class="hole-stb">' + stb + ' pts</span>' : '<span class="hole-stb empty">&nbsp;</span>';
 
+  // Golpes que recibe el jugador en este hoyo (basado en HCP al 85% e índice)
+  const hcp85val = hcp85(hcp);
+  const extras = indice ? Math.floor((hcp85val + 18 - indice) / 18) : 0;
+  const dotsStr = extras > 0 ? '●'.repeat(extras) : '';
+  const hcpMeta = indice
+    ? '<span class="hole-meta">Índ ' + indice + (dotsStr ? ' <span class="hole-dots">' + dotsStr + '</span>' : '') + '</span>'
+    : '';
+
   return '<div class="hole-cell">' +
     '<span class="hole-num">H ' + (h+1) + '</span>' +
+    hcpMeta +
     '<div class="' + cls + '" onclick="openScoreModal(' + h + ')">' +
       (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
       (score !== null ? '<span class="hole-score">' + score + '</span>' : '') +
