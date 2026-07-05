@@ -512,6 +512,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-tar-hole{display:flex;flex-direction:column;align-items:center;gap:2px;}
 .adm-tar-hole-num{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;color:var(--g4);}
 .adm-tar-hole-par{font-family:'Barlow Condensed',sans-serif;font-size:9px;color:var(--g3);}
+.adm-tar-hole-idx{font-family:'Barlow Condensed',sans-serif;font-size:9px;color:var(--g4);font-weight:600;}
 .adm-tar-hole-input{width:100%;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--navy);padding:5px 2px;border:1px solid var(--g3);border-radius:3px;background:var(--white);box-sizing:border-box;}
 .adm-tar-hole-input:focus{border-color:var(--navy);outline:none;}
 .mit-fecha-card-locked{cursor:default;background:var(--off);opacity:.85;}
@@ -1917,7 +1918,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
               <div class="adm-row">
                 <div class="adm-field">
                   <label class="adm-label">HCP de juego</label>
-                  <input type="number" id="adm-tar-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP">
+                  <input type="number" id="adm-tar-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" oninput="renderAdmTarHoles()">
                 </div>
               </div>
               <label class="adm-label">Golpes por hoyo</label>
@@ -4512,17 +4513,25 @@ function openAdmTarEditor(mat, nombre, cancha, canchaId) {
 }
 
 function renderAdmTarHoles() {
-  const pares = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.pares) || new Array(18).fill(4);
+  const pares   = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.pares)   || new Array(18).fill(4);
+  const indices = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.indices) || [];
+  const hcp = parseInt(document.getElementById('adm-tar-hcp').value) || 0;
+  const hcp85val = hcp ? Math.round(hcp * 0.85) : 0;
   const holesEl = document.getElementById('adm-tar-holes');
   if(!holesEl) return;
   let html = '';
   for(let h = 0; h < 18; h++){
-    const par = pares[h] || 4;
-    const score = ADM_TAR_SCORES[h];
-    const val = score !== null ? score : '';
+    const par    = pares[h]   || 4;
+    const indice = indices[h] || null;
+    const score  = ADM_TAR_SCORES[h];
+    const val    = score !== null ? score : '';
+    const extras = (indice && hcp85val) ? Math.floor((hcp85val + 18 - indice) / 18) : 0;
+    const dots   = extras > 0 ? '<span style="color:var(--navy);font-size:8px;">' + '●'.repeat(extras) + '</span>' : '';
+    const idxHtml = indice ? `<div class="adm-tar-hole-idx">Índ ${indice}${dots ? ' '+dots : ''}</div>` : '';
     html += `<div class="adm-tar-hole">
       <div class="adm-tar-hole-num">H${h+1}</div>
       <div class="adm-tar-hole-par">P${par}</div>
+      ${idxHtml}
       <input type="number" class="adm-tar-hole-input" id="adm-tar-h${h}"
         value="${val}" min="1" max="15" inputmode="numeric"
         oninput="ADM_TAR_SCORES[${h}] = this.value !== '' ? (parseInt(this.value)||null) : null">

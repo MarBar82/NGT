@@ -5133,13 +5133,12 @@ function recalcularStbFecha_(params) {
   const fechaRows = allRows.filter(function(r){ return String(r[0]).trim() === fStr; });
   if (!fechaRows.length) return { ok: false, error: 'Sin tarjetas para fecha ' + fStr };
 
-  // Cancha (pares + índices) — misma para todos
+  // Cancha (pares + índices) — forzar lectura fresca para que tome índices corregidos en NGT DB
   const canchaId   = String(fechaRows[0][5] || '').trim();
   const canchaName = String(fechaRows[0][4] || '').trim();
   const cacheKey   = 'cp2_' + (canchaId || canchaName);
-  const cd = cachedRead_(cacheKey, 300, function(){
-    return getCanchaPares_(canchaId || canchaName);
-  });
+  try { CacheService.getScriptCache().remove(cacheKey); } catch(e) {}
+  const cd = getCanchaPares_(canchaId || canchaName);
   if (!cd || !cd.pares || !cd.indices || cd.pares.length < 18 || cd.indices.length < 18) {
     return { ok: false, error: 'No se pudo leer pares/índices de la cancha' };
   }
