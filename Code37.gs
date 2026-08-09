@@ -1482,7 +1482,8 @@ function editarFecha_(params) {
     try {
       const propsE = PropertiesService.getDocumentProperties();
       const metaE = JSON.parse(propsE.getProperty('FECHA_META') || '{}');
-      if (metaE[String(fecha)]) metaE[String(fecha)].hoyoSalida = parseInt(hoyoSalida) || 1;
+      if (!metaE[String(fecha)]) metaE[String(fecha)] = {};
+      metaE[String(fecha)].hoyoSalida = parseInt(hoyoSalida) || 1;
       propsE.setProperty('FECHA_META', JSON.stringify(metaE));
     } catch(e) {}
   }

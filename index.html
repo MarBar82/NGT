@@ -509,11 +509,11 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-sec-back-btn:hover{border-color:var(--navy);color:var(--navy);}
 .adm-sec-title{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);}
 .adm-tar-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin:10px 0;}
-.adm-holes-scroll{display:flex;gap:5px;overflow-x:auto;padding:4px 0 8px;-webkit-overflow-scrolling:touch;}
-.adm-hole-btn{flex:0 0 40px;height:40px;border-radius:50%;border:2px solid var(--g3);background:var(--white);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+.adm-holes-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin:8px 0;}
+.adm-hole-btn{aspect-ratio:1;width:100%;border-radius:50%;border:2px solid var(--g3);background:var(--white);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;box-sizing:border-box;}
 .adm-hole-btn:active,.adm-hole-btn.hb-set{border-color:var(--navy);}
 .adm-hole-btn .hb-num{font-family:'Barlow Condensed',sans-serif;font-size:7px;font-weight:700;color:var(--g4);line-height:1;}
-.adm-hole-btn .hb-val{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;color:var(--navy);line-height:1.1;}
+.adm-hole-btn .hb-val{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;color:var(--navy);line-height:1.1;}
 .adm-hole-btn.hb-empty .hb-val{color:var(--g3);font-weight:400;font-size:11px;}
 #adm-numpad-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:flex-end;justify-content:center;}
 #adm-numpad-panel{background:var(--white);border-radius:16px 16px 0 0;padding:14px 14px 28px;width:100%;max-width:480px;box-sizing:border-box;}
@@ -2055,13 +2055,13 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <div class="adm-card" style="margin-top:12px;">
           <div class="adm-card-hdr">⛳ Par por Hoyo</div>
           <div class="adm-card-body">
-            <div id="adm-cancha-par-grid" class="adm-holes-scroll"></div>
+            <div id="adm-cancha-par-grid" class="adm-holes-grid"></div>
           </div>
         </div>
         <div class="adm-card" style="margin-top:12px;">
           <div class="adm-card-hdr">🏌️ HCP por Hoyo</div>
           <div class="adm-card-body">
-            <div id="adm-cancha-hcp-grid" class="adm-holes-scroll"></div>
+            <div id="adm-cancha-hcp-grid" class="adm-holes-grid"></div>
           </div>
         </div>
         <div class="adm-card" style="margin-top:12px;">
@@ -2102,9 +2102,9 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <label class="adm-label">Nombre</label>
     <input type="text" id="adm-nc-nombre" class="adm-input" placeholder="Ej: Pilar Golf Club" style="margin-bottom:14px;">
     <label class="adm-label">Par por Hoyo</label>
-    <div id="adm-nc-par" class="adm-holes-scroll" style="margin-bottom:14px;"></div>
+    <div id="adm-nc-par" class="adm-holes-grid" style="margin-bottom:14px;"></div>
     <label class="adm-label">HCP por Hoyo</label>
-    <div id="adm-nc-hcp" class="adm-holes-scroll" style="margin-bottom:14px;"></div>
+    <div id="adm-nc-hcp" class="adm-holes-grid" style="margin-bottom:14px;"></div>
     <label class="adm-label">Rating y Slope</label>
     <div id="adm-nc-ratings"></div>
     <button class="adm-btn-secondary" onclick="admNcAddRating()" style="margin-top:6px;margin-bottom:14px;">+ Agregar color</button>
