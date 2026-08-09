@@ -1721,6 +1721,13 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           <div id="adm-hcp-btn-sub" style="font-size:10px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--g4);margin-top:2px;">Consulta la AAG para todos los jugadores</div>
         </div>
       </button>
+      <button class="adm-big-btn" onclick="admGoTo('canchas')" style="margin-top:10px;flex-direction:row;justify-content:flex-start;gap:12px;padding:14px 16px;">
+        <span style="font-size:22px;">⛳</span>
+        <div style="text-align:left;">
+          <div style="font-size:13px;">Gestionar Canchas</div>
+          <div style="font-size:10px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--g4);margin-top:2px;">Editar pares, índices, rating y slope</div>
+        </div>
+      </button>
     </div>
 
     <!-- Crear Fecha (wizard 2 pasos) -->
@@ -1910,6 +1917,16 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           </div>
         </div>
 
+        <!-- RECALCULAR MATCHES -->
+        <div class="adm-card" id="adm-recalc-match-card">
+          <div class="adm-card-hdr">⚔ Matches por Hoyo</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Recalcula los matches usando los índices actuales de la cancha. Usalo si los HCP por hoyo cambiaron después de cargar las tarjetas.</div>
+            <button class="adm-btn-secondary" onclick="admRecalcularMatches()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚔ Recalcular Matches</button>
+            <div id="adm-recalc-match-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
+
         <!-- TARJETAS: editar por jugador -->
         <div class="adm-card" id="adm-edit-tarjetas-card">
           <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
@@ -1978,6 +1995,19 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
       </div><!-- /adm-edit-panel -->
 
+    </div>
+
+    <!-- Gestionar Canchas -->
+    <div class="adm-section" id="adm-canchas" style="display:none;">
+      <div class="adm-sec-back">
+        <button class="adm-sec-back-btn" onclick="admGoHome()">← Volver</button>
+        <span class="adm-sec-title">Gestionar Canchas</span>
+      </div>
+      <div id="adm-canchas-loading" style="color:var(--g4);font-size:13px;padding:4px;">Cargando...</div>
+      <div id="adm-canchas-content" style="display:none;">
+        <div id="adm-canchas-tabs" class="adm-tabs"></div>
+        <div id="adm-canchas-panels"></div>
+      </div>
     </div>
 
     </div>
@@ -3676,8 +3706,10 @@ function admGoTo(section) {
   document.getElementById('adm-home').style.display = 'none';
   document.getElementById('adm-crear').style.display = section === 'crear' ? 'block' : 'none';
   document.getElementById('adm-editar').style.display = section === 'editar' ? 'block' : 'none';
+  document.getElementById('adm-canchas').style.display = section === 'canchas' ? 'block' : 'none';
   if(section === 'editar') renderFechasGrid();
   if(section === 'crear') wizAutoFecha_();
+  if(section === 'canchas') admLoadCanchas();
 }
 
 function wizAutoFecha_(){
@@ -3695,6 +3727,7 @@ function admGoHome() {
   document.getElementById('adm-home').style.display = 'block';
   document.getElementById('adm-crear').style.display = 'none';
   document.getElementById('adm-editar').style.display = 'none';
+  document.getElementById('adm-canchas').style.display = 'none';
   cerrarEditPanel();
 }
 
@@ -3987,6 +4020,145 @@ function admRecalcularStb(){
       msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
     }
   }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
+}
+
+function admRecalcularMatches(){
+  const fecha = MGR_FECHA;
+  const msg = document.getElementById('adm-recalc-match-msg');
+  if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
+  msg.className='adm-msg'; msg.textContent='Recalculando...'; msg.style.display='block';
+  ngtApiPost({ action:'recalcularMatchesFecha', adminKey:ADMIN_KEY_OK, fecha:fecha }).then(r => {
+    if(r && r.ok){
+      msg.className='adm-msg ok';
+      msg.textContent='✓ ' + r.updated + ' matches recalculados';
+    } else {
+      msg.className='adm-msg err';
+      msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
+}
+
+/* ── Gestionar Canchas ── */
+var ADM_CANCHAS_DATA = [];
+
+function admLoadCanchas(){
+  const loading = document.getElementById('adm-canchas-loading');
+  const content = document.getElementById('adm-canchas-content');
+  loading.textContent = 'Cargando...'; loading.style.display = 'block';
+  content.style.display = 'none';
+  ngtApiGet('canchasAdmin').then(r => {
+    loading.style.display = 'none';
+    if(!r || !r.data || !r.data.length){
+      loading.textContent = 'No se encontraron canchas.'; loading.style.display = 'block'; return;
+    }
+    ADM_CANCHAS_DATA = r.data;
+    content.style.display = 'block';
+    admRenderCanchas(r.data);
+  }).catch(e => { loading.textContent = 'Error: ' + e.message; });
+}
+
+function admRenderCanchas(canchas){
+  const tabs   = document.getElementById('adm-canchas-tabs');
+  const panels = document.getElementById('adm-canchas-panels');
+  tabs.innerHTML = ''; panels.innerHTML = '';
+  canchas.forEach((c, ci) => {
+    const tab = document.createElement('button');
+    tab.className = 'adm-tab' + (ci === 0 ? ' on' : '');
+    tab.textContent = c.nombre;
+    tab.onclick = () => {
+      tabs.querySelectorAll('.adm-tab').forEach(t => t.classList.remove('on'));
+      tab.classList.add('on');
+      panels.querySelectorAll('.adm-cancha-panel').forEach(p => p.style.display = 'none');
+      document.getElementById('adm-cp-' + ci).style.display = 'block';
+    };
+    tabs.appendChild(tab);
+    const panel = document.createElement('div');
+    panel.className = 'adm-cancha-panel';
+    panel.id = 'adm-cp-' + ci;
+    panel.style.display = ci === 0 ? 'block' : 'none';
+    panel.innerHTML = admCanchaPanel(c, ci);
+    panels.appendChild(panel);
+  });
+}
+
+function admCanchaPanel(c, ci){
+  const pares   = c.pares   || new Array(18).fill('');
+  const indices = c.indices || new Array(18).fill('');
+  let h = '<div class="adm-card"><div class="adm-card-hdr">🏌️ Hoyos — Par e Índice de Dificultad</div><div class="adm-card-body">';
+  h += '<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:5px;margin-bottom:6px;">';
+  for(let i = 0; i < 18; i++){
+    if(i === 9) h += '</div><div style="display:grid;grid-template-columns:repeat(9,1fr);gap:5px;margin-bottom:6px;">';
+    h += '<div style="text-align:center;">';
+    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:700;color:var(--g4);margin-bottom:2px;">H' + (i+1) + '</div>';
+    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:8px;color:var(--g4);margin-bottom:1px;">PAR</div>';
+    h += '<input type="number" class="adm-tar-hole-input" style="margin-bottom:4px;" min="3" max="6" value="' + (pares[i]||'') + '" data-ci="' + ci + '" data-hoyo="' + (i+1) + '" data-field="par">';
+    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:8px;color:var(--g4);margin-bottom:1px;">HCP</div>';
+    h += '<input type="number" class="adm-tar-hole-input" min="1" max="18" value="' + (indices[i]||'') + '" data-ci="' + ci + '" data-hoyo="' + (i+1) + '" data-field="idx">';
+    h += '</div>';
+  }
+  h += '</div>';
+  h += '<button class="adm-btn-secondary" onclick="admGuardarHoyos(' + ci + ')" style="background:var(--navy);color:#fff;border-color:var(--navy);">💾 Guardar 18 hoyos</button>';
+  h += '<div id="adm-ch-msg-' + ci + '" class="adm-msg" style="display:none;margin-top:8px;"></div>';
+  h += '</div></div>';
+
+  const ratings = c.ratings || {};
+  const colors  = Object.keys(ratings);
+  h += '<div class="adm-card" style="margin-top:12px;"><div class="adm-card-hdr">📐 Rating y Slope</div><div class="adm-card-body">';
+  if(!colors.length){
+    h += '<div style="color:var(--g4);font-size:13px;">Sin datos de rating para esta cancha.</div>';
+  } else {
+    h += '<table style="width:100%;border-collapse:collapse;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;">';
+    h += '<tr><th style="text-align:left;padding:5px 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);">Color</th>';
+    h += '<th style="padding:5px 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);">Rating</th>';
+    h += '<th style="padding:5px 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);">Slope</th><th></th></tr>';
+    colors.forEach(color => {
+      const rs = ratings[color];
+      h += '<tr>';
+      h += '<td style="padding:4px 8px;font-weight:700;color:var(--navy);">' + color + '</td>';
+      h += '<td style="padding:4px 8px;"><input type="number" step="0.1" class="adm-tar-hole-input" style="width:65px;" value="' + (rs.rating||'') + '" data-ci="' + ci + '" data-color="' + color + '" data-field="rating"></td>';
+      h += '<td style="padding:4px 8px;"><input type="number" class="adm-tar-hole-input" style="width:55px;" value="' + (rs.slope||'') + '" data-ci="' + ci + '" data-color="' + color + '" data-field="slope"></td>';
+      h += '<td style="padding:4px 8px;"><button class="adm-btn-secondary" onclick="admGuardarRating(' + ci + ',\'' + color + '\',this)" style="padding:5px 10px;">Guardar</button></td>';
+      h += '</tr>';
+    });
+    h += '</table>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+function admGuardarHoyos(ci){
+  const c = ADM_CANCHAS_DATA[ci];
+  if(!c) return;
+  const msg = document.getElementById('adm-ch-msg-' + ci);
+  msg.className='adm-msg'; msg.textContent='Guardando...'; msg.style.display='block';
+  const hoyos = [];
+  for(let h = 1; h <= 18; h++){
+    const parEl = document.querySelector('[data-ci="' + ci + '"][data-hoyo="' + h + '"][data-field="par"]');
+    const idxEl = document.querySelector('[data-ci="' + ci + '"][data-hoyo="' + h + '"][data-field="idx"]');
+    hoyos.push({ hoyo: h, par: parEl ? parseInt(parEl.value)||'' : '', indice: idxEl ? parseInt(idxEl.value)||'' : '' });
+  }
+  ngtApiPost({ action:'updateCanchaHoyos', adminKey:ADMIN_KEY_OK, canchaId:c.id, hoyos:hoyos }).then(r => {
+    if(r && r.ok){
+      msg.className='adm-msg ok'; msg.textContent='✓ ' + r.updated + ' hoyos actualizados';
+    } else {
+      msg.className='adm-msg err'; msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
+}
+
+function admGuardarRating(ci, color, btn){
+  const c = ADM_CANCHAS_DATA[ci];
+  if(!c) return;
+  const row = btn.closest('tr');
+  const rating = parseFloat(row.querySelector('[data-field="rating"]').value);
+  const slope  = parseInt(row.querySelector('[data-field="slope"]').value);
+  if(isNaN(rating) || isNaN(slope)){ alert('Rating y slope deben ser números válidos'); return; }
+  btn.disabled = true; btn.textContent = '...';
+  ngtApiPost({ action:'updateRating', adminKey:ADMIN_KEY_OK, canchaId:c.id, color:color, rating:rating, slope:slope }).then(r => {
+    btn.disabled = false;
+    btn.textContent = (r && r.ok) ? '✓ Ok' : '✗ Error';
+    setTimeout(() => { btn.textContent = 'Guardar'; }, 2000);
+  }).catch(() => { btn.disabled = false; btn.textContent = '✗'; setTimeout(() => { btn.textContent = 'Guardar'; }, 2000); });
 }
 
 function admRecalcularScore(){

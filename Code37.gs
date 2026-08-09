@@ -4381,6 +4381,7 @@ function doGet(e) {
         break;
       }
       case 'loginAdmin':       result = { ok: checkAdmin_(params.key) }; break;
+      case 'canchasAdmin':     result = { ok: true, data: getCanchasAdmin_() }; break;
       default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }
@@ -5034,7 +5035,10 @@ function doPost(e) {
       case 'actualizarHcpIndices': result = actualizarHcpIndices_(params); break;
       case 'recalcularScore':      result = recalcularTotalesScore_(params); break;
       case 'recalcularHcpFecha':   result = recalcularHcpFecha_(params); break;
-      case 'recalcularStbFecha':   result = recalcularStbFecha_(params); break;
+      case 'recalcularStbFecha':    result = recalcularStbFecha_(params); break;
+      case 'updateCanchaHoyos':    result = updateCanchaHoyos_(params); break;
+      case 'updateRating':         result = updateRating_(params); break;
+      case 'recalcularMatchesFecha': result = recalcularMatchesFecha_(params); break;
       case 'armarLineas':          result = armarLineas_(params); break;
       case 'fechaLineas':          result = { ok: true, data: cachedRead_('fl_' + params.fecha, 300, function(){ return getFechaLineas_(params.fecha); }) }; break;
       case 'setDoblesFecha':       result = setDoblesFecha_(params); break;
@@ -5194,6 +5198,208 @@ function recalcularStbFecha_(params) {
 
   audit_('RECALCULAR_STB', adminKey, { fecha: fStr, updated: updated });
   return { ok: true, updated: updated, details: details };
+}
+
+/* ══════════ ADMIN: GESTIONAR CANCHAS ══════════ */
+
+function getCanchasAdmin_() {
+  const canchasMap = getCanchasHistMap_();
+  const ratingsMap = getRatingsMap_();
+  const result = [];
+  Object.keys(canchasMap).sort().forEach(function(id) {
+    const c = canchasMap[id];
+    const r = ratingsMap[id] || { byColor: {} };
+    result.push({ id: c.id, nombre: c.nombre, pares: c.pares, indices: c.indices, ratings: r.byColor });
+  });
+  return result;
+}
+
+function updateCanchaHoyos_(params) {
+  const { adminKey, canchaId, hoyos } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!canchaId) return { ok: false, error: 'Falta canchaId' };
+  if (!Array.isArray(hoyos) || !hoyos.length) return { ok: false, error: 'Falta lista de hoyos' };
+  const sh = getHistSheet_('CANCHAS');
+  if (!sh) return { ok: false, error: 'Hoja CANCHAS no encontrada en NGT DB' };
+  const lr = sh.getLastRow();
+  if (lr < 2) return { ok: false, error: 'CANCHAS vacía' };
+  const data = sh.getRange(2, 1, lr - 1, 5).getValues();
+  const hoyoMap = {};
+  hoyos.forEach(function(h) { hoyoMap[parseInt(h.hoyo)] = h; });
+  let updated = 0;
+  for (let i = 0; i < data.length; i++) {
+    const rowId = String(data[i][0] || '').trim();
+    if (rowId !== String(canchaId)) continue;
+    const rowHoyo = parseInt(data[i][2]);
+    const hd = hoyoMap[rowHoyo];
+    if (!hd) continue;
+    const par = parseInt(hd.par);
+    const idx = parseInt(hd.indice);
+    if (!isNaN(par)) sh.getRange(i + 2, 4).setValue(par);
+    if (!isNaN(idx)) sh.getRange(i + 2, 5).setValue(idx);
+    updated++;
+  }
+  try { CacheService.getScriptCache().remove('cp2_' + canchaId); } catch(e) {}
+  return { ok: true, updated: updated };
+}
+
+function updateRating_(params) {
+  const { adminKey, canchaId, color, rating, slope } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!canchaId || !color) return { ok: false, error: 'Falta canchaId o color' };
+  const sh = getHistSheet_('RATING');
+  if (!sh) return { ok: false, error: 'Hoja RATING no encontrada en NGT DB' };
+  const lr = sh.getLastRow();
+  if (lr < 2) return { ok: false, error: 'RATING vacío' };
+  const data = sh.getRange(2, 1, lr - 1, 5).getValues();
+  const colorKey = String(color).trim().toUpperCase();
+  let found = false;
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim() !== String(canchaId)) continue;
+    if (String(data[i][2] || '').trim().toUpperCase() !== colorKey) continue;
+    if (rating !== undefined && rating !== null && rating !== '') sh.getRange(i + 2, 4).setValue(parseFloat(rating));
+    if (slope  !== undefined && slope  !== null && slope  !== '') sh.getRange(i + 2, 5).setValue(parseInt(slope));
+    found = true;
+    break;
+  }
+  if (!found) return { ok: false, error: 'No se encontró ' + canchaId + ' / ' + color + ' en RATING' };
+  try { CacheService.getScriptCache().remove('cp2_' + canchaId); } catch(e) {}
+  return { ok: true };
+}
+
+function recalcularMatchesFecha_(params) {
+  const { adminKey, fecha } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha) return { ok: false, error: 'Falta fecha' };
+
+  const fStr = String(fecha);
+  const fecN = parseInt(fecha);
+  const maCol = 4 * fecN + 2;
+
+  const matchSh = getSheet_(SHEETS.MATCH);
+  if (!matchSh) return { ok: false, error: 'Hoja MATCH no encontrada' };
+  const matchLast = findNextEmptyRow_(matchSh, 2);
+  if (matchLast <= 2) return { ok: false, error: 'No hay matches' };
+
+  const matchData = matchSh.getRange(2, 2, matchLast - 2, 3).getValues(); // B, C, D
+
+  const tarjSh = getSheet_(SHEETS.TARJETAS);
+  if (!tarjSh) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
+  const tarjLast = findNextEmptyRow_(tarjSh, 2);
+  if (tarjLast <= 2) return { ok: false, error: 'No hay tarjetas' };
+
+  const tarjAll = tarjSh.getRange(2, 2, tarjLast - 2, 32).getValues();
+  const tarjMap = {};
+  let canchaId = null, canchaName = null;
+  tarjAll.forEach(function(r) {
+    if (String(r[0]).trim() !== fStr) return;
+    const mat = String(r[1]).trim();
+    tarjMap[mat] = r;
+    if (!canchaId) { canchaId = String(r[5]).trim(); canchaName = String(r[4]).trim(); }
+  });
+
+  try { CacheService.getScriptCache().remove('cp2_' + (canchaId || canchaName)); } catch(e) {}
+  const cd = getCanchaPares_(canchaId || canchaName);
+  const cpIndices = (cd && cd.indices) ? cd.indices : [];
+  if (!cpIndices.length) return { ok: false, error: 'No se encontraron índices de la cancha' };
+
+  const matchWriteOps = [];
+  const rowYMap = {};
+  const affectedMats = {};
+  let updated = 0;
+
+  for (let i = 0; i < matchData.length; i += 2) {
+    if (String(matchData[i][0] || '').trim() !== fStr) continue;
+    if (i + 1 >= matchData.length) break;
+    if (String(matchData[i + 1][0] || '').trim() !== fStr) continue;
+
+    const matA = String(matchData[i][1] || '').trim();
+    const matB = String(matchData[i + 1][1] || '').trim();
+    if (!matA || !matB) continue;
+
+    const tarjA = tarjMap[matA];
+    const tarjB = tarjMap[matB];
+    if (!tarjA || !tarjB) continue;
+
+    const hcpA = parseFloat(tarjA[3]);
+    const hcpB = parseFloat(tarjB[3]);
+    if (isNaN(hcpA) || isNaN(hcpB)) continue;
+
+    const scoresA = tarjA.slice(6, 24);
+    const scoresB = tarjB.slice(6, 24);
+    const hasScores = scoresA.some(function(s){ return s !== '' && s !== null && s !== undefined; })
+                   && scoresB.some(function(s){ return s !== '' && s !== null && s !== undefined; });
+    if (!hasScores) continue;
+
+    const hcp85A = Math.round(hcpA * 0.85);
+    const hcp85B = Math.round(hcpB * 0.85);
+    const ayA = Math.max(0, hcp85A - hcp85B);
+    const ayB = Math.max(0, hcp85B - hcp85A);
+    const bcA = Math.max(0, ayA - 18);
+    const bcB = Math.max(0, ayB - 18);
+
+    const adjA = new Array(18), adjB = new Array(18);
+    const netA = new Array(18), netB = new Array(18);
+    for (let h = 0; h < 18; h++) {
+      const idx = cpIndices[h] || 0;
+      adjA[h] = (ayA > 0 && ayA >= idx ? -1 : 0) + (bcA > 0 && idx <= bcA ? -1 : 0);
+      adjB[h] = (ayB > 0 && ayB >= idx ? -1 : 0) + (bcB > 0 && idx <= bcB ? -1 : 0);
+      const gA = (scoresA[h] !== '' && scoresA[h] != null) ? parseInt(scoresA[h]) : null;
+      const gB = (scoresB[h] !== '' && scoresB[h] != null) ? parseInt(scoresB[h]) : null;
+      netA[h] = (gA !== null && !isNaN(gA)) ? gA + adjA[h] : '';
+      netB[h] = (gB !== null && !isNaN(gB)) ? gB + adjB[h] : '';
+    }
+
+    let baA = 0, baB = 0;
+    for (let h = 0; h < 18; h++) {
+      if (netA[h] !== '' && netB[h] !== '') {
+        if (netA[h] < netB[h]) baA++;
+        if (netB[h] < netA[h]) baB++;
+      }
+    }
+    const bbA = baA - baB, bbB = baB - baA;
+    const xA = bbA > 0 ? (bbA + ' UP') : (bbA === 0 ? 'AS' : '');
+    const xB = bbB > 0 ? (bbB + ' UP') : (bbB === 0 ? 'AS' : '');
+    const yA = xA === '' ? 0 : (xA === 'AS' ? 3 : 6);
+    const yB = xB === '' ? 0 : (xB === 'AS' ? 3 : 6);
+
+    const rowA = i + 2, rowB = i + 3;
+    rowYMap[rowA] = yA; rowYMap[rowB] = yB;
+    affectedMats[matA] = true; affectedMats[matB] = true;
+    matchWriteOps.push(
+      { row: rowA, col: 5,  data: [[hcp85A].concat(netA).concat([xA, yA])] },
+      { row: rowA, col: 33, data: [adjA.concat([ayA, '', baA, bbA, bcA])] },
+      { row: rowB, col: 5,  data: [[hcp85B].concat(netB).concat([xB, yB])] },
+      { row: rowB, col: 33, data: [adjB.concat([ayB, '', baB, bbB, bcB])] }
+    );
+    updated++;
+  }
+
+  if (!matchWriteOps.length) return { ok: false, error: 'No se encontraron matches con scores para recalcular' };
+
+  matchWriteOps.forEach(function(op) {
+    matchSh.getRange(op.row, op.col, 1, op.data[0].length).setValues(op.data);
+  });
+
+  const scoreSh = getSheet_('SCORE');
+  if (scoreSh && maCol >= 6 && maCol <= 49) {
+    const matchFull = matchSh.getRange(2, 2, matchLast - 2, 24).getValues();
+    Object.keys(affectedMats).forEach(function(mat) {
+      let totalMA = 0;
+      matchFull.forEach(function(r, ri) {
+        if (String(r[0]).trim() !== fStr || String(r[1]).trim() !== mat) return;
+        const shRow = ri + 2;
+        totalMA += rowYMap.hasOwnProperty(shRow) ? rowYMap[shRow] : (Number(r[23]) || 0);
+      });
+      const sRow = getScoreRowForMat_(mat);
+      if (sRow > 0) scoreSh.getRange(sRow, maCol).setValue(totalMA);
+    });
+  }
+
+  recalcularTotalesScore_(null);
+  try { CacheService.getScriptCache().remove('fl_' + fStr); } catch(e) {}
+  audit_('RECALCULAR_MATCHES', adminKey, { fecha: fStr, updated: updated });
+  return { ok: true, updated: updated };
 }
 
 /**
