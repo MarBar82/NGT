@@ -1199,14 +1199,15 @@ function getFechaLineas_(fecha) {
                       '6':'09-08','7':'13-09','8':'25-10' };
 
   return {
-    fecha:     String(fecha),
-    dia:       fechasMap[String(fecha)] || '',
-    cancha:    canchaName,
-    canchaId:  canchaId,
-    colorTee:  meta.colorTee || 'BLANCAS',
-    horario:   meta.horario  || '',
-    greenFee:  meta.greenFee || '',
-    lineas:    lineas,
+    fecha:      String(fecha),
+    dia:        fechasMap[String(fecha)] || '',
+    cancha:     canchaName,
+    canchaId:   canchaId,
+    colorTee:   meta.colorTee   || 'BLANCAS',
+    horario:    meta.horario    || '',
+    greenFee:   meta.greenFee   || '',
+    hoyoSalida: meta.hoyoSalida || 1,
+    lineas:     lineas,
   };
 }
 
@@ -1241,10 +1242,11 @@ function getFechaDetalle_(fecha) {
     }
   });
 
-  // Get dobles for this fecha from SCORE
   const dobles = getDoblesForFecha_(fecha);
+  const metaDet = getFechaMeta_(fecha);
+  const hoyoSalidaDet = (metaDet && metaDet.hoyoSalida) ? metaDet.hoyoSalida : 1;
 
-  return { fecha: fecha, cancha: cancha, colorTee: colorTee, jugadores: jugadores, invitados: invitados, dobles: dobles };
+  return { fecha: fecha, cancha: cancha, colorTee: colorTee, jugadores: jugadores, invitados: invitados, dobles: dobles, hoyoSalida: hoyoSalidaDet };
 }
 
 /**
@@ -1273,7 +1275,7 @@ function getDoblesForFecha_(fecha) {
  * Edit existing fecha: update cancha, add new players, remove removed ones, update dobles
  */
 function editarFecha_(params) {
-  const { adminKey, fecha, canchaId, jugadores, dobles, invitados, colorTee } = params;
+  const { adminKey, fecha, canchaId, jugadores, dobles, invitados, colorTee, hoyoSalida } = params;
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
   if (!fecha) return { ok: false, error: 'Falta fecha' };
 
@@ -1475,6 +1477,16 @@ function editarFecha_(params) {
     }
   }
 
+  // Update hoyoSalida in FECHA_META if provided
+  if (hoyoSalida !== undefined && hoyoSalida !== null) {
+    try {
+      const propsE = PropertiesService.getDocumentProperties();
+      const metaE = JSON.parse(propsE.getProperty('FECHA_META') || '{}');
+      if (metaE[String(fecha)]) metaE[String(fecha)].hoyoSalida = parseInt(hoyoSalida) || 1;
+      propsE.setProperty('FECHA_META', JSON.stringify(metaE));
+    } catch(e) {}
+  }
+
   audit_('EDITAR_FECHA', 'admin', { fecha, canchaId, canchaName, targetJugadores, targetInvitadoNames, targetDobles, changes });
   if (changes.errors.length > 0) {
     return { ok: false, error: 'Errores al guardar: ' + changes.errors.join(' | '), changes: changes };
@@ -1506,7 +1518,7 @@ function debugMatch_() {
 // ════════════ WRITES ════════════
 function crearFecha_(params) {
   const { adminKey, fecha, canchaId, jugadores, dobles, invitados, colorTee,
-          horario, greenFee, lineas } = params;
+          horario, greenFee, lineas, hoyoSalida } = params;
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
   if (!fecha || !canchaId || ((!jugadores || !jugadores.length) && (!invitados || !invitados.length))) {
     return { ok: false, error: 'Faltan datos' };
@@ -1603,11 +1615,12 @@ function crearFecha_(params) {
   meta[String(fecha)] = {
     canchaId,
     canchaName,
-    dobles:   dobles   || [],
-    colorTee: colorTee || 'BLANCAS',
-    horario:  horario  || '',
-    greenFee: greenFee || '',
-    lineas:   Array.isArray(lineas) ? lineas : [],  // [[mat,...], [mat,...], ...]
+    dobles:     dobles   || [],
+    colorTee:   colorTee || 'BLANCAS',
+    horario:    horario  || '',
+    greenFee:   greenFee || '',
+    lineas:     Array.isArray(lineas) ? lineas : [],
+    hoyoSalida: parseInt(hoyoSalida) || 1,
   };
   props.setProperty('FECHA_META', JSON.stringify(meta));
 
@@ -5036,9 +5049,10 @@ function doPost(e) {
       case 'recalcularScore':      result = recalcularTotalesScore_(params); break;
       case 'recalcularHcpFecha':   result = recalcularHcpFecha_(params); break;
       case 'recalcularStbFecha':    result = recalcularStbFecha_(params); break;
-      case 'updateCanchaHoyos':    result = updateCanchaHoyos_(params); break;
-      case 'updateRating':         result = updateRating_(params); break;
+      case 'updateCanchaHoyos':      result = updateCanchaHoyos_(params); break;
+      case 'updateRating':           result = updateRating_(params); break;
       case 'recalcularMatchesFecha': result = recalcularMatchesFecha_(params); break;
+      case 'crearCancha':            result = crearCancha_(params); break;
       case 'armarLineas':          result = armarLineas_(params); break;
       case 'fechaLineas':          result = { ok: true, data: cachedRead_('fl_' + params.fecha, 300, function(){ return getFechaLineas_(params.fecha); }) }; break;
       case 'setDoblesFecha':       result = setDoblesFecha_(params); break;
@@ -5303,6 +5317,16 @@ function recalcularMatchesFecha_(params) {
   const cpIndices = (cd && cd.indices) ? cd.indices : [];
   if (!cpIndices.length) return { ok: false, error: 'No se encontraron índices de la cancha' };
 
+  const fechaMeta  = getFechaMeta_(fStr);
+  const hoyoSalida = (fechaMeta && fechaMeta.hoyoSalida) ? parseInt(fechaMeta.hoyoSalida) : 1;
+  const holeOrder  = [];
+  if (hoyoSalida === 10) {
+    for (var ho = 9; ho < 18; ho++) holeOrder.push(ho);
+    for (var ho = 0; ho < 9;  ho++) holeOrder.push(ho);
+  } else {
+    for (var ho = 0; ho < 18; ho++) holeOrder.push(ho);
+  }
+
   const matchWriteOps = [];
   const rowYMap = {};
   const affectedMats = {};
@@ -5358,8 +5382,30 @@ function recalcularMatchesFecha_(params) {
       }
     }
     const bbA = baA - baB, bbB = baB - baA;
-    const xA = bbA > 0 ? (bbA + ' UP') : (bbA === 0 ? 'AS' : '');
-    const xB = bbB > 0 ? (bbB + ' UP') : (bbB === 0 ? 'AS' : '');
+
+    // Match play result in hole-play order (respects hoyoSalida)
+    let mpDiff = 0, clinchUp = 0, clinchRem = -1;
+    for (let pos = 0; pos < 18; pos++) {
+      const h = holeOrder[pos];
+      if (netA[h] !== '' && netB[h] !== '') {
+        if (netA[h] < netB[h]) mpDiff++;
+        else if (netB[h] < netA[h]) mpDiff--;
+      }
+      const remaining = 17 - pos;
+      if (clinchRem === -1 && Math.abs(mpDiff) > remaining) {
+        clinchUp = Math.abs(mpDiff); clinchRem = remaining;
+      }
+    }
+    let xA, xB;
+    if (clinchRem === -1) {
+      xA = 'AS'; xB = 'AS';
+    } else if (mpDiff > 0) {
+      xA = clinchRem > 0 ? (clinchUp + '&' + clinchRem) : (clinchUp + ' UP');
+      xB = '';
+    } else {
+      xA = '';
+      xB = clinchRem > 0 ? (clinchUp + '&' + clinchRem) : (clinchUp + ' UP');
+    }
     const yA = xA === '' ? 0 : (xA === 'AS' ? 3 : 6);
     const yB = xB === '' ? 0 : (xB === 'AS' ? 3 : 6);
 
@@ -5400,6 +5446,57 @@ function recalcularMatchesFecha_(params) {
   try { CacheService.getScriptCache().remove('fl_' + fStr); } catch(e) {}
   audit_('RECALCULAR_MATCHES', adminKey, { fecha: fStr, updated: updated });
   return { ok: true, updated: updated };
+}
+
+function crearCancha_(params) {
+  const { adminKey, nombre, hoyos, ratings } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const nombreClean = String(nombre || '').trim();
+  if (!nombreClean) return { ok: false, error: 'Falta el nombre de la cancha' };
+  if (!Array.isArray(hoyos) || hoyos.length !== 18) return { ok: false, error: 'Se necesitan exactamente 18 hoyos' };
+
+  const canchasSh = getSheet_(SHEETS.CANCHAS);
+  const histSh = getHistSheet_('CANCHAS');
+  if (!canchasSh || !histSh) return { ok: false, error: 'Hojas CANCHAS no encontradas' };
+
+  // Max ID from both sources
+  let maxId = 0;
+  const lrC = canchasSh.getLastRow();
+  if (lrC >= 2) canchasSh.getRange(2, 1, lrC - 1, 1).getValues()
+    .forEach(function(r){ const id = parseInt(r[0]); if (!isNaN(id) && id > maxId) maxId = id; });
+  const lrH = histSh.getLastRow();
+  if (lrH >= 2) histSh.getRange(2, 1, lrH - 1, 1).getValues()
+    .forEach(function(r){ const id = parseInt(r[0]); if (!isNaN(id) && id > maxId) maxId = id; });
+  const newId = maxId + 1;
+
+  // CANCHAS sheet (main): one row — ID, NOMBRE
+  canchasSh.appendRow([newId, nombreClean]);
+
+  // NGT DB CANCHAS: 18 rows — ID, NOMBRE, HOYO, PAR, INDICE
+  const canchasRows = hoyos.map(function(h, i) {
+    return [newId, nombreClean, i + 1, parseInt(h.par) || 4, parseInt(h.indice) || (i + 1)];
+  });
+  histSh.getRange(histSh.getLastRow() + 1, 1, 18, 5).setValues(canchasRows);
+
+  // NGT DB RATING: one row per tee color
+  if (Array.isArray(ratings) && ratings.length) {
+    const ratingSh = getHistSheet_('RATING');
+    if (ratingSh) {
+      const ratingRows = ratings
+        .filter(function(r){ return r.color && r.rating != null && r.slope != null; })
+        .map(function(r){ return [newId, nombreClean, String(r.color).trim().toUpperCase(), parseFloat(r.rating), parseInt(r.slope)]; });
+      if (ratingRows.length) ratingSh.getRange(ratingSh.getLastRow() + 1, 1, ratingRows.length, 5).setValues(ratingRows);
+    }
+  }
+
+  try {
+    const cache = CacheService.getScriptCache();
+    cache.remove('canchas');
+    cache.remove('cp2_' + newId);
+    cache.remove('allColoresCancha');
+  } catch(e) {}
+
+  return { ok: true, id: newId, nombre: nombreClean };
 }
 
 /**

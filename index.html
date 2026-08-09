@@ -509,6 +509,22 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-sec-back-btn:hover{border-color:var(--navy);color:var(--navy);}
 .adm-sec-title{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);}
 .adm-tar-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin:10px 0;}
+.adm-holes-scroll{display:flex;gap:5px;overflow-x:auto;padding:4px 0 8px;-webkit-overflow-scrolling:touch;}
+.adm-hole-btn{flex:0 0 40px;height:40px;border-radius:50%;border:2px solid var(--g3);background:var(--white);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+.adm-hole-btn:active,.adm-hole-btn.hb-set{border-color:var(--navy);}
+.adm-hole-btn .hb-num{font-family:'Barlow Condensed',sans-serif;font-size:7px;font-weight:700;color:var(--g4);line-height:1;}
+.adm-hole-btn .hb-val{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;color:var(--navy);line-height:1.1;}
+.adm-hole-btn.hb-empty .hb-val{color:var(--g3);font-weight:400;font-size:11px;}
+#adm-numpad-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:flex-end;justify-content:center;}
+#adm-numpad-panel{background:var(--white);border-radius:16px 16px 0 0;padding:14px 14px 28px;width:100%;max-width:480px;box-sizing:border-box;}
+.adm-np-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;text-transform:uppercase;color:var(--navy);}
+.adm-np-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.adm-np-key{height:50px;border:1.5px solid var(--g3);border-radius:8px;background:var(--white);font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--navy);cursor:pointer;touch-action:manipulation;}
+.adm-np-key:active{background:var(--off);}
+.adm-np-key.np-special{font-size:14px;font-weight:700;color:var(--g4);background:var(--off);}
+.adm-np-key.np-clear{font-size:14px;color:#b91c1c;background:var(--off);}
+#adm-nc-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:8900;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;}
+#adm-nc-inner{background:var(--white);border-radius:8px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;padding:16px;box-sizing:border-box;}
 .adm-tar-hole{display:flex;flex-direction:column;align-items:center;gap:2px;}
 .adm-tar-hole-num{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;color:var(--g4);}
 .adm-tar-hole-par{font-family:'Barlow Condensed',sans-serif;font-size:9px;color:var(--g3);}
@@ -2037,11 +2053,15 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       <!-- Panel edición cancha existente -->
       <div id="adm-cancha-edit" style="display:none;">
         <div class="adm-card" style="margin-top:12px;">
-          <div class="adm-card-hdr">🏌️ Par e Índice por Hoyo</div>
+          <div class="adm-card-hdr">⛳ Par por Hoyo</div>
           <div class="adm-card-body">
-            <div id="adm-cancha-holes-grid" class="adm-tar-grid"></div>
-            <button class="adm-btn-secondary" onclick="admGuardarHoyos()" style="margin-top:8px;background:var(--navy);color:#fff;border-color:var(--navy);">💾 Guardar Hoyos</button>
-            <div id="adm-cancha-holes-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+            <div id="adm-cancha-par-grid" class="adm-holes-scroll"></div>
+          </div>
+        </div>
+        <div class="adm-card" style="margin-top:12px;">
+          <div class="adm-card-hdr">🏌️ HCP por Hoyo</div>
+          <div class="adm-card-body">
+            <div id="adm-cancha-hcp-grid" class="adm-holes-scroll"></div>
           </div>
         </div>
         <div class="adm-card" style="margin-top:12px;">
@@ -2050,27 +2070,8 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div id="adm-cancha-ratings-table"></div>
           </div>
         </div>
-      </div>
-
-      <!-- Formulario nueva cancha -->
-      <div id="adm-cancha-nueva" style="display:none;margin-top:12px;">
-        <div class="adm-card">
-          <div class="adm-card-hdr">⛳ Nueva Cancha</div>
-          <div class="adm-card-body">
-            <label class="adm-label">Nombre</label>
-            <input type="text" id="adm-nc-nombre" class="adm-input" placeholder="Ej: Pilar Golf Club" style="margin-bottom:14px;">
-            <label class="adm-label">Par e Índice por Hoyo</label>
-            <div id="adm-nc-holes" class="adm-tar-grid"></div>
-            <label class="adm-label" style="margin-top:14px;">Rating y Slope</label>
-            <div id="adm-nc-ratings"></div>
-            <button class="adm-btn-secondary" onclick="admNcAddRating()" style="margin-top:6px;">+ Agregar color</button>
-            <div style="display:flex;gap:8px;margin-top:14px;">
-              <button class="adm-btn-primary" onclick="admCrearCancha()" style="flex:2;">⛳ Crear Cancha</button>
-              <button class="adm-btn-secondary" onclick="admOcultarNuevaCancha()" style="flex:1;">Cancelar</button>
-            </div>
-            <div id="adm-nc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
-          </div>
-        </div>
+        <button class="adm-btn-secondary" onclick="admGuardarHoyos()" style="width:100%;background:var(--navy);color:#fff;border-color:var(--navy);margin-top:4px;">💾 Guardar Hoyos</button>
+        <div id="adm-cancha-holes-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
       </div>
     </div>
 
@@ -2078,6 +2079,41 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
   </div>
 </div>
+</div>
+
+<!-- ════ NUMPAD OVERLAY ════ -->
+<div id="adm-numpad-ov" style="display:none;" onclick="admNumpadClose(event)">
+  <div id="adm-numpad-panel" onclick="event.stopPropagation()">
+    <div class="adm-np-hdr">
+      <span id="adm-np-title">Valor</span>
+      <button onclick="admNumpadClose()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--g4);">✕</button>
+    </div>
+    <div id="adm-np-keys" class="adm-np-grid"></div>
+  </div>
+</div>
+
+<!-- ════ NUEVA CANCHA MODAL ════ -->
+<div id="adm-nc-modal" style="display:none;" onclick="admOcultarNuevaCancha(event)">
+  <div id="adm-nc-inner" onclick="event.stopPropagation()">
+    <div class="adm-np-hdr">
+      <span>⛳ Nueva Cancha</span>
+      <button onclick="admOcultarNuevaCancha()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--g4);">✕</button>
+    </div>
+    <label class="adm-label">Nombre</label>
+    <input type="text" id="adm-nc-nombre" class="adm-input" placeholder="Ej: Pilar Golf Club" style="margin-bottom:14px;">
+    <label class="adm-label">Par por Hoyo</label>
+    <div id="adm-nc-par" class="adm-holes-scroll" style="margin-bottom:14px;"></div>
+    <label class="adm-label">HCP por Hoyo</label>
+    <div id="adm-nc-hcp" class="adm-holes-scroll" style="margin-bottom:14px;"></div>
+    <label class="adm-label">Rating y Slope</label>
+    <div id="adm-nc-ratings"></div>
+    <button class="adm-btn-secondary" onclick="admNcAddRating()" style="margin-top:6px;margin-bottom:14px;">+ Agregar color</button>
+    <div style="display:flex;gap:8px;">
+      <button class="adm-btn-primary" onclick="admCrearCancha()" style="flex:2;">⛳ Crear Cancha</button>
+      <button class="adm-btn-secondary" onclick="admOcultarNuevaCancha()" style="flex:1;">Cancelar</button>
+    </div>
+    <div id="adm-nc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+  </div>
 </div>
 
 <!-- ════ FECHA DINÁMICA ════ -->
@@ -4107,6 +4143,7 @@ function admRecalcularMatches(){
 
 /* ── Gestionar Canchas ── */
 var ADM_CANCHAS_DATA = [];
+var ADM_NP_TARGET = null; // { el, hoyo, field, page }
 
 function admLoadCanchas(){
   const sel = document.getElementById('adm-canchas-sel');
@@ -4117,9 +4154,9 @@ function admLoadCanchas(){
     if(!r || !r.data || !r.data.length){
       sel.innerHTML = '<option value="">— Sin canchas —</option>'; return;
     }
-    ADM_CANCHAS_DATA = r.data;
+    ADM_CANCHAS_DATA = r.data.slice().sort((a,b) => a.nombre.localeCompare(b.nombre));
     let opts = '<option value="">Seleccionar cancha...</option>';
-    r.data.forEach(c => { opts += '<option value="' + c.id + '">' + c.nombre + '</option>'; });
+    ADM_CANCHAS_DATA.forEach(c => { opts += '<option value="' + c.id + '">' + c.nombre + '</option>'; });
     sel.innerHTML = opts;
   }).catch(e => { sel.innerHTML = '<option value="">Error: ' + e.message + '</option>'; });
 }
@@ -4136,21 +4173,27 @@ function admCanchaSeleccionada(){
   document.getElementById('adm-cancha-holes-msg').style.display = 'none';
 }
 
+function admRenderHoleCircles(containerId, values, field){
+  const cont = document.getElementById(containerId);
+  if(!cont) return;
+  let h = '';
+  for(let i = 0; i < 18; i++){
+    const v = values[i] || '';
+    const cls = v ? 'adm-hole-btn hb-set' : 'adm-hole-btn hb-empty';
+    h += '<button type="button" class="' + cls + '" data-hoyo="' + (i+1) + '" data-field="' + field + '" data-val="' + v + '"';
+    h += ' onclick="admNumpadOpen(this,' + (i+1) + ',\'' + field + '\')">';
+    h += '<span class="hb-num">H' + (i+1) + '</span>';
+    h += '<span class="hb-val">' + (v || '-') + '</span>';
+    h += '</button>';
+  }
+  cont.innerHTML = h;
+}
+
 function admRenderCanchaEditPanel(c){
   const pares   = c.pares   || new Array(18).fill('');
   const indices = c.indices || new Array(18).fill('');
-  const grid = document.getElementById('adm-cancha-holes-grid');
-  let h = '';
-  for(let i = 0; i < 18; i++){
-    h += '<div class="adm-tar-hole">';
-    h += '<div class="adm-tar-hole-num">H' + (i+1) + '</div>';
-    h += '<div class="adm-tar-hole-par">Par</div>';
-    h += '<input type="number" class="adm-tar-hole-input" inputmode="numeric" min="3" max="6" value="' + (pares[i]||'') + '" data-hoyo="' + (i+1) + '" data-field="par">';
-    h += '<div class="adm-tar-hole-idx">HCP</div>';
-    h += '<input type="number" class="adm-tar-hole-input" inputmode="numeric" min="1" max="18" value="' + (indices[i]||'') + '" data-hoyo="' + (i+1) + '" data-field="idx">';
-    h += '</div>';
-  }
-  grid.innerHTML = h;
+  admRenderHoleCircles('adm-cancha-par-grid', pares, 'par');
+  admRenderHoleCircles('adm-cancha-hcp-grid', indices, 'idx');
 
   const ratings = c.ratings || {};
   const colors  = Object.keys(ratings);
@@ -4175,18 +4218,64 @@ function admRenderCanchaEditPanel(c){
   rDiv.innerHTML = rt;
 }
 
+/* ── Numpad ── */
+function admNumpadOpen(el, hoyo, field){
+  ADM_NP_TARGET = { el: el, hoyo: hoyo, field: field };
+  const label = field === 'par' ? 'Par H' + hoyo : 'HCP H' + hoyo;
+  document.getElementById('adm-np-title').textContent = label;
+  admNumpadRenderPage(field === 'par' ? 'par' : 'hcp1');
+  document.getElementById('adm-numpad-ov').style.display = 'flex';
+}
+
+function admNumpadRenderPage(page){
+  const keys = document.getElementById('adm-np-keys');
+  let h = '';
+  if(page === 'par'){
+    [3,4,5,6].forEach(n => { h += '<button class="adm-np-key" onclick="admNumpadSelect(' + n + ')">' + n + '</button>'; });
+    h += '<button class="adm-np-key np-clear" onclick="admNumpadSelect(null)">Borrar</button>';
+    keys.style.gridTemplateColumns = 'repeat(3,1fr)';
+  } else if(page === 'hcp1'){
+    for(let n = 1; n <= 9; n++) h += '<button class="adm-np-key" onclick="admNumpadSelect(' + n + ')">' + n + '</button>';
+    h += '<button class="adm-np-key np-special" onclick="admNumpadRenderPage(\'hcp2\')">+10 →</button>';
+    h += '<button class="adm-np-key np-clear" onclick="admNumpadSelect(null)">Borrar</button>';
+    keys.style.gridTemplateColumns = 'repeat(3,1fr)';
+  } else {
+    for(let n = 11; n <= 18; n++) h += '<button class="adm-np-key" onclick="admNumpadSelect(' + n + ')">' + n + '</button>';
+    h += '<button class="adm-np-key np-special" onclick="admNumpadRenderPage(\'hcp1\')">← 1-9</button>';
+    keys.style.gridTemplateColumns = 'repeat(3,1fr)';
+  }
+  keys.innerHTML = h;
+}
+
+function admNumpadSelect(val){
+  if(!ADM_NP_TARGET) return;
+  const el = ADM_NP_TARGET.el;
+  el.setAttribute('data-val', val !== null ? String(val) : '');
+  el.querySelector('.hb-val').textContent = val !== null ? String(val) : '-';
+  el.className = val !== null ? 'adm-hole-btn hb-set' : 'adm-hole-btn hb-empty';
+  admNumpadClose();
+}
+
+function admNumpadClose(e){
+  if(e && e.target !== document.getElementById('adm-numpad-ov')) return;
+  document.getElementById('adm-numpad-ov').style.display = 'none';
+  ADM_NP_TARGET = null;
+}
+
 function admGuardarHoyos(){
   const sel = document.getElementById('adm-canchas-sel');
   const c = ADM_CANCHAS_DATA.find(x => String(x.id) === String(sel.value));
   if(!c) return;
   const msg = document.getElementById('adm-cancha-holes-msg');
   msg.className='adm-msg'; msg.textContent='Guardando...'; msg.style.display='block';
-  const grid = document.getElementById('adm-cancha-holes-grid');
   const hoyos = [];
   for(let h = 1; h <= 18; h++){
-    const parEl = grid.querySelector('[data-hoyo="' + h + '"][data-field="par"]');
-    const idxEl = grid.querySelector('[data-hoyo="' + h + '"][data-field="idx"]');
-    hoyos.push({ hoyo: h, par: parEl ? parseInt(parEl.value)||'' : '', indice: idxEl ? parseInt(idxEl.value)||'' : '' });
+    const parEl = document.querySelector('#adm-cancha-par-grid [data-hoyo="' + h + '"]');
+    const idxEl = document.querySelector('#adm-cancha-hcp-grid [data-hoyo="' + h + '"]');
+    hoyos.push({ hoyo: h,
+      par:    parEl ? parseInt(parEl.getAttribute('data-val'))||'' : '',
+      indice: idxEl ? parseInt(idxEl.getAttribute('data-val'))||'' : ''
+    });
   }
   ngtApiPost({ action:'updateCanchaHoyos', adminKey:ADMIN_KEY_OK, canchaId:c.id, hoyos:hoyos }).then(r => {
     if(r && r.ok){
@@ -4215,31 +4304,23 @@ function admGuardarRating(color, btn){
   }).catch(() => { btn.disabled = false; btn.textContent = '✗'; setTimeout(() => { btn.textContent = 'Guardar'; }, 2000); });
 }
 
+/* ── Nueva Cancha Modal ── */
 function admMostrarNuevaCancha(){
-  document.getElementById('adm-cancha-nueva').style.display = 'block';
   document.getElementById('adm-nc-nombre').value = '';
   document.getElementById('adm-nc-ratings').innerHTML = '';
   document.getElementById('adm-nc-msg').style.display = 'none';
   admRenderNuevaHoles();
+  document.getElementById('adm-nc-modal').style.display = 'flex';
 }
 
-function admOcultarNuevaCancha(){
-  document.getElementById('adm-cancha-nueva').style.display = 'none';
+function admOcultarNuevaCancha(e){
+  if(e && e.target !== document.getElementById('adm-nc-modal')) return;
+  document.getElementById('adm-nc-modal').style.display = 'none';
 }
 
 function admRenderNuevaHoles(){
-  const grid = document.getElementById('adm-nc-holes');
-  let h = '';
-  for(let i = 0; i < 18; i++){
-    h += '<div class="adm-tar-hole">';
-    h += '<div class="adm-tar-hole-num">H' + (i+1) + '</div>';
-    h += '<div class="adm-tar-hole-par">Par</div>';
-    h += '<input type="number" class="adm-tar-hole-input" inputmode="numeric" min="3" max="6" placeholder="4" data-hoyo="' + (i+1) + '" data-field="par">';
-    h += '<div class="adm-tar-hole-idx">HCP</div>';
-    h += '<input type="number" class="adm-tar-hole-input" inputmode="numeric" min="1" max="18" placeholder="' + (i+1) + '" data-hoyo="' + (i+1) + '" data-field="idx">';
-    h += '</div>';
-  }
-  grid.innerHTML = h;
+  admRenderHoleCircles('adm-nc-par', new Array(18).fill(''), 'par');
+  admRenderHoleCircles('adm-nc-hcp', new Array(18).fill(''), 'idx');
 }
 
 function admNcAddRating(){
@@ -4259,12 +4340,14 @@ function admCrearCancha(){
   const nombre = (document.getElementById('adm-nc-nombre').value || '').trim();
   const msg = document.getElementById('adm-nc-msg');
   if(!nombre){ msg.className='adm-msg err'; msg.textContent='Ingresa el nombre de la cancha'; msg.style.display='block'; return; }
-  const grid = document.getElementById('adm-nc-holes');
   const hoyos = [];
   for(let h = 1; h <= 18; h++){
-    const parEl = grid.querySelector('[data-hoyo="' + h + '"][data-field="par"]');
-    const idxEl = grid.querySelector('[data-hoyo="' + h + '"][data-field="idx"]');
-    hoyos.push({ hoyo: h, par: parseInt((parEl&&parEl.value)||'')||4, indice: parseInt((idxEl&&idxEl.value)||'')||h });
+    const parEl = document.querySelector('#adm-nc-par [data-hoyo="' + h + '"]');
+    const idxEl = document.querySelector('#adm-nc-hcp [data-hoyo="' + h + '"]');
+    hoyos.push({ hoyo: h,
+      par:    parseInt((parEl && parEl.getAttribute('data-val'))||'')||4,
+      indice: parseInt((idxEl && idxEl.getAttribute('data-val'))||'')||h
+    });
   }
   const ratings = [];
   document.querySelectorAll('.nc-rating-row').forEach(row => {
@@ -4277,7 +4360,7 @@ function admCrearCancha(){
   ngtApiPost({ action:'crearCancha', adminKey:ADMIN_KEY_OK, nombre:nombre, hoyos:hoyos, ratings:ratings }).then(r => {
     if(r && r.ok){
       msg.className='adm-msg ok'; msg.textContent='✓ Cancha "' + nombre + '" creada (ID ' + r.id + ')';
-      admOcultarNuevaCancha();
+      document.getElementById('adm-nc-modal').style.display = 'none';
       admLoadCanchas();
     } else {
       msg.className='adm-msg err'; msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
