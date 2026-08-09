@@ -4129,11 +4129,13 @@ function admRecalcularMatches(){
   const fecha = MGR_FECHA;
   const msg = document.getElementById('adm-recalc-match-msg');
   if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
-  msg.className='adm-msg'; msg.textContent='Recalculando...'; msg.style.display='block';
-  ngtApiPost({ action:'recalcularMatchesFecha', adminKey:ADMIN_KEY_OK, fecha:fecha }).then(r => {
+  const hsSel = document.getElementById('adm-edit-hoyo-salida');
+  const hoyoSalida = hsSel ? parseInt(hsSel.value) || 1 : 1;
+  msg.className='adm-msg'; msg.textContent='Recalculando (hoyo salida: ' + hoyoSalida + ')...'; msg.style.display='block';
+  ngtApiPost({ action:'recalcularMatchesFecha', adminKey:ADMIN_KEY_OK, fecha:fecha, hoyoSalida:hoyoSalida }).then(r => {
     if(r && r.ok){
       msg.className='adm-msg ok';
-      msg.textContent='✓ ' + r.updated + ' matches recalculados';
+      msg.textContent='✓ ' + r.updated + ' matches recalculados (hoyo ' + (r.hoyoSalida||1) + ')';
     } else {
       msg.className='adm-msg err';
       msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');

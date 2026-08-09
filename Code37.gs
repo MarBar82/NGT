@@ -5283,7 +5283,7 @@ function updateRating_(params) {
 }
 
 function recalcularMatchesFecha_(params) {
-  const { adminKey, fecha } = params || {};
+  const { adminKey, fecha, hoyoSalida: paramHoyoSalida } = params || {};
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
   if (!fecha) return { ok: false, error: 'Falta fecha' };
 
@@ -5318,8 +5318,14 @@ function recalcularMatchesFecha_(params) {
   const cpIndices = (cd && cd.indices) ? cd.indices : [];
   if (!cpIndices.length) return { ok: false, error: 'No se encontraron índices de la cancha' };
 
-  const fechaMeta  = getFechaMeta_(fStr);
-  const hoyoSalida = (fechaMeta && fechaMeta.hoyoSalida) ? parseInt(fechaMeta.hoyoSalida) : 1;
+  // hoyoSalida: prefer explicit param from frontend, fall back to stored meta
+  var hoyoSalida;
+  if (paramHoyoSalida !== undefined && paramHoyoSalida !== null) {
+    hoyoSalida = parseInt(paramHoyoSalida) || 1;
+  } else {
+    const fechaMeta = getFechaMeta_(fStr);
+    hoyoSalida = (fechaMeta && fechaMeta.hoyoSalida) ? parseInt(fechaMeta.hoyoSalida) : 1;
+  }
   const holeOrder  = [];
   if (hoyoSalida === 10) {
     for (var ho = 9; ho < 18; ho++) holeOrder.push(ho);
@@ -5445,8 +5451,8 @@ function recalcularMatchesFecha_(params) {
 
   recalcularTotalesScore_(null);
   try { CacheService.getScriptCache().remove('fl_' + fStr); } catch(e) {}
-  audit_('RECALCULAR_MATCHES', adminKey, { fecha: fStr, updated: updated });
-  return { ok: true, updated: updated };
+  audit_('RECALCULAR_MATCHES', adminKey, { fecha: fStr, updated: updated, hoyoSalida: hoyoSalida });
+  return { ok: true, updated: updated, hoyoSalida: hoyoSalida };
 }
 
 function crearCancha_(params) {
