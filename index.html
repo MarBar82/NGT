@@ -1785,6 +1785,15 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
               <input type="text" id="adm-greenfee" class="adm-input" placeholder="$ 0.000">
             </div>
           </div>
+          <div class="adm-row">
+            <div class="adm-field">
+              <label class="adm-label">Hoyo de salida</label>
+              <select id="adm-hoyo-salida" class="adm-input">
+                <option value="1">Hoyo 1</option>
+                <option value="10">Hoyo 10</option>
+              </select>
+            </div>
+          </div>
 
           <button class="adm-btn-primary" id="wiz-armar-btn" onclick="wizArmarLineas()" style="margin-top:18px;">⚡ Armar Líneas →</button>
           <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
@@ -1855,6 +1864,16 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
             <label class="adm-label">Jugadores que disputan</label>
             <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
+
+            <div class="adm-row" style="margin-top:6px;">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo de salida</label>
+                <select id="adm-edit-hoyo-salida" class="adm-input">
+                  <option value="1">Hoyo 1</option>
+                  <option value="10">Hoyo 10</option>
+                </select>
+              </div>
+            </div>
 
             <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Datos</button>
             <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
@@ -2003,10 +2022,55 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <button class="adm-sec-back-btn" onclick="admGoHome()">← Volver</button>
         <span class="adm-sec-title">Gestionar Canchas</span>
       </div>
-      <div id="adm-canchas-loading" style="color:var(--g4);font-size:13px;padding:4px;">Cargando...</div>
-      <div id="adm-canchas-content" style="display:none;">
-        <div id="adm-canchas-tabs" class="adm-tabs"></div>
-        <div id="adm-canchas-panels"></div>
+
+      <!-- Selector -->
+      <div class="adm-card">
+        <div class="adm-card-body" style="padding-bottom:10px;">
+          <label class="adm-label">Cancha</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="adm-canchas-sel" class="adm-input" onchange="admCanchaSeleccionada()" style="flex:1;"><option value="">— Cargando... —</option></select>
+            <button class="adm-btn-secondary" onclick="admMostrarNuevaCancha()" style="white-space:nowrap;">+ Nueva</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel edición cancha existente -->
+      <div id="adm-cancha-edit" style="display:none;">
+        <div class="adm-card" style="margin-top:12px;">
+          <div class="adm-card-hdr">🏌️ Par e Índice por Hoyo</div>
+          <div class="adm-card-body">
+            <div id="adm-cancha-holes-grid" class="adm-tar-grid"></div>
+            <button class="adm-btn-secondary" onclick="admGuardarHoyos()" style="margin-top:8px;background:var(--navy);color:#fff;border-color:var(--navy);">💾 Guardar Hoyos</button>
+            <div id="adm-cancha-holes-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
+        <div class="adm-card" style="margin-top:12px;">
+          <div class="adm-card-hdr">📐 Rating y Slope</div>
+          <div class="adm-card-body">
+            <div id="adm-cancha-ratings-table"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formulario nueva cancha -->
+      <div id="adm-cancha-nueva" style="display:none;margin-top:12px;">
+        <div class="adm-card">
+          <div class="adm-card-hdr">⛳ Nueva Cancha</div>
+          <div class="adm-card-body">
+            <label class="adm-label">Nombre</label>
+            <input type="text" id="adm-nc-nombre" class="adm-input" placeholder="Ej: Pilar Golf Club" style="margin-bottom:14px;">
+            <label class="adm-label">Par e Índice por Hoyo</label>
+            <div id="adm-nc-holes" class="adm-tar-grid"></div>
+            <label class="adm-label" style="margin-top:14px;">Rating y Slope</label>
+            <div id="adm-nc-ratings"></div>
+            <button class="adm-btn-secondary" onclick="admNcAddRating()" style="margin-top:6px;">+ Agregar color</button>
+            <div style="display:flex;gap:8px;margin-top:14px;">
+              <button class="adm-btn-primary" onclick="admCrearCancha()" style="flex:2;">⛳ Crear Cancha</button>
+              <button class="adm-btn-secondary" onclick="admOcultarNuevaCancha()" style="flex:1;">Cancelar</button>
+            </div>
+            <div id="adm-nc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -3409,10 +3473,12 @@ function wizValidarPaso1_(){
   const fecha    = fechaEl   ? fechaEl.value.trim()   : '';
   const canchaId = canchaEl  ? canchaEl.value.trim()  : '';
   const colorTee = (colorEl  ? colorEl.value.trim()   : '') || 'BLANCAS';
-  const horario  = horarioEl ? horarioEl.value.trim() : '';
-  const greenFee = feeEl     ? feeEl.value.trim()     : '';
+  const horario   = horarioEl ? horarioEl.value.trim() : '';
+  const greenFee  = feeEl     ? feeEl.value.trim()     : '';
+  const hoyoSalidaEl = document.getElementById('adm-hoyo-salida');
+  const hoyoSalida   = hoyoSalidaEl ? parseInt(hoyoSalidaEl.value) || 1 : 1;
   const jugadores = [...document.querySelectorAll('#adm-jugadores-list input:checked')].map(i => i.value);
-  const dobles    = []; // los dobles se configuran desde Gestionar Fecha
+  const dobles    = [];
   const msg = document.getElementById('adm-crear-msg');
   msg.style.display = 'none';
   if(!fecha){
@@ -3424,7 +3490,7 @@ function wizValidarPaso1_(){
   if(!jugadores.length){
     msg.className = 'adm-msg err'; msg.textContent = 'Marcá al menos un jugador'; msg.style.display = 'block'; return null;
   }
-  return { fecha, canchaId, colorTee, jugadores, dobles, horario, greenFee };
+  return { fecha, canchaId, colorTee, jugadores, dobles, horario, greenFee, hoyoSalida };
 }
 
 // Muestra el Paso 2 con los datos ya guardados en WIZ_PASO1_DATA
@@ -3638,9 +3704,10 @@ function wizCrearTodo(){
     colorTee: WIZ_PASO1_DATA.colorTee,
     jugadores: WIZ_PASO1_DATA.jugadores,
     dobles:   WIZ_PASO1_DATA.dobles,
-    horario:  WIZ_PASO1_DATA.horario  || '',
-    greenFee: WIZ_PASO1_DATA.greenFee || '',
-    lineas:   lineasParam,
+    horario:    WIZ_PASO1_DATA.horario    || '',
+    greenFee:   WIZ_PASO1_DATA.greenFee   || '',
+    hoyoSalida: WIZ_PASO1_DATA.hoyoSalida || 1,
+    lineas:     lineasParam,
   }).then(r => {
     if(!r.ok){
       msg.className = 'adm-msg err';
@@ -4042,123 +4109,180 @@ function admRecalcularMatches(){
 var ADM_CANCHAS_DATA = [];
 
 function admLoadCanchas(){
-  const loading = document.getElementById('adm-canchas-loading');
-  const content = document.getElementById('adm-canchas-content');
-  loading.textContent = 'Cargando...'; loading.style.display = 'block';
-  content.style.display = 'none';
+  const sel = document.getElementById('adm-canchas-sel');
+  const editDiv = document.getElementById('adm-cancha-edit');
+  sel.innerHTML = '<option value="">— Cargando... —</option>';
+  editDiv.style.display = 'none';
   ngtApiGet('canchasAdmin').then(r => {
-    loading.style.display = 'none';
     if(!r || !r.data || !r.data.length){
-      loading.textContent = 'No se encontraron canchas.'; loading.style.display = 'block'; return;
+      sel.innerHTML = '<option value="">— Sin canchas —</option>'; return;
     }
     ADM_CANCHAS_DATA = r.data;
-    content.style.display = 'block';
-    admRenderCanchas(r.data);
-  }).catch(e => { loading.textContent = 'Error: ' + e.message; });
+    let opts = '<option value="">Seleccionar cancha...</option>';
+    r.data.forEach(c => { opts += '<option value="' + c.id + '">' + c.nombre + '</option>'; });
+    sel.innerHTML = opts;
+  }).catch(e => { sel.innerHTML = '<option value="">Error: ' + e.message + '</option>'; });
 }
 
-function admRenderCanchas(canchas){
-  const tabs   = document.getElementById('adm-canchas-tabs');
-  const panels = document.getElementById('adm-canchas-panels');
-  tabs.innerHTML = ''; panels.innerHTML = '';
-  canchas.forEach((c, ci) => {
-    const tab = document.createElement('button');
-    tab.className = 'adm-tab' + (ci === 0 ? ' on' : '');
-    tab.textContent = c.nombre;
-    tab.onclick = () => {
-      tabs.querySelectorAll('.adm-tab').forEach(t => t.classList.remove('on'));
-      tab.classList.add('on');
-      panels.querySelectorAll('.adm-cancha-panel').forEach(p => p.style.display = 'none');
-      document.getElementById('adm-cp-' + ci).style.display = 'block';
-    };
-    tabs.appendChild(tab);
-    const panel = document.createElement('div');
-    panel.className = 'adm-cancha-panel';
-    panel.id = 'adm-cp-' + ci;
-    panel.style.display = ci === 0 ? 'block' : 'none';
-    panel.innerHTML = admCanchaPanel(c, ci);
-    panels.appendChild(panel);
-  });
+function admCanchaSeleccionada(){
+  const sel = document.getElementById('adm-canchas-sel');
+  const editDiv = document.getElementById('adm-cancha-edit');
+  const id = sel.value;
+  if(!id){ editDiv.style.display = 'none'; return; }
+  const c = ADM_CANCHAS_DATA.find(x => String(x.id) === String(id));
+  if(!c){ editDiv.style.display = 'none'; return; }
+  admRenderCanchaEditPanel(c);
+  editDiv.style.display = 'block';
+  document.getElementById('adm-cancha-holes-msg').style.display = 'none';
 }
 
-function admCanchaPanel(c, ci){
+function admRenderCanchaEditPanel(c){
   const pares   = c.pares   || new Array(18).fill('');
   const indices = c.indices || new Array(18).fill('');
-  let h = '<div class="adm-card"><div class="adm-card-hdr">🏌️ Hoyos — Par e Índice de Dificultad</div><div class="adm-card-body">';
-  h += '<div style="display:grid;grid-template-columns:repeat(9,1fr);gap:5px;margin-bottom:6px;">';
+  const grid = document.getElementById('adm-cancha-holes-grid');
+  let h = '';
   for(let i = 0; i < 18; i++){
-    if(i === 9) h += '</div><div style="display:grid;grid-template-columns:repeat(9,1fr);gap:5px;margin-bottom:6px;">';
-    h += '<div style="text-align:center;">';
-    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:700;color:var(--g4);margin-bottom:2px;">H' + (i+1) + '</div>';
-    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:8px;color:var(--g4);margin-bottom:1px;">PAR</div>';
-    h += '<input type="number" class="adm-tar-hole-input" style="margin-bottom:4px;" min="3" max="6" value="' + (pares[i]||'') + '" data-ci="' + ci + '" data-hoyo="' + (i+1) + '" data-field="par">';
-    h += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:8px;color:var(--g4);margin-bottom:1px;">HCP</div>';
-    h += '<input type="number" class="adm-tar-hole-input" min="1" max="18" value="' + (indices[i]||'') + '" data-ci="' + ci + '" data-hoyo="' + (i+1) + '" data-field="idx">';
+    h += '<div class="adm-tar-hole">';
+    h += '<div class="adm-tar-hole-num">H' + (i+1) + '</div>';
+    h += '<div class="adm-tar-hole-par">Par</div>';
+    h += '<input type="number" class="adm-tar-hole-input" inputmode="numeric" min="3" max="6" value="' + (pares[i]||'') + '" data-hoyo="' + (i+1) + '" data-field="par">';
+    h += '<div class="adm-tar-hole-idx">HCP</div>';
+    h += '<input type="number" class="adm-tar-hole-input" inputmode="numeric" min="1" max="18" value="' + (indices[i]||'') + '" data-hoyo="' + (i+1) + '" data-field="idx">';
     h += '</div>';
   }
-  h += '</div>';
-  h += '<button class="adm-btn-secondary" onclick="admGuardarHoyos(' + ci + ')" style="background:var(--navy);color:#fff;border-color:var(--navy);">💾 Guardar 18 hoyos</button>';
-  h += '<div id="adm-ch-msg-' + ci + '" class="adm-msg" style="display:none;margin-top:8px;"></div>';
-  h += '</div></div>';
+  grid.innerHTML = h;
 
   const ratings = c.ratings || {};
   const colors  = Object.keys(ratings);
-  h += '<div class="adm-card" style="margin-top:12px;"><div class="adm-card-hdr">📐 Rating y Slope</div><div class="adm-card-body">';
+  const rDiv = document.getElementById('adm-cancha-ratings-table');
   if(!colors.length){
-    h += '<div style="color:var(--g4);font-size:13px;">Sin datos de rating para esta cancha.</div>';
-  } else {
-    h += '<table style="width:100%;border-collapse:collapse;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;">';
-    h += '<tr><th style="text-align:left;padding:5px 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);">Color</th>';
-    h += '<th style="padding:5px 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);">Rating</th>';
-    h += '<th style="padding:5px 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);">Slope</th><th></th></tr>';
-    colors.forEach(color => {
-      const rs = ratings[color];
-      h += '<tr>';
-      h += '<td style="padding:4px 8px;font-weight:700;color:var(--navy);">' + color + '</td>';
-      h += '<td style="padding:4px 8px;"><input type="number" step="0.1" class="adm-tar-hole-input" style="width:65px;" value="' + (rs.rating||'') + '" data-ci="' + ci + '" data-color="' + color + '" data-field="rating"></td>';
-      h += '<td style="padding:4px 8px;"><input type="number" class="adm-tar-hole-input" style="width:55px;" value="' + (rs.slope||'') + '" data-ci="' + ci + '" data-color="' + color + '" data-field="slope"></td>';
-      h += '<td style="padding:4px 8px;"><button class="adm-btn-secondary" onclick="admGuardarRating(' + ci + ',\'' + color + '\',this)" style="padding:5px 10px;">Guardar</button></td>';
-      h += '</tr>';
-    });
-    h += '</table>';
+    rDiv.innerHTML = '<div style="color:var(--g4);font-size:13px;">Sin datos de rating.</div>'; return;
   }
-  h += '</div></div>';
-  return h;
+  let rt = '<table style="width:100%;border-collapse:collapse;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;">';
+  rt += '<tr><th style="text-align:left;padding:5px 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);">Color</th>';
+  rt += '<th style="padding:5px 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);">Rating</th>';
+  rt += '<th style="padding:5px 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);">Slope</th><th></th></tr>';
+  colors.forEach(color => {
+    const rs = ratings[color];
+    rt += '<tr>';
+    rt += '<td style="padding:4px 8px;font-weight:700;color:var(--navy);">' + color + '</td>';
+    rt += '<td style="padding:4px 8px;"><input type="number" step="0.1" class="adm-tar-hole-input" style="width:65px;" value="' + (rs.rating||'') + '" data-color="' + color + '" data-field="rating"></td>';
+    rt += '<td style="padding:4px 8px;"><input type="number" class="adm-tar-hole-input" style="width:55px;" value="' + (rs.slope||'') + '" data-color="' + color + '" data-field="slope"></td>';
+    rt += '<td style="padding:4px 8px;"><button class="adm-btn-secondary" onclick="admGuardarRating(\'' + color + '\',this)" style="padding:5px 10px;">Guardar</button></td>';
+    rt += '</tr>';
+  });
+  rt += '</table>';
+  rDiv.innerHTML = rt;
 }
 
-function admGuardarHoyos(ci){
-  const c = ADM_CANCHAS_DATA[ci];
+function admGuardarHoyos(){
+  const sel = document.getElementById('adm-canchas-sel');
+  const c = ADM_CANCHAS_DATA.find(x => String(x.id) === String(sel.value));
   if(!c) return;
-  const msg = document.getElementById('adm-ch-msg-' + ci);
+  const msg = document.getElementById('adm-cancha-holes-msg');
   msg.className='adm-msg'; msg.textContent='Guardando...'; msg.style.display='block';
+  const grid = document.getElementById('adm-cancha-holes-grid');
   const hoyos = [];
   for(let h = 1; h <= 18; h++){
-    const parEl = document.querySelector('[data-ci="' + ci + '"][data-hoyo="' + h + '"][data-field="par"]');
-    const idxEl = document.querySelector('[data-ci="' + ci + '"][data-hoyo="' + h + '"][data-field="idx"]');
+    const parEl = grid.querySelector('[data-hoyo="' + h + '"][data-field="par"]');
+    const idxEl = grid.querySelector('[data-hoyo="' + h + '"][data-field="idx"]');
     hoyos.push({ hoyo: h, par: parEl ? parseInt(parEl.value)||'' : '', indice: idxEl ? parseInt(idxEl.value)||'' : '' });
   }
   ngtApiPost({ action:'updateCanchaHoyos', adminKey:ADMIN_KEY_OK, canchaId:c.id, hoyos:hoyos }).then(r => {
     if(r && r.ok){
       msg.className='adm-msg ok'; msg.textContent='✓ ' + r.updated + ' hoyos actualizados';
+      const loc = ADM_CANCHAS_DATA.find(x => String(x.id) === String(c.id));
+      if(loc){ loc.pares = hoyos.map(h => h.par); loc.indices = hoyos.map(h => h.indice); }
     } else {
       msg.className='adm-msg err'; msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
     }
   }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
 }
 
-function admGuardarRating(ci, color, btn){
-  const c = ADM_CANCHAS_DATA[ci];
+function admGuardarRating(color, btn){
+  const sel = document.getElementById('adm-canchas-sel');
+  const c = ADM_CANCHAS_DATA.find(x => String(x.id) === String(sel.value));
   if(!c) return;
   const row = btn.closest('tr');
   const rating = parseFloat(row.querySelector('[data-field="rating"]').value);
   const slope  = parseInt(row.querySelector('[data-field="slope"]').value);
-  if(isNaN(rating) || isNaN(slope)){ alert('Rating y slope deben ser números válidos'); return; }
+  if(isNaN(rating) || isNaN(slope)){ alert('Rating y slope deben ser numeros validos'); return; }
   btn.disabled = true; btn.textContent = '...';
   ngtApiPost({ action:'updateRating', adminKey:ADMIN_KEY_OK, canchaId:c.id, color:color, rating:rating, slope:slope }).then(r => {
     btn.disabled = false;
     btn.textContent = (r && r.ok) ? '✓ Ok' : '✗ Error';
     setTimeout(() => { btn.textContent = 'Guardar'; }, 2000);
   }).catch(() => { btn.disabled = false; btn.textContent = '✗'; setTimeout(() => { btn.textContent = 'Guardar'; }, 2000); });
+}
+
+function admMostrarNuevaCancha(){
+  document.getElementById('adm-cancha-nueva').style.display = 'block';
+  document.getElementById('adm-nc-nombre').value = '';
+  document.getElementById('adm-nc-ratings').innerHTML = '';
+  document.getElementById('adm-nc-msg').style.display = 'none';
+  admRenderNuevaHoles();
+}
+
+function admOcultarNuevaCancha(){
+  document.getElementById('adm-cancha-nueva').style.display = 'none';
+}
+
+function admRenderNuevaHoles(){
+  const grid = document.getElementById('adm-nc-holes');
+  let h = '';
+  for(let i = 0; i < 18; i++){
+    h += '<div class="adm-tar-hole">';
+    h += '<div class="adm-tar-hole-num">H' + (i+1) + '</div>';
+    h += '<div class="adm-tar-hole-par">Par</div>';
+    h += '<input type="number" class="adm-tar-hole-input" inputmode="numeric" min="3" max="6" placeholder="4" data-hoyo="' + (i+1) + '" data-field="par">';
+    h += '<div class="adm-tar-hole-idx">HCP</div>';
+    h += '<input type="number" class="adm-tar-hole-input" inputmode="numeric" min="1" max="18" placeholder="' + (i+1) + '" data-hoyo="' + (i+1) + '" data-field="idx">';
+    h += '</div>';
+  }
+  grid.innerHTML = h;
+}
+
+function admNcAddRating(){
+  const div = document.getElementById('adm-nc-ratings');
+  const row = document.createElement('div');
+  row.className = 'nc-rating-row';
+  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px;';
+  row.innerHTML =
+    '<input type="text" class="adm-input" placeholder="Color (ROJAS)" style="width:100px;" data-field="color">' +
+    '<input type="number" step="0.1" class="adm-input" placeholder="Rating" style="width:75px;" data-field="rating">' +
+    '<input type="number" class="adm-input" placeholder="Slope" style="width:75px;" data-field="slope">' +
+    '<button class="adm-btn-secondary" onclick="this.closest(\'.nc-rating-row\').remove()" style="padding:5px 8px;">✕</button>';
+  div.appendChild(row);
+}
+
+function admCrearCancha(){
+  const nombre = (document.getElementById('adm-nc-nombre').value || '').trim();
+  const msg = document.getElementById('adm-nc-msg');
+  if(!nombre){ msg.className='adm-msg err'; msg.textContent='Ingresa el nombre de la cancha'; msg.style.display='block'; return; }
+  const grid = document.getElementById('adm-nc-holes');
+  const hoyos = [];
+  for(let h = 1; h <= 18; h++){
+    const parEl = grid.querySelector('[data-hoyo="' + h + '"][data-field="par"]');
+    const idxEl = grid.querySelector('[data-hoyo="' + h + '"][data-field="idx"]');
+    hoyos.push({ hoyo: h, par: parseInt((parEl&&parEl.value)||'')||4, indice: parseInt((idxEl&&idxEl.value)||'')||h });
+  }
+  const ratings = [];
+  document.querySelectorAll('.nc-rating-row').forEach(row => {
+    const color  = (row.querySelector('[data-field="color"]').value || '').trim().toUpperCase();
+    const rating = parseFloat(row.querySelector('[data-field="rating"]').value);
+    const slope  = parseInt(row.querySelector('[data-field="slope"]').value);
+    if(color && !isNaN(rating) && !isNaN(slope)) ratings.push({ color, rating, slope });
+  });
+  msg.className='adm-msg'; msg.textContent='Creando...'; msg.style.display='block';
+  ngtApiPost({ action:'crearCancha', adminKey:ADMIN_KEY_OK, nombre:nombre, hoyos:hoyos, ratings:ratings }).then(r => {
+    if(r && r.ok){
+      msg.className='adm-msg ok'; msg.textContent='✓ Cancha "' + nombre + '" creada (ID ' + r.id + ')';
+      admOcultarNuevaCancha();
+      admLoadCanchas();
+    } else {
+      msg.className='adm-msg err'; msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
 }
 
 function admRecalcularScore(){
@@ -4492,6 +4616,10 @@ function abrirEditPanel(fecha){
     });
     cs.innerHTML = canchaOpts;
 
+    // Populate hoyo salida
+    const hsSel = document.getElementById('adm-edit-hoyo-salida');
+    if(hsSel) hsSel.value = String(det.hoyoSalida || 1);
+
     // Trigger color load for the current cancha + preselect the saved color
     if(cs.value){
       loadColoresCanchaEdit();
@@ -4572,6 +4700,9 @@ function adminEditarFecha(){
   msg.textContent = 'Guardando...';
   msg.style.display = 'block';
 
+  const hoyoSalidaEditEl = document.getElementById('adm-edit-hoyo-salida');
+  const hoyoSalidaEdit = hoyoSalidaEditEl ? parseInt(hoyoSalidaEditEl.value) || 1 : 1;
+
   ngtApiPost({
     action: 'editarFecha',
     adminKey: ADMIN_KEY_OK,
@@ -4580,6 +4711,7 @@ function adminEditarFecha(){
     colorTee: colorTee,
     jugadores: jugadores,
     dobles: dobles,
+    hoyoSalida: hoyoSalidaEdit,
   }).then(r => {
     if(r.ok){
       msg.className = 'adm-msg ok';
