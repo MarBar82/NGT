@@ -4077,8 +4077,12 @@ function admGuardarDobles(){
   msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
   ngtApiPost({ action: 'setDoblesFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, dobles: dobles }).then(r => {
     if(r && r.ok){
+      const ch = r.changes || {};
+      let txt = '✓ Dobles guardados y score recalculado · ' + (ch.set||[]).length + ' activado(s)';
+      if((ch.cleared||[]).length) txt += ' · ' + ch.cleared.length + ' removido(s)';
+      if((ch.notFound||[]).length) txt += ' · ⚠ no encontrado en SCORE: ' + ch.notFound.join(', ');
       msg.className = 'adm-msg ok';
-      msg.textContent = '✓ Dobles actualizados · ' + dobles.length + ' jugador(es)';
+      msg.textContent = txt;
     } else {
       msg.className = 'adm-msg err';
       msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');
