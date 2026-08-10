@@ -1613,32 +1613,6 @@ function crearFecha_(params) {
   };
   props.setProperty('FECHA_META', JSON.stringify(meta));
 
-  // ── Escribir líneas en MATCH!BZ:CB (flat list: fecha, nroLinea, apodo) ──────
-  // Esto permite que armarLineas_ sepa qué líneas se jugaron en fechas anteriores.
-  if (Array.isArray(lineas) && lineas.length) {
-    try {
-      const shM = getSheet_(SHEETS.MATCH);
-      const jugsAll = getJugadores_();
-      const matToApodo = {};
-      jugsAll.forEach(function(j) {
-        matToApodo[j.matricula] = (j.apodo || j.nombre.split(' ')[0] || j.matricula).toUpperCase();
-      });
-      const rows = [];
-      lineas.forEach(function(lineaMats, idx) {
-        const lineNum = idx + 1;
-        (Array.isArray(lineaMats) ? lineaMats : []).forEach(function(mat) {
-          const apodo = matToApodo[String(mat)] || String(mat);
-          rows.push([parseInt(fecha), lineNum, apodo]);
-        });
-      });
-      if (rows.length) {
-        const lastRow = shM.getLastRow();
-        const startRow = Math.max(lastRow + 1, 2);
-        shM.getRange(startRow, 78, rows.length, 3).setValues(rows); // BZ=78, CA=79, CB=80
-      }
-    } catch(e) { /* no bloquear si falla la escritura de líneas */ }
-  }
-
   // Invalidar caches que dependen de fechas/jugadores
   try {
     const cache = CacheService.getScriptCache();
@@ -4660,63 +4634,75 @@ function armarLineas_(params) {
   const shM = getSheet_(SHEETS.MATCH);
   if (!shM) return { ok: false, error: 'Hoja MATCH no encontrada' };
 
-  // 3a. Match history: lectura directa de filas (B=fecha, C=matricula).
-  // Pares de filas consecutivas con la misma fecha = un match.
-  // matchedPairs[key] = cantidad de veces que ese par jugó entre sí.
-  const matchedPairs = {}; // "matA|matB" sorted → número de veces
+  // 3a+3b. Una sola lectura de MATCH (B=fecha, C=mat1, D=mat2).
+  // - matchedPairs: todos los enfrentamientos históricos (para evitar repetir 1v1).
+  // - recentLinePairs: compañeros de línea en las últimas 2 fechas, reconstruidos
+  //   por componentes conectados (jugadores unidos por al menos un match en la misma
+  //   fecha forman una línea — funciona para líneas de 3 y de 4).
+  const matchedPairs   = {}; // "matA|matB" → nº de veces que se enfrentaron
+  const recentLinePairs = {}; // "matA|matB" → true si compartieron línea en últimas 2 fechas
   try {
     const lastRowM = shM.getLastRow();
     if (lastRowM >= 3) {
-      // B=fecha, C=mat1, D=mat2 — 1 row per match
       const mRows = shM.getRange(2, 2, lastRowM - 1, 3).getValues();
+
+      // Agrupar matches por fecha
+      const matchesByFecha = {};
       for (var mi = 0; mi < mRows.length; mi++) {
         const f  = String(mRows[mi][0] || '').trim();
         const m1 = String(mRows[mi][1] || '').trim();
         const m2 = String(mRows[mi][2] || '').trim();
-        if (f && m1 && m2 && m1 !== m2) {
-          const key = [m1, m2].sort().join('|');
-          matchedPairs[key] = (matchedPairs[key] || 0) + 1;
-        }
+        if (!f || !m1 || !m2 || m1 === m2) continue;
+        const key = [m1, m2].sort().join('|');
+        matchedPairs[key] = (matchedPairs[key] || 0) + 1;
+        if (!matchesByFecha[f]) matchesByFecha[f] = [];
+        matchesByFecha[f].push([m1, m2]);
       }
-    }
-  } catch(e) { /* continuar sin historial de matches */ }
 
-  // 3b. Líneas compartidas: BZ:CB flat list (BZ=78) — fecha, nroLinea, apodo
-  // Regla: evitar repetir línea con las ÚLTIMAS 2 FECHAS jugadas.
-  const recentLinePairs = {}; // "matA|matB" → true si compartieron línea en las últimas 2 fechas
-  try {
-    const lastRowM = shM.getLastRow();
-    if (lastRowM >= 2) {
-      const lineData = shM.getRange(2, 78, lastRowM - 1, 3).getValues(); // BZ:CB
-      // Build: fechaNum → lineNum → [matriculas]
-      const linesByFecha = {};
-      lineData.forEach(function(row) {
-        const f  = parseInt(row[0]) || 0;
-        const l  = parseInt(row[1]) || 0;
-        const ap = String(row[2] || '').trim().toUpperCase();
-        if (!f || !l || !ap) return;
-        const mat = apodoToMat[ap];
-        if (!mat) return;
-        if (!linesByFecha[f]) linesByFecha[f] = {};
-        if (!linesByFecha[f][l]) linesByFecha[f][l] = [];
-        linesByFecha[f][l].push(mat);
-      });
       // Últimas 2 fechas anteriores a la actual
       const currentFechaNum = parseInt(fecha) || 0;
-      const lastTwo = Object.keys(linesByFecha).map(Number)
+      const lastTwo = Object.keys(matchesByFecha).map(Number)
         .filter(function(f2) { return f2 < currentFechaNum; })
         .sort(function(a, b) { return b - a; })
         .slice(0, 2);
+
+      // Componentes conectados por fecha → líneas
       lastTwo.forEach(function(f2) {
-        Object.values(linesByFecha[f2]).forEach(function(players) {
-          for (var i = 0; i < players.length; i++)
-            for (var j = i + 1; j < players.length; j++) {
-              recentLinePairs[[players[i], players[j]].sort().join('|')] = true;
-            }
+        const pairs = matchesByFecha[String(f2)];
+        if (!pairs || !pairs.length) return;
+        // Union-Find
+        const parent = {};
+        function find(x) {
+          if (!parent[x]) parent[x] = x;
+          if (parent[x] !== x) parent[x] = find(parent[x]);
+          return parent[x];
+        }
+        pairs.forEach(function(p) {
+          const px = find(p[0]), py = find(p[1]);
+          if (px !== py) parent[px] = py;
+        });
+        // Agrupar jugadores por componente
+        const lines = {};
+        const allMats = [];
+        pairs.forEach(function(p) {
+          if (allMats.indexOf(p[0]) < 0) allMats.push(p[0]);
+          if (allMats.indexOf(p[1]) < 0) allMats.push(p[1]);
+        });
+        allMats.forEach(function(m) {
+          const root = find(m);
+          if (!lines[root]) lines[root] = [];
+          lines[root].push(m);
+        });
+        // Todos los pares dentro de cada línea = recentLinePairs
+        Object.keys(lines).forEach(function(root) {
+          const grp = lines[root];
+          for (var i = 0; i < grp.length; i++)
+            for (var j = i + 1; j < grp.length; j++)
+              recentLinePairs[[grp[i], grp[j]].sort().join('|')] = true;
         });
       });
     }
-  } catch(e) { /* continuar sin historial de líneas */ }
+  } catch(e) { /* continuar sin historial */ }
 
   // ── 5. Algoritmo de armado de líneas ─────────────────────────────────────
   const N = players.length;
@@ -5436,7 +5422,7 @@ function recalcularMatchesFecha_(params) {
  * One-time migration: converts MATCH from 2-rows-per-match to 1-row-per-match.
  * Run ONCE from the Apps Script editor after deploying this version.
  * Safe to re-run: skips rows that are already in 1-row format.
- * Line history data in cols BZ:CB (78-80) is preserved (different column range).
+ * Line history data in cols J:L (10-12) is preserved (different column range).
  */
 function debugMigrarMatch_() {
   const sh = getSheet_(SHEETS.MATCH);
