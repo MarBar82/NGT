@@ -4646,7 +4646,8 @@ function doPost(e) {
       case 'cargarMatches':       result = cargarMatches_(params); break;
       case 'editarMatches':       result = editarMatches_(params); break;
       case 'actualizarHcpIndices': result = actualizarHcpIndices_(params); break;
-      case 'recalcularScore':      result = recalcularTotalesScore_(params); break;
+      case 'recalcularScore':          result = recalcularTotalesScore_(params); break;
+      case 'calcularGanadoresFechas': result = calcularGanadoresFechas_(params); break;
       case 'recalcularHcpFecha':   result = recalcularHcpFecha_(params); break;
       case 'recalcularStbFecha':    result = recalcularStbFecha_(params); break;
       case 'updateCanchaHoyos':      result = updateCanchaHoyos_(params); break;
@@ -5241,6 +5242,157 @@ function recalcularTotalesScore_(params) {
   return { ok: true, totales: cVals };
 }
 
+/**
+ * Determina el ganador de cada fecha por mayor Stableford total.
+ * Desempate: últimos 9 hoyos jugados → últimos 6 → últimos 3 → head-to-head match en el año.
+ * Escribe el conteo de fechas ganadas en SCORE!AK (col 37).
+ */
+function calcularGanadoresFechas_(params) {
+  if (params && !checkAdmin_(params.adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const sh = getSheet_('SCORE');
+  if (!sh) return { ok: false, error: 'SCORE no encontrada' };
+
+  // Player list from app SCORE rows 3..20
+  const playerRaw = sh.getRange(3, 1, 18, 1).getValues();
+  const playerMats = playerRaw.map(function(r) { return String(r[0] || '').trim(); });
+
+  // All TARJETAS
+  const tarjSh = getSheet_(SHEETS.TARJETAS);
+  if (!tarjSh) return { ok: false, error: 'Sin TARJETAS' };
+  const tarjLast = findNextEmptyRow_(tarjSh, 2);
+  if (tarjLast <= 2) return { ok: false, error: 'Sin tarjetas' };
+  // B=fecha(0), C=mat(1), D=nombre(2), E=hcp(3), F=cancha(4), G=canchaId(5), H..Y=scores(6..23)
+  const allTarj = tarjSh.getRange(2, 2, tarjLast - 2, 24).getValues();
+
+  // MATCH data for head-to-head across ALL fechas
+  // B=fecha(0), C=mat1(1), D=mat2(2), E=res1(3), F=pts1(4), G=res2(5), H=pts2(6)
+  const matchSh = getSheet_(SHEETS.MATCH);
+  const allMatches = [];
+  if (matchSh) {
+    const ml = findNextEmptyRow_(matchSh, 4);
+    if (ml > 2) {
+      matchSh.getRange(2, 2, ml - 2, 7).getValues().forEach(function(r) { allMatches.push(r); });
+    }
+  }
+
+  // Build head-to-head map: canonical key "matA|matB" (sorted) → { [matA]: wins, [matB]: wins }
+  const h2h = {};
+  allMatches.forEach(function(r) {
+    const m1 = String(r[1] || '').trim();
+    const m2 = String(r[2] || '').trim();
+    if (!m1 || !m2) return;
+    const pts1 = Number(r[4]) || 0;
+    const pts2 = Number(r[6]) || 0;
+    if (!pts1 && !pts2) return; // match sin resultado
+    const key = m1 < m2 ? m1 + '|' + m2 : m2 + '|' + m1;
+    if (!h2h[key]) h2h[key] = {};
+    if (!h2h[key][m1]) h2h[key][m1] = 0;
+    if (!h2h[key][m2]) h2h[key][m2] = 0;
+    if (pts1 > pts2) h2h[key][m1]++;
+    else if (pts2 > pts1) h2h[key][m2]++;
+  });
+
+  // Collect distinct fechas
+  const fechaSet = {};
+  allTarj.forEach(function(r) {
+    const f = String(r[0] || '').trim();
+    if (f) fechaSet[f] = true;
+  });
+
+  // Initialize win counters
+  const wins = {};
+  playerMats.forEach(function(m) { if (m) wins[m] = 0; });
+
+  const details = {};
+
+  Object.keys(fechaSet).forEach(function(fStr) {
+    const fechaRows = allTarj.filter(function(r) { return String(r[0] || '').trim() === fStr; });
+    if (!fechaRows.length) return;
+
+    // Cancha
+    const canchaId   = String(fechaRows[0][5] || '').trim();
+    const canchaName = String(fechaRows[0][4] || '').trim();
+    const cd = getCanchaPares_(canchaId || canchaName);
+    if (!cd || !cd.pares || !cd.indices || cd.pares.length < 18) return;
+
+    // hoyoSalida → play order for last-9/6/3 countback
+    const fechaMeta  = getFechaMeta_(fStr);
+    const hoyoSalida = (fechaMeta && fechaMeta.hoyoSalida) ? parseInt(fechaMeta.hoyoSalida) : 1;
+    const holeOrder  = [];
+    if (hoyoSalida === 10) {
+      for (var ho = 9; ho < 18; ho++) holeOrder.push(ho);
+      for (var ho = 0; ho < 9;  ho++) holeOrder.push(ho);
+    } else {
+      for (var ho = 0; ho < 18; ho++) holeOrder.push(ho);
+    }
+    const last9idx  = holeOrder.slice(9);
+    const last6idx  = holeOrder.slice(12);
+    const last3idx  = holeOrder.slice(15);
+
+    // Per-player stableford breakdown
+    const playerScores = [];
+    fechaRows.forEach(function(r) {
+      const mat = String(r[1] || '').trim();
+      if (!mat || mat.indexOf('INV') === 0) return;
+      const hcp = parseFloat(r[3]);
+      if (isNaN(hcp)) return;
+      const scores18 = r.slice(6, 24);
+      if (!scores18.some(function(s) { return s !== '' && s !== null && s !== undefined; })) return;
+
+      var stbByHole = new Array(18).fill(0);
+      var total = 0;
+      for (var h = 0; h < 18; h++) {
+        const sc = (scores18[h] !== undefined && scores18[h] !== null && scores18[h] !== '')
+          ? parseInt(scores18[h]) : null;
+        if (sc === null || isNaN(sc)) continue;
+        const pts = calcStablefordHole_(sc, cd.pares[h] || null, cd.indices[h] || null, hcp);
+        stbByHole[h] = (pts !== null ? pts : 0);
+        total += stbByHole[h];
+      }
+      playerScores.push({ mat: mat, total: total, stbByHole: stbByHole });
+    });
+
+    if (!playerScores.length) return;
+
+    // Sort by: total desc → last9 desc → last6 desc → last3 desc → h2h
+    playerScores.sort(function(a, b) {
+      if (b.total !== a.total) return b.total - a.total;
+
+      function sumHoles(ps, idxs) { return idxs.reduce(function(s, h) { return s + ps.stbByHole[h]; }, 0); }
+
+      var diff9 = sumHoles(b, last9idx) - sumHoles(a, last9idx);
+      if (diff9) return diff9;
+      var diff6 = sumHoles(b, last6idx) - sumHoles(a, last6idx);
+      if (diff6) return diff6;
+      var diff3 = sumHoles(b, last3idx) - sumHoles(a, last3idx);
+      if (diff3) return diff3;
+
+      // Head-to-head match wins durante el año
+      const key = a.mat < b.mat ? a.mat + '|' + b.mat : b.mat + '|' + a.mat;
+      const rec = h2h[key];
+      if (rec) {
+        const aW = rec[a.mat] || 0;
+        const bW = rec[b.mat] || 0;
+        if (aW !== bW) return bW - aW;
+      }
+      return 0; // empate no resuelto → sorteo manual
+    });
+
+    const winner = playerScores[0];
+    details[fStr] = { winner: winner.mat, total: winner.total };
+    if (wins[winner.mat] !== undefined) wins[winner.mat]++;
+  });
+
+  // Write to SCORE!AK (col 37), rows 3..20
+  const winVals = playerMats.map(function(m) { return [m ? (wins[m] || 0) : '']; });
+  sh.getRange(3, 37, 18, 1).setValues(winVals);
+  SpreadsheetApp.flush();
+
+  audit_('CALCULAR_GANADORES_FECHAS', (params && params.adminKey) || 'system', { wins: wins, details: details });
+  return { ok: true, wins: wins, details: details };
+}
+
 function test() {
   Logger.log('=== DEBUG MATCH ===');
   Logger.log(JSON.stringify(debugMatch_(), null, 2));
@@ -5248,6 +5400,12 @@ function test() {
   Logger.log(JSON.stringify(getCanchas_(), null, 2));
   Logger.log('=== FECHAS ACTIVAS ===');
   Logger.log(JSON.stringify(getFechasActivas_()));
+}
+
+// Wrapper: recalculate fecha winners and write to SCORE!AK
+function runCalcularGanadoresFechas() {
+  const result = calcularGanadoresFechas_(null);
+  Logger.log(JSON.stringify(result));
 }
 
 // Wrapper: run from Apps Script dropdown to diagnose MATCH sheet format
