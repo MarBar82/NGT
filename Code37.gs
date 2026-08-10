@@ -227,38 +227,96 @@ function getScoreRowForMat_(matricula) {
   return -1;
 }
 
-function getDbColForFecha_(fechaNum) {
-  const n = parseInt(fechaNum);
-  if (!n || n < 1 || n > 8) return -1;
-  // Fecha 1 DB → col H = 8
-  // Fecha 2 DB → col L = 12
-  // Formula: 4*n + 4
-  return 4 * n + 4;
+// ════════ NGT DB SCORE HELPERS ════════
+// NGT DB SCORE: A=Fecha, B=Matricula, C=Stableford, D=Match, E=Bonus, F=Doble
+
+function getNGTScoreSheet_() {
+  return getHistSheet_('SCORE');
+}
+
+function getAllNGTScoreData_() {
+  const sh = getNGTScoreSheet_();
+  if (!sh) return [];
+  const last = sh.getLastRow();
+  if (last < 2) return [];
+  const raw = sh.getRange(2, 1, last - 1, 6).getValues();
+  return raw.map(function(r, i) {
+    return {
+      fecha:    String(r[0] || '').trim(),
+      mat:      String(r[1] || '').trim(),
+      st:       Number(r[2]) || 0,
+      ma:       Number(r[3]) || 0,
+      pb:       Number(r[4]) || 0,
+      db:       (r[5] === true || r[5] === 1),
+      sheetRow: i + 2,
+    };
+  }).filter(function(r) { return r.fecha && r.mat; });
+}
+
+function findNGTScoreRow_(fechaStr, matStr) {
+  const sh = getNGTScoreSheet_();
+  if (!sh) return -1;
+  const last = sh.getLastRow();
+  if (last < 2) return -1;
+  const data = sh.getRange(2, 1, last - 1, 2).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim() === String(fechaStr) &&
+        String(data[i][1] || '').trim() === String(matStr)) {
+      return i + 2;
+    }
+  }
+  return -1;
+}
+
+// colIdx: 3=Stableford, 4=Match, 5=Bonus, 6=Doble (1-based sheet column in NGT DB)
+function setNGTScoreField_(fechaStr, matStr, colIdx, value) {
+  const sh = getNGTScoreSheet_();
+  if (!sh) return;
+  let row = findNGTScoreRow_(fechaStr, matStr);
+  if (row < 0) {
+    row = sh.getLastRow() + 1;
+    sh.getRange(row, 1, 1, 6).setValues([[fechaStr, matStr, 0, 0, 0, false]]);
+  }
+  sh.getRange(row, colIdx).setValue(value);
+}
+
+function getNGTScoreRow_(fechaStr, matStr) {
+  const sh = getNGTScoreSheet_();
+  if (!sh) return null;
+  const row = findNGTScoreRow_(fechaStr, matStr);
+  if (row < 0) return null;
+  const vals = sh.getRange(row, 1, 1, 6).getValues()[0];
+  return {
+    st: Number(vals[2]) || 0,
+    ma: Number(vals[3]) || 0,
+    pb: Number(vals[4]) || 0,
+    db: (vals[5] === true || vals[5] === 1),
+  };
 }
 
 function getJugadoresConDobleDisponible_() {
   // Returns list of matriculas that have NOT used their doble in ANY fecha.
-  // Checks: col AT (46, manual global flag) AND each fecha's DB column (8,12,16,20,24,28,32,36).
-  // A player is "disponible" only if they have no TRUE in AT and no TRUE in any DB column.
+  // Checks: col AT (46, manual global override) AND NGT DB SCORE Doble field.
   const sh = getSheet_('SCORE');
   if (!sh) return [];
   const data = sh.getRange(2, 1, 19, 46).getValues(); // A2:AT20
-  // 0-based indices of the DB column for each fecha (cols 8,12,16,20,24,28,32,36 → idx 7,11,15,19,23,27,31,35)
-  const DB_COL_IDX = [7, 11, 15, 19, 23, 27, 31, 35];
 
   function isTrue_(v) {
     return (v === true) || (v === 1) ||
       (typeof v === 'string' && (v.toUpperCase() === 'TRUE' || v.toUpperCase() === 'VERDADERO'));
   }
 
+  // Build set of mats who used doble in any fecha (from NGT DB)
+  const ngtRows = getAllNGTScoreData_();
+  const dobledMats = new Set();
+  ngtRows.forEach(function(r) { if (r.db) dobledMats.add(r.mat); });
+
   const available = [];
   data.forEach(function(row) {
     const mat = String(row[0] || '').trim();
     if (!mat) return;
-    // Check AT (global flag)
-    if (isTrue_(row[45])) return;
-    // Check any fecha DB column — if any is TRUE, the player already used their doble
-    if (DB_COL_IDX.some(function(ci) { return isTrue_(row[ci]); })) return;
+    if (isTrue_(row[45])) return;  // AT global flag
+    if (dobledMats.has(mat)) return;
     available.push(mat);
   });
   return available;
@@ -284,60 +342,23 @@ function debugDobles_() {
 }
 
 function setDobleForFecha_(matricula, fecha) {
-  // Mark DB=TRUE in the SCORE row for this matricula at this fecha's column
-  const sh = getSheet_('SCORE');
-  if (!sh) return { ok: false, error: 'SCORE no encontrada' };
-  const row = getScoreRowForMat_(matricula);
-  if (row < 0) return { ok: false, error: 'Matrícula no está en SCORE' };
-  const col = getDbColForFecha_(fecha);
-  if (col < 0) return { ok: false, error: 'Fecha inválida' };
-  sh.getRange(row, col).setValue(true);
+  setNGTScoreField_(String(fecha), String(matricula), 6, true);
   return { ok: true };
 }
 
-/**
- * Returns the ST column index for a given fecha number.
- * Fecha 1 ST = col E = 5, Fecha 2 ST = col I = 9, ... Pattern: 4*n + 1
- */
-function getStColForFecha_(fechaNum) {
-  const n = parseInt(fechaNum);
-  if (!n || n < 1 || n > 8) return -1;
-  return 4 * n + 1;
-}
-
-/**
- * Read the ST value from SCORE for a player at a given fecha.
- * Returns null if not found or empty.
- */
 function getStForPlayerInFecha_(matricula, fecha) {
-  const sh = getSheet_('SCORE');
-  if (!sh) return null;
-  const row = getScoreRowForMat_(matricula);
-  if (row < 0) return null;
-  const col = getStColForFecha_(fecha);
-  if (col < 0) return null;
-  const v = sh.getRange(row, col).getValue();
-  if (v === '' || v === null || v === undefined) return null;
-  const num = parseFloat(String(v).replace(',', '.'));
-  return isNaN(num) ? null : num;
+  const r = getNGTScoreRow_(String(fecha), String(matricula));
+  if (!r || r.st === 0) return null;
+  return r.st;
 }
 
-/**
- * Write the ST score (single, not doubled) for the player into SCORE!AU
- * AU = column 47 — used by the leaderboard formula to display the doble points
- */
-function writeDobleStScore_(matricula, fecha) {
+// Write the ST score (undoubled) into SCORE!AU so LEADERBOARD formulas can display it.
+// AU = column 47. stVal is passed directly from the caller (already computed).
+function writeDobleStScore_(matricula, fecha, stVal) {
   const sh = getSheet_('SCORE');
   if (!sh) return { ok: false, error: 'SCORE no encontrada' };
   const row = getScoreRowForMat_(matricula);
   if (row < 0) return { ok: false, error: 'Matrícula no está en SCORE' };
-
-  // Need to flush pending writes so SCORE formulas recalculate before reading ST
-  SpreadsheetApp.flush();
-
-  const stVal = getStForPlayerInFecha_(matricula, fecha);
-  if (stVal === null) return { ok: false, error: 'No se pudo leer ST de fecha ' + fecha };
-
   sh.getRange(row, 47).setValue(stVal); // AU = col 47
   return { ok: true, st: stVal };
 }
@@ -1237,26 +1258,10 @@ function getFechaDetalle_(fecha) {
   return { fecha: fecha, cancha: cancha, colorTee: colorTee, jugadores: jugadores, invitados: invitados, dobles: dobles, hoyoSalida: hoyoSalidaDet };
 }
 
-/**
- * Returns list of matriculas who have DB=TRUE in SCORE for the given fecha
- */
 function getDoblesForFecha_(fecha) {
-  const sh = getSheet_('SCORE');
-  if (!sh) return [];
-  const col = getDbColForFecha_(fecha);
-  if (col < 0) return [];
-  const data = sh.getRange(2, 1, 19, 46).getValues();
-  const result = [];
-  data.forEach(row => {
-    const mat = String(row[0] || '').trim();
-    if (!mat) return;
-    const v = row[col - 1];
-    const isTrue = (v === true)
-      || (v === 1)
-      || (typeof v === 'string' && (v.toUpperCase() === 'TRUE' || v.toUpperCase() === 'VERDADERO'));
-    if (isTrue) result.push(mat);
-  });
-  return result;
+  const fStr = String(fecha);
+  const ngtRows = getAllNGTScoreData_();
+  return ngtRows.filter(function(r) { return r.fecha === fStr && r.db; }).map(function(r) { return r.mat; });
 }
 
 /**
@@ -1436,34 +1441,20 @@ function editarFecha_(params) {
   // Step 4: Update dobles
   const currentDobles = getDoblesForFecha_(fecha);
   const targetDobles = (dobles || []).map(String);
-  const shScore = getSheet_('SCORE');
-  if (shScore) {
-    const dbCol = getDbColForFecha_(fecha);
-    if (dbCol > 0) {
-      targetDobles.forEach(mat => {
-        if (currentDobles.indexOf(mat) >= 0) return;
-        try {
-          const scoreRow = getScoreRowForMat_(mat);
-          if (scoreRow > 0) {
-            shScore.getRange(scoreRow, dbCol).setValue(true);
-            changes.doblesSet.push(mat);
-          } else {
-            changes.errors.push('score row not found for ' + mat);
-          }
-        } catch (e) { changes.errors.push('doble set ' + mat + ': ' + e.message); }
-      });
-      currentDobles.forEach(mat => {
-        if (targetDobles.indexOf(mat) >= 0) return;
-        try {
-          const scoreRow = getScoreRowForMat_(mat);
-          if (scoreRow > 0) {
-            shScore.getRange(scoreRow, dbCol).setValue(false);
-            changes.doblesCleared.push(mat);
-          }
-        } catch (e) { changes.errors.push('doble clear ' + mat + ': ' + e.message); }
-      });
-    }
-  }
+  targetDobles.forEach(function(mat) {
+    if (currentDobles.indexOf(mat) >= 0) return;
+    try {
+      setNGTScoreField_(String(fecha), mat, 6, true);
+      changes.doblesSet.push(mat);
+    } catch (e) { changes.errors.push('doble set ' + mat + ': ' + e.message); }
+  });
+  currentDobles.forEach(function(mat) {
+    if (targetDobles.indexOf(mat) >= 0) return;
+    try {
+      setNGTScoreField_(String(fecha), mat, 6, false);
+      changes.doblesCleared.push(mat);
+    } catch (e) { changes.errors.push('doble clear ' + mat + ': ' + e.message); }
+  });
 
   // Update hoyoSalida in FECHA_META if provided
   if (hoyoSalida !== undefined && hoyoSalida !== null) {
@@ -1735,75 +1726,11 @@ function setBonusWinners_(params) {
     }
   }
 
-  // Actualizar SCORE!PB col (4*fecha+3) y recomputar AL:AS/C/D/LEADERBOARD
-  const scoreSh = getSheet_('SCORE');
-  if (scoreSh) {
-    const pbCol = 4 * fecN + 3;
-    if (pbCol >= 5 && pbCol <= 48) {
-      Object.keys(pbMap).forEach(function(mat) {
-        const sRow = getScoreRowForMat_(mat);
-        if (sRow > 0) scoreSh.getRange(sRow, pbCol).setValue(pbMap[mat]);
-      });
-    }
-
-    // Recompute AL:AS / C / D / LEADERBOARD (identical logic as resetFecha_ step 5)
-    const allData = scoreSh.getRange(3, 5, 18, 32).getValues();
-    const alValsAll = [], totalCs = [];
-    for (let i = 0; i < 18; i++) {
-      const als = [];
-      let total = 0;
-      for (let n = 0; n < 8; n++) {
-        const bn = 4 * n;
-        const st = Number(allData[i][bn])     || 0;
-        const ma = Number(allData[i][bn + 1]) || 0;
-        const pb = Number(allData[i][bn + 2]) || 0;
-        const db = (allData[i][bn + 3] === true || allData[i][bn + 3] === 1);
-        const al = st + ma + pb + (db ? st : 0);
-        als.push(al);
-        total += al;
-      }
-      alValsAll.push(als);
-      totalCs.push(total);
-    }
-    const allRanks = totalCs.map(function(ci, i) {
-      let rank = 1;
-      for (let j = 0; j < totalCs.length; j++) { if (totalCs[j] > ci) rank++; }
-      let cnt = 0;
-      for (let j = 0; j <= i; j++) { if (totalCs[j] === ci) cnt++; }
-      return rank + cnt - 1;
-    });
-    scoreSh.getRange(3, 38, 18, 8).setValues(alValsAll);
-    scoreSh.getRange(3,  3, 18, 1).setValues(totalCs.map(function(c){ return [c]; }));
-    scoreSh.getRange(3,  4, 18, 1).setValues(allRanks.map(function(r){ return [r]; }));
-
-    const lbSh = getSheet_('LEADERBOARD');
-    if (lbSh) {
-      const scoreNames = scoreSh.getRange(3, 2, 18, 1).getValues();
-      const stbTot = [], maTot = [], pbTot = [];
-      for (let i = 0; i < 18; i++) {
-        let st = 0, ma = 0, pb = 0;
-        for (let n = 0; n < 8; n++) {
-          st += Number(allData[i][4*n])   || 0;
-          ma += Number(allData[i][4*n+1]) || 0;
-          pb += Number(allData[i][4*n+2]) || 0;
-        }
-        stbTot.push(st); maTot.push(ma); pbTot.push(pb);
-      }
-      const gV=[], jV=[], kV=[], lV=[], mV=[];
-      for (let r = 1; r <= 18; r++) {
-        const idx = allRanks.indexOf(r);
-        if (idx >= 0) {
-          gV.push([String(scoreNames[idx][0]||'')]); jV.push([totalCs[idx]]);
-          kV.push([stbTot[idx]]); lV.push([maTot[idx]]); mV.push([pbTot[idx]]);
-        } else {
-          gV.push(['']); jV.push([0]); kV.push([0]); lV.push([0]); mV.push([0]);
-        }
-      }
-      lbSh.getRange(2, 7,18,1).setValues(gV); lbSh.getRange(2,10,18,1).setValues(jV);
-      lbSh.getRange(2,11,18,1).setValues(kV); lbSh.getRange(2,12,18,1).setValues(lV);
-      lbSh.getRange(2,13,18,1).setValues(mV);
-    }
-  }
+  // Actualizar NGT DB SCORE!Bonus y recomputar AL:AS/C/D/LEADERBOARD
+  Object.keys(pbMap).forEach(function(mat) {
+    setNGTScoreField_(fStr, mat, 5, pbMap[mat]);
+  });
+  recalcularTotalesScore_(null);
 
   SpreadsheetApp.flush();
   audit_('SET_BONUS_WINNERS', 'admin', { fecha, ldMat, baMat });
@@ -1937,13 +1864,6 @@ function cargarTarjeta_(params) {
   // Stableford breakdown (pure computation, no I/O)
   const stbBreak = calcStbBreakdown_(myScores18, cpPares, cpIndices, hcpNum);
 
-  // Column addresses (arithmetic only)
-  const stCol = 4 * parseInt(fecha) + 1; // SCORE!ST
-  const maCol = 4 * parseInt(fecha) + 2; // SCORE!MA
-  const pbCol = 4 * parseInt(fecha) + 3; // SCORE!PB
-
-  // SCORE row for current player (1 read, reused multiple times)
-  const preScoreRow = getScoreRowForMat_(matricula);
 
   // STB row lookup (read B:C once)
   let preStbRow = -1;
@@ -2045,30 +1965,26 @@ function cargarTarjeta_(params) {
   }
 
   // SCORE!MA per affected player — sum pts from their match rows
-  const maWriteOps = []; // [{scoreRow, totalMA, mat}]
+  const maWriteOps = []; // [{totalMA, mat}]
   const affectedMatsList = Object.keys(affectedMats);
   if (affectedMatsList.length > 0 && preMatchBCY) {
-    const scoreSh2 = getSheet_('SCORE');
-    if (scoreSh2 && maCol >= 6 && maCol <= 49) {
-      for (let ai = 0; ai < affectedMatsList.length; ai++) {
-        const mat = affectedMatsList[ai];
-        let totalMA = 0;
-        for (let mi2 = 0; mi2 < preMatchBCY.length; mi2++) {
-          if (String(preMatchBCY[mi2][0] || '').trim() !== fStr) continue;
-          const m1 = String(preMatchBCY[mi2][1] || '').trim();
-          const m2 = String(preMatchBCY[mi2][2] || '').trim();
-          if (mat !== m1 && mat !== m2) continue;
-          const shRow = mi2 + 2;
-          if (rowYOverride[shRow]) {
-            totalMA += mat === rowYOverride[shRow].mat1 ? rowYOverride[shRow].pts1 : rowYOverride[shRow].pts2;
-          } else {
-            // col F (idx 4) = pts1, col H (idx 6) = pts2
-            totalMA += mat === m1 ? (Number(preMatchBCY[mi2][4]) || 0) : (Number(preMatchBCY[mi2][6]) || 0);
-          }
+    for (let ai = 0; ai < affectedMatsList.length; ai++) {
+      const mat = affectedMatsList[ai];
+      let totalMA = 0;
+      for (let mi2 = 0; mi2 < preMatchBCY.length; mi2++) {
+        if (String(preMatchBCY[mi2][0] || '').trim() !== fStr) continue;
+        const m1 = String(preMatchBCY[mi2][1] || '').trim();
+        const m2 = String(preMatchBCY[mi2][2] || '').trim();
+        if (mat !== m1 && mat !== m2) continue;
+        const shRow = mi2 + 2;
+        if (rowYOverride[shRow]) {
+          totalMA += mat === rowYOverride[shRow].mat1 ? rowYOverride[shRow].pts1 : rowYOverride[shRow].pts2;
+        } else {
+          // col F (idx 4) = pts1, col H (idx 6) = pts2
+          totalMA += mat === m1 ? (Number(preMatchBCY[mi2][4]) || 0) : (Number(preMatchBCY[mi2][6]) || 0);
         }
-        const sRow = (mat === mStr) ? preScoreRow : getScoreRowForMat_(mat);
-        if (sRow > 0) maWriteOps.push({ scoreRow: sRow, totalMA: totalMA, mat: mat });
       }
+      maWriteOps.push({ totalMA: totalMA, mat: mat });
     }
   }
 
@@ -2118,10 +2034,9 @@ function cargarTarjeta_(params) {
         ]]);
       }
 
-      // 3. SCORE ST
-      const scoreSh = getSheet_('SCORE');
-      if (scoreSh && stbBreak && preScoreRow > 0 && stCol >= 5 && stCol <= 48) {
-        scoreSh.getRange(preScoreRow, stCol).setValue(stbBreak.k);
+      // 3. SCORE ST → NGT DB
+      if (stbBreak) {
+        setNGTScoreField_(fStr, mStr, 3, stbBreak.k);
         myStWritten = stbBreak.k;
       }
 
@@ -2131,148 +2046,25 @@ function cargarTarjeta_(params) {
         op.sh.getRange(op.row, op.col, 1, op.data[0].length).setValues(op.data);
       }
 
-      // 5. SCORE MA writes
+      // 5. SCORE MA → NGT DB
       let myMaWritten = null;
-      if (maWriteOps.length > 0 && maCol >= 6 && maCol <= 49) {
-        const scoreSh2b = scoreSh || getSheet_('SCORE');
-        if (scoreSh2b) {
-          for (let mi3 = 0; mi3 < maWriteOps.length; mi3++) {
-            const mop = maWriteOps[mi3];
-            scoreSh2b.getRange(mop.scoreRow, maCol).setValue(mop.totalMA);
-            if (mop.mat === mStr) myMaWritten = mop.totalMA;
-          }
-        }
+      for (let mi3 = 0; mi3 < maWriteOps.length; mi3++) {
+        const mop = maWriteOps[mi3];
+        setNGTScoreField_(fStr, mop.mat, 4, mop.totalMA);
+        if (mop.mat === mStr) myMaWritten = mop.totalMA;
       }
 
-      // 5b. Recalcular total (AL:AS + col C) para los oponentes afectados.
-      // El paso 7 solo recalcula el total del jugador actual (preScoreRow).
-      // Si el oponente cargó antes, su MA queda actualizado pero su total no — este paso lo corrige.
-      try {
-        const scoreSh5b = scoreSh || getSheet_('SCORE');
-        const otherMaOps = maWriteOps.filter(function(op) { return op.mat !== mStr; });
-        if (scoreSh5b && otherMaOps.length > 0) {
-          const fecN5b = parseInt(fecha);
-          const bOther = 4 * (fecN5b - 1); // offset into 41-col E..AS array
-          // Batch-read all score rows at once (rows 3..20, cols E..AS = 41 cols)
-          const allScoreRows5b = scoreSh5b.getRange(3, 5, 18, 41).getValues();
-          otherMaOps.forEach(function(mop) {
-            const rowOffset = mop.scoreRow - 3; // SCORE data rows start at row 3
-            if (rowOffset < 0 || rowOffset >= 18) return;
-            var rowData = allScoreRows5b[rowOffset].slice(); // copy
-            rowData[bOther + 1] = mop.totalMA;              // patch MA for this fecha
-            // Recalculate per-fecha total (AL:AS)
-            var alVals5b = [];
-            for (var nf = 1; nf <= 8; nf++) {
-              var bx  = 4 * (nf - 1);
-              var st5 = Number(rowData[bx])     || 0;
-              var ma5 = Number(rowData[bx + 1]) || 0;
-              var pb5 = Number(rowData[bx + 2]) || 0;
-              var db5 = (rowData[bx + 3] === true || rowData[bx + 3] === 1);
-              alVals5b.push(st5 + ma5 + pb5 + (db5 ? st5 : 0));
-            }
-            var totalC5b = alVals5b.reduce(function(a, v) { return a + v; }, 0);
-            scoreSh5b.getRange(mop.scoreRow, 38, 1, 8).setValues([alVals5b]);
-            scoreSh5b.getRange(mop.scoreRow, 3).setValue(totalC5b);
-          });
-        }
-      } catch (e5b) { /* no bloquear el flujo principal si falla el recálculo del oponente */ }
-
-      // 6. PB!E + SCORE!PB
+      // 6. PB!E + SCORE Bonus → NGT DB
       try {
         const myPbWritten = pbPoints_;
         if (prePbRow > 0 && prePbSh) prePbSh.getRange(prePbRow, 5).setValue(myPbWritten);
-        const scoreSh3 = scoreSh || getSheet_('SCORE');
-        if (scoreSh3 && pbCol >= 7 && pbCol <= 50 && preScoreRow > 0) {
-          scoreSh3.getRange(preScoreRow, pbCol).setValue(myPbWritten);
-        }
-
-        // 7. SCORE totales (AL:AS) + C + D — reads INSIDE lock for correctness
-        const scoreSh5 = scoreSh || getSheet_('SCORE');
-        if (scoreSh5 && myStWritten !== null && preScoreRow > 0) {
-          const scoreFull = scoreSh5.getRange(preScoreRow, 5, 1, 41).getValues()[0];
-          const fecN = parseInt(fecha);
-          const b    = 4 * (fecN - 1);
-          scoreFull[b]     = myStWritten;
-          if (myMaWritten !== null) scoreFull[b + 1] = myMaWritten;
-          scoreFull[b + 2] = myPbWritten;
-
-          const alVals = [];
-          for (let n = 1; n <= 8; n++) {
-            const bn = 4 * (n - 1);
-            const st = Number(scoreFull[bn])     || 0;
-            const ma = Number(scoreFull[bn + 1]) || 0;
-            const pb = Number(scoreFull[bn + 2]) || 0;
-            const db = (scoreFull[bn + 3] === true || scoreFull[bn + 3] === 1);
-            alVals.push(st + ma + pb + (db ? st : 0));
-          }
-          const totalC = alVals.reduce(function(a, v){ return a + v; }, 0);
-          scoreSh5.getRange(preScoreRow, 38, 1, 8).setValues([alVals]);
-          scoreSh5.getRange(preScoreRow, 3).setValue(totalC);
-
-          const allCRaw = scoreSh5.getRange(3, 3, 18, 1).getValues();
-          const allC    = allCRaw.map(function(r){ return Number(r[0]) || 0; });
-          const myRankIdx = preScoreRow - 3;
-          if (myRankIdx >= 0 && myRankIdx < 18) allC[myRankIdx] = totalC;
-
-          const allRanks = allC.map(function(ci, i) {
-            let rank = 1;
-            for (let j = 0; j < allC.length; j++) { if (allC[j] > ci) rank++; }
-            let cntBefore = 0;
-            for (let j = 0; j <= i; j++) { if (allC[j] === ci) cntBefore++; }
-            return rank + cntBefore - 1;
-          });
-          scoreSh5.getRange(3, 4, 18, 1).setValues(allRanks.map(function(r){ return [r]; }));
-
-          // 8. LEADERBOARD G, J, K, L, M
-          try {
-            const lbSh = getSheet_('LEADERBOARD');
-            if (lbSh) {
-              const scoreNames   = scoreSh5.getRange(3, 2, 18, 1).getValues();
-              const allScoreData = scoreSh5.getRange(3, 5, 18, 32).getValues();
-              if (myRankIdx >= 0 && myRankIdx < 18) {
-                const bld = 4 * (fecN - 1);
-                allScoreData[myRankIdx][bld]     = myStWritten;
-                if (myMaWritten !== null) allScoreData[myRankIdx][bld + 1] = myMaWritten;
-                allScoreData[myRankIdx][bld + 2] = myPbWritten;
-              }
-              const stbTot = new Array(18), maTot = new Array(18), pbTot = new Array(18);
-              for (let i = 0; i < 18; i++) {
-                let st = 0, ma = 0, pb = 0;
-                for (let n = 0; n < 8; n++) {
-                  st += Number(allScoreData[i][4 * n])     || 0;
-                  ma += Number(allScoreData[i][4 * n + 1]) || 0;
-                  pb += Number(allScoreData[i][4 * n + 2]) || 0;
-                }
-                stbTot[i] = st; maTot[i] = ma; pbTot[i] = pb;
-              }
-              const gVals = [], jVals = [], kVals = [], lVals = [], mVals = [];
-              for (let r = 1; r <= 18; r++) {
-                const idx = allRanks.indexOf(r);
-                if (idx >= 0) {
-                  gVals.push([String(scoreNames[idx][0] || '')]);
-                  jVals.push([allC[idx]]);
-                  kVals.push([stbTot[idx]]);
-                  lVals.push([maTot[idx]]);
-                  mVals.push([pbTot[idx]]);
-                } else {
-                  gVals.push(['']); jVals.push([0]); kVals.push([0]);
-                  lVals.push([0]);  mVals.push([0]);
-                }
-              }
-              lbSh.getRange(2,  7, 18, 1).setValues(gVals);
-              lbSh.getRange(2, 10, 18, 1).setValues(jVals);
-              lbSh.getRange(2, 11, 18, 1).setValues(kVals);
-              lbSh.getRange(2, 12, 18, 1).setValues(lVals);
-              lbSh.getRange(2, 13, 18, 1).setValues(mVals);
-            }
-          } catch (lbErr) { /* Non-fatal */ }
-        }
+        setNGTScoreField_(fStr, mStr, 5, myPbWritten);
       } catch (pbErr) { /* Non-fatal */ }
     } catch (stbErr) { /* Non-fatal — STB/SCORE/MATCH failure doesn't block tarjeta write */ }
 
     // 9. Puntos dobles
-    if (currentDobles_.indexOf(String(matricula)) >= 0) {
-      const auResult = writeDobleStScore_(matricula, fecha);
+    if (currentDobles_.indexOf(String(matricula)) >= 0 && stbBreak) {
+      const auResult = writeDobleStScore_(matricula, fecha, stbBreak.k);
       if (auResult.ok) {
         dobleMsg = 'doble aplicado: ST=' + auResult.st + ' escrito en AU';
       } else {
@@ -2283,8 +2075,9 @@ function cargarTarjeta_(params) {
     lock.releaseLock();
   }
 
-  // Flush FUERA del lock — los setValues() están encolados; el flush los
-  // confirma sin bloquear a otros jugadores que esperen el lock.
+  // Recalculate totals (AL:AS, C, D, LEADERBOARD) from NGT DB now that all writes are done.
+  recalcularTotalesScore_(null);
+
   SpreadsheetApp.flush();
 
   audit_('CARGAR_TARJETA', isAdmin ? 'admin' : matricula, { fecha, matricula, hcp, scores, ld, ba, usarDoble, dobleMsg });
@@ -2375,95 +2168,19 @@ function resetFecha_(params) {
     }
   }
 
-  // ── 5. SCORE + LEADERBOARD — recalcular desde cero ────────────────────
-  const scoreSh = getSheet_('SCORE');
-  if (scoreSh) {
-    // Leer E:AJ (32 cols = 8 fechas × 4) antes de limpiar
-    const allData = scoreSh.getRange(3, 5, 18, 32).getValues();
-
-    // Zerar en memoria las 4 cols de esta fecha
-    const b = 4 * (fecN - 1);
-    for (let i = 0; i < 18; i++) {
-      allData[i][b]     = 0; // ST
-      allData[i][b + 1] = 0; // MA
-      allData[i][b + 2] = 0; // PB
-      allData[i][b + 3] = false; // DB
-    }
-
-    // Limpiar esas cols en el sheet
-    const stCol = 4 * fecN + 1; // col numérica de ST en SCORE
-    if (stCol >= 5 && stCol <= 48) {
-      scoreSh.getRange(3, stCol, 18, 4).clearContent(); // ST/MA/PB/DB
-    }
-
-    // Recompute AL:AS, C, D para los 18 jugadores
-    const alValsAll = [], totalCs = [];
-    for (let i = 0; i < 18; i++) {
-      const als = [];
-      let total = 0;
-      for (let n = 0; n < 8; n++) {
-        const bn  = 4 * n;
-        const st  = Number(allData[i][bn])     || 0;
-        const ma  = Number(allData[i][bn + 1]) || 0;
-        const pb  = Number(allData[i][bn + 2]) || 0;
-        const db  = (allData[i][bn + 3] === true || allData[i][bn + 3] === 1);
-        const al  = st + ma + pb + (db ? st : 0);
-        als.push(al);
-        total += al;
+  // ── 5. SCORE + LEADERBOARD — borrar filas NGT DB para esta fecha y recalcular ──
+  const ngtScoreSh = getNGTScoreSheet_();
+  if (ngtScoreSh) {
+    const last = ngtScoreSh.getLastRow();
+    if (last >= 2) {
+      const ab = ngtScoreSh.getRange(2, 1, last - 1, 2).getValues();
+      for (let i = ab.length - 1; i >= 0; i--) {
+        if (String(ab[i][0] || '').trim() === fStr) ngtScoreSh.deleteRow(i + 2);
       }
-      alValsAll.push(als);
-      totalCs.push(total);
-    }
-
-    const allRanks = totalCs.map(function(ci, i) {
-      let rank = 1;
-      for (let j = 0; j < totalCs.length; j++) { if (totalCs[j] > ci) rank++; }
-      let cntBefore = 0;
-      for (let j = 0; j <= i; j++) { if (totalCs[j] === ci) cntBefore++; }
-      return rank + cntBefore - 1;
-    });
-
-    scoreSh.getRange(3, 38, 18, 8).setValues(alValsAll);
-    scoreSh.getRange(3,  3, 18, 1).setValues(totalCs.map(function(c){ return [c]; }));
-    scoreSh.getRange(3,  4, 18, 1).setValues(allRanks.map(function(r){ return [r]; }));
-    changes.score = 18;
-
-    // LEADERBOARD G, J, K, L, M
-    const lbSh = getSheet_('LEADERBOARD');
-    if (lbSh) {
-      const scoreNames = scoreSh.getRange(3, 2, 18, 1).getValues();
-      const stbTot = new Array(18), maTot = new Array(18), pbTot = new Array(18);
-      for (let i = 0; i < 18; i++) {
-        let st = 0, ma = 0, pb = 0;
-        for (let n = 0; n < 8; n++) {
-          st += Number(allData[i][4 * n])     || 0;
-          ma += Number(allData[i][4 * n + 1]) || 0;
-          pb += Number(allData[i][4 * n + 2]) || 0;
-        }
-        stbTot[i] = st; maTot[i] = ma; pbTot[i] = pb;
-      }
-
-      const gVals = [], jVals = [], kVals = [], lVals = [], mVals = [];
-      for (let r = 1; r <= 18; r++) {
-        const idx = allRanks.indexOf(r);
-        if (idx >= 0) {
-          gVals.push([String(scoreNames[idx][0] || '')]);
-          jVals.push([totalCs[idx]]);
-          kVals.push([stbTot[idx]]);
-          lVals.push([maTot[idx]]);
-          mVals.push([pbTot[idx]]);
-        } else {
-          gVals.push(['']); jVals.push([0]); kVals.push([0]);
-          lVals.push([0]);  mVals.push([0]);
-        }
-      }
-      lbSh.getRange(2,  7, 18, 1).setValues(gVals);
-      lbSh.getRange(2, 10, 18, 1).setValues(jVals);
-      lbSh.getRange(2, 11, 18, 1).setValues(kVals);
-      lbSh.getRange(2, 12, 18, 1).setValues(lVals);
-      lbSh.getRange(2, 13, 18, 1).setValues(mVals);
     }
   }
+  recalcularTotalesScore_(null);
+  changes.score = 18;
 
   SpreadsheetApp.flush();
   audit_('RESET_FECHA', 'admin', { fecha, changes });
@@ -2516,95 +2233,19 @@ function eliminarFecha_(params) {
   // ── 4. MATCH — eliminar filas ─────────────────────────────────────────────
   changes.match = deleteRowsForFecha(getSheet_(SHEETS.MATCH), 2); // col B = fecha
 
-  // ── 5. SCORE — zerar cols de la fecha + recalcular AL:AS / C / D / LEADERBOARD ──
-  const scoreSh = getSheet_('SCORE');
-  if (scoreSh) {
-    // Leer E:AJ (32 cols = 8 fechas × 4) antes de limpiar
-    const allData = scoreSh.getRange(3, 5, 18, 32).getValues();
-
-    // Zerar en memoria las 4 cols de esta fecha
-    const b = 4 * (fecN - 1);
-    for (let i = 0; i < 18; i++) {
-      allData[i][b]     = 0;
-      allData[i][b + 1] = 0;
-      allData[i][b + 2] = 0;
-      allData[i][b + 3] = false;
-    }
-
-    // Limpiar esas cols en el sheet
-    const stCol = 4 * fecN + 1;
-    if (stCol >= 5 && stCol <= 48) {
-      scoreSh.getRange(3, stCol, 18, 4).clearContent();
-    }
-
-    // Recompute AL:AS, C, D para los 18 jugadores
-    const alValsAll = [], totalCs = [];
-    for (let i = 0; i < 18; i++) {
-      const als = [];
-      let total = 0;
-      for (let n = 0; n < 8; n++) {
-        const bn = 4 * n;
-        const st = Number(allData[i][bn])     || 0;
-        const ma = Number(allData[i][bn + 1]) || 0;
-        const pb = Number(allData[i][bn + 2]) || 0;
-        const db = (allData[i][bn + 3] === true || allData[i][bn + 3] === 1);
-        const al = st + ma + pb + (db ? st : 0);
-        als.push(al);
-        total += al;
+  // ── 5. SCORE — borrar filas NGT DB para esta fecha y recalcular ──────────
+  const ngtScoreSh = getNGTScoreSheet_();
+  if (ngtScoreSh) {
+    const last = ngtScoreSh.getLastRow();
+    if (last >= 2) {
+      const ab = ngtScoreSh.getRange(2, 1, last - 1, 2).getValues();
+      for (let i = ab.length - 1; i >= 0; i--) {
+        if (String(ab[i][0] || '').trim() === fStr) ngtScoreSh.deleteRow(i + 2);
       }
-      alValsAll.push(als);
-      totalCs.push(total);
-    }
-
-    const allRanks = totalCs.map(function(ci, i) {
-      let rank = 1;
-      for (let j = 0; j < totalCs.length; j++) { if (totalCs[j] > ci) rank++; }
-      let cntBefore = 0;
-      for (let j = 0; j <= i; j++) { if (totalCs[j] === ci) cntBefore++; }
-      return rank + cntBefore - 1;
-    });
-
-    scoreSh.getRange(3, 38, 18, 8).setValues(alValsAll);
-    scoreSh.getRange(3,  3, 18, 1).setValues(totalCs.map(function(c){ return [c]; }));
-    scoreSh.getRange(3,  4, 18, 1).setValues(allRanks.map(function(r){ return [r]; }));
-    changes.score = 18;
-
-    // LEADERBOARD G, J, K, L, M
-    const lbSh = getSheet_('LEADERBOARD');
-    if (lbSh) {
-      const scoreNames = scoreSh.getRange(3, 2, 18, 1).getValues();
-      const stbTot = new Array(18), maTot = new Array(18), pbTot = new Array(18);
-      for (let i = 0; i < 18; i++) {
-        let st = 0, ma = 0, pb = 0;
-        for (let n = 0; n < 8; n++) {
-          st += Number(allData[i][4 * n])     || 0;
-          ma += Number(allData[i][4 * n + 1]) || 0;
-          pb += Number(allData[i][4 * n + 2]) || 0;
-        }
-        stbTot[i] = st; maTot[i] = ma; pbTot[i] = pb;
-      }
-
-      const gVals = [], jVals = [], kVals = [], lVals = [], mVals = [];
-      for (let r = 1; r <= 18; r++) {
-        const idx = allRanks.indexOf(r);
-        if (idx >= 0) {
-          gVals.push([String(scoreNames[idx][0] || '')]);
-          jVals.push([totalCs[idx]]);
-          kVals.push([stbTot[idx]]);
-          lVals.push([maTot[idx]]);
-          mVals.push([pbTot[idx]]);
-        } else {
-          gVals.push(['']); jVals.push([0]); kVals.push([0]);
-          lVals.push([0]);  mVals.push([0]);
-        }
-      }
-      lbSh.getRange(2,  7, 18, 1).setValues(gVals);
-      lbSh.getRange(2, 10, 18, 1).setValues(jVals);
-      lbSh.getRange(2, 11, 18, 1).setValues(kVals);
-      lbSh.getRange(2, 12, 18, 1).setValues(lVals);
-      lbSh.getRange(2, 13, 18, 1).setValues(mVals);
     }
   }
+  recalcularTotalesScore_(null);
+  changes.score = 18;
 
   SpreadsheetApp.flush();
   audit_('ELIMINAR_FECHA', 'admin', { fecha, changes });
@@ -4938,13 +4579,8 @@ function setDoblesFecha_(params) {
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
   if (!fecha) return { ok: false, error: 'Falta fecha' };
 
-  const shScore = getSheet_('SCORE');
-  if (!shScore) return { ok: false, error: 'Hoja SCORE no encontrada' };
-
-  const dbCol = getDbColForFecha_(fecha);
-  if (dbCol <= 0) return { ok: false, error: 'No se encontró columna DB para fecha ' + fecha };
-
-  const nuevosDobles  = Array.isArray(dobles) ? dobles.map(String) : [];
+  const fStr = String(fecha);
+  const nuevosDobles   = Array.isArray(dobles) ? dobles.map(String) : [];
   const actualesDobles = getDoblesForFecha_(fecha);
 
   // Obtener todos los jugadores en esta fecha para limpiar los que ya no están
@@ -4956,29 +4592,22 @@ function setDoblesFecha_(params) {
       shT.getRange(2, 2, ne - 2, 2).getValues().forEach(function(r) {
         const f = String(r[0] || '').trim();
         const m = String(r[1] || '').trim();
-        if (f === String(fecha) && m && m.indexOf('INV') !== 0) todosEnFecha.push(m);
+        if (f === fStr && m && m.indexOf('INV') !== 0) todosEnFecha.push(m);
       });
     }
   }
 
   const changes = { set: [], cleared: [], notFound: [] };
 
-  // Setear dobles para los nuevos (siempre escribe TRUE, incluso si ya estaba, para corregir inconsistencias)
   nuevosDobles.forEach(function(mat) {
-    const row = getScoreRowForMat_(mat);
-    if (row > 0) {
-      shScore.getRange(row, dbCol).setValue(true);
-      changes.set.push(mat);
-    } else {
-      changes.notFound.push(mat);
-    }
+    setNGTScoreField_(fStr, mat, 6, true);
+    changes.set.push(mat);
   });
 
-  // Limpiar dobles para los que salen de la lista
   todosEnFecha.forEach(function(mat) {
     if (actualesDobles.indexOf(mat) >= 0 && nuevosDobles.indexOf(mat) < 0) {
-      const row = getScoreRowForMat_(mat);
-      if (row > 0) { shScore.getRange(row, dbCol).setValue(false); changes.cleared.push(mat); }
+      setNGTScoreField_(fStr, mat, 6, false);
+      changes.cleared.push(mat);
     }
   });
 
@@ -5110,8 +4739,6 @@ function recalcularStbFecha_(params) {
 
   const fStr = String(fecha);
   const fecN = parseInt(fecha);
-  const stCol = 4 * fecN + 1; // columna STB en SCORE para esta fecha
-
   const sh = getSheet_(SHEETS.TARJETAS);
   if (!sh) return { ok: false, error: 'Sin TARJETAS' };
   const last = findNextEmptyRow_(sh, 2);
@@ -5143,7 +4770,6 @@ function recalcularStbFecha_(params) {
     });
   }
 
-  const scoreSh = getSheet_('SCORE');
   let updated = 0;
   const details = [];
 
@@ -5166,11 +4792,8 @@ function recalcularStbFecha_(params) {
       ]]);
     }
 
-    // Actualizar SCORE col STB para esta fecha
-    if (scoreSh) {
-      const scoreRow = getScoreRowForMat_(mat);
-      if (scoreRow > 0) scoreSh.getRange(scoreRow, stCol, 1, 1).setValue(stbBreak.k);
-    }
+    // Actualizar SCORE col STB para esta fecha → NGT DB
+    setNGTScoreField_(fStr, mat, 3, stbBreak.k);
 
     updated++;
     details.push({ mat: mat, nombre: nombre, hcp: hcp, stb: stbBreak.k });
@@ -5259,8 +4882,6 @@ function recalcularMatchesFecha_(params) {
   if (!fecha) return { ok: false, error: 'Falta fecha' };
 
   const fStr = String(fecha);
-  const fecN = parseInt(fecha);
-  const maCol = 4 * fecN + 2;
 
   const matchSh = getSheet_(SHEETS.MATCH);
   if (!matchSh) return { ok: false, error: 'Hoja MATCH no encontrada' };
@@ -5388,29 +5009,24 @@ function recalcularMatchesFecha_(params) {
     matchSh.getRange(op.row, op.col, 1, op.data[0].length).setValues(op.data);
   });
 
-  const scoreSh = getSheet_('SCORE');
-  if (scoreSh && maCol >= 6 && maCol <= 49) {
-    // Read B..H (7 cols) to sum pts per player
-    const matchFull = matchSh.getRange(2, 2, matchLast - 2, 7).getValues();
-    Object.keys(affectedMats).forEach(function(mat) {
-      let totalMA = 0;
-      matchFull.forEach(function(r, ri) {
-        if (String(r[0] || '').trim() !== fStr) return;
-        const m1 = String(r[1] || '').trim();
-        const m2 = String(r[2] || '').trim();
-        if (mat !== m1 && mat !== m2) return;
-        const shRow = ri + 2;
-        if (rowYMap[shRow]) {
-          totalMA += mat === rowYMap[shRow].mat1 ? rowYMap[shRow].pts1 : rowYMap[shRow].pts2;
-        } else {
-          // col F (idx 4) = pts1, col H (idx 6) = pts2
-          totalMA += mat === m1 ? (Number(r[4]) || 0) : (Number(r[6]) || 0);
-        }
-      });
-      const sRow = getScoreRowForMat_(mat);
-      if (sRow > 0) scoreSh.getRange(sRow, maCol).setValue(totalMA);
+  // Write MA totals → NGT DB
+  const matchFull = matchSh.getRange(2, 2, matchLast - 2, 7).getValues();
+  Object.keys(affectedMats).forEach(function(mat) {
+    let totalMA = 0;
+    matchFull.forEach(function(r, ri) {
+      if (String(r[0] || '').trim() !== fStr) return;
+      const m1 = String(r[1] || '').trim();
+      const m2 = String(r[2] || '').trim();
+      if (mat !== m1 && mat !== m2) return;
+      const shRow = ri + 2;
+      if (rowYMap[shRow]) {
+        totalMA += mat === rowYMap[shRow].mat1 ? rowYMap[shRow].pts1 : rowYMap[shRow].pts2;
+      } else {
+        totalMA += mat === m1 ? (Number(r[4]) || 0) : (Number(r[6]) || 0);
+      }
     });
-  }
+    setNGTScoreField_(fStr, mat, 4, totalMA);
+  });
 
   recalcularTotalesScore_(null);
   try { CacheService.getScriptCache().remove('fl_' + fStr); } catch(e) {}
@@ -5538,30 +5154,52 @@ function recalcularTotalesScore_(params) {
   const sh = getSheet_('SCORE');
   if (!sh) return { ok: false, error: 'SCORE no encontrada' };
 
-  // Filas 3..20 = 18 jugadores. Leer cols E..AS (col 5, 41 cols).
-  const raw = sh.getRange(3, 5, 18, 41).getValues();
+  // Read player list from app SCORE (A=matricula, B=nombre, rows 3..20)
+  const playerMats = sh.getRange(3, 1, 18, 1).getValues().map(function(r) {
+    return String(r[0] || '').trim();
+  });
 
-  const alMatrix = []; // 18 filas × 8 cols
-  const cVals    = [];
+  // Build map: mat → { fechaStr → {st, ma, pb, db} } from NGT DB
+  const ngtRows = getAllNGTScoreData_();
+  const ngtMap = {};
+  ngtRows.forEach(function(r) {
+    if (!ngtMap[r.mat]) ngtMap[r.mat] = {};
+    ngtMap[r.mat][r.fecha] = r;
+  });
+
+  const alMatrix   = []; // 18 rows × 8 cols (AL:AS)
+  const cVals      = [];
+  const stbTotals  = new Array(18).fill(0);
+  const maTotals   = new Array(18).fill(0);
+  const pbTotals   = new Array(18).fill(0);
 
   for (var i = 0; i < 18; i++) {
-    var row = raw[i];
-    var alRow = [];
+    const mat         = playerMats[i];
+    const playerFdMap = mat ? (ngtMap[mat] || {}) : {};
+    var alRow  = [];
+    var total  = 0;
+    var stSum  = 0, maSum = 0, pbSum = 0;
     for (var n = 1; n <= 8; n++) {
-      var b  = 4 * (n - 1);
-      var st = Number(row[b])     || 0;
-      var ma = Number(row[b + 1]) || 0;
-      var pb = Number(row[b + 2]) || 0;
-      var db = (row[b + 3] === true || row[b + 3] === 1);
-      alRow.push(st + ma + pb + (db ? st : 0));
+      const fd = playerFdMap[String(n)] || { st: 0, ma: 0, pb: 0, db: false };
+      const st = fd.st || 0;
+      const ma = fd.ma || 0;
+      const pb = fd.pb || 0;
+      const db = fd.db === true;
+      const al = st + ma + pb + (db ? st : 0);
+      alRow.push(al);
+      total  += al;
+      stSum  += st; maSum += ma; pbSum += pb;
     }
     alMatrix.push(alRow);
-    cVals.push(alRow.reduce(function(a, v) { return a + v; }, 0));
+    cVals.push(total);
+    stbTotals[i] = stSum;
+    maTotals[i]  = maSum;
+    pbTotals[i]  = pbSum;
   }
 
   // Escribir AL:AS (col 38, 8 cols) y C (col 3)
   sh.getRange(3, 38, 18, 8).setValues(alMatrix);
-  sh.getRange(3, 3, 18, 1).setValues(cVals.map(function(v) { return [v]; }));
+  sh.getRange(3,  3, 18, 1).setValues(cVals.map(function(v) { return [v]; }));
 
   // Recalcular rankings (col D)
   var allRanks = cVals.map(function(ci, i) {
@@ -5577,32 +5215,21 @@ function recalcularTotalesScore_(params) {
   try {
     const lbSh = getSheet_('LEADERBOARD');
     if (lbSh) {
-      const scoreNames   = sh.getRange(3, 2, 18, 1).getValues();
-      const allScoreData = sh.getRange(3, 5, 18, 32).getValues();
-      const stbTot = new Array(18).fill(0);
-      const maTot  = new Array(18).fill(0);
-      const pbTot  = new Array(18).fill(0);
-      for (var i2 = 0; i2 < 18; i2++) {
-        for (var n2 = 0; n2 < 8; n2++) {
-          stbTot[i2] += Number(allScoreData[i2][4 * n2])     || 0;
-          maTot[i2]  += Number(allScoreData[i2][4 * n2 + 1]) || 0;
-          pbTot[i2]  += Number(allScoreData[i2][4 * n2 + 2]) || 0;
-        }
-      }
+      const scoreNames = sh.getRange(3, 2, 18, 1).getValues();
       var gVals = [], jVals = [], kVals = [], lVals = [], mVals = [];
       for (var r2 = 1; r2 <= 18; r2++) {
         var idx2 = allRanks.indexOf(r2);
         if (idx2 >= 0) {
           gVals.push([String(scoreNames[idx2][0] || '')]);
           jVals.push([cVals[idx2]]);
-          kVals.push([stbTot[idx2]]);
-          lVals.push([maTot[idx2]]);
-          mVals.push([pbTot[idx2]]);
+          kVals.push([stbTotals[idx2]]);
+          lVals.push([maTotals[idx2]]);
+          mVals.push([pbTotals[idx2]]);
         } else {
           gVals.push(['']); jVals.push([0]); kVals.push([0]); lVals.push([0]); mVals.push([0]);
         }
       }
-      lbSh.getRange(2, 7, 18, 1).setValues(gVals);
+      lbSh.getRange(2,  7, 18, 1).setValues(gVals);
       lbSh.getRange(2, 10, 18, 1).setValues(jVals);
       lbSh.getRange(2, 11, 18, 1).setValues(kVals);
       lbSh.getRange(2, 12, 18, 1).setValues(lVals);
