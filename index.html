@@ -4135,7 +4135,8 @@ function admRecalcularMatches(){
   ngtApiPost({ action:'recalcularMatchesFecha', adminKey:ADMIN_KEY_OK, fecha:fecha, hoyoSalida:hoyoSalida }).then(r => {
     if(r && r.ok){
       msg.className='adm-msg ok';
-      msg.textContent='✓ ' + r.updated + ' matches recalculados (hoyo ' + (r.hoyoSalida||1) + ')';
+      const ord = r.holeOrder ? r.holeOrder.slice(0,4).map(function(x){return x+1;}).join(',') : '?';
+      msg.textContent='✓ ' + r.updated + ' matches recalculados (hoyo ' + (r.hoyoSalida||1) + ', orden: ' + ord + '...)';
     } else {
       msg.className='adm-msg err';
       msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');

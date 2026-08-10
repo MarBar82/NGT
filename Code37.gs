@@ -5452,7 +5452,7 @@ function recalcularMatchesFecha_(params) {
   recalcularTotalesScore_(null);
   try { CacheService.getScriptCache().remove('fl_' + fStr); } catch(e) {}
   audit_('RECALCULAR_MATCHES', adminKey, { fecha: fStr, updated: updated, hoyoSalida: hoyoSalida });
-  return { ok: true, updated: updated, hoyoSalida: hoyoSalida };
+  return { ok: true, updated: updated, hoyoSalida: hoyoSalida, holeOrder: holeOrder };
 }
 
 function crearCancha_(params) {
