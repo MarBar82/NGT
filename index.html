@@ -2131,8 +2131,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   <div class="match-filters">
     <div class="filter-group">
       <label for="match-fecha">Fecha</label>
-      <select id="match-fecha" onchange="renderMatchTable()">
-        <option value="">Todas</option>
+      <select id="match-fecha" onchange="loadMatchForFecha(this.value)">
       </select>
     </div>
     <div class="filter-group">
@@ -2874,168 +2873,36 @@ function loadF2(){
 
 
 // ══ MATCH ══
-let MATCH_PAIRS = [];
-let MATCH_HEADERS = [];
-
-function matchGvizCallback(response){
-  try {
-    const table = response.table;
-    // Range is D2:X → row 0 of response is row 2 of sheet (first match data)
-    const dataRows = [];
-    table.rows.forEach(r => {
-      const line = [];
-      if(r.c) r.c.forEach(c => {
-        let val = (c && c.v !== null && c.v !== undefined) ? String(c.v) : '';
-        val = val.replace(/<[^>]*>/g, '').trim();
-        line.push(val);
-      });
-      dataRows.push(line);
-    });
-
-    // Build match pairs — each match = 2 consecutive rows
-    MATCH_PAIRS = [];
-    for(let i = 0; i < dataRows.length; i += 2){
-      const r1 = dataRows[i] || [];
-      const r2 = dataRows[i+1] || [];
-
-      const isValidRow = function(row){
-        if(!row || !row.length) return false;
-        const name = String(row[0]||'').trim();
-        if(!name || name === '#N/A' || name.toUpperCase() === 'JUGADOR') return false;
-        let valid = 0;
-        for(let k = 0; k < row.length; k++){
-          const v = String(row[k]||'').trim();
-          if(v && v !== '#N/A' && v !== '#REF!' && v !== '#VALUE!' && v !== '#ERROR!') valid++;
-        }
-        return valid >= 2;
-      };
-
-      if(!isValidRow(r1) && !isValidRow(r2)) continue;
-
-      MATCH_PAIRS.push({
-        pairIndex: Math.floor(i/2),
-        sheetRow1: i + 2,   // data row 0 = sheet row 2
-        rowA: r1,
-        rowB: r2,
-      });
-    }
-
-    loadMatchFechas();
-  } catch(e){
-    document.getElementById('match-body').innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
-    console.error(e);
-  }
-}
-
-let MATCH_FECHAS = [];
-
-function matchFechaCallback(response){
-  try {
-    const rows = response.table.rows || [];
-    // Range B2:B → rows[0] is sheet row 2, same as MATCH data rows[0]
-    const fechasAll = [];
-    rows.forEach(r => {
-      if(r.c && r.c[0]){
-        let v = (r.c[0].v !== null && r.c[0].v !== undefined) ? String(r.c[0].v) : '';
-        v = v.replace(/<[^>]*>/g, '').trim();
-        fechasAll.push(v);
-      } else {
-        fechasAll.push('');
-      }
-    });
-
-    // fechasAll[i] corresponds to sheet row (i+2)
-    // pair.sheetRow1 = 2 for pair 0 → fechasAll[0]
-    MATCH_PAIRS.forEach(function(pair){
-      const idx = pair.sheetRow1 - 2;
-      const row1Fecha = (fechasAll[idx] || '').toString().trim();
-      const row2Fecha = (fechasAll[idx+1] || '').toString().trim();
-      pair.fecha = row1Fecha || row2Fecha || '';
-    });
-
-    populateFilters();
-    renderMatchTable();
-  } catch(e){
-    document.getElementById('match-body').innerHTML = '<div class="lb-error">Error fecha: ' + e.message + '</div>';
-  }
-}
-
-function loadMatchFechas(){
-  const old = document.getElementById('match-f-script');
-  if(old) old.remove();
-  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-    '/gviz/tq?tqx=out:json;responseHandler:matchFechaCallback' +
-    '&sheet=' + encodeURIComponent('MATCH') +
-    '&range=B2:B' +
-    '&headers=0' +
-    '&_=' + Date.now();
-  const s = document.createElement('script');
-  s.id = 'match-f-script'; s.src = url;
-  document.head.appendChild(s);
-}
-
-function populateFilters(){
-  const fechas = [...new Set(MATCH_PAIRS.map(p => p.fecha).filter(f => f && f !== '#N/A'))];
-
-  // Players: both rowA[0] and rowB[0] from all pairs
-  const juegaSet = new Set();
-  MATCH_PAIRS.forEach(function(p){
-    const ja = String(p.rowA[0]||'').trim();
-    const jb = String(p.rowB[0]||'').trim();
-    if(ja && ja !== '#N/A') juegaSet.add(ja);
-    if(jb && jb !== '#N/A') juegaSet.add(jb);
-  });
-  const jugadores = [...juegaSet].sort();
-
-  const fsel = document.getElementById('match-fecha');
-  fsel.innerHTML = '<option value="">Todas</option>';
-  fechas.forEach(f => {
-    fsel.innerHTML += '<option value="' + f + '">' + f + '</option>';
-  });
-
-  const jsel = document.getElementById('match-jugador');
-  jsel.innerHTML = '<option value="">Todos</option>';
-  jugadores.forEach(j => {
-    jsel.innerHTML += '<option value="' + j + '">' + j + '</option>';
-  });
-}
+let MATCH_DATA_CACHE = {}; // {fecha: [matchObj...]}
+let MATCH_CUR_FECHA  = '';
+let MATCH_CUR_DATA   = [];
 
 const FECHA_CANCHA = {
   '1': 'Everlinks G.C.',
   '2': 'Campo Chico GC',
 };
 
-function calcMatchResult(rowA, rowB, hoyoSalida){
-  // Columns: 0=name, 1=HCP, 2..19=net holes 1..18, 20=stored result (backend)
-
-  // Use stored backend result (col 20 = sheet col X) when available — it already
-  // applies the correct hole order (hoyoSalida) and handicap adjustment.
-  const storedA = String(rowA[20]||'').trim();
-  const storedB = String(rowB[20]||'').trim();
-  if(storedA || storedB){
+function calcMatchResultFromData(scA, scB, resA, resB){
+  // Use stored result when available
+  const sA = String(resA || '').trim();
+  const sB = String(resB || '').trim();
+  if(sA || sB){
     let winner, resultStr;
-    if(storedA === 'AS'){ winner='draw'; resultStr='AS'; }
-    else if(storedA){ winner='A'; resultStr=storedA; }
-    else if(storedB === 'AS'){ winner='draw'; resultStr='AS'; }
-    else if(storedB){ winner='B'; resultStr=storedB; }
-    if(winner) return { winner, resultStr, endedAtHole: 999 };
+    if(sA === 'AS'){ winner='draw'; resultStr='AS'; }
+    else if(sA){ winner='A'; resultStr=sA; }
+    else if(sB === 'AS'){ winner='draw'; resultStr='AS'; }
+    else { winner='B'; resultStr=sB; }
+    return { winner, resultStr, endedAtHole: 999 };
   }
-
-  // Fallback: recompute from net scores (for matches not yet recalculated)
-  const hs = parseInt(hoyoSalida) || 1;
-  const ord = [];
-  if(hs === 10){ for(let i=9;i<18;i++) ord.push(i); for(let i=0;i<9;i++) ord.push(i); }
-  else { for(let i=0;i<18;i++) ord.push(i); }
-
+  // Compute from net scores
   let upA = 0, holesPlayed = 0, endedAtHole = -1, resultStr = '', winner = 'pending';
   for(let pos = 0; pos < 18; pos++){
-    const h = ord[pos];
-    const sA = parseInt(String(rowA[2+h]||'').trim());
-    const sB = parseInt(String(rowB[2+h]||'').trim());
-    if(isNaN(sA) || isNaN(sB)) break;
+    const vA = parseInt(scA[pos]);
+    const vB = parseInt(scB[pos]);
+    if(isNaN(vA) || isNaN(vB)) break;
     holesPlayed = pos + 1;
-    if(sA < sB) upA++;
-    else if(sB < sA) upA--;
+    if(vA < vB) upA++;
+    else if(vB < vA) upA--;
     const rem = 18 - holesPlayed;
     if(Math.abs(upA) > rem){
       endedAtHole = holesPlayed;
@@ -3052,142 +2919,139 @@ function calcMatchResult(rowA, rowB, hoyoSalida){
   return { winner, resultStr, endedAtHole };
 }
 
-function renderMatchTable(){
-  const fsel = document.getElementById('match-fecha').value;
-  const jsel = document.getElementById('match-jugador').value;
+function loadMatch(){
+  document.getElementById('match-body').innerHTML =
+    '<div class="lb-status"><div class="spinner"></div>Cargando matches...</div>';
+  ngtApiGet('fechasActivas').then(function(resp){
+    const fechas = ((resp && resp.data) || []).map(String).sort(function(a,b){ return Number(a)-Number(b); });
+    const fsel = document.getElementById('match-fecha');
+    fsel.innerHTML = '';
+    fechas.forEach(function(f){ fsel.innerHTML += '<option value="'+f+'">'+f+'</option>'; });
+    const latest = fechas[fechas.length-1] || '';
+    if(latest){ fsel.value = latest; }
+    loadMatchForFecha(latest);
+  }).catch(function(e){
+    document.getElementById('match-body').innerHTML = '<div class="lb-error">Error al cargar fechas: ' + e.message + '</div>';
+  });
+}
 
-  const filtered = MATCH_PAIRS.filter(function(p){
-    if(fsel && String(p.fecha).trim() !== fsel) return false;
-    if(jsel){
-      const ja = String(p.rowA[0]||'').trim();
-      const jb = String(p.rowB[0]||'').trim();
-      if(ja !== jsel && jb !== jsel) return false;
-    }
+function loadMatchForFecha(fecha){
+  if(!fecha){ MATCH_CUR_FECHA=''; MATCH_CUR_DATA=[]; renderMatchTable(); return; }
+  if(MATCH_DATA_CACHE[fecha]){
+    MATCH_CUR_FECHA = fecha; MATCH_CUR_DATA = MATCH_DATA_CACHE[fecha];
+    populateMatchPlayerFilter(); renderMatchTable(); return;
+  }
+  document.getElementById('match-body').innerHTML =
+    '<div class="lb-status"><div class="spinner"></div>Cargando fecha ' + fecha + '...</div>';
+  ngtApiGet('matchesFullForFecha', { fecha: fecha }).then(function(resp){
+    const data = (resp && resp.data) || [];
+    MATCH_DATA_CACHE[fecha] = data;
+    MATCH_CUR_FECHA = fecha;
+    MATCH_CUR_DATA  = data;
+    populateMatchPlayerFilter();
+    renderMatchTable();
+  }).catch(function(e){
+    document.getElementById('match-body').innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+  });
+}
+
+function populateMatchPlayerFilter(){
+  const juegaSet = new Set();
+  MATCH_CUR_DATA.forEach(function(m){
+    if(m.j1Name) juegaSet.add(m.j1Name);
+    if(m.j2Name) juegaSet.add(m.j2Name);
+  });
+  const jsel = document.getElementById('match-jugador');
+  const prev = jsel.value;
+  jsel.innerHTML = '<option value="">Todos</option>';
+  [...juegaSet].sort().forEach(function(j){ jsel.innerHTML += '<option value="'+j+'">'+j+'</option>'; });
+  if(prev && juegaSet.has(prev)) jsel.value = prev;
+}
+
+function renderMatchTable(){
+  const jsel = document.getElementById('match-jugador').value;
+  const filtered = MATCH_CUR_DATA.filter(function(m){
+    if(jsel && m.j1Name !== jsel && m.j2Name !== jsel) return false;
     return true;
   });
 
   if(!filtered.length){
-    document.getElementById('match-body').innerHTML = '<div class="lb-error">No hay resultados con los filtros aplicados.</div>';
+    document.getElementById('match-body').innerHTML =
+      MATCH_CUR_DATA.length ? '<div class="lb-error">No hay resultados con los filtros aplicados.</div>'
+                            : '<div class="lb-error">No hay matches para esta fecha.</div>';
     return;
   }
 
+  const fechaNum = String(MATCH_CUR_FECHA || '').trim();
+  const cancha   = FECHA_CANCHA[fechaNum] || '';
+  const hdrText  = fechaNum ? ('FECHA ' + fechaNum + (cancha ? ' · ' + cancha : '')) : 'Match';
+
   let out = '<div class="match-cards">';
+  filtered.forEach(function(m){
+    const nameA = m.j1Name || '';
+    const nameB = m.j2Name || '';
+    const hcpA  = m.j1Hcp  != null ? String(m.j1Hcp) : '–';
+    const hcpB  = m.j2Hcp  != null ? String(m.j2Hcp) : '–';
+    const scA   = m.j1Scores || [];
+    const scB   = m.j2Scores || [];
 
-  filtered.forEach(function(p){
-    const rowA = p.rowA;
-    const rowB = p.rowB;
-    const nameA = String(rowA[0]||'').trim();
-    const nameB = String(rowB[0]||'').trim();
-    const hcpA  = String(rowA[1]||'').trim();
-    const hcpB  = String(rowB[1]||'').trim();
-
-    const res = calcMatchResult(rowA, rowB);
-    const fechaNum = String(p.fecha || '').trim();
-    const cancha = FECHA_CANCHA[fechaNum] || '';
-    const hdrText = fechaNum ? ('FECHA ' + fechaNum + (cancha ? ' · ' + cancha : '')) : 'Match';
-
-    // Result color: blue if A wins, red if B wins, gray if draw/pending
+    const res = calcMatchResultFromData(scA, scB, m.j1Result, m.j2Result);
     let resColor = 'var(--g4)';
     if(res.winner === 'A') resColor = '#1a3a6e';
     else if(res.winner === 'B') resColor = 'var(--red)';
 
-    // Compute per-hole winners (all 18)
     const holeResults = [];
     for(let h = 0; h < 18; h++){
-      const sA = parseInt(rowA[2 + h]);
-      const sB = parseInt(rowB[2 + h]);
-      if(isNaN(sA) || isNaN(sB)) holeResults.push(null);
-      else if(sA < sB) holeResults.push('A');
-      else if(sB < sA) holeResults.push('B');
+      const vA = parseInt(scA[h]);
+      const vB = parseInt(scB[h]);
+      if(isNaN(vA) || isNaN(vB)) holeResults.push(null);
+      else if(vA < vB) holeResults.push('A');
+      else if(vB < vA) holeResults.push('B');
       else holeResults.push('tie');
     }
 
     out += '<div class="match-card">';
     out += '<div class="match-card-hdr"><span class="match-fecha">' + hdrText + '</span></div>';
-
-    // Layout: fixed left (name+HCP) + scrollable center (18 holes) + fixed right (Rdo)
     out += '<div class="mc-grid">';
 
-    // Left fixed: names + HCPs (table for alignment with holes)
     out += '<table class="mc-left-tbl">';
     out += '<thead><tr><th class="mc-th-name">Jugador</th><th class="mc-th-hcp">HCP</th></tr></thead>';
     out += '<tbody>';
-    out += '<tr><td class="mc-td-name">' + fmtHistName(nameA) + '</td><td class="mc-td-hcp">' + (hcpA || '–') + '</td></tr>';
-    out += '<tr><td class="mc-td-name">' + fmtHistName(nameB) + '</td><td class="mc-td-hcp">' + (hcpB || '–') + '</td></tr>';
+    out += '<tr><td class="mc-td-name">' + fmtHistName(nameA) + '</td><td class="mc-td-hcp">' + hcpA + '</td></tr>';
+    out += '<tr><td class="mc-td-name">' + fmtHistName(nameB) + '</td><td class="mc-td-hcp">' + hcpB + '</td></tr>';
     out += '</tbody></table>';
 
-    // Center scrollable: 18 holes
     out += '<div class="mc-holes-scroll"><table class="mc-holes-tbl"><thead><tr>';
-    for(let h = 1; h <= 18; h++){
-      out += '<th class="c">' + h + '</th>';
-    }
+    for(let h = 1; h <= 18; h++) out += '<th class="c">' + h + '</th>';
     out += '</tr></thead><tbody>';
 
-    // Row A holes
     out += '<tr>';
     for(let h = 0; h < 18; h++){
-      const v = String(rowA[2 + h] || '').trim();
-      const winner = holeResults[h];
+      const v = (scA[h] !== '' && scA[h] != null) ? String(scA[h]) : '';
+      const wr = holeResults[h];
       const afterEnd = (res.endedAtHole > 0 && h >= res.endedAtHole);
-      if(v === '' || v === '#N/A'){
-        out += '<td class="c"><span class="mh-empty">–</span></td>';
-      } else if(winner === 'A' && !afterEnd){
-        out += '<td class="c"><span class="mh mh-won-a">' + v + '</span></td>';
-      } else {
-        out += '<td class="c"><span class="mh mh-normal' + (afterEnd ? ' mh-after' : '') + '">' + v + '</span></td>';
-      }
+      if(!v) out += '<td class="c"><span class="mh-empty">–</span></td>';
+      else if(wr === 'A' && !afterEnd) out += '<td class="c"><span class="mh mh-won-a">' + v + '</span></td>';
+      else out += '<td class="c"><span class="mh mh-normal' + (afterEnd ? ' mh-after' : '') + '">' + v + '</span></td>';
     }
-    out += '</tr>';
-
-    // Row B holes
-    out += '<tr>';
+    out += '</tr><tr>';
     for(let h = 0; h < 18; h++){
-      const v = String(rowB[2 + h] || '').trim();
-      const winner = holeResults[h];
+      const v = (scB[h] !== '' && scB[h] != null) ? String(scB[h]) : '';
+      const wr = holeResults[h];
       const afterEnd = (res.endedAtHole > 0 && h >= res.endedAtHole);
-      if(v === '' || v === '#N/A'){
-        out += '<td class="c"><span class="mh-empty">–</span></td>';
-      } else if(winner === 'B' && !afterEnd){
-        out += '<td class="c"><span class="mh mh-won-b">' + v + '</span></td>';
-      } else {
-        out += '<td class="c"><span class="mh mh-normal' + (afterEnd ? ' mh-after' : '') + '">' + v + '</span></td>';
-      }
+      if(!v) out += '<td class="c"><span class="mh-empty">–</span></td>';
+      else if(wr === 'B' && !afterEnd) out += '<td class="c"><span class="mh mh-won-b">' + v + '</span></td>';
+      else out += '<td class="c"><span class="mh mh-normal' + (afterEnd ? ' mh-after' : '') + '">' + v + '</span></td>';
     }
     out += '</tr></tbody></table></div>';
 
-    // Right fixed: result
-    out += '<table class="mc-right-tbl">';
-    out += '<thead><tr><th>Rdo</th></tr></thead>';
-    out += '<tbody>';
+    out += '<table class="mc-right-tbl"><thead><tr><th>Rdo</th></tr></thead><tbody>';
     out += '<tr><td rowspan="2" style="color:' + resColor + ';" class="mc-td-res">' + res.resultStr + '</td></tr>';
-    out += '<tr></tr>';
-    out += '</tbody></table>';
-
+    out += '<tr></tr></tbody></table>';
     out += '</div></div>';
   });
-
   out += '</div>';
   document.getElementById('match-body').innerHTML = out;
-}
-
-function loadMatch(){
-  document.getElementById('match-body').innerHTML =
-    '<div class="lb-status"><div class="spinner"></div>Cargando matches...</div>';
-  const old = document.getElementById('match-script');
-  if(old) old.remove();
-  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-    '/gviz/tq?tqx=out:json;responseHandler:matchGvizCallback' +
-    '&sheet=' + encodeURIComponent('MATCH') +
-    '&range=D2:X' +
-    '&headers=0' +
-    '&_=' + Date.now();
-  const s = document.createElement('script');
-  s.id = 'match-script'; s.src = url;
-  s.onerror = function(){
-    document.getElementById('match-body').innerHTML =
-      '<div class="lb-error">⚠ No se pudo cargar.<br><button onclick="loadMatch()" style="margin-top:10px;font-family:Barlow Condensed,sans-serif;font-size:13px;font-weight:700;cursor:pointer;padding:6px 16px;border:1px solid var(--red);color:var(--red);background:none;border-radius:3px;">↻ Reintentar</button></div>';
-  };
-  document.head.appendChild(s);
 }
 
 function toggleFechasDrop(e){
@@ -5866,65 +5730,23 @@ function renderFechaDinamica(data){
 }
 
 function loadMatchResultsForFecha(fecha, matches){
-  // Load MATCH sheet data via gviz (same pattern as the live Match section)
-  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-    '/gviz/tq?tqx=out:json;responseHandler:fechaMatchScoresCallback' +
-    '&sheet=' + encodeURIComponent('MATCH') +
-    '&range=D2:X' +
-    '&headers=0' +
-    '&_=' + Date.now();
-
-  window.__PENDING_FECHA = { fecha: String(fecha), matches: matches };
-
-  const old = document.getElementById('fecha-match-script');
-  if(old) old.remove();
-  const s = document.createElement('script');
-  s.id = 'fecha-match-script'; s.src = url;
-  s.onerror = function(){};
-  document.head.appendChild(s);
+  ngtApiGet('matchesFullForFecha', { fecha: String(fecha) }).then(function(resp){
+    const fullData = (resp && resp.data) || [];
+    fechaMatchRender(matches, fullData);
+  }).catch(function(e){
+    console.error('loadMatchResultsForFecha error:', e);
+  });
 }
 
-function fechaMatchScoresCallback(response){
-  try {
-    const pending = window.__PENDING_FECHA;
-    if(!pending) return;
+function fechaMatchRender(pendingMatches, fullData){
+  // Build lookup by j1Name|j2Name
+  const byPair = {};
+  fullData.forEach(function(m){ byPair[m.j1Name + '|' + m.j2Name] = m; });
 
-    // Build list of pairs (same logic as live Match section) but only for our fecha
-    const rows = response.table.rows || [];
-    // MATCH range D2:X → col0=jugador(D), cols1..=E..X
-    // Actually D2:X means D, E, F, ... X → 21 cols. col0=D=Jugador, col1=E=HCP, col2..col19=H1..H18, col20=X=Resultado
-    const allRows = [];
-    rows.forEach(r => {
-      const line = [];
-      if(r.c) r.c.forEach(c => {
-        let val = (c && c.v !== null && c.v !== undefined) ? String(c.v) : '';
-        val = val.replace(/<[^>]*>/g, '').trim();
-        line.push(val);
-      });
-      allRows.push(line);
-    });
-
-    // Also need col B (fecha) — but the range is D:X. We need a separate fetch for B.
-    // Alternative: match by j1Name/j2Name in the matches array — since matches for this fecha
-    // have unique player pairings within the fecha and we know the names.
-
-    // Build pairs from allRows
-    const pairs = [];
-    for(let i = 0; i < allRows.length - 1; i += 2){
-      const rA = allRows[i];
-      const rB = allRows[i+1];
-      if(!rA || !rB) continue;
-      const nameA = (rA[0]||'').trim();
-      const nameB = (rB[0]||'').trim();
-      if(!nameA || !nameB) continue;
-      pairs.push({ nameA: nameA, nameB: nameB, rowA: rA, rowB: rB });
-    }
-
-    // For each match in pending.matches, find the pair in pairs with same names
-    pending.matches.forEach((m, idx) => {
-      const found = pairs.find(p => p.nameA === m.j1Name && p.nameB === m.j2Name);
-      if(!found) return;
-      const res = calcMatchResult(found.rowA, found.rowB);
+  pendingMatches.forEach(function(m, idx){
+    const found = byPair[m.j1Name + '|' + m.j2Name];
+    if(!found) return;
+    const res = calcMatchResultFromData(found.j1Scores || [], found.j2Scores || [], found.j1Result, found.j2Result);
 
       const matchEl = document.querySelector('[data-match-idx="' + idx + '"]');
       if(!matchEl) return;
@@ -5972,9 +5794,11 @@ function fechaMatchScoresCallback(response){
       // Render hole-by-hole colored bubbles
       // won-w = navy (ganador del match), won-l = red (perdedor), tie = gray, empty = unplayed
       const holeResults = [];
+      const scA = found.j1Scores || [];
+      const scB = found.j2Scores || [];
       for(let h = 0; h < 18; h++){
-        const sA = parseInt(found.rowA[2 + h]);
-        const sB = parseInt(found.rowB[2 + h]);
+        const sA = parseInt(scA[h]);
+        const sB = parseInt(scB[h]);
         if(isNaN(sA) || isNaN(sB)) holeResults.push(null);
         else if(sA < sB) holeResults.push('A');
         else if(sB < sA) holeResults.push('B');
@@ -5982,7 +5806,7 @@ function fechaMatchScoresCallback(response){
       }
       const holesEl = document.getElementById('fd-holes-' + idx);
       if(holesEl){
-        const mWinner = res.winner; // 'A', 'B', 'draw', or 'pending'
+        const mWinner = res.winner;
         let holesHtml = '';
         for(let h = 0; h < 18; h++){
           const hr = holeResults[h];
@@ -5990,8 +5814,6 @@ function fechaMatchScoresCallback(response){
           if(hr === null) cls = 'empty';
           else if(hr === 'tie') cls = 'tie';
           else {
-            // If match has a decisive winner: winner's holes = won-w (navy), loser's = won-l (red)
-            // If draw/pending: A holes = won-w (navy), B holes = won-l (red) as neutral fallback
             const isWinnerHole = (mWinner === 'A' && hr === 'A') || (mWinner === 'B' && hr === 'B')
                                || (mWinner !== 'A' && mWinner !== 'B' && hr === 'A');
             cls = isWinnerHole ? 'won-w' : 'won-l';
@@ -6001,9 +5823,6 @@ function fechaMatchScoresCallback(response){
         holesEl.innerHTML = holesHtml;
       }
     });
-  } catch(e){
-    console.error('fechaMatchScoresCallback error:', e);
-  }
 }
 
 // Nota: el menú de fechas se alimenta desde ngtInitData() al boot.

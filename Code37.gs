@@ -4354,7 +4354,8 @@ function doGet(e) {
       case 'coloresCancha':    result = { ok: true, data: cachedRead_('colores_' + params.canchaId, 300, function(){ return getColoresCancha_(params.canchaId); }) }; break;
       case 'allColoresCancha': result = { ok: true, data: cachedRead_('allColoresCancha', 300, getAllColoresCancha_) }; break;
       case 'winProbabilities': result = { ok: true, data: getWinProbabilitiesCached_() }; break;
-      case 'matchesForFecha':  result = { ok: true, data: getMatchesForFecha_(params.fecha) }; break;
+      case 'matchesForFecha':     result = { ok: true, data: getMatchesForFecha_(params.fecha) }; break;
+      case 'matchesFullForFecha': result = { ok: true, data: getMatchesFullForFecha_(params.fecha) }; break;
       case 'misFechas':        result = { ok: true, data: cachedRead_('mf_' + params.matricula, 60, function(){ return getMisFechas_(params.matricula); }) }; break;
       case 'dobleDisponible':  result = { ok: true, data: { tieneDoble: getJugadoresConDobleDisponible_().indexOf(String(params.matricula)) >= 0 } }; break;
       case 'jugadoresConDoble': result = { ok: true, data: cachedRead_('jugadoresConDoble', 60, getJugadoresConDobleDisponible_) }; break;
@@ -5437,25 +5438,36 @@ function recalcularMatchesFecha_(params) {
  * Safe to re-run: skips rows that are already in 1-row format.
  * Line history data in cols BZ:CB (78-80) is preserved (different column range).
  */
+function debugMigrarMatch_() {
+  const sh = getSheet_(SHEETS.MATCH);
+  if (!sh) { Logger.log('MATCH no encontrado'); return; }
+  const lastRow = sh.getLastRow();
+  Logger.log('lastRow: ' + lastRow);
+  if (lastRow < 3) { Logger.log('Sin datos'); return; }
+  const rawData = sh.getRange(2, 2, lastRow - 1, 24).getValues();
+  Logger.log('rawData.length: ' + rawData.length);
+  // Mostrar primeras 4 filas
+  for (var i = 0; i < Math.min(4, rawData.length); i++) {
+    Logger.log('row[' + i + '] B=' + rawData[i][0] + ' C=' + rawData[i][1] + ' D=' + rawData[i][2] + ' X=' + rawData[i][22] + ' Y=' + rawData[i][23]);
+  }
+  // Contar pares válidos
+  var validPairs = 0, skipped = 0;
+  for (var j = 0; j + 1 < rawData.length; j += 2) {
+    var fA = String(rawData[j][0] || '').trim();
+    var matA = String(rawData[j][1] || '').trim();
+    var matB = String(rawData[j + 1][1] || '').trim();
+    if (!fA || !matA || !matB) { skipped++; } else { validPairs++; }
+  }
+  Logger.log('Pares válidos: ' + validPairs + ' | Saltados: ' + skipped);
+}
+
 function migrarMatchA1Fila_() {
   const sh = getSheet_(SHEETS.MATCH);
   if (!sh) return { error: 'Hoja MATCH no encontrada' };
   const lastRow = sh.getLastRow();
   if (lastRow < 3) return { ok: true, converted: 0, message: 'No hay datos para migrar' };
 
-  // Read cols B..Y (24 cols) to get old data (fecha, mat, nombre, ..., resultado, puntos)
   const rawData = sh.getRange(2, 2, lastRow - 1, 24).getValues();
-
-  // Detect if already migrated: if col D (index 2) has a second matricula instead of a name
-  // Simple check: first non-empty row — if col D looks numeric, it's mat2 (new format)
-  const firstMatch = rawData.find(function(r) { return String(r[0] || '').trim(); });
-  if (firstMatch) {
-    const col4val = String(firstMatch[2] || '').trim();
-    // If col D is numeric (a matricula), data is already in new format
-    if (col4val && /^\d+$/.test(col4val)) {
-      return { ok: true, converted: 0, message: 'Los datos ya están en formato de 1 fila por match' };
-    }
-  }
 
   const newRows = [];
   let converted = 0;
@@ -5466,7 +5478,6 @@ function migrarMatchA1Fila_() {
     const matA = String(rA[1] || '').trim();
     const matB = String(rB[1] || '').trim();
     if (!fA || !matA || !matB) continue;
-    // col X = index 22 from B = resultado; col Y = index 23 = puntos
     const resA = String(rA[22] || '').trim();
     const ptsA = Number(rA[23]) || 0;
     const resB = String(rB[22] || '').trim();
@@ -5477,10 +5488,7 @@ function migrarMatchA1Fila_() {
 
   if (!newRows.length) return { ok: true, converted: 0, message: 'No se encontraron pares para convertir' };
 
-  // Clear cols B..Y for all existing match rows (leave BZ:CB untouched)
   sh.getRange(2, 2, lastRow - 1, 24).clearContent();
-
-  // Write new compact format
   sh.getRange(2, 2, newRows.length, 7).setValues(newRows);
   SpreadsheetApp.flush();
 
@@ -5627,4 +5635,15 @@ function test() {
   Logger.log(JSON.stringify(getCanchas_(), null, 2));
   Logger.log('=== FECHAS ACTIVAS ===');
   Logger.log(JSON.stringify(getFechasActivas_()));
+}
+
+// Wrapper: run from Apps Script dropdown to diagnose MATCH sheet format
+function runDebugMigrarMatch() {
+  debugMigrarMatch_();
+}
+
+// Wrapper: run from Apps Script dropdown to execute the one-time MATCH migration
+function runMigrarMatchA1Fila() {
+  const result = migrarMatchA1Fila_();
+  Logger.log(JSON.stringify(result));
 }
