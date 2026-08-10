@@ -3005,52 +3005,51 @@ const FECHA_CANCHA = {
   '2': 'Campo Chico GC',
 };
 
-function calcMatchResult(rowA, rowB){
-  // Columns: 0=name, 1=HCP, 2..19=holes 1..18, 20=raw result (ignored)
-  let upA = 0;
-  let holesPlayed = 0;
-  let endedAtHole = -1;
-  let resultStr = '';
-  let winner = 'pending';
+function calcMatchResult(rowA, rowB, hoyoSalida){
+  // Columns: 0=name, 1=HCP, 2..19=net holes 1..18, 20=stored result (backend)
 
-  for(let h = 0; h < 18; h++){
-    const vA = String(rowA[2 + h] || '').trim();
-    const vB = String(rowB[2 + h] || '').trim();
-    const sA = parseInt(vA);
-    const sB = parseInt(vB);
+  // Use stored backend result (col 20 = sheet col X) when available — it already
+  // applies the correct hole order (hoyoSalida) and handicap adjustment.
+  const storedA = String(rowA[20]||'').trim();
+  const storedB = String(rowB[20]||'').trim();
+  if(storedA || storedB){
+    let winner, resultStr;
+    if(storedA === 'AS'){ winner='draw'; resultStr='AS'; }
+    else if(storedA){ winner='A'; resultStr=storedA; }
+    else if(storedB === 'AS'){ winner='draw'; resultStr='AS'; }
+    else if(storedB){ winner='B'; resultStr=storedB; }
+    if(winner) return { winner, resultStr, endedAtHole: 999 };
+  }
+
+  // Fallback: recompute from net scores (for matches not yet recalculated)
+  const hs = parseInt(hoyoSalida) || 1;
+  const ord = [];
+  if(hs === 10){ for(let i=9;i<18;i++) ord.push(i); for(let i=0;i<9;i++) ord.push(i); }
+  else { for(let i=0;i<18;i++) ord.push(i); }
+
+  let upA = 0, holesPlayed = 0, endedAtHole = -1, resultStr = '', winner = 'pending';
+  for(let pos = 0; pos < 18; pos++){
+    const h = ord[pos];
+    const sA = parseInt(String(rowA[2+h]||'').trim());
+    const sB = parseInt(String(rowB[2+h]||'').trim());
     if(isNaN(sA) || isNaN(sB)) break;
-
-    holesPlayed = h + 1;
+    holesPlayed = pos + 1;
     if(sA < sB) upA++;
     else if(sB < sA) upA--;
-
-    const remaining = 18 - holesPlayed;
-    if(Math.abs(upA) > remaining){
+    const rem = 18 - holesPlayed;
+    if(Math.abs(upA) > rem){
       endedAtHole = holesPlayed;
       winner = upA > 0 ? 'A' : 'B';
-      // If remaining=0, match ended on last hole → use "X UP" instead of "X&0"
-      resultStr = remaining === 0 ? (Math.abs(upA) + ' UP') : (Math.abs(upA) + '&' + remaining);
+      resultStr = rem === 0 ? (Math.abs(upA)+' UP') : (Math.abs(upA)+'&'+rem);
       break;
     }
   }
-
   if(!resultStr){
-    if(holesPlayed === 0){
-      winner = 'pending';
-      resultStr = '–';
-      endedAtHole = 0;
-    } else if(holesPlayed < 18){
-      winner = 'pending';
-      resultStr = upA === 0 ? 'AS parcial' : (upA > 0 ? (Math.abs(upA) + ' UP parcial') : (Math.abs(upA) + ' DN parcial'));
-      endedAtHole = holesPlayed;
-    } else {
-      if(upA === 0){ winner = 'draw'; resultStr = 'AS'; }
-      else { winner = upA > 0 ? 'A' : 'B'; resultStr = Math.abs(upA) + ' UP'; }
-      endedAtHole = 18;
-    }
+    if(!holesPlayed){ winner='pending'; resultStr='–'; endedAtHole=0; }
+    else if(holesPlayed < 18){ winner='pending'; resultStr=upA===0?'AS parcial':(Math.abs(upA)+(upA>0?' UP parcial':' DN parcial')); endedAtHole=holesPlayed; }
+    else { winner=upA===0?'draw':(upA>0?'A':'B'); resultStr=upA===0?'AS':(Math.abs(upA)+' UP'); endedAtHole=18; }
   }
-
-  return { winner: winner, resultStr: resultStr, endedAtHole: endedAtHole };
+  return { winner, resultStr, endedAtHole };
 }
 
 function renderMatchTable(){
