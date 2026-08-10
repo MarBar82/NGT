@@ -2922,7 +2922,7 @@ function calcMatchResultFromData(scA, scB, resA, resB){
 function loadMatch(){
   document.getElementById('match-body').innerHTML =
     '<div class="lb-status"><div class="spinner"></div>Cargando matches...</div>';
-  ngtApiGet('fechasActivas').then(function(resp){
+  ngtApiGet('fechas').then(function(resp){
     const fechas = ((resp && resp.data) || []).map(String).sort(function(a,b){ return Number(a)-Number(b); });
     const fsel = document.getElementById('match-fecha');
     fsel.innerHTML = '';
