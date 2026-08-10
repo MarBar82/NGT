@@ -10,7 +10,6 @@ const SHEETS = {
   TARJETAS:  'TARJETAS',
   MATCH:     'MATCH',
   JUGADORES: 'JUGADORES',
-  CANCHAS:   'CANCHAS',
   FECHAS:    'FECHAS',
   SCORE:     'SCORE',
   AUDIT:     '_AUDIT',
@@ -178,20 +177,22 @@ function getJugadores_() {
 }
 
 function getCanchas_() {
-  const sh = getSheet_(SHEETS.CANCHAS);
+  // Source of truth: NGT DB Rating (A=id, B=nombre) — deduplicated by id
+  const sh = getHistSheet_('Rating');
   if (!sh) return [];
   const lastRow = sh.getLastRow();
   if (lastRow < 2) return [];
   const data = sh.getRange(2, 1, lastRow - 1, 2).getValues();
-  const out = [];
-  data.forEach(row => {
-    const id = row[0];
-    const nombre = row[1];
-    if (id === '' || id === null || id === undefined) return;
-    if (!nombre || String(nombre).trim() === '') return;
-    out.push({ id: String(id), nombre: String(nombre).trim() });
+  const seen = {};
+  const out  = [];
+  data.forEach(function(row) {
+    const id     = String(row[0] || '').trim();
+    const nombre = String(row[1] || '').trim();
+    if (!id || !nombre || seen[id]) return;
+    seen[id] = true;
+    out.push({ id, nombre });
   });
-  return out;
+  return out.sort(function(a, b) { return a.nombre.localeCompare(b.nombre); });
 }
 
 function lookupCanchaName_(id) {
@@ -495,162 +496,112 @@ function getMisFechas_(matricula) {
   if (!sh) return [];
   const nextEmpty = findNextEmptyRow_(sh, 2);
   if (nextEmpty <= 2) return [];
-  // Cols: A=FM, B=FECHA(0), C=MATRICULA(1), D=NOMBRE(2), E=HCP(3), F=CANCHA(4) … AG=COLOR_TEE(31)
+  // Cols: A=FM, B=FECHA(0), C=MATRICULA(1), D=NOMBRE(2), E=HCP(3), F=CANCHA(4), G=CANCHAИД(5) … AG=COLOR_TEE(31)
   const data = sh.getRange(2, 2, nextEmpty - 2, 32).getValues();
   const out = [];
-  const canchasNeeded = {};
-  data.forEach((row, i) => {
+  const canchasNeeded = {}; // canchaId → true
+  data.forEach(function(row, i) {
     const f = String(row[0] || '').trim();
     const m = String(row[1] || '').trim();
-    if (m === String(matricula) && f) {
-      const c  = String(row[4]  || '').trim();
-      const ct = String(row[31] || '').trim().toUpperCase(); // AG = colorTee
-      // hasScores: el jugador efectivamente cargó scores (col H = Hoyo 1, índice 6 en rango desde col B)
-      // HCP (col E, índice 3) NO sirve: se auto-rellena al crear la fecha
-      const hoyo1 = row[6]; // col H
-      out.push({
-        fecha:     f,
-        hcp:       row[3] || '',
-        hasScores: hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined,
-        cancha:    c,
-        colorTee:  ct || 'BLANCAS',
-        rowIndex:  i + 2,
-      });
-      if (c) canchasNeeded[c.toUpperCase()] = true;
-    }
+    if (m !== String(matricula) || !f) return;
+    const canchaName = String(row[4] || '').trim(); // F = nombre (solo para display)
+    const canchaId   = String(row[5] || '').trim(); // G = ID (para lookup)
+    const ct         = String(row[31] || '').trim().toUpperCase();
+    const hoyo1      = row[6]; // col H
+    out.push({
+      fecha:     f,
+      hcp:       row[3] || '',
+      hasScores: hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined,
+      cancha:    canchaName,
+      canchaId:  canchaId,
+      colorTee:  ct || 'BLANCAS',
+      rowIndex:  i + 2,
+    });
+    if (canchaId) canchasNeeded[canchaId] = true;
   });
 
-  // Build cancha→{pares, indices} map for the canchas this player has played.
-  const paresMap = {};
+  // Build canchaId→{pares, indices} from NGT DB CANCHAS (A=id, B=hoyo, C=par, D=hcp_idx)
+  const paresMap   = {};
   const indicesMap = {};
-  if (Object.keys(canchasNeeded).length){
-    // Read CANCHAS for pares
-    const shC = getSheet_(SHEETS.CANCHAS);
-    if (shC){
-      const lr = shC.getLastRow();
-      if (lr >= 2){
-        const cdata = shC.getRange(2, 1, lr - 1, 20).getValues();
-        cdata.forEach(r => {
-          const id = String(r[0] || '').trim();
-          const nom = String(r[1] || '').trim();
-          const upN = nom.toUpperCase();
-          const upI = id.toUpperCase();
-          if (canchasNeeded[upN] || canchasNeeded[upI]){
-            const pares = r.slice(2, 20).map(v => parseInt(v) || null);
-            paresMap[upN] = pares;
-            paresMap[upI] = pares;
-          }
-        });
-      }
-    }
-    // Read indices from NGT DB CANCHAS (A=ID, B=NOMBRE, C=hoyo, D=PAR, E=ÍNDICE)
+  if (Object.keys(canchasNeeded).length) {
     const shDb = getHistSheet_('CANCHAS');
     if (shDb) {
       const lr = shDb.getLastRow();
       if (lr >= 2) {
-        const idata = shDb.getRange(2, 1, lr - 1, 5).getValues();
-        const canchaHoles = {};
-        idata.forEach(r => {
-          const id = String(r[0] || '').trim().toUpperCase();
-          const nom = String(r[1] || '').trim().toUpperCase();
-          const hoyo = parseInt(r[2]);
-          const indice = parseInt(r[4]);
-          if (!hoyo || !indice) return;
-          const key = canchasNeeded[id] ? id : (canchasNeeded[nom] ? nom : null);
-          if (!key) return;
-          if (!canchaHoles[key]) canchaHoles[key] = [];
-          canchaHoles[key].push({ hoyo, indice });
+        const idata = shDb.getRange(2, 1, lr - 1, 4).getValues();
+        const holes = {}; // id → [{hoyo, par, idx}]
+        idata.forEach(function(r) {
+          const cId = String(r[0] || '').trim();
+          if (!canchasNeeded[cId]) return;
+          const hoyo = parseInt(r[1]);
+          const par  = parseInt(r[2]) || null;
+          const idx  = parseInt(r[3]) || null;
+          if (hoyo < 1 || hoyo > 18) return;
+          if (!holes[cId]) holes[cId] = [];
+          holes[cId].push({ hoyo, par, idx });
         });
-        Object.keys(canchaHoles).forEach(key => {
-          const holes = canchaHoles[key];
-          if (holes.length === 18) {
-            holes.sort((a, b) => a.hoyo - b.hoyo);
-            indicesMap[key] = holes.map(h => h.indice);
-          }
+        Object.keys(holes).forEach(function(cId) {
+          const hs = holes[cId];
+          if (hs.length !== 18) return;
+          hs.sort(function(a, b) { return a.hoyo - b.hoyo; });
+          paresMap[cId]   = hs.map(function(h) { return h.par; });
+          indicesMap[cId] = hs.map(function(h) { return h.idx; });
         });
       }
     }
   }
 
-  // Attach pares + indices to each fecha
-  out.forEach(f => {
-    const k = String(f.cancha || '').toUpperCase();
-    if (paresMap[k]) f.pares = paresMap[k];
+  out.forEach(function(f) {
+    const k = f.canchaId;
+    if (paresMap[k])   f.pares   = paresMap[k];
     if (indicesMap[k]) f.indices = indicesMap[k];
   });
-  return out.sort((a, b) => parseInt(b.fecha) - parseInt(a.fecha)); // most recent first
+  return out.sort(function(a, b) { return parseInt(b.fecha) - parseInt(a.fecha); });
 }
 
-function getCanchaPares_(canchaNombreOrId) {
+function getCanchaPares_(canchaId) {
   // Returns { id, nombre, pares:[18], indices:[18], ratings:[{tee,rating,slope}] }
-  // Name matching is case-insensitive.
-  const sh = getSheet_(SHEETS.CANCHAS);
-  if (!sh) return null;
-  const lastRow = sh.getLastRow();
-  if (lastRow < 2) return null;
-  const data = sh.getRange(2, 1, lastRow - 1, 20).getValues(); // A:T (20 cols: id, nombre, 18 pares)
-  const keyRaw = String(canchaNombreOrId).trim();
-  const keyUp  = keyRaw.toUpperCase();
+  // Lookup is by ID only — all TARJETAS records have canchaId in col G.
+  const id = String(canchaId || '').trim();
+  if (!id) return null;
 
-  let cancha = null;
-  for (let i = 0; i < data.length; i++) {
-    const id     = String(data[i][0] || '').trim();
-    const nombre = String(data[i][1] || '').trim();
-    if (id === keyRaw || nombre.toUpperCase() === keyUp) {
-      cancha = {
-        id:      id,
-        nombre:  nombre,
-        pares:   data[i].slice(2, 20).map(v => parseInt(v) || null),
-        indices: [],
-        ratings: [], // [{tee, rating, slope}] — llenado desde NGT DB Rating
-      };
-      break;
-    }
-  }
-  if (!cancha) return null;
-
-  // Read indices from NGT DB CANCHAS (A=ID, B=NOMBRE, C=hoyo, D=PAR, E=ÍNDICE)
-  const shDb = getHistSheet_('CANCHAS');
-  if (shDb) {
-    const lr = shDb.getLastRow();
-    if (lr >= 2) {
-      const hcpData = shDb.getRange(2, 1, lr - 1, 5).getValues();
-      const holes = [];
-      hcpData.forEach(r => {
-        const id     = String(r[0] || '').trim();
-        const nombre = String(r[1] || '').trim();
-        if (id === cancha.id || nombre.toUpperCase() === cancha.nombre.toUpperCase()) {
-          const hoyo   = parseInt(r[2]);
-          const indice = parseInt(r[4]);
-          if (hoyo >= 1 && hoyo <= 18 && indice) holes.push({ hoyo, indice });
-        }
-      });
-      if (holes.length === 18) {
-        holes.sort((a, b) => a.hoyo - b.hoyo);
-        cancha.indices = holes.map(h => h.indice);
-      }
-    }
-  }
-
-  // Read slope/rating per tee from NGT DB Rating (A=canchaId, B=nombre, C=tee, D=rating, E=slope)
+  // NGT DB CANCHAS: A=id, B=hoyo, C=par, D=hcp_idx
+  const shHoyos  = getHistSheet_('CANCHAS');
+  // NGT DB Rating:  A=id, B=nombre, C=tee, D=rating, E=slope
   const shRating = getHistSheet_('Rating');
-  if (shRating) {
-    const lr = shRating.getLastRow();
-    if (lr >= 2) {
-      const rData = shRating.getRange(2, 1, lr - 1, 5).getValues();
-      rData.forEach(r => {
-        const id     = String(r[0] || '').trim();
-        const nombre = String(r[1] || '').trim();
-        if (id !== cancha.id && nombre.toUpperCase() !== cancha.nombre.toUpperCase()) return;
-        const tee    = String(r[2] || '').trim();
-        const rating = parseFloat(r[3]) || null;
-        const slope  = parseInt(r[4])   || null;
-        if (tee && slope) cancha.ratings.push({ tee, rating, slope });
-      });
-    }
+  if (!shHoyos || !shRating) return null;
+
+  const pares   = new Array(18).fill(null);
+  const indices = new Array(18).fill(null);
+  const lrH = shHoyos.getLastRow();
+  if (lrH >= 2) {
+    const hData = shHoyos.getRange(2, 1, lrH - 1, 4).getValues();
+    hData.forEach(function(r) {
+      if (String(r[0] || '').trim() !== id) return;
+      const h = parseInt(r[1]);
+      if (h < 1 || h > 18) return;
+      pares[h - 1]   = parseInt(r[2]) || null;
+      indices[h - 1] = parseInt(r[3]) || null;
+    });
   }
 
-  return cancha;
+  let nombre = '';
+  const ratings = [];
+  const lrR = shRating.getLastRow();
+  if (lrR >= 2) {
+    const rData = shRating.getRange(2, 1, lrR - 1, 5).getValues();
+    rData.forEach(function(r) {
+      if (String(r[0] || '').trim() !== id) return;
+      if (!nombre) nombre = String(r[1] || '').trim();
+      const tee    = String(r[2] || '').trim();
+      const rating = parseFloat(r[3]) || null;
+      const slope  = parseInt(r[4])   || null;
+      if (tee && slope) ratings.push({ tee, rating, slope });
+    });
+  }
+
+  if (!nombre && pares.every(function(p) { return p === null; })) return null;
+  return { id, nombre, pares, indices, ratings };
 }
 
 /**
@@ -700,23 +651,20 @@ function buildHcpJuegoMap_(canchaId, canchaName, teeColor) {
   }
   if (!slope) return null;
 
-  // ── 2. Read par total from CANCHAS sheet (sum of 18-hole pars, cols C-T) ──
+  // ── 2. Read par total from NGT DB CANCHAS (A=id, B=hoyo, C=par, D=hcp_idx) ──
   let par = null;
-  const shCanchas = getSheet_(SHEETS.CANCHAS);
-  if (shCanchas) {
-    const clr = shCanchas.getLastRow();
+  const shHoyos = getHistSheet_('CANCHAS');
+  if (shHoyos) {
+    const clr = shHoyos.getLastRow();
     if (clr >= 2) {
-      const cData = shCanchas.getRange(2, 1, clr - 1, 20).getValues();
-      for (const cr of cData) {
-        const cId  = String(cr[0] || '').trim();
-        const cNom = String(cr[1] || '').trim().toUpperCase();
-        if (cId === idKey || cNom === nomKey) {
-          const pares = cr.slice(2, 20).map(v => parseInt(v) || 0);
-          const total = pares.reduce((s, v) => s + v, 0);
-          if (total > 0) par = total;
-          break;
-        }
-      }
+      const cData = shHoyos.getRange(2, 1, clr - 1, 3).getValues();
+      let total = 0, count = 0;
+      cData.forEach(function(cr) {
+        if (String(cr[0] || '').trim() !== idKey) return;
+        const p = parseInt(cr[2]) || 0;
+        if (p > 0) { total += p; count++; }
+      });
+      if (count === 18) par = total;
     }
   }
 
@@ -776,26 +724,24 @@ function debugHcpCalculo_(params) {
     }
   }
 
-  // ── Par desde CANCHAS ─────────────────────────────────────────────────────
-  const shCanchas = getSheet_(SHEETS.CANCHAS);
+  // ── Par desde NGT DB CANCHAS (A=id, B=hoyo, C=par, D=hcp_idx) ──────────
+  const shHoyosDbg = getHistSheet_('CANCHAS');
   const canchasRows = [];
   let par = null, paresRaw = [];
-  if (shCanchas) {
-    const clr = shCanchas.getLastRow();
+  const idKeyDbg = canchaId.trim();
+  if (shHoyosDbg) {
+    const clr = shHoyosDbg.getLastRow();
     if (clr >= 2) {
-      const cData = shCanchas.getRange(2, 1, clr - 1, 20).getValues();
-      cData.forEach(cr => canchasRows.push({ id: cr[0], nombre: cr[1], pares: cr.slice(2, 20) }));
-      const idKey  = canchaId.toUpperCase();
-      const nomKey = canchaName.toUpperCase();
-      for (const cr of cData) {
-        const cId  = String(cr[0] || '').trim().toUpperCase();
-        const cNom = String(cr[1] || '').trim().toUpperCase();
-        if (cId !== idKey && cNom !== nomKey) continue;
-        paresRaw = cr.slice(2, 20).map(v => parseInt(v) || 0);
-        const total = paresRaw.reduce((s, v) => s + v, 0);
-        if (total > 0) par = total;
-        break;
-      }
+      const cData = shHoyosDbg.getRange(2, 1, clr - 1, 3).getValues();
+      cData.forEach(function(cr) { canchasRows.push({ id: cr[0], hoyo: cr[1], par: cr[2] }); });
+      let total = 0, count = 0;
+      cData.forEach(function(cr) {
+        if (String(cr[0] || '').trim() !== idKeyDbg) return;
+        const p = parseInt(cr[2]) || 0;
+        paresRaw.push(p);
+        if (p > 0) { total += p; count++; }
+      });
+      if (count === 18) par = total;
     }
   }
 
@@ -3135,10 +3081,12 @@ function getProximaFecha_() {
 
 const HIST_SHEET_ID = '1qCtyWVqcfQxL9TOSJI3v7O7mPjQ-qHCyLK5hNckVC5U';
 
+var _histSS = null;
 function getHistSheet_(name) {
   try {
-    return SpreadsheetApp.openById(HIST_SHEET_ID).getSheetByName(name);
-  } catch (e) {
+    if (!_histSS) _histSS = SpreadsheetApp.openById(HIST_SHEET_ID);
+    return _histSS.getSheetByName(name);
+  } catch(e) {
     return null;
   }
 }
@@ -4998,13 +4946,16 @@ function setDoblesFecha_(params) {
     }
   }
 
-  const changes = { set: [], cleared: [] };
+  const changes = { set: [], cleared: [], notFound: [] };
 
-  // Setear dobles para los nuevos
+  // Setear dobles para los nuevos (siempre escribe TRUE, incluso si ya estaba, para corregir inconsistencias)
   nuevosDobles.forEach(function(mat) {
-    if (actualesDobles.indexOf(mat) < 0) { // solo si no estaba ya
-      const row = getScoreRowForMat_(mat);
-      if (row > 0) { shScore.getRange(row, dbCol).setValue(true); changes.set.push(mat); }
+    const row = getScoreRowForMat_(mat);
+    if (row > 0) {
+      shScore.getRange(row, dbCol).setValue(true);
+      changes.set.push(mat);
+    } else {
+      changes.notFound.push(mat);
     }
   });
 
@@ -5019,6 +4970,10 @@ function setDoblesFecha_(params) {
   SpreadsheetApp.flush();
   // Invalidate cache so jugadoresConDoble reflects the updated state immediately
   try { CacheService.getScriptCache().remove('jugadoresConDoble'); } catch(e) {}
+
+  // Recalcular totales automáticamente para que el leaderboard quede actualizado
+  recalcularTotalesScore_(null);
+
   audit_('SET_DOBLES_FECHA', 'admin', { fecha, dobles: nuevosDobles, changes });
   return { ok: true, changes: changes };
 }
@@ -5238,20 +5193,21 @@ function updateCanchaHoyos_(params) {
   if (!sh) return { ok: false, error: 'Hoja CANCHAS no encontrada en NGT DB' };
   const lr = sh.getLastRow();
   if (lr < 2) return { ok: false, error: 'CANCHAS vacía' };
-  const data = sh.getRange(2, 1, lr - 1, 5).getValues();
+  // NGT DB CANCHAS: A=id(0), B=hoyo(1), C=par(2), D=hcp_idx(3) — sin columna nombre
+  const data = sh.getRange(2, 1, lr - 1, 4).getValues();
   const hoyoMap = {};
   hoyos.forEach(function(h) { hoyoMap[parseInt(h.hoyo)] = h; });
   let updated = 0;
   for (let i = 0; i < data.length; i++) {
     const rowId = String(data[i][0] || '').trim();
     if (rowId !== String(canchaId)) continue;
-    const rowHoyo = parseInt(data[i][2]);
+    const rowHoyo = parseInt(data[i][1]); // col B = hoyo
     const hd = hoyoMap[rowHoyo];
     if (!hd) continue;
     const par = parseInt(hd.par);
     const idx = parseInt(hd.indice);
-    if (!isNaN(par)) sh.getRange(i + 2, 4).setValue(par);
-    if (!isNaN(idx)) sh.getRange(i + 2, 5).setValue(idx);
+    if (!isNaN(par)) sh.getRange(i + 2, 3).setValue(par); // col C = par
+    if (!isNaN(idx)) sh.getRange(i + 2, 4).setValue(idx); // col D = hcp_idx
     updated++;
   }
   try { CacheService.getScriptCache().remove('cp2_' + canchaId); } catch(e) {}
@@ -5262,10 +5218,10 @@ function updateRating_(params) {
   const { adminKey, canchaId, color, rating, slope } = params || {};
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
   if (!canchaId || !color) return { ok: false, error: 'Falta canchaId o color' };
-  const sh = getHistSheet_('RATING');
-  if (!sh) return { ok: false, error: 'Hoja RATING no encontrada en NGT DB' };
+  const sh = getHistSheet_('Rating');
+  if (!sh) return { ok: false, error: 'Hoja Rating no encontrada en NGT DB' };
   const lr = sh.getLastRow();
-  if (lr < 2) return { ok: false, error: 'RATING vacío' };
+  if (lr < 2) return { ok: false, error: 'Rating vacía' };
   const data = sh.getRange(2, 1, lr - 1, 5).getValues();
   const colorKey = String(color).trim().toUpperCase();
   let found = false;
@@ -5277,7 +5233,7 @@ function updateRating_(params) {
     found = true;
     break;
   }
-  if (!found) return { ok: false, error: 'No se encontró ' + canchaId + ' / ' + color + ' en RATING' };
+  if (!found) return { ok: false, error: 'No se encontró ' + canchaId + ' / ' + color + ' en Rating' };
   try { CacheService.getScriptCache().remove('cp2_' + canchaId); } catch(e) {}
   return { ok: true };
 }
@@ -5462,38 +5418,32 @@ function crearCancha_(params) {
   if (!nombreClean) return { ok: false, error: 'Falta el nombre de la cancha' };
   if (!Array.isArray(hoyos) || hoyos.length !== 18) return { ok: false, error: 'Se necesitan exactamente 18 hoyos' };
 
-  const canchasSh = getSheet_(SHEETS.CANCHAS);
-  const histSh = getHistSheet_('CANCHAS');
-  if (!canchasSh || !histSh) return { ok: false, error: 'Hojas CANCHAS no encontradas' };
+  // NGT DB CANCHAS: A=id, B=hoyo, C=par, D=hcp_idx (sin nombre)
+  const histSh    = getHistSheet_('CANCHAS');
+  const ratingSh  = getHistSheet_('Rating');
+  if (!histSh || !ratingSh) return { ok: false, error: 'Hojas NGT DB no encontradas' };
 
-  // Max ID from both sources
+  // Max ID desde NGT DB CANCHAS
   let maxId = 0;
-  const lrC = canchasSh.getLastRow();
-  if (lrC >= 2) canchasSh.getRange(2, 1, lrC - 1, 1).getValues()
-    .forEach(function(r){ const id = parseInt(r[0]); if (!isNaN(id) && id > maxId) maxId = id; });
   const lrH = histSh.getLastRow();
-  if (lrH >= 2) histSh.getRange(2, 1, lrH - 1, 1).getValues()
-    .forEach(function(r){ const id = parseInt(r[0]); if (!isNaN(id) && id > maxId) maxId = id; });
+  if (lrH >= 2) {
+    histSh.getRange(2, 1, lrH - 1, 1).getValues()
+      .forEach(function(r){ const id = parseInt(r[0]); if (!isNaN(id) && id > maxId) maxId = id; });
+  }
   const newId = maxId + 1;
 
-  // CANCHAS sheet (main): one row — ID, NOMBRE
-  canchasSh.appendRow([newId, nombreClean]);
-
-  // NGT DB CANCHAS: 18 rows — ID, NOMBRE, HOYO, PAR, INDICE
+  // NGT DB CANCHAS: 18 rows — ID, HOYO, PAR, INDICE
   const canchasRows = hoyos.map(function(h, i) {
-    return [newId, nombreClean, i + 1, parseInt(h.par) || 4, parseInt(h.indice) || (i + 1)];
+    return [newId, i + 1, parseInt(h.par) || 4, parseInt(h.indice) || (i + 1)];
   });
-  histSh.getRange(histSh.getLastRow() + 1, 1, 18, 5).setValues(canchasRows);
+  histSh.getRange(histSh.getLastRow() + 1, 1, 18, 4).setValues(canchasRows);
 
-  // NGT DB RATING: one row per tee color
+  // NGT DB Rating: one row per tee color — A=id, B=nombre, C=tee, D=rating, E=slope
   if (Array.isArray(ratings) && ratings.length) {
-    const ratingSh = getHistSheet_('RATING');
-    if (ratingSh) {
-      const ratingRows = ratings
-        .filter(function(r){ return r.color && r.rating != null && r.slope != null; })
-        .map(function(r){ return [newId, nombreClean, String(r.color).trim().toUpperCase(), parseFloat(r.rating), parseInt(r.slope)]; });
-      if (ratingRows.length) ratingSh.getRange(ratingSh.getLastRow() + 1, 1, ratingRows.length, 5).setValues(ratingRows);
-    }
+    const ratingRows = ratings
+      .filter(function(r){ return r.color && r.rating != null && r.slope != null; })
+      .map(function(r){ return [newId, nombreClean, String(r.color).trim().toUpperCase(), parseFloat(r.rating), parseInt(r.slope)]; });
+    if (ratingRows.length) ratingSh.getRange(ratingSh.getLastRow() + 1, 1, ratingRows.length, 5).setValues(ratingRows);
   }
 
   try {
