@@ -432,37 +432,81 @@ function getCanchaForFecha_(fecha) {
  * Reads MATCH!D..X : D=jugador, E=hcp85, F-W=H1-H18, X=resultado
  */
 function getMatchesFullForFecha_(fecha) {
-  const sh = getSheet_(SHEETS.MATCH);
-  if (!sh) return [];
-  const nextEmpty = findNextEmptyRow_(sh, 4);
+  // Returns match data for display including per-hole net scores.
+  // Net scores computed on the fly from TARJETAS (gross) + CANCHAS (indices).
+  const fStr = String(fecha);
+  const shM  = getSheet_(SHEETS.MATCH);
+  if (!shM) return [];
+  const nextEmpty = findNextEmptyRow_(shM, 4);
   if (nextEmpty <= 2) return [];
-  // cols B(fecha), D(jugador), E(hcp), F-W(scores H1-H18), X(resultado)
-  // Read B through X : cols 2..24
-  const data = sh.getRange(2, 2, nextEmpty - 2, 23).getValues();
+
+  // B=fecha, C=mat1, D=mat2, E=res1, F=pts1, G=res2, H=pts2
+  const mData = shM.getRange(2, 2, nextEmpty - 2, 7).getValues();
+  const pairs = [];
+  for (let i = 0; i < mData.length; i++) {
+    if (String(mData[i][0] || '').trim() !== fStr) continue;
+    const matA = String(mData[i][1] || '').trim();
+    const matB = String(mData[i][2] || '').trim();
+    if (!matA || !matB) continue;
+    pairs.push({ matA, matB, resA: String(mData[i][3] || ''), resB: String(mData[i][5] || '') });
+  }
+  if (!pairs.length) return [];
+
+  const shT = getSheet_(SHEETS.TARJETAS);
+  if (!shT) return [];
+  const nextT = findNextEmptyRow_(shT, 2);
+  if (nextT <= 2) return [];
+  const tData = shT.getRange(2, 2, nextT - 2, 32).getValues();
+  const tarjMap = {};
+  let canchaId = null;
+  tData.forEach(function(r) {
+    if (String(r[0] || '').trim() !== fStr) return;
+    const m = String(r[1] || '').trim();
+    if (m) { tarjMap[m] = r; if (!canchaId) canchaId = String(r[5] || '').trim(); }
+  });
+
+  const cd = canchaId ? getCanchaPares_(canchaId) : null;
+  const cpIndices = (cd && cd.indices) ? cd.indices : new Array(18).fill(0);
 
   const matches = [];
-  for (let i = 0; i < data.length; i += 2) {
-    const rowA = data[i];
-    const rowB = i + 1 < data.length ? data[i + 1] : null;
-    if (!rowB) break;
-    const fA = String(rowA[0] || '').trim();
-    const fB = String(rowB[0] || '').trim();
-    if (fA !== String(fecha) || fB !== String(fecha)) continue;
-    const nameA = String(rowA[2] || '').trim(); // col D
-    const nameB = String(rowB[2] || '').trim();
-    if (!nameA || !nameB) continue;
+  pairs.forEach(function(p) {
+    const tarjA = tarjMap[p.matA];
+    const tarjB = tarjMap[p.matB];
+    if (!tarjA || !tarjB) return;
+
+    const hcpA   = parseFloat(tarjA[3]);
+    const hcpB   = parseFloat(tarjB[3]);
+    const hcp85A = isNaN(hcpA) ? 0 : Math.round(hcpA * 0.85);
+    const hcp85B = isNaN(hcpB) ? 0 : Math.round(hcpB * 0.85);
+    const ayA = Math.max(0, hcp85A - hcp85B);
+    const ayB = Math.max(0, hcp85B - hcp85A);
+    const bcA = Math.max(0, ayA - 18);
+    const bcB = Math.max(0, ayB - 18);
+
+    const scA = tarjA.slice(6, 24);
+    const scB = tarjB.slice(6, 24);
+    const netA = [], netB = [];
+    for (let h = 0; h < 18; h++) {
+      const idx  = cpIndices[h] || 0;
+      const adjA = (ayA > 0 && ayA >= idx ? -1 : 0) + (bcA > 0 && idx <= bcA ? -1 : 0);
+      const adjB = (ayB > 0 && ayB >= idx ? -1 : 0) + (bcB > 0 && idx <= bcB ? -1 : 0);
+      const gA   = (scA[h] !== '' && scA[h] != null) ? parseInt(scA[h]) : null;
+      const gB   = (scB[h] !== '' && scB[h] != null) ? parseInt(scB[h]) : null;
+      netA.push(gA !== null && !isNaN(gA) ? gA + adjA : '');
+      netB.push(gB !== null && !isNaN(gB) ? gB + adjB : '');
+    }
 
     matches.push({
-      j1Name: nameA,
-      j2Name: nameB,
-      j1Hcp: rowA[3],            // col E
-      j2Hcp: rowB[3],
-      j1Scores: rowA.slice(4, 22), // F..W — 18 hoyos
-      j2Scores: rowB.slice(4, 22),
-      j1Result: rowA[22],         // col X
-      j2Result: rowB[22],
+      j1Name:   String(tarjA[2] || '').trim(),
+      j2Name:   String(tarjB[2] || '').trim(),
+      j1Hcp:    hcp85A,
+      j2Hcp:    hcp85B,
+      j1Scores: netA,
+      j2Scores: netB,
+      j1Result: p.resA,
+      j2Result: p.resB,
     });
-  }
+  });
   return matches;
 }
 
@@ -1080,13 +1124,11 @@ function getFechaLineas_(fecha) {
     try {
       const ne2 = shM.getLastRow();
       if (ne2 >= 3) {
-        const mData = shM.getRange(2, 2, ne2 - 1, 2).getValues(); // cols B(fecha), C(mat)
-        for (var ri = 0; ri + 1 < mData.length; ri += 2) {
-          const f1 = String(mData[ri][0]     || '').trim();
-          const f2 = String(mData[ri + 1][0] || '').trim();
-          if (f1 !== String(fecha) || f2 !== String(fecha)) continue;
-          const j1 = String(mData[ri][1]     || '').trim();
-          const j2 = String(mData[ri + 1][1] || '').trim();
+        const mData = shM.getRange(2, 2, ne2 - 1, 3).getValues(); // B=fecha, C=mat1, D=mat2
+        for (var ri = 0; ri < mData.length; ri++) {
+          if (String(mData[ri][0] || '').trim() !== String(fecha)) continue;
+          const j1 = String(mData[ri][1] || '').trim();
+          const j2 = String(mData[ri][2] || '').trim();
           if (j1 && j2) matchPairsSet[[j1, j2].sort().join('|')] = true;
         }
       }
@@ -1954,18 +1996,21 @@ function cargarTarjeta_(params) {
   let   hcp85val       = stbBreak ? stbBreak.e : 0;
 
   if (preMatchSh && cpIndices.length > 0 && stbBreak) {
-    const matchLast = findNextEmptyRow_(preMatchSh, 2);
+    const matchLast = findNextEmptyRow_(preMatchSh, 4);
     if (matchLast > 2) {
-      preMatchBCY = preMatchSh.getRange(2, 2, matchLast - 2, 24).getValues();
+      // B=fecha, C=mat1, D=mat2, E=res1, F=pts1, G=res2, H=pts2
+      preMatchBCY = preMatchSh.getRange(2, 2, matchLast - 2, 7).getValues();
 
       for (let mi = 0; mi < preMatchBCY.length; mi++) {
-        if (String(preMatchBCY[mi][0]).trim() !== fStr || String(preMatchBCY[mi][1]).trim() !== mStr) continue;
-        const mySheetRow      = mi + 2;
-        const partnerSheetRow = (mySheetRow % 2 === 0) ? mySheetRow + 1 : mySheetRow - 1;
-        const partnerIdx      = partnerSheetRow - 2;
-        if (partnerIdx < 0 || partnerIdx >= preMatchBCY.length) continue;
+        if (String(preMatchBCY[mi][0] || '').trim() !== fStr) continue;
+        const mat1 = String(preMatchBCY[mi][1] || '').trim();
+        const mat2 = String(preMatchBCY[mi][2] || '').trim();
+        const isMat1 = (mat1 === mStr);
+        const isMat2 = (mat2 === mStr);
+        if (!isMat1 && !isMat2) continue;
 
-        const oppMat = String(preMatchBCY[partnerIdx][1]).trim();
+        const mySheetRow = mi + 2;
+        const oppMat = isMat1 ? mat2 : mat1;
         if (!oppMat) continue;
 
         let oppTarjeta = null;
@@ -1976,29 +2021,28 @@ function cargarTarjeta_(params) {
         }
         if (!oppTarjeta) continue;
 
-        const oppScores18   = oppTarjeta.slice(6, 24);
-        const oppHasScores  = oppScores18.some(function(s){ return s !== '' && s !== null && s !== undefined; });
+        const oppScores18  = oppTarjeta.slice(6, 24);
+        const oppHasScores = oppScores18.some(function(s){ return s !== '' && s !== null && s !== undefined; });
         if (!oppHasScores) continue;
 
         const oppHcpNum = parseFloat(oppTarjeta[3]);
         if (isNaN(oppHcpNum)) continue;
-        const oppHcp85  = Math.round(oppHcpNum * 0.85);
+        const oppHcp85 = Math.round(oppHcpNum * 0.85);
 
         const ayMy  = Math.max(0, hcp85val - oppHcp85);
         const ayOpp = Math.max(0, oppHcp85 - hcp85val);
         const bcMy  = Math.max(0, ayMy  - 18);
         const bcOpp = Math.max(0, ayOpp - 18);
 
-        const myAdj = new Array(18), oppAdj = new Array(18);
         const myNet = new Array(18), oppNet = new Array(18);
         for (let h = 0; h < 18; h++) {
-          const idx   = cpIndices[h] || 0;
-          myAdj[h]    = (ayMy  > 0 && ayMy  >= idx ? -1 : 0) + (bcMy  > 0 && idx <= bcMy  ? -1 : 0);
-          oppAdj[h]   = (ayOpp > 0 && ayOpp >= idx ? -1 : 0) + (bcOpp > 0 && idx <= bcOpp ? -1 : 0);
-          const myG   = myScores18[h]  !== '' && myScores18[h]  !== null ? parseInt(myScores18[h])  : null;
-          const oppG  = oppScores18[h] !== '' && oppScores18[h] !== null ? parseInt(oppScores18[h]) : null;
-          myNet[h]    = (myG  !== null && !isNaN(myG))  ? myG  + myAdj[h]  : '';
-          oppNet[h]   = (oppG !== null && !isNaN(oppG)) ? oppG + oppAdj[h] : '';
+          const idx = cpIndices[h] || 0;
+          const adjMy  = (ayMy  > 0 && ayMy  >= idx ? -1 : 0) + (bcMy  > 0 && idx <= bcMy  ? -1 : 0);
+          const adjOpp = (ayOpp > 0 && ayOpp >= idx ? -1 : 0) + (bcOpp > 0 && idx <= bcOpp ? -1 : 0);
+          const myG  = myScores18[h]  !== '' && myScores18[h]  !== null ? parseInt(myScores18[h])  : null;
+          const oppG = oppScores18[h] !== '' && oppScores18[h] !== null ? parseInt(oppScores18[h]) : null;
+          myNet[h]  = (myG  !== null && !isNaN(myG))  ? myG  + adjMy  : '';
+          oppNet[h] = (oppG !== null && !isNaN(oppG)) ? oppG + adjOpp : '';
         }
 
         let myBA = 0, oppBA = 0;
@@ -2015,22 +2059,18 @@ function cargarTarjeta_(params) {
         const myY   = myX  === '' ? 0 : (myX  === 'AS' ? 3 : 6);
         const oppY  = oppX === '' ? 0 : (oppX === 'AS' ? 3 : 6);
 
-        rowYOverride[mySheetRow]      = myY;
-        rowYOverride[partnerSheetRow] = oppY;
+        // Write [res1, pts1, res2, pts2] to cols E..H of the single match row
+        const writeData = isMat1 ? [[myX, myY, oppX, oppY]] : [[oppX, oppY, myX, myY]];
+        rowYOverride[mySheetRow] = { mat1: mat1, pts1: isMat1 ? myY : oppY, mat2: mat2, pts2: isMat1 ? oppY : myY };
         affectedMats[mStr]   = true;
         affectedMats[oppMat] = true;
 
-        matchWriteOps.push(
-          { sh: preMatchSh, row: mySheetRow,      col: 5,  data: [[hcp85val].concat(myNet).concat([myX,  myY])]  },
-          { sh: preMatchSh, row: mySheetRow,      col: 33, data: [myAdj.concat([ayMy,  '', myBA,  myBB,  bcMy])] },
-          { sh: preMatchSh, row: partnerSheetRow, col: 5,  data: [[oppHcp85].concat(oppNet).concat([oppX, oppY])] },
-          { sh: preMatchSh, row: partnerSheetRow, col: 33, data: [oppAdj.concat([ayOpp, '', oppBA, oppBB, bcOpp])] }
-        );
+        matchWriteOps.push({ sh: preMatchSh, row: mySheetRow, col: 5, data: writeData });
       }
     }
   }
 
-  // SCORE!MA per affected player (sum Y across all their match rows)
+  // SCORE!MA per affected player — sum pts from their match rows
   const maWriteOps = []; // [{scoreRow, totalMA, mat}]
   const affectedMatsList = Object.keys(affectedMats);
   if (affectedMatsList.length > 0 && preMatchBCY) {
@@ -2040,10 +2080,17 @@ function cargarTarjeta_(params) {
         const mat = affectedMatsList[ai];
         let totalMA = 0;
         for (let mi2 = 0; mi2 < preMatchBCY.length; mi2++) {
-          if (String(preMatchBCY[mi2][0]).trim() !== fStr) continue;
-          if (String(preMatchBCY[mi2][1]).trim() !== mat)  continue;
+          if (String(preMatchBCY[mi2][0] || '').trim() !== fStr) continue;
+          const m1 = String(preMatchBCY[mi2][1] || '').trim();
+          const m2 = String(preMatchBCY[mi2][2] || '').trim();
+          if (mat !== m1 && mat !== m2) continue;
           const shRow = mi2 + 2;
-          totalMA += rowYOverride.hasOwnProperty(shRow) ? rowYOverride[shRow] : (Number(preMatchBCY[mi2][23]) || 0);
+          if (rowYOverride[shRow]) {
+            totalMA += mat === rowYOverride[shRow].mat1 ? rowYOverride[shRow].pts1 : rowYOverride[shRow].pts2;
+          } else {
+            // col F (idx 4) = pts1, col H (idx 6) = pts2
+            totalMA += mat === m1 ? (Number(preMatchBCY[mi2][4]) || 0) : (Number(preMatchBCY[mi2][6]) || 0);
+          }
         }
         const sRow = (mat === mStr) ? preScoreRow : getScoreRowForMat_(mat);
         if (sRow > 0) maWriteOps.push({ scoreRow: sRow, totalMA: totalMA, mat: mat });
@@ -2637,30 +2684,21 @@ function cargarMatches_(params) {
 
   // Find starting row and ensure sheet has enough rows
   let nextRow = findNextEmptyRow_(sh, 4);
-  if (nextRow % 2 === 1) nextRow++;
-  const rowsNeeded = prepared.length * 2;
+  const rowsNeeded = prepared.length; // 1 row per match
   const lastRequired = nextRow + rowsNeeded - 1;
   if (sh.getMaxRows() < lastRequired) {
     sh.insertRowsAfter(sh.getMaxRows(), lastRequired - sh.getMaxRows() + 10);
     log.push('inserted rows to reach row ' + (lastRequired + 10));
   }
 
-  // Batch write cols B-C-D together (fecha, matricula, nombre)
-  // Col C previously held a VLOOKUP formula to derive the matricula from the nombre.
-  // Writing it directly avoids any mismatch caused by spaces/formatting in JUGADORES.
-  const colBCD = [];
-  prepared.forEach(p => {
-    colBCD.push([fecha, p.mat1, p.name1]);
-    colBCD.push([fecha, p.mat2, p.name2]);
-  });
+  // Write 1 row per match: B=fecha, C=mat1, D=mat2, E=res1, F=pts1, G=res2, H=pts2
+  const newRows = prepared.map(function(p) { return [fecha, p.mat1, p.mat2, '', 0, '', 0]; });
 
   let written = 0;
   try {
-    // Clear validation on col D (the nombre column has a dropdown in some setups)
-    sh.getRange(nextRow, 4, rowsNeeded, 1).clearDataValidations();
-    sh.getRange(nextRow, 2, rowsNeeded, 3).setValues(colBCD);
+    sh.getRange(nextRow, 2, rowsNeeded, 7).setValues(newRows);
     written = prepared.length;
-    log.push('batch wrote cols B-C-D ' + rowsNeeded + ' rows starting ' + nextRow);
+    log.push('wrote ' + rowsNeeded + ' match rows starting at row ' + nextRow);
   } catch (err) {
     log.push('batch write ERROR: ' + err.message);
   }
@@ -2678,29 +2716,23 @@ function getMatchesForFecha_(fecha) {
   if (!sh) return [];
   const nextEmpty = findNextEmptyRow_(sh, 4);
   if (nextEmpty <= 2) return [];
-  // Read B (fecha) and D (jugador nombre) from row 2 to last
-  const range = sh.getRange(2, 2, nextEmpty - 2, 3).getValues(); // B,C,D
-  // Build map: jugador name -> matricula for reverse lookup
-  const nameToMat = {};
-  getJugadores_().forEach(j => { nameToMat[j.nombre] = j.matricula; });
+  // B=fecha, C=mat1, D=mat2
+  const range = sh.getRange(2, 2, nextEmpty - 2, 3).getValues();
+  const matToName = {};
+  getJugadores_().forEach(function(j) { matToName[j.matricula] = j.nombre; });
 
   const matches = [];
-  // Pair rows: (rowA, rowB) where row numbers are 2+i in sheet
-  for (let i = 0; i < range.length; i += 2) {
-    const rowA = 2 + i;
-    const rowB = 2 + i + 1;
-    const fA = String(range[i][0] || '').trim();
-    const jA = String(range[i][2] || '').trim();
-    const fB = i + 1 < range.length ? String(range[i + 1][0] || '').trim() : '';
-    const jB = i + 1 < range.length ? String(range[i + 1][2] || '').trim() : '';
-    if (fA === String(fecha) && jA && fB === String(fecha) && jB) {
+  for (let i = 0; i < range.length; i++) {
+    const f  = String(range[i][0] || '').trim();
+    const m1 = String(range[i][1] || '').trim();
+    const m2 = String(range[i][2] || '').trim();
+    if (f === String(fecha) && m1 && m2) {
       matches.push({
-        rowA: rowA,
-        rowB: rowB,
-        j1Name: jA,
-        j2Name: jB,
-        j1: nameToMat[jA] || '',
-        j2: nameToMat[jB] || '',
+        rowI:   i + 2,
+        j1Name: matToName[m1] || m1,
+        j2Name: matToName[m2] || m2,
+        j1:     m1,
+        j2:     m2,
       });
     }
   }
@@ -2734,7 +2766,7 @@ function editarMatches_(params) {
     });
     rowsToClear.forEach(r => {
       try {
-        sh.getRange(r, 2, 1, 3).clearContent(); // clear B, C and D in one call
+        sh.getRange(r, 2, 1, 7).clearContent(); // clear B..H
         changes.cleared++;
       } catch (e) { changes.errors.push('clear row ' + r + ': ' + e.message); }
     });
@@ -2771,25 +2803,19 @@ function editarMatches_(params) {
 
   // Step 3: Find starting row and ensure sheet has enough capacity
   let nextRow = findNextEmptyRow_(sh, 4);
-  if (nextRow % 2 === 1) nextRow++;
-  const rowsNeeded = prepared.length * 2;
+  const rowsNeeded = prepared.length; // 1 row per match
   const lastRequired = nextRow + rowsNeeded - 1;
   if (sh.getMaxRows() < lastRequired) {
     sh.insertRowsAfter(sh.getMaxRows(), lastRequired - sh.getMaxRows() + 10);
     changes.log.push('inserted rows to row ' + (lastRequired + 10));
   }
 
-  // Step 4: Batch write cols B-C-D (fecha, matricula, nombre) — same approach as cargarMatches_
-  const colBCD = [];
-  prepared.forEach(p => {
-    colBCD.push([fecha, p.mat1, p.name1]);
-    colBCD.push([fecha, p.mat2, p.name2]);
-  });
+  // Step 4: Write 1 row per match: B=fecha, C=mat1, D=mat2, E..H empty (filled by recalcular)
+  const newRows = prepared.map(function(p) { return [fecha, p.mat1, p.mat2, '', 0, '', 0]; });
   try {
-    sh.getRange(nextRow, 4, rowsNeeded, 1).clearDataValidations(); // col D dropdown
-    sh.getRange(nextRow, 2, rowsNeeded, 3).setValues(colBCD);
+    sh.getRange(nextRow, 2, rowsNeeded, 7).setValues(newRows);
     changes.added = prepared.length;
-    changes.log.push('batch wrote cols B-C-D ' + rowsNeeded + ' rows starting ' + nextRow);
+    changes.log.push('wrote ' + rowsNeeded + ' match rows starting ' + nextRow);
   } catch (e) {
     changes.errors.push('batch write ERROR: ' + e.message);
   }
@@ -2981,19 +3007,21 @@ function getFechaResultados_(fecha) {
   if (shM) {
     const nextEmpty = findNextEmptyRow_(shM, 4);
     if (nextEmpty > 2) {
-      const mData = shM.getRange(2, 2, nextEmpty - 2, 3).getValues(); // B,C,D
-      for (let i = 0; i + 1 < mData.length; i += 2) {
-        const fA = String(mData[i][0]     || '').trim();
-        const fB = String(mData[i + 1][0] || '').trim();
-        if (fA !== fStr || fB !== fStr) continue;
-        const nameA = String(mData[i][2]     || '').trim();
-        const nameB = String(mData[i + 1][2] || '').trim();
-        if (!nameA || !nameB) continue;
+      // B=fecha, C=mat1, D=mat2 — 1 row per match
+      const mData = shM.getRange(2, 2, nextEmpty - 2, 3).getValues();
+      for (let i = 0; i < mData.length; i++) {
+        if (String(mData[i][0] || '').trim() !== fStr) continue;
+        const mat1 = String(mData[i][1] || '').trim();
+        const mat2 = String(mData[i][2] || '').trim();
+        if (!mat1 || !mat2) continue;
+        const jug1 = jugMap[mat1] || {};
+        const jug2 = jugMap[mat2] || {};
         matches.push({
-          rowA: i + 2, rowB: i + 3,
-          j1Name: nameA, j2Name: nameB,
-          j1: String(mData[i][1]     || '').trim(),
-          j2: String(mData[i + 1][1] || '').trim(),
+          rowI:   i + 2,
+          j1Name: jug1.nombre || mat1,
+          j2Name: jug2.nombre || mat2,
+          j1:     mat1,
+          j2:     mat2,
         });
       }
     }
@@ -4638,13 +4666,13 @@ function armarLineas_(params) {
   try {
     const lastRowM = shM.getLastRow();
     if (lastRowM >= 3) {
-      const mRows = shM.getRange(2, 2, lastRowM - 1, 2).getValues(); // B, C
-      for (var mi = 0; mi + 1 < mRows.length; mi += 2) {
-        const f1 = String(mRows[mi][0]     || '').trim();
-        const f2 = String(mRows[mi + 1][0] || '').trim();
-        const m1 = String(mRows[mi][1]     || '').trim();
-        const m2 = String(mRows[mi + 1][1] || '').trim();
-        if (f1 && f1 === f2 && m1 && m2 && m1 !== m2) {
+      // B=fecha, C=mat1, D=mat2 — 1 row per match
+      const mRows = shM.getRange(2, 2, lastRowM - 1, 3).getValues();
+      for (var mi = 0; mi < mRows.length; mi++) {
+        const f  = String(mRows[mi][0] || '').trim();
+        const m1 = String(mRows[mi][1] || '').trim();
+        const m2 = String(mRows[mi][2] || '').trim();
+        if (f && m1 && m2 && m1 !== m2) {
           const key = [m1, m2].sort().join('|');
           matchedPairs[key] = (matchedPairs[key] || 0) + 1;
         }
@@ -5291,17 +5319,14 @@ function recalcularMatchesFecha_(params) {
   }
 
   const matchWriteOps = [];
-  const rowYMap = {};
+  const rowYMap = {}; // sheetRow → { mat1, pts1, mat2, pts2 }
   const affectedMats = {};
   let updated = 0;
 
-  for (let i = 0; i < matchData.length; i += 2) {
+  for (let i = 0; i < matchData.length; i++) {
     if (String(matchData[i][0] || '').trim() !== fStr) continue;
-    if (i + 1 >= matchData.length) break;
-    if (String(matchData[i + 1][0] || '').trim() !== fStr) continue;
-
     const matA = String(matchData[i][1] || '').trim();
-    const matB = String(matchData[i + 1][1] || '').trim();
+    const matB = String(matchData[i][2] || '').trim();
     if (!matA || !matB) continue;
 
     const tarjA = tarjMap[matA];
@@ -5325,26 +5350,16 @@ function recalcularMatchesFecha_(params) {
     const bcA = Math.max(0, ayA - 18);
     const bcB = Math.max(0, ayB - 18);
 
-    const adjA = new Array(18), adjB = new Array(18);
     const netA = new Array(18), netB = new Array(18);
     for (let h = 0; h < 18; h++) {
-      const idx = cpIndices[h] || 0;
-      adjA[h] = (ayA > 0 && ayA >= idx ? -1 : 0) + (bcA > 0 && idx <= bcA ? -1 : 0);
-      adjB[h] = (ayB > 0 && ayB >= idx ? -1 : 0) + (bcB > 0 && idx <= bcB ? -1 : 0);
-      const gA = (scoresA[h] !== '' && scoresA[h] != null) ? parseInt(scoresA[h]) : null;
-      const gB = (scoresB[h] !== '' && scoresB[h] != null) ? parseInt(scoresB[h]) : null;
-      netA[h] = (gA !== null && !isNaN(gA)) ? gA + adjA[h] : '';
-      netB[h] = (gB !== null && !isNaN(gB)) ? gB + adjB[h] : '';
+      const idx  = cpIndices[h] || 0;
+      const adjA = (ayA > 0 && ayA >= idx ? -1 : 0) + (bcA > 0 && idx <= bcA ? -1 : 0);
+      const adjB = (ayB > 0 && ayB >= idx ? -1 : 0) + (bcB > 0 && idx <= bcB ? -1 : 0);
+      const gA   = (scoresA[h] !== '' && scoresA[h] != null) ? parseInt(scoresA[h]) : null;
+      const gB   = (scoresB[h] !== '' && scoresB[h] != null) ? parseInt(scoresB[h]) : null;
+      netA[h]    = (gA !== null && !isNaN(gA)) ? gA + adjA : '';
+      netB[h]    = (gB !== null && !isNaN(gB)) ? gB + adjB : '';
     }
-
-    let baA = 0, baB = 0;
-    for (let h = 0; h < 18; h++) {
-      if (netA[h] !== '' && netB[h] !== '') {
-        if (netA[h] < netB[h]) baA++;
-        if (netB[h] < netA[h]) baB++;
-      }
-    }
-    const bbA = baA - baB, bbB = baB - baA;
 
     // Match play result in hole-play order (respects hoyoSalida)
     let mpDiff = 0, clinchUp = 0, clinchRem = -1;
@@ -5372,15 +5387,11 @@ function recalcularMatchesFecha_(params) {
     const yA = xA === '' ? 0 : (xA === 'AS' ? 3 : 6);
     const yB = xB === '' ? 0 : (xB === 'AS' ? 3 : 6);
 
-    const rowA = i + 2, rowB = i + 3;
-    rowYMap[rowA] = yA; rowYMap[rowB] = yB;
+    const rowI = i + 2;
+    rowYMap[rowI] = { mat1: matA, pts1: yA, mat2: matB, pts2: yB };
     affectedMats[matA] = true; affectedMats[matB] = true;
-    matchWriteOps.push(
-      { row: rowA, col: 5,  data: [[hcp85A].concat(netA).concat([xA, yA])] },
-      { row: rowA, col: 33, data: [adjA.concat([ayA, '', baA, bbA, bcA])] },
-      { row: rowB, col: 5,  data: [[hcp85B].concat(netB).concat([xB, yB])] },
-      { row: rowB, col: 33, data: [adjB.concat([ayB, '', baB, bbB, bcB])] }
-    );
+    // Write [res1, pts1, res2, pts2] to cols E..H of the single row
+    matchWriteOps.push({ row: rowI, col: 5, data: [[xA, yA, xB, yB]] });
     updated++;
   }
 
@@ -5392,13 +5403,22 @@ function recalcularMatchesFecha_(params) {
 
   const scoreSh = getSheet_('SCORE');
   if (scoreSh && maCol >= 6 && maCol <= 49) {
-    const matchFull = matchSh.getRange(2, 2, matchLast - 2, 24).getValues();
+    // Read B..H (7 cols) to sum pts per player
+    const matchFull = matchSh.getRange(2, 2, matchLast - 2, 7).getValues();
     Object.keys(affectedMats).forEach(function(mat) {
       let totalMA = 0;
       matchFull.forEach(function(r, ri) {
-        if (String(r[0]).trim() !== fStr || String(r[1]).trim() !== mat) return;
+        if (String(r[0] || '').trim() !== fStr) return;
+        const m1 = String(r[1] || '').trim();
+        const m2 = String(r[2] || '').trim();
+        if (mat !== m1 && mat !== m2) return;
         const shRow = ri + 2;
-        totalMA += rowYMap.hasOwnProperty(shRow) ? rowYMap[shRow] : (Number(r[23]) || 0);
+        if (rowYMap[shRow]) {
+          totalMA += mat === rowYMap[shRow].mat1 ? rowYMap[shRow].pts1 : rowYMap[shRow].pts2;
+        } else {
+          // col F (idx 4) = pts1, col H (idx 6) = pts2
+          totalMA += mat === m1 ? (Number(r[4]) || 0) : (Number(r[6]) || 0);
+        }
       });
       const sRow = getScoreRowForMat_(mat);
       if (sRow > 0) scoreSh.getRange(sRow, maCol).setValue(totalMA);
@@ -5409,6 +5429,63 @@ function recalcularMatchesFecha_(params) {
   try { CacheService.getScriptCache().remove('fl_' + fStr); } catch(e) {}
   audit_('RECALCULAR_MATCHES', adminKey, { fecha: fStr, updated: updated, hoyoSalida: hoyoSalida });
   return { ok: true, updated: updated, hoyoSalida: hoyoSalida, holeOrder: holeOrder };
+}
+
+/**
+ * One-time migration: converts MATCH from 2-rows-per-match to 1-row-per-match.
+ * Run ONCE from the Apps Script editor after deploying this version.
+ * Safe to re-run: skips rows that are already in 1-row format.
+ * Line history data in cols BZ:CB (78-80) is preserved (different column range).
+ */
+function migrarMatchA1Fila_() {
+  const sh = getSheet_(SHEETS.MATCH);
+  if (!sh) return { error: 'Hoja MATCH no encontrada' };
+  const lastRow = sh.getLastRow();
+  if (lastRow < 3) return { ok: true, converted: 0, message: 'No hay datos para migrar' };
+
+  // Read cols B..Y (24 cols) to get old data (fecha, mat, nombre, ..., resultado, puntos)
+  const rawData = sh.getRange(2, 2, lastRow - 1, 24).getValues();
+
+  // Detect if already migrated: if col D (index 2) has a second matricula instead of a name
+  // Simple check: first non-empty row — if col D looks numeric, it's mat2 (new format)
+  const firstMatch = rawData.find(function(r) { return String(r[0] || '').trim(); });
+  if (firstMatch) {
+    const col4val = String(firstMatch[2] || '').trim();
+    // If col D is numeric (a matricula), data is already in new format
+    if (col4val && /^\d+$/.test(col4val)) {
+      return { ok: true, converted: 0, message: 'Los datos ya están en formato de 1 fila por match' };
+    }
+  }
+
+  const newRows = [];
+  let converted = 0;
+  for (let i = 0; i + 1 < rawData.length; i += 2) {
+    const rA = rawData[i];
+    const rB = rawData[i + 1];
+    const fA   = String(rA[0] || '').trim();
+    const matA = String(rA[1] || '').trim();
+    const matB = String(rB[1] || '').trim();
+    if (!fA || !matA || !matB) continue;
+    // col X = index 22 from B = resultado; col Y = index 23 = puntos
+    const resA = String(rA[22] || '').trim();
+    const ptsA = Number(rA[23]) || 0;
+    const resB = String(rB[22] || '').trim();
+    const ptsB = Number(rB[23]) || 0;
+    newRows.push([fA, matA, matB, resA, ptsA, resB, ptsB]);
+    converted++;
+  }
+
+  if (!newRows.length) return { ok: true, converted: 0, message: 'No se encontraron pares para convertir' };
+
+  // Clear cols B..Y for all existing match rows (leave BZ:CB untouched)
+  sh.getRange(2, 2, lastRow - 1, 24).clearContent();
+
+  // Write new compact format
+  sh.getRange(2, 2, newRows.length, 7).setValues(newRows);
+  SpreadsheetApp.flush();
+
+  audit_('MIGRAR_MATCH_1FILA', 'admin', { converted: converted, totalRows: newRows.length });
+  return { ok: true, converted: converted, totalRows: newRows.length };
 }
 
 function crearCancha_(params) {
