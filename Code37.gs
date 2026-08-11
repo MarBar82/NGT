@@ -5305,19 +5305,18 @@ function recalcularTotalesScore_(params, fechaParaPosLb) {
           oVals.push([0]); pVals.push(['']); qVals.push(['']); rVals.push(['']); sVals.push(['']);
         }
       }
-      lbSh.getRange(2,  7, 18, 1).setValues(gVals);  // G = nombre
-      lbSh.getRange(2,  8, 18, 1).setValues(hVals);  // H = movDir (⬆/⬇/—)
-      lbSh.getRange(2,  9, 18, 1).setValues(iVals);  // I = movQty (magnitude)
-      lbSh.getRange(2, 10, 18, 1).setValues(jVals);  // J = pts totales
-      lbSh.getRange(2, 11, 18, 1).setValues(kVals);  // K = stb total
-      lbSh.getRange(2, 12, 18, 1).setValues(lVals);  // L = match total
-      lbSh.getRange(2, 13, 18, 1).setValues(mVals);  // M = bonus total
-      lbSh.getRange(2, 14, 18, 1).setValues(nVals);  // N = fechas jugadas
-      lbSh.getRange(2, 15, 18, 1).setValues(oVals);  // O = fechas ganadas
-      lbSh.getRange(2, 16, 18, 1).setValues(pVals);  // P = clear
-      lbSh.getRange(2, 17, 18, 1).setValues(qVals);  // Q = clear
-      lbSh.getRange(2, 18, 18, 1).setValues(rVals);  // R = doble indicator
-      lbSh.getRange(2, 19, 18, 1).setValues(sVals);  // S = doble points
+      // Batch write cols 2..14 (B..N) — LEADERBOARD columns shifted left 5 (old F->A)
+      // B=nombre, C=movDir, D=movQty, E=pts, F=stb, G=match, H=bonus,
+      // I=fjug, J=fgan, K=clear, L=clear, M=doble, N=doblePts
+      const lbData = [];
+      for (var ri = 0; ri < 18; ri++) {
+        lbData.push([
+          gVals[ri][0], hVals[ri][0], iVals[ri][0], jVals[ri][0], kVals[ri][0],
+          lVals[ri][0], mVals[ri][0], nVals[ri][0], oVals[ri][0],
+          pVals[ri][0], qVals[ri][0], rVals[ri][0], sVals[ri][0]
+        ]);
+      }
+      lbSh.getRange(2, 2, 18, 13).setValues(lbData);
     }
   } catch(eLb) {}
 
