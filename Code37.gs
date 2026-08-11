@@ -5520,9 +5520,15 @@ function test() {
   Logger.log(JSON.stringify(getFechasActivas_()));
 }
 
-// Wrapper: recalculate fecha winners and write to SCORE!AK
+// Wrapper: recalculate fecha winners and write PosFecha + full LEADERBOARD
 function runCalcularGanadoresFechas() {
   const result = calcularGanadoresFechas_(null);
+  Logger.log(JSON.stringify(result));
+}
+
+// Wrapper: recalculate totals and update LEADERBOARD (standalone, no auth required)
+function runRecalcularTotalesScore() {
+  const result = recalcularTotalesScore_(null);
   Logger.log(JSON.stringify(result));
 }
 
