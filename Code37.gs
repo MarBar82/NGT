@@ -5165,15 +5165,15 @@ function crearCancha_(params) {
 // fechaParaPosLb: if provided, writes PosLeaderboard (col H) in NGT DB for that fecha's rows
 function recalcularTotalesScore_(params, fechaParaPosLb) {
   if (params && !checkAdmin_(params.adminKey)) return { ok: false, error: 'No autorizado' };
-  const sh = getSheet_('SCORE');
-  if (!sh) return { ok: false, error: 'SCORE no encontrada' };
 
-  // Read player list from app SCORE (A=matricula, B=nombre, rows 3..20)
-  const playerMats = sh.getRange(3, 1, 18, 1).getValues().map(function(r) {
-    return String(r[0] || '').trim();
-  });
+  // Player list from JUGADORES (source of truth — no dependency on app SCORE sheet)
+  const jugs = getJugadores_();
+  const playerMats  = jugs.map(function(j) { return j.matricula; });
+  const playerNames = jugs.map(function(j) { return j.nombre; });
+  const numP = playerMats.length;
+  if (!numP) return { ok: false, error: 'Sin jugadores en JUGADORES' };
 
-  // Build map: mat → { fechaStr → {st, ma, pb, db} } from NGT DB
+  // Build map: mat → { fechaStr → row } from NGT DB SCORE
   const ngtRows = getAllNGTScoreData_();
   const ngtMap = {};
   ngtRows.forEach(function(r) {
@@ -5181,41 +5181,36 @@ function recalcularTotalesScore_(params, fechaParaPosLb) {
     ngtMap[r.mat][r.fecha] = r;
   });
 
-  const alMatrix   = []; // 18 rows × 8 cols (AL:AS)
-  const cVals      = [];
-  const stbTotals  = new Array(18).fill(0);
-  const maTotals   = new Array(18).fill(0);
-  const pbTotals   = new Array(18).fill(0);
+  const alMatrix  = [];
+  const cVals     = [];
+  const stbTotals = new Array(numP).fill(0);
+  const maTotals  = new Array(numP).fill(0);
+  const pbTotals  = new Array(numP).fill(0);
 
-  for (var i = 0; i < 18; i++) {
-    const mat         = playerMats[i];
+  for (var i = 0; i < numP; i++) {
+    const mat = playerMats[i];
     const playerFdMap = mat ? (ngtMap[mat] || {}) : {};
-    var alRow  = [];
-    var total  = 0;
-    var stSum  = 0, maSum = 0, pbSum = 0;
+    var alRow = [], total = 0, stSum = 0, maSum = 0, pbSum = 0;
     for (var n = 1; n <= 8; n++) {
       const fd = playerFdMap[String(n)] || { st: 0, ma: 0, pb: 0, db: 0 };
-      const st = fd.st || 0;
-      const ma = fd.ma || 0;
-      const pb = fd.pb || 0;
-      const db = fd.db || 0; // extra points from doble (0 if not used)
+      const st = fd.st || 0, ma = fd.ma || 0, pb = fd.pb || 0, db = fd.db || 0;
       const al = st + ma + pb + db;
       alRow.push(al);
-      total  += al;
-      stSum  += st; maSum += ma; pbSum += pb;
+      total += al; stSum += st; maSum += ma; pbSum += pb;
     }
     alMatrix.push(alRow);
     cVals.push(total);
-    stbTotals[i] = stSum;
-    maTotals[i]  = maSum;
-    pbTotals[i]  = pbSum;
+    stbTotals[i] = stSum; maTotals[i] = maSum; pbTotals[i] = pbSum;
   }
 
-  // Escribir AL:AS (col 38, 8 cols) y C (col 3)
-  sh.getRange(3, 38, 18, 8).setValues(alMatrix);
-  sh.getRange(3,  3, 18, 1).setValues(cVals.map(function(v) { return [v]; }));
+  // Optional: write totals back to app SCORE sheet if it still exists
+  const sh = getSheet_('SCORE');
+  if (sh) {
+    try { sh.getRange(3, 38, numP, 8).setValues(alMatrix); } catch(e) {}
+    try { sh.getRange(3,  3, numP, 1).setValues(cVals.map(function(v) { return [v]; })); } catch(e) {}
+  }
 
-  // Recalcular rankings (col D)
+  // Rankings
   var allRanks = cVals.map(function(ci, i) {
     var rank = 1;
     for (var j = 0; j < cVals.length; j++) { if (cVals[j] > ci) rank++; }
@@ -5223,14 +5218,16 @@ function recalcularTotalesScore_(params, fechaParaPosLb) {
     for (var j = 0; j <= i; j++) { if (cVals[j] === ci) cntBefore++; }
     return rank + cntBefore - 1;
   });
-  sh.getRange(3, 4, 18, 1).setValues(allRanks.map(function(r) { return [r]; }));
+  if (sh) {
+    try { sh.getRange(3, 4, numP, 1).setValues(allRanks.map(function(r) { return [r]; })); } catch(e) {}
+  }
 
-  // Write PosLeaderboard (col H = 8) for the given fecha's rows in NGT DB
+  // Write PosLeaderboard (col 8) for the given fecha's rows in NGT DB
   if (fechaParaPosLb) {
     try {
       const ngtSh = getNGTScoreSheet_();
       if (ngtSh) {
-        for (var pi = 0; pi < 18; pi++) {
+        for (var pi = 0; pi < numP; pi++) {
           const mat = playerMats[pi];
           if (!mat) continue;
           const row = findNGTScoreRow_(fechaParaPosLb, mat);
@@ -5240,24 +5237,23 @@ function recalcularTotalesScore_(params, fechaParaPosLb) {
     } catch(ePosLb) {}
   }
 
-  // Compute fechas ganadas per player (count PosFecha=1 in NGT DB)
+  // Fechas ganadas per player (PosFecha=1 count)
   const ganadoresMap = {};
   playerMats.forEach(function(m) { if (m) ganadoresMap[m] = 0; });
   ngtRows.forEach(function(r) {
     if (r.posFecha === 1 && ganadoresMap[r.mat] !== undefined) ganadoresMap[r.mat]++;
   });
 
-  // Determine previous fecha for movement calculation (second-to-last in sorted order)
+  // Previous fecha for movement arrows (second-to-last by number)
   const allFechasSet = {};
   ngtRows.forEach(function(r) { allFechasSet[r.fecha] = true; });
   const allFechasArr = Object.keys(allFechasSet).sort(function(a, b) { return parseInt(a) - parseInt(b); });
   const prevFecha = allFechasArr.length >= 2 ? allFechasArr[allFechasArr.length - 2] : null;
 
-  // Actualizar LEADERBOARD G, H, I, J, K, L, M, N, O, P, Q, R, S
+  // Write LEADERBOARD G–S
   try {
     const lbSh = getSheet_('LEADERBOARD');
     if (lbSh) {
-      const scoreNames = sh.getRange(3, 2, 18, 1).getValues();
       var gVals=[], hVals=[], iVals=[], jVals=[], kVals=[], lVals=[], mVals=[];
       var nVals=[], oVals=[], pVals=[], qVals=[], rVals=[], sVals=[];
       for (var r2 = 1; r2 <= 18; r2++) {
@@ -5266,7 +5262,7 @@ function recalcularTotalesScore_(params, fechaParaPosLb) {
           const mat = playerMats[idx2];
           const playerFdMap = ngtMap[mat] || {};
 
-          gVals.push([String(scoreNames[idx2][0] || '')]);
+          gVals.push([playerNames[idx2] || '']);
           jVals.push([cVals[idx2]]);
           kVals.push([stbTotals[idx2]]);
           lVals.push([maTotals[idx2]]);
@@ -5274,28 +5270,25 @@ function recalcularTotalesScore_(params, fechaParaPosLb) {
           oVals.push([ganadoresMap[mat] || 0]);
 
           // N: fechas jugadas = count rows with st > 0
-          const fJug = Object.keys(playerFdMap).filter(function(f) { return (playerFdMap[f].st || 0) > 0; }).length;
+          const fJug = Object.keys(playerFdMap).filter(function(f) {
+            return (playerFdMap[f].st || 0) > 0;
+          }).length;
           nVals.push([fJug || '']);
 
           // H, I: movement vs previous fecha's PosLeaderboard
           var movDir = '—', movAbs = '';
           const prevRow = prevFecha ? (playerFdMap[prevFecha] || null) : null;
           if (prevRow && prevRow.posLb > 0) {
-            const diff = prevRow.posLb - r2; // positive = moved up
-            if (diff !== 0) {
-              movDir = diff > 0 ? '⬆' : '⬇';
-              movAbs = Math.abs(diff);
-            }
+            const diff = prevRow.posLb - r2;
+            if (diff !== 0) { movDir = diff > 0 ? '⬆' : '⬇'; movAbs = Math.abs(diff); }
           }
           hVals.push([movDir]);
           iVals.push([movAbs]);
 
-          // P: not shown — clear
-          pVals.push(['']);
-          // Q: posAnt no longer needed as sheet column — clear
-          qVals.push(['']);
+          pVals.push(['']); // P: not shown — clear
+          qVals.push(['']); // Q: posAnt replaced by code — clear
 
-          // R, S: doble indicator and points from NGT DB
+          // R, S: doble from NGT DB
           var dobleInd = '', doblePts = '';
           Object.keys(playerFdMap).forEach(function(f) {
             const fd = playerFdMap[f];
@@ -5321,8 +5314,8 @@ function recalcularTotalesScore_(params, fechaParaPosLb) {
       lbSh.getRange(2, 13, 18, 1).setValues(mVals);  // M = bonus total
       lbSh.getRange(2, 14, 18, 1).setValues(nVals);  // N = fechas jugadas
       lbSh.getRange(2, 15, 18, 1).setValues(oVals);  // O = fechas ganadas
-      lbSh.getRange(2, 16, 18, 1).setValues(pVals);  // P = clear (not shown)
-      lbSh.getRange(2, 17, 18, 1).setValues(qVals);  // Q = clear (posAnt replaced by code)
+      lbSh.getRange(2, 16, 18, 1).setValues(pVals);  // P = clear
+      lbSh.getRange(2, 17, 18, 1).setValues(qVals);  // Q = clear
       lbSh.getRange(2, 18, 18, 1).setValues(rVals);  // R = doble indicator
       lbSh.getRange(2, 19, 18, 1).setValues(sVals);  // S = doble points
     }
