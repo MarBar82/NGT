@@ -228,7 +228,7 @@ function getScoreRowForMat_(matricula) {
 }
 
 // ════════ NGT DB SCORE HELPERS ════════
-// NGT DB SCORE: A=Fecha, B=Matricula, C=Stableford, D=Match, E=Bonus, F=Doble
+// NGT DB SCORE: A=Fecha, B=Matricula, C=Stableford, D=Match, E=Bonus, F=Doble(puntos), G=PosFecha, H=PosLeaderboard
 
 function getNGTScoreSheet_() {
   return getHistSheet_('SCORE');
@@ -239,7 +239,7 @@ function getAllNGTScoreData_() {
   if (!sh) return [];
   const last = sh.getLastRow();
   if (last < 2) return [];
-  const raw = sh.getRange(2, 1, last - 1, 6).getValues();
+  const raw = sh.getRange(2, 1, last - 1, 8).getValues();
   return raw.map(function(r, i) {
     return {
       fecha:    String(r[0] || '').trim(),
@@ -247,7 +247,9 @@ function getAllNGTScoreData_() {
       st:       Number(r[2]) || 0,
       ma:       Number(r[3]) || 0,
       pb:       Number(r[4]) || 0,
-      db:       (r[5] === true || r[5] === 1),
+      db:       Number(r[5]) || 0,
+      posFecha: Number(r[6]) || 0,
+      posLb:    Number(r[7]) || 0,
       sheetRow: i + 2,
     };
   }).filter(function(r) { return r.fecha && r.mat; });
@@ -268,14 +270,14 @@ function findNGTScoreRow_(fechaStr, matStr) {
   return -1;
 }
 
-// colIdx: 3=Stableford, 4=Match, 5=Bonus, 6=Doble (1-based sheet column in NGT DB)
+// colIdx: 3=Stableford, 4=Match, 5=Bonus, 6=Doble, 7=PosFecha, 8=PosLeaderboard (1-based sheet column in NGT DB)
 function setNGTScoreField_(fechaStr, matStr, colIdx, value) {
   const sh = getNGTScoreSheet_();
   if (!sh) return;
   let row = findNGTScoreRow_(fechaStr, matStr);
   if (row < 0) {
     row = sh.getLastRow() + 1;
-    sh.getRange(row, 1, 1, 6).setValues([[fechaStr, matStr, 0, 0, 0, false]]);
+    sh.getRange(row, 1, 1, 8).setValues([[fechaStr, matStr, 0, 0, 0, 0, 0, 0]]);
   }
   sh.getRange(row, colIdx).setValue(value);
 }
@@ -285,12 +287,14 @@ function getNGTScoreRow_(fechaStr, matStr) {
   if (!sh) return null;
   const row = findNGTScoreRow_(fechaStr, matStr);
   if (row < 0) return null;
-  const vals = sh.getRange(row, 1, 1, 6).getValues()[0];
+  const vals = sh.getRange(row, 1, 1, 8).getValues()[0];
   return {
-    st: Number(vals[2]) || 0,
-    ma: Number(vals[3]) || 0,
-    pb: Number(vals[4]) || 0,
-    db: (vals[5] === true || vals[5] === 1),
+    st:       Number(vals[2]) || 0,
+    ma:       Number(vals[3]) || 0,
+    pb:       Number(vals[4]) || 0,
+    db:       Number(vals[5]) || 0,
+    posFecha: Number(vals[6]) || 0,
+    posLb:    Number(vals[7]) || 0,
   };
 }
 
@@ -309,7 +313,7 @@ function getJugadoresConDobleDisponible_() {
   // Build set of mats who used doble in any fecha (from NGT DB)
   const ngtRows = getAllNGTScoreData_();
   const dobledMats = new Set();
-  ngtRows.forEach(function(r) { if (r.db) dobledMats.add(r.mat); });
+  ngtRows.forEach(function(r) { if (r.db !== 0) dobledMats.add(r.mat); });
 
   const available = [];
   data.forEach(function(row) {
@@ -342,7 +346,8 @@ function debugDobles_() {
 }
 
 function setDobleForFecha_(matricula, fecha) {
-  setNGTScoreField_(String(fecha), String(matricula), 6, true);
+  // Use 1 as placeholder until the player loads their tarjeta (which updates to actual ST value)
+  setNGTScoreField_(String(fecha), String(matricula), 6, 1);
   return { ok: true };
 }
 
@@ -1261,7 +1266,7 @@ function getFechaDetalle_(fecha) {
 function getDoblesForFecha_(fecha) {
   const fStr = String(fecha);
   const ngtRows = getAllNGTScoreData_();
-  return ngtRows.filter(function(r) { return r.fecha === fStr && r.db; }).map(function(r) { return r.mat; });
+  return ngtRows.filter(function(r) { return r.fecha === fStr && r.db !== 0; }).map(function(r) { return r.mat; });
 }
 
 /**
@@ -1444,14 +1449,14 @@ function editarFecha_(params) {
   targetDobles.forEach(function(mat) {
     if (currentDobles.indexOf(mat) >= 0) return;
     try {
-      setNGTScoreField_(String(fecha), mat, 6, true);
+      setNGTScoreField_(String(fecha), mat, 6, 1);
       changes.doblesSet.push(mat);
     } catch (e) { changes.errors.push('doble set ' + mat + ': ' + e.message); }
   });
   currentDobles.forEach(function(mat) {
     if (targetDobles.indexOf(mat) >= 0) return;
     try {
-      setNGTScoreField_(String(fecha), mat, 6, false);
+      setNGTScoreField_(String(fecha), mat, 6, 0);
       changes.doblesCleared.push(mat);
     } catch (e) { changes.errors.push('doble clear ' + mat + ': ' + e.message); }
   });
@@ -1726,14 +1731,16 @@ function setBonusWinners_(params) {
     }
   }
 
-  // Actualizar NGT DB SCORE!Bonus y recomputar AL:AS/C/D/LEADERBOARD
+  // Actualizar NGT DB SCORE!Bonus
   Object.keys(pbMap).forEach(function(mat) {
     setNGTScoreField_(fStr, mat, 5, pbMap[mat]);
   });
-  recalcularTotalesScore_(null);
 
-  // Sumar 1 fecha ganada al ganador de esta fecha en SCORE!AK
+  // Escribir PosFecha (G) en NGT DB para todos los jugadores de esta fecha
   sumarGanadorFecha_(fecha);
+
+  // Recomputar totales + PosLeaderboard para esta fecha + LEADERBOARD (G,J,K,L,M,O)
+  recalcularTotalesScore_(null, fStr);
 
   SpreadsheetApp.flush();
   audit_('SET_BONUS_WINNERS', 'admin', { fecha, ldMat, baMat });
@@ -2067,6 +2074,8 @@ function cargarTarjeta_(params) {
 
     // 9. Puntos dobles
     if (currentDobles_.indexOf(String(matricula)) >= 0 && stbBreak) {
+      // Write actual ST value to NGT DB Doble column (replaces placeholder 1)
+      setNGTScoreField_(fStr, mStr, 6, stbBreak.k);
       const auResult = writeDobleStScore_(matricula, fecha, stbBreak.k);
       if (auResult.ok) {
         dobleMsg = 'doble aplicado: ST=' + auResult.st + ' escrito en AU';
@@ -4603,13 +4612,13 @@ function setDoblesFecha_(params) {
   const changes = { set: [], cleared: [], notFound: [] };
 
   nuevosDobles.forEach(function(mat) {
-    setNGTScoreField_(fStr, mat, 6, true);
+    setNGTScoreField_(fStr, mat, 6, 1);
     changes.set.push(mat);
   });
 
   todosEnFecha.forEach(function(mat) {
     if (actualesDobles.indexOf(mat) >= 0 && nuevosDobles.indexOf(mat) < 0) {
-      setNGTScoreField_(fStr, mat, 6, false);
+      setNGTScoreField_(fStr, mat, 6, 0);
       changes.cleared.push(mat);
     }
   });
@@ -5153,7 +5162,8 @@ function crearCancha_(params) {
  * se calculó después de que el jugador ya había cargado su tarjeta.
  * Se puede llamar desde el admin (acción 'recalcularScore') o directamente desde el editor de AS.
  */
-function recalcularTotalesScore_(params) {
+// fechaParaPosLb: if provided, writes PosLeaderboard (col H) in NGT DB for that fecha's rows
+function recalcularTotalesScore_(params, fechaParaPosLb) {
   if (params && !checkAdmin_(params.adminKey)) return { ok: false, error: 'No autorizado' };
   const sh = getSheet_('SCORE');
   if (!sh) return { ok: false, error: 'SCORE no encontrada' };
@@ -5184,12 +5194,12 @@ function recalcularTotalesScore_(params) {
     var total  = 0;
     var stSum  = 0, maSum = 0, pbSum = 0;
     for (var n = 1; n <= 8; n++) {
-      const fd = playerFdMap[String(n)] || { st: 0, ma: 0, pb: 0, db: false };
+      const fd = playerFdMap[String(n)] || { st: 0, ma: 0, pb: 0, db: 0 };
       const st = fd.st || 0;
       const ma = fd.ma || 0;
       const pb = fd.pb || 0;
-      const db = fd.db === true;
-      const al = st + ma + pb + (db ? st : 0);
+      const db = fd.db || 0; // extra points from doble (0 if not used)
+      const al = st + ma + pb + db;
       alRow.push(al);
       total  += al;
       stSum  += st; maSum += ma; pbSum += pb;
@@ -5215,12 +5225,34 @@ function recalcularTotalesScore_(params) {
   });
   sh.getRange(3, 4, 18, 1).setValues(allRanks.map(function(r) { return [r]; }));
 
-  // Actualizar LEADERBOARD G, J, K, L, M
+  // Write PosLeaderboard (col H = 8) for the given fecha's rows in NGT DB
+  if (fechaParaPosLb) {
+    try {
+      const ngtSh = getNGTScoreSheet_();
+      if (ngtSh) {
+        for (var pi = 0; pi < 18; pi++) {
+          const mat = playerMats[pi];
+          if (!mat) continue;
+          const row = findNGTScoreRow_(fechaParaPosLb, mat);
+          if (row > 0) ngtSh.getRange(row, 8).setValue(allRanks[pi]);
+        }
+      }
+    } catch(ePosLb) {}
+  }
+
+  // Compute fechas ganadas per player (count PosFecha=1 in NGT DB)
+  const ganadoresMap = {};
+  playerMats.forEach(function(m) { if (m) ganadoresMap[m] = 0; });
+  ngtRows.forEach(function(r) {
+    if (r.posFecha === 1 && ganadoresMap[r.mat] !== undefined) ganadoresMap[r.mat]++;
+  });
+
+  // Actualizar LEADERBOARD G, J, K, L, M, O
   try {
     const lbSh = getSheet_('LEADERBOARD');
     if (lbSh) {
       const scoreNames = sh.getRange(3, 2, 18, 1).getValues();
-      var gVals = [], jVals = [], kVals = [], lVals = [], mVals = [];
+      var gVals = [], jVals = [], kVals = [], lVals = [], mVals = [], oVals = [];
       for (var r2 = 1; r2 <= 18; r2++) {
         var idx2 = allRanks.indexOf(r2);
         if (idx2 >= 0) {
@@ -5229,8 +5261,9 @@ function recalcularTotalesScore_(params) {
           kVals.push([stbTotals[idx2]]);
           lVals.push([maTotals[idx2]]);
           mVals.push([pbTotals[idx2]]);
+          oVals.push([ganadoresMap[playerMats[idx2]] || 0]);
         } else {
-          gVals.push(['']); jVals.push([0]); kVals.push([0]); lVals.push([0]); mVals.push([0]);
+          gVals.push(['']); jVals.push([0]); kVals.push([0]); lVals.push([0]); mVals.push([0]); oVals.push([0]);
         }
       }
       lbSh.getRange(2,  7, 18, 1).setValues(gVals);
@@ -5238,6 +5271,7 @@ function recalcularTotalesScore_(params) {
       lbSh.getRange(2, 11, 18, 1).setValues(kVals);
       lbSh.getRange(2, 12, 18, 1).setValues(lVals);
       lbSh.getRange(2, 13, 18, 1).setValues(mVals);
+      lbSh.getRange(2, 15, 18, 1).setValues(oVals); // O = col 15 = fechas ganadas
     }
   } catch(eLb) {}
 
@@ -5246,16 +5280,16 @@ function recalcularTotalesScore_(params) {
 }
 
 /**
- * Shared helper: given TARJETAS rows for ONE fecha and h2h match data,
- * returns the winning matricula (or null if no scorecards).
+ * Returns the sorted ranking for a fecha: [{mat, posFecha, total}, ...]
+ * Uses tiebreakers: total STB → last 9 holes → last 6 → last 3 → head-to-head match wins.
  */
-function getGanadorFecha_(fechaRows, allMatchRows, fStr) {
-  if (!fechaRows.length) return null;
+function getRankingFecha_(fechaRows, allMatchRows, fStr) {
+  if (!fechaRows.length) return [];
 
   const canchaId   = String(fechaRows[0][5] || '').trim();
   const canchaName = String(fechaRows[0][4] || '').trim();
   const cd = getCanchaPares_(canchaId || canchaName);
-  if (!cd || !cd.pares || !cd.indices || cd.pares.length < 18) return null;
+  if (!cd || !cd.pares || !cd.indices || cd.pares.length < 18) return [];
 
   const fechaMeta  = getFechaMeta_(fStr);
   const hoyoSalida = (fechaMeta && fechaMeta.hoyoSalida) ? parseInt(fechaMeta.hoyoSalida) : 1;
@@ -5308,7 +5342,7 @@ function getGanadorFecha_(fechaRows, allMatchRows, fStr) {
     playerScores.push({ mat: mat, total: total, stbByHole: stbByHole });
   });
 
-  if (!playerScores.length) return null;
+  if (!playerScores.length) return [];
 
   playerScores.sort(function(a, b) {
     if (b.total !== a.total) return b.total - a.total;
@@ -5325,18 +5359,27 @@ function getGanadorFecha_(fechaRows, allMatchRows, fStr) {
     return 0; // empate no resuelto → sorteo manual
   });
 
-  return playerScores[0].mat;
+  return playerScores.map(function(ps, idx) {
+    return { mat: ps.mat, posFecha: idx + 1, total: ps.total };
+  });
 }
 
 /**
- * Incremental update: called after setBonusWinners_ finalizes a fecha.
- * Reads only that fecha's tarjetas, determines the winner, and adds 1 to
- * their SCORE!AK (col 37) count. Leaves all other players' counts untouched.
+ * Shared helper: given TARJETAS rows for ONE fecha and h2h match data,
+ * returns the winning matricula (or null if no scorecards).
+ */
+function getGanadorFecha_(fechaRows, allMatchRows, fStr) {
+  const ranking = getRankingFecha_(fechaRows, allMatchRows, fStr);
+  return ranking.length > 0 ? ranking[0].mat : null;
+}
+
+/**
+ * Called after setBonusWinners_ finalizes a fecha.
+ * Computes the full ranking for that fecha and writes PosFecha (col G = 7) to NGT DB SCORE
+ * for every player. PosFecha=1 is the winner; this replaces the old SCORE!AK increment.
  */
 function sumarGanadorFecha_(fecha) {
-  const fStr  = String(fecha);
-  const sh    = getSheet_('SCORE');
-  if (!sh) return;
+  const fStr = String(fecha);
 
   const tarjSh = getSheet_(SHEETS.TARJETAS);
   if (!tarjSh) return;
@@ -5352,34 +5395,28 @@ function sumarGanadorFecha_(fecha) {
     if (ml > 2) allMatchRows.push.apply(allMatchRows, matchSh.getRange(2, 2, ml - 2, 7).getValues());
   }
 
-  const winnerMat = getGanadorFecha_(fechaRows, allMatchRows, fStr);
-  if (!winnerMat) return;
+  const ranking = getRankingFecha_(fechaRows, allMatchRows, fStr);
+  if (!ranking.length) return;
 
-  // Find winner's row in SCORE and increment AK (col 37)
-  const playerMats = sh.getRange(3, 1, 18, 1).getValues();
-  for (var i = 0; i < 18; i++) {
-    if (String(playerMats[i][0] || '').trim() === winnerMat) {
-      const akCell = sh.getRange(i + 3, 37);
-      akCell.setValue((Number(akCell.getValue()) || 0) + 1);
-      audit_('SUMAR_GANADOR_FECHA', 'system', { fecha: fStr, winner: winnerMat });
-      break;
-    }
+  // Write PosFecha (col 7) for each player in NGT DB SCORE
+  const ngtSh = getNGTScoreSheet_();
+  if (ngtSh) {
+    ranking.forEach(function(entry) {
+      const row = findNGTScoreRow_(fStr, entry.mat);
+      if (row > 0) ngtSh.getRange(row, 7).setValue(entry.posFecha);
+    });
   }
+
+  audit_('SUMAR_GANADOR_FECHA', 'system', { fecha: fStr, winner: ranking[0].mat, ranking: ranking.map(function(r) { return r.mat; }) });
 }
 
 /**
- * Full recalculation: reads ALL fechas, recomputes winners from scratch,
- * and overwrites SCORE!AK. Use this to correct AK if something went wrong.
+ * Full recalculation: reads ALL fechas, recomputes PosFecha rankings from scratch,
+ * writes them to NGT DB SCORE col G, then recalculates totals + LEADERBOARD (including col O).
+ * Use this to correct PosFecha if something went wrong.
  */
 function calcularGanadoresFechas_(params) {
   if (params && !checkAdmin_(params.adminKey)) return { ok: false, error: 'No autorizado' };
-
-  const sh = getSheet_('SCORE');
-  if (!sh) return { ok: false, error: 'SCORE no encontrada' };
-
-  const playerMats = sh.getRange(3, 1, 18, 1).getValues().map(function(r) {
-    return String(r[0] || '').trim();
-  });
 
   const tarjSh = getSheet_(SHEETS.TARJETAS);
   if (!tarjSh) return { ok: false, error: 'Sin TARJETAS' };
@@ -5397,25 +5434,28 @@ function calcularGanadoresFechas_(params) {
   const fechaSet = {};
   allTarj.forEach(function(r) { const f = String(r[0]||'').trim(); if (f) fechaSet[f] = true; });
 
-  const wins = {};
-  playerMats.forEach(function(m) { if (m) wins[m] = 0; });
+  const ngtSh = getNGTScoreSheet_();
   const details = {};
 
   Object.keys(fechaSet).forEach(function(fStr) {
     const fechaRows = allTarj.filter(function(r) { return String(r[0]||'').trim() === fStr; });
-    const winnerMat = getGanadorFecha_(fechaRows, allMatchRows, fStr);
-    if (winnerMat) {
-      details[fStr] = winnerMat;
-      if (wins[winnerMat] !== undefined) wins[winnerMat]++;
+    const ranking = getRankingFecha_(fechaRows, allMatchRows, fStr);
+    if (!ranking.length) return;
+    details[fStr] = ranking[0].mat;
+    if (ngtSh) {
+      ranking.forEach(function(entry) {
+        const row = findNGTScoreRow_(fStr, entry.mat);
+        if (row > 0) ngtSh.getRange(row, 7).setValue(entry.posFecha);
+      });
     }
   });
 
-  const winVals = playerMats.map(function(m) { return [m ? (wins[m] || 0) : '']; });
-  sh.getRange(3, 37, 18, 1).setValues(winVals);
+  // Recalculate totals + LEADERBOARD (O = fechas ganadas from PosFecha)
+  recalcularTotalesScore_(null);
   SpreadsheetApp.flush();
 
-  audit_('CALCULAR_GANADORES_FECHAS', (params && params.adminKey) || 'system', { wins: wins, details: details });
-  return { ok: true, wins: wins, details: details };
+  audit_('CALCULAR_GANADORES_FECHAS', (params && params.adminKey) || 'system', { details: details });
+  return { ok: true, details: details };
 }
 
 function test() {
