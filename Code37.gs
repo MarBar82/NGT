@@ -5305,18 +5305,18 @@ function recalcularTotalesScore_(params, fechaParaPosLb) {
           oVals.push([0]); pVals.push(['']); qVals.push(['']); rVals.push(['']); sVals.push(['']);
         }
       }
-      // Batch write cols 2..14 (B..N) — LEADERBOARD columns shifted left 5 (old F->A)
+      // Batch write cols 2..12 (B..L) — K and L (clear) removed from sheet
       // B=nombre, C=movDir, D=movQty, E=pts, F=stb, G=match, H=bonus,
-      // I=fjug, J=fgan, K=clear, L=clear, M=doble, N=doblePts
+      // I=fjug, J=fgan, K=doble, L=doblePts
       const lbData = [];
       for (var ri = 0; ri < 18; ri++) {
         lbData.push([
           gVals[ri][0], hVals[ri][0], iVals[ri][0], jVals[ri][0], kVals[ri][0],
           lVals[ri][0], mVals[ri][0], nVals[ri][0], oVals[ri][0],
-          pVals[ri][0], qVals[ri][0], rVals[ri][0], sVals[ri][0]
+          rVals[ri][0], sVals[ri][0]
         ]);
       }
-      lbSh.getRange(2, 2, 18, 13).setValues(lbData);
+      lbSh.getRange(2, 2, 18, 11).setValues(lbData);
     }
   } catch(eLb) {}
 

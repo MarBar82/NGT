@@ -2172,7 +2172,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <script>
 const SHEET_ID = '1lXT9Zb-jOycI59KSyglDluolYfN0jkjVAjFE3X0ZX4I';
 const SHEET_NAME = 'LEADERBOARD';
-const RANGE = 'A1:P19';
+const RANGE = 'A1:N19';
 
 function v(row,i){
   try{if(!row.c||i>=row.c.length)return '';const c=row.c[i];if(!c||c.v===null||c.v===undefined)return '';const val=(c.f!==undefined&&c.f!==null)?c.f:c.v;return String(val).trim();}catch(e){return '';}
@@ -2311,8 +2311,8 @@ function gvizCallback(response){
     rows.forEach((row,i)=>{
       const pos=v(row,0),nombre=v(row,1),movDir=v(row,2),movQty=v(row,3);
       const pts=v(row,4),stb=v(row,5),mch=v(row,6),pb=v(row,7);
-      const fjug=v(row,8),fgan=v(row,9),hcp=v(row,10),posAnt=v(row,11);
-      const doble=v(row,12),pd=v(row,13),golpes=v(row,14),champ=v(row,15);
+      const fjug=v(row,8),fgan=v(row,9);
+      const doble=v(row,10),pd=v(row,11),golpes=v(row,12),champ=v(row,13);
       if(!nombre)return;
       if(i<3) console.log('LB Row '+i+':', 'movDir=['+movDir+'] movQty=['+movQty+']');
       const mov=movCell(movDir,movQty);
