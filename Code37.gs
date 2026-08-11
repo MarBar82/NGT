@@ -5247,31 +5247,84 @@ function recalcularTotalesScore_(params, fechaParaPosLb) {
     if (r.posFecha === 1 && ganadoresMap[r.mat] !== undefined) ganadoresMap[r.mat]++;
   });
 
-  // Actualizar LEADERBOARD G, J, K, L, M, O
+  // Determine previous fecha for movement calculation (second-to-last in sorted order)
+  const allFechasSet = {};
+  ngtRows.forEach(function(r) { allFechasSet[r.fecha] = true; });
+  const allFechasArr = Object.keys(allFechasSet).sort(function(a, b) { return parseInt(a) - parseInt(b); });
+  const prevFecha = allFechasArr.length >= 2 ? allFechasArr[allFechasArr.length - 2] : null;
+
+  // Actualizar LEADERBOARD G, H, I, J, K, L, M, N, O, P, Q, R, S
   try {
     const lbSh = getSheet_('LEADERBOARD');
     if (lbSh) {
       const scoreNames = sh.getRange(3, 2, 18, 1).getValues();
-      var gVals = [], jVals = [], kVals = [], lVals = [], mVals = [], oVals = [];
+      var gVals=[], hVals=[], iVals=[], jVals=[], kVals=[], lVals=[], mVals=[];
+      var nVals=[], oVals=[], pVals=[], qVals=[], rVals=[], sVals=[];
       for (var r2 = 1; r2 <= 18; r2++) {
         var idx2 = allRanks.indexOf(r2);
-        if (idx2 >= 0) {
+        if (idx2 >= 0 && playerMats[idx2]) {
+          const mat = playerMats[idx2];
+          const playerFdMap = ngtMap[mat] || {};
+
           gVals.push([String(scoreNames[idx2][0] || '')]);
           jVals.push([cVals[idx2]]);
           kVals.push([stbTotals[idx2]]);
           lVals.push([maTotals[idx2]]);
           mVals.push([pbTotals[idx2]]);
-          oVals.push([ganadoresMap[playerMats[idx2]] || 0]);
+          oVals.push([ganadoresMap[mat] || 0]);
+
+          // N: fechas jugadas = count rows with st > 0
+          const fJug = Object.keys(playerFdMap).filter(function(f) { return (playerFdMap[f].st || 0) > 0; }).length;
+          nVals.push([fJug || '']);
+
+          // H, I: movement vs previous fecha's PosLeaderboard
+          var movDir = '—', movAbs = '';
+          const prevRow = prevFecha ? (playerFdMap[prevFecha] || null) : null;
+          if (prevRow && prevRow.posLb > 0) {
+            const diff = prevRow.posLb - r2; // positive = moved up
+            if (diff !== 0) {
+              movDir = diff > 0 ? '⬆' : '⬇';
+              movAbs = Math.abs(diff);
+            }
+          }
+          hVals.push([movDir]);
+          iVals.push([movAbs]);
+
+          // P: not shown — clear
+          pVals.push(['']);
+          // Q: posAnt no longer needed as sheet column — clear
+          qVals.push(['']);
+
+          // R, S: doble indicator and points from NGT DB
+          var dobleInd = '', doblePts = '';
+          Object.keys(playerFdMap).forEach(function(f) {
+            const fd = playerFdMap[f];
+            if (fd.db !== 0) {
+              dobleInd = 'SI';
+              if (fd.db > 1) doblePts = fd.db;
+            }
+          });
+          rVals.push([dobleInd]);
+          sVals.push([doblePts]);
         } else {
-          gVals.push(['']); jVals.push([0]); kVals.push([0]); lVals.push([0]); mVals.push([0]); oVals.push([0]);
+          gVals.push(['']); hVals.push(['']); iVals.push(['']); jVals.push([0]);
+          kVals.push([0]); lVals.push([0]); mVals.push([0]); nVals.push(['']);
+          oVals.push([0]); pVals.push(['']); qVals.push(['']); rVals.push(['']); sVals.push(['']);
         }
       }
-      lbSh.getRange(2,  7, 18, 1).setValues(gVals);
-      lbSh.getRange(2, 10, 18, 1).setValues(jVals);
-      lbSh.getRange(2, 11, 18, 1).setValues(kVals);
-      lbSh.getRange(2, 12, 18, 1).setValues(lVals);
-      lbSh.getRange(2, 13, 18, 1).setValues(mVals);
-      lbSh.getRange(2, 15, 18, 1).setValues(oVals); // O = col 15 = fechas ganadas
+      lbSh.getRange(2,  7, 18, 1).setValues(gVals);  // G = nombre
+      lbSh.getRange(2,  8, 18, 1).setValues(hVals);  // H = movDir (⬆/⬇/—)
+      lbSh.getRange(2,  9, 18, 1).setValues(iVals);  // I = movQty (magnitude)
+      lbSh.getRange(2, 10, 18, 1).setValues(jVals);  // J = pts totales
+      lbSh.getRange(2, 11, 18, 1).setValues(kVals);  // K = stb total
+      lbSh.getRange(2, 12, 18, 1).setValues(lVals);  // L = match total
+      lbSh.getRange(2, 13, 18, 1).setValues(mVals);  // M = bonus total
+      lbSh.getRange(2, 14, 18, 1).setValues(nVals);  // N = fechas jugadas
+      lbSh.getRange(2, 15, 18, 1).setValues(oVals);  // O = fechas ganadas
+      lbSh.getRange(2, 16, 18, 1).setValues(pVals);  // P = clear (not shown)
+      lbSh.getRange(2, 17, 18, 1).setValues(qVals);  // Q = clear (posAnt replaced by code)
+      lbSh.getRange(2, 18, 18, 1).setValues(rVals);  // R = doble indicator
+      lbSh.getRange(2, 19, 18, 1).setValues(sVals);  // S = doble points
     }
   } catch(eLb) {}
 
