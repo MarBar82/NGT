@@ -5676,7 +5676,7 @@ function renderFechaDinamica(data){
       const nombreHtml = fmtHistName(row.nombre);
       const ma  = row.ma  || 0;
       const pb  = row.pb  || 0;
-      const dbl = row.db  ? row.stb : 0;
+      const dbl = (row.db > 1) ? row.db : 0;
       const tot = row.stb + ma + pb + dbl;
 
       html += '<tr style="cursor:pointer;" onclick="openTarjetaModal(\'' +

@@ -2557,39 +2557,22 @@ function getFechaResultados_(fecha) {
     }
   }
 
-  // ── SCORE — MA, PB, DB, puntos acumulados antes de esta fecha ────────────
-  // 0-indexed from col A (reading 45 cols):
-  //   Fecha N: ST=4*N, MA=4*N+1, PB=4*N+2, DB=4*N+3
-  //   AL:AS per-fecha subtotals: AL=index37 (fecha1), +1 per fecha → index 36+N for fecha N
-  //   C (grand total) = index 2
+  // ── NGT DB SCORE — MA, PB, DB, puntos acumulados antes de esta fecha ──────
   const scoreMap = {}; // mat → { ma, pb, db, puntosAntes }
-  const shScore = getSheet_('SCORE');
-  if (shScore) {
-    const fecN  = parseInt(fStr);
-    const maIdx = 4 * fecN + 1;
-    const pbIdx = 4 * fecN + 2;
-    const dbIdx = 4 * fecN + 3;
-    const alIdx = 36 + fecN; // AL:AS index for this fecha (0-based from A)
-    var scoreRows = shScore.getRange(3, 1, 18, 45).getValues();
-    scoreRows.forEach(function(row) {
-      var mat = String(row[0] || '').trim();
-      if (!mat) return;
-      var ma = Number(row[maIdx]) || 0;
-      var pb = Number(row[pbIdx]) || 0;
-      var dbVal = row[dbIdx];
-      var db = (dbVal === true || dbVal === 1 ||
-        (typeof dbVal === 'string' && (dbVal.toUpperCase() === 'TRUE' || dbVal.toUpperCase() === 'VERDADERO')));
-      // Sumar directamente los subtotales AL:AS de fechas ANTERIORES a esta.
-      // Más robusto que C - AL:AS[N]: no depende de que C esté actualizado.
-      // AL:AS (0-based desde col A): fecha n → index 36+n
-      //   n=1 → idx37=AL, n=2 → idx38=AM, n=3 → idx39=AN, n=4 → idx40=AO, ...
-      var puntosAntes = 0;
-      for (var nPrev = 1; nPrev < fecN; nPrev++) {
-        puntosAntes += Number(row[36 + nPrev]) || 0;
-      }
-      scoreMap[mat] = { ma: ma, pb: pb, db: db, puntosAntes: puntosAntes };
-    });
-  }
+  const fecN = parseInt(fStr);
+  getAllNGTScoreData_().forEach(function(r) {
+    if (!r.mat) return;
+    const rFecN = parseInt(r.fecha);
+    if (r.fecha === fStr) {
+      if (!scoreMap[r.mat]) scoreMap[r.mat] = { ma: 0, pb: 0, db: 0, puntosAntes: 0 };
+      scoreMap[r.mat].ma = r.ma;
+      scoreMap[r.mat].pb = r.pb;
+      scoreMap[r.mat].db = r.db; // numeric: 0=none, 1=pending, N=actual doble pts
+    } else if (rFecN < fecN) {
+      if (!scoreMap[r.mat]) scoreMap[r.mat] = { ma: 0, pb: 0, db: 0, puntosAntes: 0 };
+      scoreMap[r.mat].puntosAntes += r.st + r.ma + r.pb + (r.db > 1 ? r.db : 0);
+    }
+  });
 
   // ── STB B:K (10 cols) — stableford ranking ───────────────────────────────
   const stableford = [];
@@ -2621,8 +2604,8 @@ function getFechaResultados_(fecha) {
       // Ordenar por STB desc; en caso de empate, por total de fecha desc
       stableford.sort(function(a, b) {
         if (b.stb !== a.stb) return b.stb - a.stb;
-        var totA = a.stb + a.ma + a.pb + (a.db ? a.stb : 0);
-        var totB = b.stb + b.ma + b.pb + (b.db ? b.stb : 0);
+        var totA = a.stb + a.ma + a.pb + (a.db > 1 ? a.db : 0);
+        var totB = b.stb + b.ma + b.pb + (b.db > 1 ? b.db : 0);
         return totB - totA;
       });
     }
