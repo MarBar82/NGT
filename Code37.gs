@@ -2781,24 +2781,23 @@ function getCanchasHistMap_() {
   if (!sh) return {};
   const lr = sh.getLastRow();
   if (lr < 2) return {};
-  const data = sh.getRange(2, 1, lr - 1, 5).getValues();
+  // CANCHAS: A=id, B=hoyo, C=par, D=hcp_idx (no nombre column)
+  const data = sh.getRange(2, 1, lr - 1, 4).getValues();
   const map = {};
   data.forEach(r => {
     const id = String(r[0] || '').trim();
-    const nombre = String(r[1] || '').trim();
-    const hoyo = parseInt(r[2]);
-    const par = parseInt(r[3]);
-    const idx = parseInt(r[4]);
+    const hoyo = parseInt(r[1]);
+    const par = parseInt(r[2]);
+    const idx = parseInt(r[3]);
     if (!id || !hoyo || hoyo < 1 || hoyo > 18) return;
     if (!map[id]) {
       map[id] = {
         id: id,
-        nombre: nombre,
+        nombre: '',
         pares: new Array(18).fill(null),
         indices: new Array(18).fill(null),
       };
     }
-    if (nombre && !map[id].nombre) map[id].nombre = nombre;
     if (!isNaN(par)) map[id].pares[hoyo - 1] = par;
     if (!isNaN(idx)) map[id].indices[hoyo - 1] = idx;
   });
@@ -4824,8 +4823,8 @@ function getCanchasAdmin_() {
   const result = [];
   Object.keys(canchasMap).sort().forEach(function(id) {
     const c = canchasMap[id];
-    const r = ratingsMap[id] || { byColor: {} };
-    result.push({ id: c.id, nombre: c.nombre, pares: c.pares, indices: c.indices, ratings: r.byColor });
+    const r = ratingsMap[id] || { nombre: '', byColor: {} };
+    result.push({ id: c.id, nombre: r.nombre || c.nombre || id, pares: c.pares, indices: c.indices, ratings: r.byColor });
   });
   return result;
 }

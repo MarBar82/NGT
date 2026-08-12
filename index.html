@@ -1722,28 +1722,22 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);">⚙ Administrador</div>
         <button onclick="adminLogout()" style="background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);cursor:pointer;">Salir ✕</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <button class="adm-big-btn" onclick="admGoTo('crear')">
           <span class="adm-big-icon">📅</span>Crear Fecha
         </button>
         <button class="adm-big-btn" onclick="admGoTo('editar')">
           <span class="adm-big-icon">✏</span>Gestionar Fechas
         </button>
+        <button class="adm-big-btn" onclick="admActualizarHcp()" id="adm-hcp-btn">
+          <span class="adm-big-icon">🏌️</span>
+          <span>Actualizar HCP</span>
+          <span id="adm-hcp-btn-sub" style="font-size:9px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--g4);margin-top:-4px;">Consulta la AAG</span>
+        </button>
+        <button class="adm-big-btn" onclick="admGoTo('canchas')">
+          <span class="adm-big-icon">⛳</span>Gestionar Canchas
+        </button>
       </div>
-      <button class="adm-big-btn" onclick="admActualizarHcp()" id="adm-hcp-btn" style="flex-direction:row;justify-content:flex-start;gap:12px;padding:14px 16px;">
-        <span style="font-size:22px;">🏌️</span>
-        <div style="text-align:left;">
-          <div style="font-size:13px;">Actualizar HCP Índices</div>
-          <div id="adm-hcp-btn-sub" style="font-size:10px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--g4);margin-top:2px;">Consulta la AAG para todos los jugadores</div>
-        </div>
-      </button>
-      <button class="adm-big-btn" onclick="admGoTo('canchas')" style="margin-top:10px;flex-direction:row;justify-content:flex-start;gap:12px;padding:14px 16px;">
-        <span style="font-size:22px;">⛳</span>
-        <div style="text-align:left;">
-          <div style="font-size:13px;">Gestionar Canchas</div>
-          <div style="font-size:10px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--g4);margin-top:2px;">Editar pares, índices, rating y slope</div>
-        </div>
-      </button>
     </div>
 
     <!-- Crear Fecha (wizard 2 pasos) -->
@@ -1922,43 +1916,13 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           </div>
         </div>
 
-        <!-- RECALCULAR SCORE -->
+        <!-- RECALCULAR FECHA (unificado) -->
         <div class="adm-card" id="adm-recalc-card">
-          <div class="adm-card-hdr">🔄 Recalcular Totales</div>
+          <div class="adm-card-hdr">🔄 Recalcular Fecha</div>
           <div class="adm-card-body">
-            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Recalcula ST+MA+PB total, rankings y leaderboard para todos los jugadores. Usar si algún jugador quedó sin los puntos de match correctos.</div>
-            <button class="adm-btn-secondary" onclick="admRecalcularScore()" style="background:var(--navy);color:#fff;border-color:var(--navy);">🔄 Recalcular Score</button>
+            <div class="s dim" style="margin-bottom:12px;font-size:12px;">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
+            <button class="adm-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
             <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
-          </div>
-        </div>
-
-        <!-- RECALCULAR HCP -->
-        <div class="adm-card" id="adm-recalc-hcp-card">
-          <div class="adm-card-hdr">🔢 HCP de Juego</div>
-          <div class="adm-card-body">
-            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Recalcula el HCP de juego en TARJETAS usando la fórmula WHS completa (slope/113 + rating−par). Usalo si la fecha fue creada con una versión anterior.</div>
-            <button class="adm-btn-secondary" onclick="admRecalcularHcp()" style="background:var(--navy);color:#fff;border-color:var(--navy);">🔢 Recalcular HCP</button>
-            <div id="adm-recalc-hcp-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
-          </div>
-        </div>
-
-        <!-- RECALCULAR STB -->
-        <div class="adm-card" id="adm-recalc-stb-card">
-          <div class="adm-card-hdr">📊 Stableford por Hoyo</div>
-          <div class="adm-card-body">
-            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Recalcula el Stableford de cada jugador usando el HCP actualizado. Ejecutá primero "Recalcular HCP" y luego este.</div>
-            <button class="adm-btn-secondary" onclick="admRecalcularStb()" style="background:var(--navy);color:#fff;border-color:var(--navy);">📊 Recalcular STB</button>
-            <div id="adm-recalc-stb-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
-          </div>
-        </div>
-
-        <!-- RECALCULAR MATCHES -->
-        <div class="adm-card" id="adm-recalc-match-card">
-          <div class="adm-card-hdr">⚔ Matches por Hoyo</div>
-          <div class="adm-card-body">
-            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Recalcula los matches usando los índices actuales de la cancha. Usalo si los HCP por hoyo cambiaron después de cargar las tarjetas.</div>
-            <button class="adm-btn-secondary" onclick="admRecalcularMatches()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚔ Recalcular Matches</button>
-            <div id="adm-recalc-match-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
           </div>
         </div>
 
@@ -3994,21 +3958,44 @@ function admRecalcularStb(){
 
 function admRecalcularMatches(){
   const fecha = MGR_FECHA;
-  const msg = document.getElementById('adm-recalc-match-msg');
-  if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
   const hsSel = document.getElementById('adm-edit-hoyo-salida');
   const hoyoSalida = hsSel ? parseInt(hsSel.value) || 1 : 1;
-  msg.className='adm-msg'; msg.textContent='Recalculando (hoyo salida: ' + hoyoSalida + ')...'; msg.style.display='block';
-  ngtApiPost({ action:'recalcularMatchesFecha', adminKey:ADMIN_KEY_OK, fecha:fecha, hoyoSalida:hoyoSalida }).then(r => {
-    if(r && r.ok){
-      msg.className='adm-msg ok';
-      const ord = r.holeOrder ? r.holeOrder.slice(0,4).map(function(x){return x+1;}).join(',') : '?';
-      msg.textContent='✓ ' + r.updated + ' matches recalculados (hoyo ' + (r.hoyoSalida||1) + ', orden: ' + ord + '...)';
-    } else {
-      msg.className='adm-msg err';
-      msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
-    }
-  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
+  return ngtApiPost({ action:'recalcularMatchesFecha', adminKey:ADMIN_KEY_OK, fecha:fecha, hoyoSalida:hoyoSalida });
+}
+
+function admRecalcularFecha(){
+  const fecha = MGR_FECHA;
+  const msg = document.getElementById('adm-recalc-msg');
+  const btn = document.getElementById('adm-recalc-btn');
+  if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
+  btn.disabled = true;
+  const setMsg = (text, type) => { msg.className='adm-msg' + (type ? ' '+type : ''); msg.textContent=text; msg.style.display='block'; };
+  setMsg('1/4 · Recalculando HCP de juego...');
+  ngtApiPost({ action:'recalcularHcpFecha', adminKey:ADMIN_KEY_OK, fecha:fecha })
+    .then(r1 => {
+      if(r1 && !r1.ok) throw new Error(r1.error || 'Error en HCP');
+      setMsg('2/4 · Recalculando Stableford...');
+      return ngtApiPost({ action:'recalcularStbFecha', adminKey:ADMIN_KEY_OK, fecha:fecha });
+    })
+    .then(r2 => {
+      if(r2 && !r2.ok) throw new Error(r2.error || 'Error en STB');
+      setMsg('3/4 · Recalculando Matches...');
+      return admRecalcularMatches();
+    })
+    .then(r3 => {
+      if(r3 && !r3.ok) throw new Error(r3.error || 'Error en Matches');
+      setMsg('4/4 · Recalculando totales y leaderboard...');
+      return ngtApiPost({ action:'recalcularScore', adminKey:ADMIN_KEY_OK });
+    })
+    .then(r4 => {
+      if(r4 && !r4.ok) throw new Error(r4.error || 'Error en Score');
+      setMsg('✓ Fecha ' + fecha + ' recalculada correctamente', 'ok');
+      btn.disabled = false;
+    })
+    .catch(e => {
+      setMsg('✗ ' + e.message, 'err');
+      btn.disabled = false;
+    });
 }
 
 /* ── Gestionar Canchas ── */
