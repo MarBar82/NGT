@@ -370,7 +370,7 @@ function writeDobleStScore_(matricula, fecha, stVal) {
 
 /**
  * Read Stableford rankings for a specific fecha from STB sheet.
- * STB!A:K — col B=fecha, col C=matricula, col D=nombre, col K=stableford total
+ * STB!A:I — A=fecha, B=matricula, C..I=stb breakdown e-k, I=total
  * Returns array ordered by stableford descending.
  */
 function getStableforFromSTB_(fecha) {
@@ -378,25 +378,24 @@ function getStableforFromSTB_(fecha) {
   if (!sh) return [];
   const lastRow = sh.getLastRow();
   if (lastRow < 2) return [];
-  // Read cols B-K (10 cols, starting at col 2)
-  const data = sh.getRange(2, 2, lastRow - 1, 10).getValues();
+  // A=fecha, B=mat, C..I=stb e-k (9 cols)
+  const data = sh.getRange(2, 1, lastRow - 1, 9).getValues();
 
   const jugMap = {};
   getJugadores_().forEach(j => { jugMap[j.matricula] = j; });
 
   const out = [];
   data.forEach(row => {
-    const f = String(row[0] || '').trim();  // col B
-    const m = String(row[1] || '').trim();  // col C
-    const n = String(row[2] || '').trim();  // col D
-    const stb = row[9];                     // col K (index 9 within the 10-col slice)
+    const f = String(row[0] || '').trim();  // col A
+    const m = String(row[1] || '').trim();  // col B
+    const stb = row[8];                     // col I (total)
     if (f !== String(fecha) || !m) return;
     const stbNum = parseFloat(String(stb || '').replace(',', '.'));
     if (isNaN(stbNum)) return;
     const j = jugMap[m];
     out.push({
       matricula: m,
-      nombre: j ? j.nombre : n,
+      nombre: j ? j.nombre : m,
       apodo: j ? j.apodo : '',
       stb: stbNum,
     });
@@ -1410,19 +1409,17 @@ function editarFecha_(params) {
 
   let nextRow = findNextEmptyRow_(sh, 2);
 
+  const stbShEdit = getSheet_('STB');
+  const addedToStb = [];
   targetJugadores.forEach(mat => {
     if (currentMatriculas.indexOf(mat) >= 0) return;
     try {
       sh.getRange(nextRow, 1).setValue(fecha);
       sh.getRange(nextRow, 2).setValue(mat);
-      const jugNombreEdit_ = (function(){ const j = getJugadores_().find(function(x){ return String(x.matricula) === String(mat); }); return j ? j.nombre || '' : ''; })();
-      sh.getRange(nextRow, 3).setValue(jugNombreEdit_);
       // Write HCP de juego for new player (editHcpMap populated in step 1c, or build now if needed)
       const newHcp = editHcpMap[mat] !== undefined
         ? editHcpMap[mat]
         : (() => {
-            // editHcpMap empty means step 1c was skipped (no cancha/color change sent);
-            // build map on demand using current effective values
             try {
               const info = buildHcpJuegoMap_(effCanchaId, effCanchaName, effColor);
               editHcpMap = (info && info.hcpMap) ? info.hcpMap : {};
@@ -1434,8 +1431,17 @@ function editarFecha_(params) {
       if (colorFinal) sh.getRange(nextRow, 25).setValue(colorFinal); // Y = col 25
       nextRow++;
       changes.added.push(mat);
+      addedToStb.push(mat);
     } catch (e) { changes.errors.push('add ' + mat + ': ' + e.message); }
   });
+  // Write STB rows for newly added players
+  if (stbShEdit && addedToStb.length) {
+    try {
+      const stbNext = stbShEdit.getLastRow() + 1;
+      stbShEdit.getRange(stbNext, 1, addedToStb.length, 2)
+        .setValues(addedToStb.map(m => [fecha, m]));
+    } catch(e) { changes.errors.push('stb add: ' + e.message); }
+  }
 
   const baseTs = Date.now();
   targetInvitadoNames.forEach((nombre, idx) => {
@@ -1570,6 +1576,14 @@ function crearFecha_(params) {
     sh.getRange(startJug, 25, newJugMats.length, 1)
       .setValues(newJugMats.map(() => [colorFinal]));                  // Y (color tee)
     nextRow += newJugMats.length;
+
+    // STB: write A=fecha, B=mat for each new player (no formulas, app-owned)
+    const stbShCr = getSheet_('STB');
+    if (stbShCr) {
+      const stbNext = stbShCr.getLastRow() + 1;
+      stbShCr.getRange(stbNext, 1, newJugMats.length, 2)
+        .setValues(newJugMats.map(m => [fecha, m]));
+    }
   }
 
   // ── Invitados: batch write (A-B-C together, then E-F and AA) ───────────────
@@ -1888,15 +1902,15 @@ function cargarTarjeta_(params) {
   const stbBreak = calcStbBreakdown_(myScores18, cpPares, cpIndices, hcpNum);
 
 
-  // STB row lookup (read B:C once)
+  // STB row lookup (read A:B once)
   let preStbRow = -1;
   const preStbSh = getSheet_('STB');
   if (stbBreak && preStbSh) {
     const stbLast = preStbSh.getLastRow();
     if (stbLast >= 2) {
-      const stbBC = preStbSh.getRange(2, 2, stbLast - 1, 2).getValues();
-      for (let i = 0; i < stbBC.length; i++) {
-        if (String(stbBC[i][0]).trim() === fStr && String(stbBC[i][1]).trim() === mStr) {
+      const stbAB = preStbSh.getRange(2, 1, stbLast - 1, 2).getValues();
+      for (let i = 0; i < stbAB.length; i++) {
+        if (String(stbAB[i][0]).trim() === fStr && String(stbAB[i][1]).trim() === mStr) {
           preStbRow = i + 2; break;
         }
       }
@@ -2051,7 +2065,7 @@ function cargarTarjeta_(params) {
       // 2. STB E:K
       let myStWritten = null;
       if (stbBreak && preStbRow > 0 && preStbSh) {
-        preStbSh.getRange(preStbRow, 5, 1, 7).setValues([[
+        preStbSh.getRange(preStbRow, 3, 1, 7).setValues([[
           stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
           stbBreak.i, stbBreak.j, stbBreak.k
         ]]);
@@ -2147,15 +2161,15 @@ function resetFecha_(params) {
     }
   }
 
-  // ── 2. STB — limpiar E:K ──────────────────────────────────────────────
+  // ── 2. STB — limpiar C:I ──────────────────────────────────────────────
   const stbSh = getSheet_('STB');
   if (stbSh) {
     const last = stbSh.getLastRow();
     if (last >= 2) {
-      const bc = stbSh.getRange(2, 2, last - 1, 1).getValues(); // col B = fecha
-      bc.forEach(function(r, i) {
+      const aCol = stbSh.getRange(2, 1, last - 1, 1).getValues(); // col A = fecha
+      aCol.forEach(function(r, i) {
         if (String(r[0]).trim() === fStr) {
-          stbSh.getRange(i + 2, 5, 1, 7).clearContent();
+          stbSh.getRange(i + 2, 3, 1, 7).clearContent();
           changes.stb++;
         }
       });
@@ -2247,7 +2261,7 @@ function eliminarFecha_(params) {
   // ── 1. STB — eliminar filas PRIMERO (antes de TARJETAS) ─────────────────
   // Si col B de STB tiene fórmulas que referencian TARJETAS, borrar TARJETAS
   // primero las deja en blanco/error y deleteRowsForFecha no encontraría la fecha.
-  changes.stb = deleteRowsForFecha(getSheet_('STB'), 2); // col B = fecha
+  changes.stb = deleteRowsForFecha(getSheet_('STB'), 1); // col A = fecha
 
   // ── 2. PB — eliminar filas ───────────────────────────────────────────────
   changes.pb = deleteRowsForFecha(getSheet_('PB'), 2); // col B = fecha
@@ -2474,7 +2488,7 @@ function editarMatches_(params) {
 
 /**
  * Read stableford results for a given fecha from STB sheet
- * STB columns: B=fecha, C=matricula, D=nombre, K=total stableford
+ * STB columns: A=fecha, B=matricula, C..I=breakdown, I=total stableford
  * Returns array sorted descending by STB, with hcp from TARJETAS
  */
 function getStablefordForFecha_(fecha) {
@@ -2482,8 +2496,8 @@ function getStablefordForFecha_(fecha) {
   if (!sh) return [];
   const lastRow = sh.getLastRow();
   if (lastRow < 2) return [];
-  // Read B through K (10 cols: B,C,D,E,F,G,H,I,J,K)
-  const data = sh.getRange(2, 2, lastRow - 1, 10).getValues();
+  // A=fecha, B=mat, C..I=stb e-k (9 cols)
+  const data = sh.getRange(2, 1, lastRow - 1, 9).getValues();
   const jugMap = {};
   getJugadores_().forEach(j => { jugMap[j.matricula] = j; });
 
@@ -2505,16 +2519,15 @@ function getStablefordForFecha_(fecha) {
 
   const out = [];
   data.forEach(row => {
-    const f = String(row[0] || '').trim();  // B = fecha
-    const m = String(row[1] || '').trim();  // C = matricula
-    const n = String(row[2] || '').trim();  // D = nombre
-    const stb = row[9];                      // K = stableford total (col index 9 from B offset)
+    const f = String(row[0] || '').trim();  // A = fecha
+    const m = String(row[1] || '').trim();  // B = matricula
+    const stb = row[8];                      // I = stableford total
     if (f !== String(fecha) || !m) return;
     if (stb === '' || stb === null || stb === undefined) return;
     const jug = jugMap[m];
     out.push({
       matricula: m,
-      nombre: jug ? jug.nombre : n,
+      nombre: jug ? jug.nombre : m,
       apodo: jug ? jug.apodo : '',
       stb: parseFloat(stb) || 0,
       hcp: hcpMap[m] !== undefined ? hcpMap[m] : '',
@@ -2587,24 +2600,24 @@ function getFechaResultados_(fecha) {
     }
   });
 
-  // ── STB B:K (10 cols) — stableford ranking ───────────────────────────────
+  // ── STB A:I (9 cols) — stableford ranking ────────────────────────────────
   const stableford = [];
   const shS = getSheet_('STB');
   if (shS) {
     const lastRow = shS.getLastRow();
     if (lastRow >= 2) {
-      const sData = shS.getRange(2, 2, lastRow - 1, 10).getValues();
+      const sData = shS.getRange(2, 1, lastRow - 1, 9).getValues();
       sData.forEach(function(row) {
         if (String(row[0] || '').trim() !== fStr) return;
         const m = String(row[1] || '').trim();
         if (!m) return;
-        const stb = row[9]; // col K
+        const stb = row[8]; // col I = total
         if (stb === '' || stb === null || stb === undefined) return;
         const jug = jugMap[m];
         const sc  = scoreMap[m] || {};
         stableford.push({
           matricula:   m,
-          nombre:      (jug && jug.nombre) || String(row[2] || '').trim(),
+          nombre:      (jug && jug.nombre) || m,
           apodo:       (jug && jug.apodo)  || '',
           stb:         parseFloat(stb) || 0,
           hcp:         hcpMap[m] !== undefined ? hcpMap[m] : '',
@@ -4767,13 +4780,13 @@ function recalcularStbFecha_(params) {
     return { ok: false, error: 'No se pudo leer pares/índices de la cancha' };
   }
 
-  // Mapear STB rows (B=fecha, C=mat) → número de fila
+  // Mapear STB rows (A=fecha, B=mat) → número de fila
   const stbSh = getSheet_('STB');
   if (!stbSh) return { ok: false, error: 'Sin hoja STB' };
   const stbLast = stbSh.getLastRow();
   const stbMap = {};
   if (stbLast >= 2) {
-    stbSh.getRange(2, 2, stbLast - 1, 2).getValues().forEach(function(r, i){
+    stbSh.getRange(2, 1, stbLast - 1, 2).getValues().forEach(function(r, i){
       stbMap[String(r[0]).trim() + '_' + String(r[1]).trim()] = i + 2;
     });
   }
@@ -4790,10 +4803,10 @@ function recalcularStbFecha_(params) {
     const stbBreak = calcStbBreakdown_(scores18, cd.pares, cd.indices, hcp);
     if (!stbBreak) return; // sin scores aún
 
-    // Actualizar STB E:K
+    // Actualizar STB C:I
     const key = fStr + '_' + mat;
     if (stbMap[key]) {
-      stbSh.getRange(stbMap[key], 5, 1, 7).setValues([[
+      stbSh.getRange(stbMap[key], 3, 1, 7).setValues([[
         stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
         stbBreak.i, stbBreak.j, stbBreak.k
       ]]);
