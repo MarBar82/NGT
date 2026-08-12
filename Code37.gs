@@ -231,7 +231,7 @@ function getScoreRowForMat_(matricula) {
 // NGT DB SCORE: A=Fecha, B=Matricula, C=Stableford, D=Match, E=Bonus, F=Doble(puntos), G=PosFecha, H=PosLeaderboard
 
 function getNGTScoreSheet_() {
-  return getHistSheet_('SCORE');
+  return getSheet_('SCORE');
 }
 
 function getAllNGTScoreData_() {
