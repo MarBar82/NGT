@@ -478,11 +478,15 @@ function getMatchesFullForFecha_(fecha) {
   }
   if (!pairs.length) return [];
 
+  const jugMapFull = {};
+  getJugadores_().forEach(function(j) { jugMapFull[j.matricula] = j; });
+
   const shT = getSheet_(SHEETS.TARJETAS);
   if (!shT) return [];
-  const nextT = findNextEmptyRow_(shT, 2);
+  const nextT = findNextEmptyRow_(shT, 1);
   if (nextT <= 2) return [];
-  const tData = shT.getRange(2, 1, nextT - 2, 27).getValues();
+  // A..X: 0=fecha,1=mat,2=hcp,3=canchaId,4..21=H1..H18
+  const tData = shT.getRange(2, 1, nextT - 2, 24).getValues();
   const tarjMap = {};
   let canchaId = null;
   tData.forEach(function(r) {
@@ -522,9 +526,11 @@ function getMatchesFullForFecha_(fecha) {
       netB.push(gB !== null && !isNaN(gB) ? gB + adjB : '');
     }
 
+    const jug1 = jugMapFull[p.matA] || {};
+    const jug2 = jugMapFull[p.matB] || {};
     matches.push({
-      j1Name:   String(tarjA[2] || '').trim(),
-      j2Name:   String(tarjB[2] || '').trim(),
+      j1Name:   jug1.nombre || p.matA,
+      j2Name:   jug2.nombre || p.matB,
       j1Hcp:    hcp85A,
       j2Hcp:    hcp85B,
       j1Scores: netA,
@@ -1113,7 +1119,7 @@ function getFechaLineas_(fecha) {
       shT.getRange(2, 1, ne - 2, 4).getValues().forEach(function(row) {
         const f = String(row[0] || '').trim();
         const m = String(row[1] || '').trim();
-        if (f === String(fecha) && m) hcpMap[m] = parseInt(row[3]) || 0;
+        if (f === String(fecha) && m) hcpMap[m] = parseInt(row[2]) || 0;
       });
     }
   }
