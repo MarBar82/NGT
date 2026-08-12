@@ -413,9 +413,9 @@ function getStableforFromSTB_(fecha) {
 function getHcpsForFecha_(fecha) {
   const sh = getSheet_(SHEETS.TARJETAS);
   if (!sh) return {};
-  const nextEmpty = findNextEmptyRow_(sh, 2);
+  const nextEmpty = findNextEmptyRow_(sh, 1);
   if (nextEmpty <= 2) return {};
-  const data = sh.getRange(2, 2, nextEmpty - 2, 4).getValues(); // B,C,D,E
+  const data = sh.getRange(2, 1, nextEmpty - 2, 4).getValues(); // A,B,C,D
   const out = {};
   data.forEach(row => {
     const f = String(row[0] || '').trim();
@@ -442,9 +442,9 @@ function getBonusWinnersDetailed_(fecha) {
 function getCanchaForFecha_(fecha) {
   const sh = getSheet_(SHEETS.TARJETAS);
   if (!sh) return '';
-  const nextEmpty = findNextEmptyRow_(sh, 2);
+  const nextEmpty = findNextEmptyRow_(sh, 1);
   if (nextEmpty <= 2) return '';
-  const data = sh.getRange(2, 2, nextEmpty - 2, 5).getValues(); // B..F
+  const data = sh.getRange(2, 1, nextEmpty - 2, 5).getValues(); // A..E
   for (let i = 0; i < data.length; i++) {
     const f = String(data[i][0] || '').trim();
     const c = String(data[i][4] || '').trim();
@@ -482,7 +482,7 @@ function getMatchesFullForFecha_(fecha) {
   if (!shT) return [];
   const nextT = findNextEmptyRow_(shT, 2);
   if (nextT <= 2) return [];
-  const tData = shT.getRange(2, 2, nextT - 2, 32).getValues();
+  const tData = shT.getRange(2, 1, nextT - 2, 27).getValues();
   const tarjMap = {};
   let canchaId = null;
   tData.forEach(function(r) {
@@ -564,20 +564,20 @@ function getMisFechas_(matricula) {
   // for each cancha. Embedding pares+indices saves a round-trip when entering score screen.
   const sh = getSheet_(SHEETS.TARJETAS);
   if (!sh) return [];
-  const nextEmpty = findNextEmptyRow_(sh, 2);
+  const nextEmpty = findNextEmptyRow_(sh, 1);
   if (nextEmpty <= 2) return [];
-  // Cols: A=FM, B=FECHA(0), C=MATRICULA(1), D=NOMBRE(2), E=HCP(3), F=CANCHA(4), G=CANCHAИД(5) … AG=COLOR_TEE(31)
-  const data = sh.getRange(2, 2, nextEmpty - 2, 32).getValues();
+  // Cols: A=FECHA(0), B=MATRICULA(1), C=NOMBRE(2), D=HCP(3), E=CANCHA(4), F=CANCHAІД(5) … AA=COLOR_TEE(26)
+  const data = sh.getRange(2, 1, nextEmpty - 2, 27).getValues();
   const out = [];
   const canchasNeeded = {}; // canchaId → true
   data.forEach(function(row, i) {
     const f = String(row[0] || '').trim();
     const m = String(row[1] || '').trim();
     if (m !== String(matricula) || !f) return;
-    const canchaName = String(row[4] || '').trim(); // F = nombre (solo para display)
-    const canchaId   = String(row[5] || '').trim(); // G = ID (para lookup)
-    const ct         = String(row[31] || '').trim().toUpperCase();
-    const hoyo1      = row[6]; // col H
+    const canchaName = String(row[4] || '').trim(); // E = nombre (solo para display)
+    const canchaId   = String(row[5] || '').trim(); // F = ID (para lookup)
+    const ct         = String(row[26] || '').trim().toUpperCase();
+    const hoyo1      = row[6]; // col G
     out.push({
       fecha:     f,
       hcp:       row[3] || '',
@@ -871,9 +871,9 @@ function debugHcpCanchas_() {
 function getFechasActivas_() {
   const sh = getSheet_(SHEETS.TARJETAS);
   if (!sh) return [];
-  const nextEmpty = findNextEmptyRow_(sh, 2);
+  const nextEmpty = findNextEmptyRow_(sh, 1);
   if (nextEmpty <= 2) return [];
-  const data = sh.getRange(2, 2, nextEmpty - 2, 1).getValues();
+  const data = sh.getRange(2, 1, nextEmpty - 2, 1).getValues();
   const fechas = new Set();
   data.forEach(r => {
     const v = String(r[0] || '').trim();
@@ -885,10 +885,10 @@ function getFechasActivas_() {
 function getJugadoresEnFecha_(fecha) {
   const shT = getSheet_(SHEETS.TARJETAS);
   if (!shT) return [];
-  const nextEmpty = findNextEmptyRow_(shT, 2);
+  const nextEmpty = findNextEmptyRow_(shT, 1);
   if (nextEmpty <= 2) return [];
 
-  const data = shT.getRange(2, 2, nextEmpty - 2, 3).getValues();
+  const data = shT.getRange(2, 1, nextEmpty - 2, 3).getValues();
 
   const jugMap = {};
   getJugadores_().forEach(j => { jugMap[j.matricula] = j; });
@@ -917,21 +917,21 @@ function getJugadoresEnFecha_(fecha) {
 function getTarjetaJugador_(fecha, matricula) {
   const sh = getSheet_(SHEETS.TARJETAS);
   if (!sh) return null;
-  const nextEmpty = findNextEmptyRow_(sh, 2);
+  const nextEmpty = findNextEmptyRow_(sh, 1);
   if (nextEmpty <= 2) return null;
-  const data = sh.getRange(2, 1, nextEmpty - 2, 32).getValues();
+  const data = sh.getRange(2, 1, nextEmpty - 2, 27).getValues();
   for (let i = 0; i < data.length; i++) {
-    const f = String(data[i][1] || '').trim();
-    const m = String(data[i][2] || '').trim();
+    const f = String(data[i][0] || '').trim();
+    const m = String(data[i][1] || '').trim();
     if (f === String(fecha) && m === String(matricula)) {
       return {
         rowIndex: i + 2,
         fecha: f, matricula: m,
-        nombre: data[i][3], hcp: data[i][4],
-        cancha: data[i][5],   // col F = cancha name
-        canchaId: data[i][6], // col G = cancha ID (needed for canchaPares lookup)
-        scores: data[i].slice(7, 25),
-        ld: data[i][25], ba: data[i][26],
+        nombre: data[i][2], hcp: data[i][3],
+        cancha: data[i][4],   // col E = cancha name
+        canchaId: data[i][5], // col F = cancha ID
+        scores: data[i].slice(6, 24),
+        ld: data[i][24], ba: data[i][25],
       };
     }
   }
@@ -945,11 +945,11 @@ function getTarjetaJugador_(fecha, matricula) {
 function getBonusWinners_(fecha) {
   const sh = getSheet_(SHEETS.TARJETAS);
   if (!sh) return { ldWinner: null, baWinner: null };
-  const nextEmpty = findNextEmptyRow_(sh, 2);
+  const nextEmpty = findNextEmptyRow_(sh, 1);
   if (nextEmpty <= 2) return { ldWinner: null, baWinner: null };
 
-  const data = sh.getRange(2, 2, nextEmpty - 2, 26).getValues();
-  // cols: B=fecha(0), C=matricula(1), D=nombre(2), ..., Z=LD(24), AA=BA(25)
+  const data = sh.getRange(2, 1, nextEmpty - 2, 26).getValues();
+  // cols: A=fecha(0), B=matricula(1), C=nombre(2), ..., Y=LD(24), Z=BA(25)
 
   const jugMap = {};
   getJugadores_().forEach(j => { jugMap[j.matricula] = j; });
@@ -991,8 +991,8 @@ function getBonusesAcum_() {
   const lr = sh.getLastRow();
   if (lr < 2) return {};
 
-  // Read cols B..AA (B=fecha, C=matricula, D=nombre, ..., Z=LD, AA=BA)
-  const data = sh.getRange(2, 2, lr - 1, 26).getValues();
+  // Read cols A..Z (A=fecha, B=matricula, C=nombre, ..., Y=LD, Z=BA)
+  const data = sh.getRange(2, 1, lr - 1, 26).getValues();
   const jugMap = {};
   getJugadores_().forEach(j => { jugMap[String(j.matricula).trim()] = j; });
 
@@ -1056,10 +1056,10 @@ function getFechaActiva_() {
     var completada = false;
     if (shT) {
       try {
-        const ne = findNextEmptyRow_(shT, 2);
+        const ne = findNextEmptyRow_(shT, 1);
         if (ne > 2) {
-          // B(0)=fecha, C(1)=mat, D(2)=nombre, E(3)=hcp, F(4)=cancha, G(5)=canchaId, H(6)=hoyo1
-          const rows = shT.getRange(2, 2, ne - 2, 7).getValues();
+          // A(0)=fecha, B(1)=mat, C(2)=nombre, D(3)=hcp, E(4)=cancha, F(5)=canchaId, G(6)=hoyo1
+          const rows = shT.getRange(2, 1, ne - 2, 7).getValues();
           const jugadoresFecha = rows.filter(function(r) {
             const f   = String(r[0] || '').trim();
             const mat = String(r[1] || '').trim();
@@ -1109,9 +1109,9 @@ function getFechaLineas_(fecha) {
   const shT = getSheet_(SHEETS.TARJETAS);
   const hcpMap = {}; // matricula → hcp de juego (almacenado en tarjeta)
   if (shT) {
-    const ne = findNextEmptyRow_(shT, 2);
+    const ne = findNextEmptyRow_(shT, 1);
     if (ne > 2) {
-      shT.getRange(2, 2, ne - 2, 4).getValues().forEach(function(row) {
+      shT.getRange(2, 1, ne - 2, 4).getValues().forEach(function(row) {
         const f = String(row[0] || '').trim();
         const m = String(row[1] || '').trim();
         if (f === String(fecha) && m) hcpMap[m] = parseInt(row[3]) || 0;
@@ -1323,7 +1323,7 @@ function editarFecha_(params) {
   if (canchaName) {
     try {
       existingRows.forEach(er => {
-        sh.getRange(er.row, 6, 1, 2).setValues([[canchaName, canchaId]]); // F + G
+        sh.getRange(er.row, 5, 1, 2).setValues([[canchaName, canchaId]]); // E + F
       });
       changes.canchaUpdated = true;
     } catch (e) { changes.errors.push('cancha: ' + e.message); }
@@ -1333,7 +1333,7 @@ function editarFecha_(params) {
   if (colorFinal) {
     try {
       existingRows.forEach(er => {
-        sh.getRange(er.row, 33).setValue(colorFinal);   // AG = col 33
+        sh.getRange(er.row, 27).setValue(colorFinal);   // AA = col 27
       });
       changes.colorUpdated = true;
     } catch (e) { changes.errors.push('color: ' + e.message); }
@@ -1353,7 +1353,7 @@ function editarFecha_(params) {
         existingRows.forEach(er => {
           if (er.isInvitado) return; // invitados no tienen matricula en JUGADORES
           const hcp = editHcpMap[er.matricula];
-          if (hcp !== undefined) sh.getRange(er.row, 5).setValue(hcp); // E = HCP de juego
+          if (hcp !== undefined) sh.getRange(er.row, 4).setValue(hcp); // D = HCP de juego
         });
         changes.hcpRecalculated = true;
       }
@@ -1406,8 +1406,10 @@ function editarFecha_(params) {
   targetJugadores.forEach(mat => {
     if (currentMatriculas.indexOf(mat) >= 0) return;
     try {
-      sh.getRange(nextRow, 2).setValue(fecha);
-      sh.getRange(nextRow, 3).setValue(mat);
+      sh.getRange(nextRow, 1).setValue(fecha);
+      sh.getRange(nextRow, 2).setValue(mat);
+      const jugNombreEdit_ = (function(){ const j = getJugadores_().find(function(x){ return String(x.matricula) === String(mat); }); return j ? j.nombre || '' : ''; })();
+      sh.getRange(nextRow, 3).setValue(jugNombreEdit_);
       // Write HCP de juego for new player (editHcpMap populated in step 1c, or build now if needed)
       const newHcp = editHcpMap[mat] !== undefined
         ? editHcpMap[mat]
@@ -1420,9 +1422,9 @@ function editarFecha_(params) {
               return editHcpMap[mat] !== undefined ? editHcpMap[mat] : '';
             } catch(e2) { return ''; }
           })();
-      if (newHcp !== '') sh.getRange(nextRow, 5).setValue(newHcp); // E = HCP de juego
-      if (canchaName) sh.getRange(nextRow, 6, 1, 2).setValues([[canchaName, canchaId]]); // F + G
-      if (colorFinal) sh.getRange(nextRow, 33).setValue(colorFinal); // AG = col 33
+      if (newHcp !== '') sh.getRange(nextRow, 4).setValue(newHcp); // D = HCP de juego
+      if (canchaName) sh.getRange(nextRow, 5, 1, 2).setValues([[canchaName, canchaId]]); // E + F
+      if (colorFinal) sh.getRange(nextRow, 27).setValue(colorFinal); // AA = col 27
       nextRow++;
       changes.added.push(mat);
     } catch (e) { changes.errors.push('add ' + mat + ': ' + e.message); }
@@ -1433,11 +1435,11 @@ function editarFecha_(params) {
     if (currentInvitadoNames.indexOf(nombre) >= 0) return;
     try {
       const invMat = 'INV' + baseTs + idx;
-      sh.getRange(nextRow, 2).setValue(fecha);
-      sh.getRange(nextRow, 3).setValue(invMat);
-      sh.getRange(nextRow, 4).setValue(nombre);
-      if (canchaName) sh.getRange(nextRow, 6, 1, 2).setValues([[canchaName, canchaId]]); // F + G
-      if (colorFinal) sh.getRange(nextRow, 33).setValue(colorFinal);   // AG = col 33
+      sh.getRange(nextRow, 1).setValue(fecha);
+      sh.getRange(nextRow, 2).setValue(invMat);
+      sh.getRange(nextRow, 3).setValue(nombre);
+      if (canchaName) sh.getRange(nextRow, 5, 1, 2).setValues([[canchaName, canchaId]]); // E + F
+      if (colorFinal) sh.getRange(nextRow, 27).setValue(colorFinal);   // AA = col 27
       nextRow++;
       changes.added.push('INV:' + nombre);
     } catch (e) { changes.errors.push('addInv ' + nombre + ': ' + e.message); }
@@ -1524,9 +1526,9 @@ function crearFecha_(params) {
   const hcpMap  = hcpInfo ? hcpInfo.hcpMap : {};
 
   const existing = [];
-  const nextEmpty = findNextEmptyRow_(sh, 2);
+  const nextEmpty = findNextEmptyRow_(sh, 1);
   if (nextEmpty > 2) {
-    const data = sh.getRange(2, 2, nextEmpty - 2, 2).getValues();
+    const data = sh.getRange(2, 1, nextEmpty - 2, 2).getValues();
     data.forEach(r => {
       const f = String(r[0] || '').trim();
       const m = String(r[1] || '').trim();
@@ -1549,19 +1551,21 @@ function crearFecha_(params) {
     });
   }
   if (newJugMats.length) {
+    const jugNombreMap = {};
+    getJugadores_().forEach(function(j) { jugNombreMap[String(j.matricula)] = j.nombre || ''; });
     const startJug = nextRow;
-    sh.getRange(startJug, 2, newJugMats.length, 2)
-      .setValues(newJugMats.map(m => [fecha, m]));                    // B-C (fecha, matricula)
-    sh.getRange(startJug, 5, newJugMats.length, 1)
-      .setValues(newJugMats.map(m => [hcpMap[m] !== undefined ? hcpMap[m] : ''])); // E (HCP de juego)
-    sh.getRange(startJug, 6, newJugMats.length, 2)
-      .setValues(newJugMats.map(() => [canchaName, canchaId]));        // F-G (cancha nombre + ID)
-    sh.getRange(startJug, 33, newJugMats.length, 1)
-      .setValues(newJugMats.map(() => [colorFinal]));                  // AG (color tee)
+    sh.getRange(startJug, 1, newJugMats.length, 3)
+      .setValues(newJugMats.map(m => [fecha, m, jugNombreMap[m] || ''])); // A-B-C (fecha, mat, nombre)
+    sh.getRange(startJug, 4, newJugMats.length, 1)
+      .setValues(newJugMats.map(m => [hcpMap[m] !== undefined ? hcpMap[m] : ''])); // D (HCP de juego)
+    sh.getRange(startJug, 5, newJugMats.length, 2)
+      .setValues(newJugMats.map(() => [canchaName, canchaId]));        // E-F (cancha nombre + ID)
+    sh.getRange(startJug, 27, newJugMats.length, 1)
+      .setValues(newJugMats.map(() => [colorFinal]));                  // AA (color tee)
     nextRow += newJugMats.length;
   }
 
-  // ── Invitados: batch write (B-C-D together, then F and AG) ─────────────────
+  // ── Invitados: batch write (A-B-C together, then E-F and AA) ───────────────
   let invAdded = 0;
   if (Array.isArray(invitados)) {
     const baseTs = Date.now();
@@ -1575,12 +1579,12 @@ function crearFecha_(params) {
     });
     if (newInvRows.length) {
       const startInv = nextRow;
-      sh.getRange(startInv, 2, newInvRows.length, 3)
-        .setValues(newInvRows.map(r => [fecha, r.mat, r.nombre]));  // B-C-D
-      sh.getRange(startInv, 6, newInvRows.length, 2)
-        .setValues(newInvRows.map(() => [canchaName, canchaId]));   // F-G (nombre + ID estático)
-      sh.getRange(startInv, 33, newInvRows.length, 1)
-        .setValues(newInvRows.map(() => [colorFinal]));             // AG
+      sh.getRange(startInv, 1, newInvRows.length, 3)
+        .setValues(newInvRows.map(r => [fecha, r.mat, r.nombre]));  // A-B-C
+      sh.getRange(startInv, 5, newInvRows.length, 2)
+        .setValues(newInvRows.map(() => [canchaName, canchaId]));   // E-F (nombre + ID estático)
+      sh.getRange(startInv, 27, newInvRows.length, 1)
+        .setValues(newInvRows.map(() => [colorFinal]));             // AA
       nextRow += newInvRows.length;
     }
   }
@@ -1702,18 +1706,18 @@ function setBonusWinners_(params) {
   const last = sh.getLastRow();
   if (last < 2) return { ok: true };
 
-  const allRows = sh.getRange(2, 2, last - 1, 26).getValues();
+  const allRows = sh.getRange(2, 1, last - 1, 26).getValues();
   const pbMap = {}; // mat → pbPoints
 
-  // Actualizar col Z (LD) y AA (BA) para cada fila de esta fecha
+  // Actualizar col Y (LD) y Z (BA) para cada fila de esta fecha
   for (let i = 0; i < allRows.length; i++) {
     if (String(allRows[i][0]).trim() !== fStr) continue;
     const mat = String(allRows[i][1]).trim();
     if (!mat) continue;
     const newLD = (ldStr && mat === ldStr) ? 1 : '';
     const newBA = (baStr && mat === baStr) ? 1 : '';
-    sh.getRange(i + 2, 26).setValue(newLD); // col Z
-    sh.getRange(i + 2, 27).setValue(newBA); // col AA
+    sh.getRange(i + 2, 25).setValue(newLD); // col Y
+    sh.getRange(i + 2, 26).setValue(newBA); // col Z
     pbMap[mat] = ((newLD === 1 ? 1 : 0) + (newBA === 1 ? 1 : 0)) * 3;
   }
 
@@ -1764,11 +1768,11 @@ function cargarTarjeta_(params) {
   const clearsLD = (ld === 0 || ld === false || ld === '0');
   const clearsBA = (ba === 0 || ba === false || ba === '0');
 
-  // Single read of B..AA covers everything we need: validation, row lookup, and old values
-  const nextEmpty = findNextEmptyRow_(sh, 2);
+  // Single read of A..Z covers everything we need: validation, row lookup, and old values
+  const nextEmpty = findNextEmptyRow_(sh, 1);
   if (nextEmpty <= 2) return { ok: false, error: 'No hay tarjetas' };
-  const allRows = sh.getRange(2, 2, nextEmpty - 2, 26).getValues();
-  // cols (0-indexed in slice starting at B): 0=fecha, 1=matricula, 2=nombre, 3=hcp,
+  const allRows = sh.getRange(2, 1, nextEmpty - 2, 26).getValues();
+  // cols (0-indexed from A): 0=fecha, 1=matricula, 2=nombre, 3=hcp,
   //   4=cancha, 5=id, 6..23=H1..H18, 24=LD, 25=BA
 
   // LD/BA uniqueness validation in same pass (avoid second sheet read)
@@ -1809,10 +1813,9 @@ function cargarTarjeta_(params) {
   }
   if (rowIdx < 0) return { ok: false, error: 'No se encontró tarjeta' };
 
-  // Build a 1×27 row covering E..AE (cols 5..31): hcp, cancha, id, H1..H18, LD, BA, IDA, VTA, GROSS, NETO.
+  // Build a 1×23 row covering D..Z (cols 4..26): hcp, cancha, id, H1..H18, LD, BA.
   // Preserve existing values for cols we shouldn't touch.
   // existingRow indices: 3=hcp, 4=cancha, 5=id, 6..23=H1..H18, 24=LD, 25=BA
-  // AB-AE (indices 23-26) computed below as static values — no sheet formula recalc.
   const newRow = new Array(23);
   newRow[0] = (hcp !== undefined && hcp !== null && hcp !== '') ? hcp : (existingRow[3] !== undefined ? existingRow[3] : '');
   newRow[1] = existingRow[4] !== undefined ? existingRow[4] : '';      // cancha (preserve)
@@ -1853,7 +1856,7 @@ function cargarTarjeta_(params) {
   const calcGross  = (idaCount > 0 || vtaCount > 0)   ? (idaSum + vtaSum) : '';
   const hcpNum     = parseFloat(newRow[0]);
   const calcNeto   = (calcGross !== '' && !isNaN(hcpNum)) ? calcGross - hcpNum : '';
-  newRow.push(calcIda, calcVuelta, calcGross, calcNeto); // indices 23-26 → cols AB-AE
+  // IDA/VUELTA/GROSS/NETO columns removed from TARJETAS — computed values kept in JS only
 
   // ── Pre-lock: reads + pure computation ─────────────────────────────────
   // Everything that doesn't WRITE to a sheet runs here, outside the lock,
@@ -2031,8 +2034,8 @@ function cargarTarjeta_(params) {
 
   let dobleMsg = null;
   try {
-    // 1. TARJETAS — write E..AE (27 cols)
-    sh.getRange(rowIdx, 5, 1, 27).setValues([newRow]);
+    // 1. TARJETAS — write D..Z (23 cols): HCP, cancha, canchaId, H1-H18, LD, BA
+    sh.getRange(rowIdx, 4, 1, 23).setValues([newRow]);
 
     try {
       // 2. STB E:K
@@ -2525,16 +2528,16 @@ function getFechaResultados_(fecha) {
   const jugMap = {};
   jugs.forEach(function(j) { jugMap[j.matricula] = j; });
 
-  // ── TARJETAS B:AA (26 cols) — una lectura para cancha + HCP + LD/BA ──────
-  // índices (0-based desde col B): 0=fecha,1=mat,2=nombre,3=hcp,4=cancha,5=canchaId,24=LD,25=BA
+  // ── TARJETAS A:Z (26 cols) — una lectura para cancha + HCP + LD/BA ──────
+  // índices (0-based desde col A): 0=fecha,1=mat,2=nombre,3=hcp,4=cancha,5=canchaId,24=LD,25=BA
   let cancha = '', canchaId = '';
   const hcpMap = {};
   let ldWinner = null, baWinner = null;
   const shT = getSheet_(SHEETS.TARJETAS);
   if (shT) {
-    const nextEmpty = findNextEmptyRow_(shT, 2);
+    const nextEmpty = findNextEmptyRow_(shT, 1);
     if (nextEmpty > 2) {
-      const tData = shT.getRange(2, 2, nextEmpty - 2, 26).getValues();
+      const tData = shT.getRange(2, 1, nextEmpty - 2, 26).getValues();
       for (let i = 0; i < tData.length; i++) {
         const r = tData[i];
         if (String(r[0] || '').trim() !== fStr) continue;
@@ -4737,11 +4740,11 @@ function recalcularStbFecha_(params) {
   const fecN = parseInt(fecha);
   const sh = getSheet_(SHEETS.TARJETAS);
   if (!sh) return { ok: false, error: 'Sin TARJETAS' };
-  const last = findNextEmptyRow_(sh, 2);
+  const last = findNextEmptyRow_(sh, 1);
   if (last <= 2) return { ok: false, error: 'Sin filas en TARJETAS' };
 
-  // B..AG: 0=fecha, 1=mat, 2=nombre, 3=hcp, 4=cancha, 5=canchaId, 6..23=H1..H18
-  const allRows = sh.getRange(2, 2, last - 2, 32).getValues();
+  // A..AA: 0=fecha, 1=mat, 2=nombre, 3=hcp, 4=cancha, 5=canchaId, 6..23=H1..H18, 26=colorTee
+  const allRows = sh.getRange(2, 1, last - 2, 27).getValues();
   const fechaRows = allRows.filter(function(r){ return String(r[0]).trim() === fStr; });
   if (!fechaRows.length) return { ok: false, error: 'Sin tarjetas para fecha ' + fStr };
 
