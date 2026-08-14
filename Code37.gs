@@ -3953,6 +3953,276 @@ function getJugadorEclectic_(matricula, canchaId) {
   };
 }
 
+// ════════════ LIVE SCORING ════════════
+
+/**
+ * Guarda el score de un hoyo para un jugador durante la ronda.
+ * cargadoPor debe pertenecer a la misma línea que matricula (o ser admin).
+ * Requisito 6.1.c + 6.1.d del requerimiento.
+ */
+function cargarHoyoLive_(params) {
+  const { fecha, matricula, hoyo, golpes, cargadoPor } = params;
+  if (!fecha || !matricula || !hoyo)
+    return { ok: false, error: 'Faltan parámetros' };
+
+  const hoyoNum = parseInt(hoyo);
+  if (isNaN(hoyoNum) || hoyoNum < 1 || hoyoNum > 18)
+    return { ok: false, error: 'Hoyo inválido (1-18)' };
+
+  const fStr   = String(fecha);
+  const matStr = String(matricula).trim();
+  const cargStr = String(cargadoPor || '').trim();
+  if (!cargStr) return { ok: false, error: 'Falta cargadoPor' };
+
+  // Auth: cargadoPor en la misma línea que matricula (o admin)
+  const isAdmin = checkAdmin_(cargStr);
+  let lineaIdx  = -1;
+
+  const meta = getFechaMeta_(fStr);
+  if (!meta || !meta.lineas) return { ok: false, error: 'Fecha no encontrada' };
+
+  for (let i = 0; i < meta.lineas.length; i++) {
+    const mats = meta.lineas[i].map(String);
+    if (mats.indexOf(matStr) >= 0) {
+      if (isAdmin || mats.indexOf(cargStr) >= 0) { lineaIdx = i; break; }
+    }
+  }
+  if (!isAdmin && lineaIdx < 0) return { ok: false, error: 'No pertenecés a la misma línea' };
+
+  // golpes: vacío o 0 limpia el hoyo; 1-15 es score válido
+  let golpesVal;
+  if (golpes === null || golpes === '' || golpes === 0 || golpes === '0') {
+    golpesVal = '';
+  } else {
+    golpesVal = parseInt(golpes);
+    if (isNaN(golpesVal) || golpesVal < 1 || golpesVal > 15)
+      return { ok: false, error: 'Golpes inválido' };
+  }
+
+  // Leer fila de TARJETAS
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
+  const nextEmpty = findNextEmptyRow_(sh, 1);
+  if (nextEmpty <= 2) return { ok: false, error: 'Sin tarjetas' };
+  // 0=fecha,1=mat,2=hcp,3=canchaId,4..21=H1..H18,22=LD,23=BA
+  const allRows = sh.getRange(2, 1, nextEmpty - 2, 24).getValues();
+
+  let rowIdx = -1, existingRow = null;
+  for (let i = 0; i < allRows.length; i++) {
+    if (String(allRows[i][0]).trim() === fStr && String(allRows[i][1]).trim() === matStr) {
+      rowIdx = i + 2; existingRow = allRows[i]; break;
+    }
+  }
+  if (rowIdx < 0) return { ok: false, error: 'Tarjeta no encontrada para ' + matStr };
+
+  // Calcular nuevo STB (pre-lock)
+  const hcpNum   = parseFloat(existingRow[2]);
+  const canchaId = String(existingRow[3] || '').trim();
+  const cd = canchaId
+    ? cachedRead_('cp2_' + canchaId, 300, function(){ return getCanchaPares_(canchaId); })
+    : null;
+  const cpPares   = (cd && cd.pares)   || [];
+  const cpIndices = (cd && cd.indices) || [];
+
+  const scores18 = existingRow.slice(4, 22).map(function(v) {
+    return (v === '' || v === null) ? '' : v;
+  });
+  scores18[hoyoNum - 1] = golpesVal;
+
+  const stbBreak = (!isNaN(hcpNum) && cpPares.length)
+    ? calcStbBreakdown_(scores18, cpPares, cpIndices, hcpNum)
+    : null;
+
+  // STB row lookup (pre-lock)
+  let preStbRow = -1;
+  const preStbSh = getSheet_('STB');
+  if (stbBreak && preStbSh) {
+    const stbLast = preStbSh.getLastRow();
+    if (stbLast >= 2) {
+      const stbAB = preStbSh.getRange(2, 1, stbLast - 1, 2).getValues();
+      for (let i = 0; i < stbAB.length; i++) {
+        if (String(stbAB[i][0]).trim() === fStr && String(stbAB[i][1]).trim() === matStr) {
+          preStbRow = i + 2; break;
+        }
+      }
+    }
+  }
+
+  // Lock → escrituras
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); }
+  catch(e) { return { ok: false, error: 'Servidor ocupado, reintentá' }; }
+
+  try {
+    // Hoyo N está en col E+N-1 (1-indexed): E=5 para hoyo 1, col = 4 + hoyoNum
+    sh.getRange(rowIdx, 4 + hoyoNum).setValue(golpesVal);
+
+    if (stbBreak && preStbRow > 0 && preStbSh) {
+      preStbSh.getRange(preStbRow, 3, 1, 7).setValues([[
+        stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
+        stbBreak.i, stbBreak.j, stbBreak.k
+      ]]);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  audit_('CARGAR_HOYO_LIVE', cargStr, { fecha: fStr, matricula: matStr, hoyo: hoyoNum, golpes: golpesVal });
+  return { ok: true, stb: stbBreak ? stbBreak.k : null };
+}
+
+/**
+ * Devuelve el estado completo de una línea en una sola llamada:
+ * scores hoyo a hoyo de todos los jugadores + estado live de sus matches.
+ * Diseñado para polling cada 10s desde el frontend (requisito 6.3).
+ */
+function getLineaLive_(fecha, lineaNum) {
+  const fStr = String(fecha);
+  const lNum = parseInt(lineaNum);
+  if (!fStr || isNaN(lNum) || lNum < 1) return null;
+
+  const meta = getFechaMeta_(fStr);
+  if (!meta || !meta.lineas || !meta.lineas[lNum - 1]) return null;
+
+  const lineaMats = meta.lineas[lNum - 1].map(String);
+  const canchaId  = String(meta.canchaId || '').trim();
+
+  const cd = canchaId
+    ? cachedRead_('cp2_' + canchaId, 600, function(){ return getCanchaPares_(canchaId); })
+    : null;
+  const cpPares   = (cd && cd.pares)   || [];
+  const cpIndices = (cd && cd.indices) || [];
+
+  // TARJETAS: una sola lectura
+  const shT = getSheet_(SHEETS.TARJETAS);
+  if (!shT) return null;
+  const nextEmpty = findNextEmptyRow_(shT, 1);
+  if (nextEmpty <= 2) return null;
+  // 0=fecha,1=mat,2=hcp,3=canchaId,4..21=H1..H18,22=LD,23=BA
+  const allRows = shT.getRange(2, 1, nextEmpty - 2, 24).getValues();
+
+  const jugMap = {};
+  cachedRead_('jugadores', 300, getJugadores_).forEach(function(j) {
+    jugMap[String(j.matricula)] = j;
+  });
+
+  const playerMap = {};
+  for (let i = 0; i < allRows.length; i++) {
+    const r = allRows[i];
+    if (String(r[0]).trim() !== fStr) continue;
+    const mat = String(r[1]).trim();
+    if (lineaMats.indexOf(mat) < 0) continue;
+    const hcp    = parseFloat(r[2]);
+    const scores = r.slice(4, 22).map(function(v) {
+      return (v === '' || v === null || v === undefined) ? null : Number(v);
+    });
+    const stb = (!isNaN(hcp) && cpPares.length)
+      ? calcStbBreakdown_(scores.map(function(v){ return v === null ? '' : v; }), cpPares, cpIndices, hcp)
+      : null;
+    playerMap[mat] = {
+      hcp:   isNaN(hcp) ? 0 : hcp,
+      hcp85: isNaN(hcp) ? 0 : Math.round(hcp * 0.85),
+      scores: scores,
+      stb:   stb,
+    };
+  }
+
+  const players = lineaMats.map(function(mat) {
+    const jug = jugMap[mat] || {};
+    const pd  = playerMap[mat] || { hcp: 0, hcp85: 0, scores: new Array(18).fill(null), stb: null };
+    const idx = pd.scores.indexOf(null);
+    return {
+      matricula: mat,
+      apodo:    (jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)).toUpperCase(),
+      hcp:      pd.hcp,
+      hcp85:    pd.hcp85,
+      scores:   pd.scores,
+      stbTotal: pd.stb ? pd.stb.k : null,
+      nextHoyo: idx >= 0 ? idx + 1 : 19, // 19 = todos cargados
+    };
+  });
+
+  // Matches de esta línea (una lectura)
+  const shM = getSheet_(SHEETS.MATCH);
+  const matchPairs = [];
+  if (shM) {
+    const neM = shM.getLastRow();
+    if (neM >= 2) {
+      const mData = shM.getRange(2, 2, neM - 1, 3).getValues(); // B=fecha,C=mat1,D=mat2
+      for (let i = 0; i < mData.length; i++) {
+        if (String(mData[i][0]).trim() !== fStr) continue;
+        const m1 = String(mData[i][1]).trim();
+        const m2 = String(mData[i][2]).trim();
+        if (lineaMats.indexOf(m1) >= 0 && lineaMats.indexOf(m2) >= 0)
+          matchPairs.push({ mat1: m1, mat2: m2 });
+      }
+    }
+  }
+
+  // Estado live hoyo a hoyo para cada match
+  const matches = matchPairs.map(function(pair) {
+    const pd1  = playerMap[pair.mat1];
+    const pd2  = playerMap[pair.mat2];
+    const jug1 = jugMap[pair.mat1] || {};
+    const jug2 = jugMap[pair.mat2] || {};
+    const a1   = (jug1.apodo || pair.mat1).toUpperCase();
+    const a2   = (jug2.apodo || pair.mat2).toUpperCase();
+
+    if (!pd1 || !pd2 || !cpIndices.length) {
+      return { j1: pair.mat1, apodo1: a1, j2: pair.mat2, apodo2: a2,
+               pts1: 0, pts2: 0, hoyosJugados: 0, estado: '', leader: null };
+    }
+
+    const ay1 = Math.max(0, pd1.hcp85 - pd2.hcp85);
+    const ay2 = Math.max(0, pd2.hcp85 - pd1.hcp85);
+    const bc1 = Math.max(0, ay1 - 18);
+    const bc2 = Math.max(0, ay2 - 18);
+
+    let pts1 = 0, pts2 = 0, hoyosJugados = 0;
+    for (let h = 0; h < 18; h++) {
+      const g1 = pd1.scores[h], g2 = pd2.scores[h];
+      if (g1 === null || g2 === null) continue;
+      const idx  = cpIndices[h] || 0;
+      const adj1 = (ay1 > 0 && ay1 >= idx ? -1 : 0) + (bc1 > 0 && idx <= bc1 ? -1 : 0);
+      const adj2 = (ay2 > 0 && ay2 >= idx ? -1 : 0) + (bc2 > 0 && idx <= bc2 ? -1 : 0);
+      const net1 = g1 + adj1, net2 = g2 + adj2;
+      if (net1 < net2) pts1++;
+      else if (net2 < net1) pts2++;
+      hoyosJugados++;
+    }
+
+    const diff      = pts1 - pts2;
+    const remaining = 18 - hoyosJugados;
+    const abs       = Math.abs(diff);
+    let estado = '';
+    if (hoyosJugados > 0) {
+      if (diff === 0) estado = 'AS';
+      else if (abs > remaining) estado = abs + '&' + remaining + (diff < 0 ? ' DN' : '');
+      else estado = diff > 0 ? (diff + ' UP') : (abs + ' DN');
+    }
+
+    return {
+      j1: pair.mat1, apodo1: a1,
+      j2: pair.mat2, apodo2: a2,
+      pts1: pts1, pts2: pts2,
+      hoyosJugados: hoyosJugados,
+      estado: estado,
+      leader: diff > 0 ? pair.mat1 : (diff < 0 ? pair.mat2 : null),
+    };
+  });
+
+  return {
+    fecha:      fStr,
+    linea:      lNum,
+    cancha:     meta.canchaName || lookupCanchaName_(canchaId) || '',
+    colorTee:   meta.colorTee   || 'BLANCAS',
+    hoyoSalida: meta.hoyoSalida || 1,
+    pares:      cpPares,
+    players:    players,
+    matches:    matches,
+  };
+}
+
 // ════════════ ROUTING ════════════
 function doGet(e) {
   const params = e.parameter || {};
@@ -4008,6 +4278,7 @@ function doGet(e) {
       }
       case 'loginAdmin':       result = { ok: checkAdmin_(params.key) }; break;
       case 'canchasAdmin':     result = { ok: true, data: getCanchasAdmin_() }; break;
+      case 'getLineaLive':     result = { ok: true, data: getLineaLive_(params.fecha, params.linea) }; break;
       default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }
@@ -4674,6 +4945,7 @@ function doPost(e) {
       case 'updateRating':           result = updateRating_(params); break;
       case 'recalcularMatchesFecha': result = recalcularMatchesFecha_(params); break;
       case 'crearCancha':            result = crearCancha_(params); break;
+      case 'cargarHoyoLive':     result = cargarHoyoLive_(params); break;
       case 'armarLineas':          result = armarLineas_(params); break;
       case 'fechaLineas':          result = { ok: true, data: cachedRead_('fl_' + params.fecha, 300, function(){ return getFechaLineas_(params.fecha); }) }; break;
       case 'setDoblesFecha':       result = setDoblesFecha_(params); break;
