@@ -4120,6 +4120,7 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
     cancha:     { id: canchaId, nombre: canchaNombre, colorTee: meta.colorTee || 'BLANCAS' },
     hoyoSalida: meta.hoyoSalida || 1,
     pares:      cpPares,
+    indices:    cpIndices,
     updatedAt:  Date.now(),
     jugadores:  jugadores,
     matches:    matches,

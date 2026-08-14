@@ -667,6 +667,34 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .sm-keypad button.sm-more{background:var(--red);color:#fff;font-size:16px;}
 .sm-keypad button.sm-more:hover{background:#a30c25;}
 
+/* ── Live Scoring ─────────────────────────────────────────── */
+.live-toggle-wrap{display:flex;border-radius:3px;overflow:hidden;border:var(--border);margin-bottom:10px;}
+.live-toggle-btn{flex:1;background:var(--white);color:var(--navy);border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;padding:9px;text-transform:uppercase;transition:.12s;}
+.live-toggle-btn.active{background:var(--navy);color:#fff;}
+.live-nav-btn{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;font-size:26px;line-height:1;padding:0 10px;font-weight:700;}
+.live-nav-btn:hover{color:#fff;}
+.live-hoyo-hdr{display:flex;align-items:center;}
+.live-hoyo-title{flex:1;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+.live-linea-chip{display:inline-block;background:rgba(255,255,255,.18);border-radius:10px;padding:1px 8px;font-size:10px;font-weight:400;letter-spacing:.04em;margin-left:6px;}
+.live-par-label{font-size:11px;font-weight:400;opacity:.75;margin-left:4px;}
+.live-player-row{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--g1);gap:12px;cursor:pointer;transition:background .1s;}
+.live-player-row:last-child{border-bottom:none;}
+.live-player-row:hover,.live-player-row:active{background:var(--off);}
+.live-player-info{flex:1;min-width:0;}
+.live-player-apodo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;text-transform:uppercase;letter-spacing:.03em;color:var(--navy);}
+.live-player-hcp{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
+.live-cargado-por{font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--g4);margin-top:2px;letter-spacing:.02em;}
+.live-hole-wrap{display:flex;align-items:center;gap:8px;}
+.live-stb-badge{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);min-width:28px;text-align:center;line-height:1;}
+.live-stb-pts{font-size:9px;font-weight:400;display:block;}
+.live-offline{background:#fee;border-radius:3px;padding:8px 12px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--red);margin-top:8px;text-align:center;}
+.live-complete-wrap{margin-bottom:10px;}
+.live-player-summary{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--g1);}
+.live-player-summary:last-child{border-bottom:none;}
+.live-sum-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;}
+.live-sum-stat{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
+.sm-player-name{text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:.1em;opacity:.65;padding-bottom:2px;display:none;}
+
 /* ══════════ HOME ══════════ */
 /* Hide topbar + subnav when Home is the active page */
 body.home-mode .tb,
@@ -1630,6 +1658,60 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     </div>
   </div>
 
+  <!-- Live Scoring view (fecha activa) -->
+  <div id="mit-live" style="display:none;">
+
+    <!-- Header row -->
+    <div style="display:flex;align-items:center;margin-bottom:10px;">
+      <button onclick="mitBackToFechas()" style="background:none;border:none;color:var(--navy);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;padding:0;letter-spacing:.03em;">← Volver</button>
+      <span id="live-title" style="flex:1;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
+    </div>
+
+    <!-- Loading state -->
+    <div id="live-loading" class="lb-status" style="display:block;"><div class="spinner"></div>Conectando...</div>
+
+    <!-- Main content (hidden until first poll succeeds) -->
+    <div id="live-content" style="display:none;">
+
+      <!-- Match strip -->
+      <div id="live-matches-strip" style="margin-bottom:10px;display:none;"></div>
+
+      <!-- Toggle: hoyo actual vs tarjeta completa -->
+      <div class="live-toggle-wrap">
+        <button id="live-toggle-hoyo" class="live-toggle-btn active" onclick="liveSetView('hoyo')">Hoyo actual</button>
+        <button id="live-toggle-tarjeta" class="live-toggle-btn" onclick="liveSetView('tarjeta')">Tarjeta completa</button>
+      </div>
+
+      <!-- Hoyo actual view -->
+      <div id="live-hoyo-view">
+        <div class="adm-card">
+          <div class="adm-card-hdr">
+            <div class="live-hoyo-hdr">
+              <button class="live-nav-btn" onclick="livePrevHoyo()">‹</button>
+              <div class="live-hoyo-title">
+                <span id="live-hoyo-label">Hoyo 1</span><span class="live-par-label" id="live-par-label"></span>
+                <span class="live-linea-chip" id="live-linea-chip"></span>
+              </div>
+              <button class="live-nav-btn" onclick="liveNextHoyo()">›</button>
+            </div>
+          </div>
+          <div class="adm-card-body" style="padding:0;" id="live-players-body"></div>
+        </div>
+      </div>
+
+      <!-- Tarjeta completa view -->
+      <div id="live-tarjeta-view" style="display:none;"></div>
+
+      <!-- Ronda completa section (shown below toggle when all 18 holes done) -->
+      <div id="live-complete-view" style="display:none;" class="live-complete-wrap"></div>
+
+    </div>
+
+    <!-- Offline / error notice -->
+    <div id="live-offline-msg" class="live-offline" style="display:none;"></div>
+
+  </div>
+
 </div>
 </div>
 
@@ -1637,6 +1719,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <div id="score-modal" class="sm-overlay" style="display:none;" onclick="smClose(event)">
   <div class="sm-box" onclick="event.stopPropagation()">
     <div class="sm-hdr">
+      <div class="sm-player-name" id="sm-player-name"></div>
       <div class="sm-hoyo" id="sm-hoyo">Hoyo 1</div>
       <div class="sm-par" id="sm-par">Par 4</div>
     </div>
@@ -3064,7 +3147,7 @@ function pg(id,btn){
   if(id==='hist')loadHist();
   if(id==='perf')loadPerfPicker();
   if(id==='match')loadMatch();
-  if(id==='mit'){ if(MIT_PLAYER) showMitFechas(); else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; } }
+  if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; } }
   if(fechaNum) loadFechaDinamica(fechaNum);
 }
 
@@ -4931,6 +5014,13 @@ let MIT_CANCHA = null;        // cancha info (with pares)
 let MIT_COLOR_TEE = 'BLANCAS'; // tee color for the current fecha (from TARJETAS col AG)
 let MIT_SCORES = [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null];
 let MIT_CUR_HOLE = 0;         // hole currently in modal (0-indexed)
+// Live Scoring state
+let LIVE_MODE = false;
+let LIVE_LINEA_DATA = null;
+let LIVE_HOYO = 1;
+let LIVE_TARGET_MAT = null;
+let LIVE_VIEW = 'hoyo';
+let LIVE_POLL_TIMER = null;
 
 function mitLogin(){
   const mat = document.getElementById('mit-mat-input').value.trim();
@@ -4964,17 +5054,21 @@ function mitLogin(){
 }
 
 function mitLogout(){
+  livePollStop();
+  LIVE_MODE = false;
   MIT_PLAYER = null;
   sessionStorage.removeItem('ngt_player_mat');
   document.getElementById('mit-login').style.display = 'block';
   document.getElementById('mit-fechas').style.display = 'none';
   document.getElementById('mit-score').style.display = 'none';
+  document.getElementById('mit-live').style.display = 'none';
   document.getElementById('mit-mat-input').value = '';
 }
 
 function showMitFechas(preloadedPromise){
   document.getElementById('mit-login').style.display = 'none';
   document.getElementById('mit-score').style.display = 'none';
+  document.getElementById('mit-live').style.display = 'none';
   document.getElementById('mit-fechas').style.display = 'block';
 
   document.getElementById('mit-greeting').textContent = '👤 ' + fmtNameForAdm(MIT_PLAYER.nombre);
@@ -5040,6 +5134,10 @@ function showMitFechas(preloadedPromise){
 }
 
 function openMitScore(fecha, cancha, colorTee){
+  if(String(fecha) === String(HOME_FECHA_ACTIVA)){
+    openLiveView(fecha, cancha);
+    return;
+  }
   MIT_FECHA = fecha;
   MIT_COLOR_TEE = String(colorTee || 'BLANCAS').trim().toUpperCase();
   document.getElementById('mit-fechas').style.display = 'none';
@@ -5175,6 +5273,7 @@ function openMitScore(fecha, cancha, colorTee){
 }
 
 function mitBackToFechas(){
+  if(LIVE_MODE){ livePollStop(); LIVE_MODE = false; }
   showMitFechas();
 }
 
@@ -5328,6 +5427,7 @@ function openScoreModal(hole){
   MIT_CUR_HOLE = hole;
   const pares = (MIT_CANCHA && MIT_CANCHA.pares) || [];
   const par = pares[hole];
+  document.getElementById('sm-player-name').style.display = 'none';
   document.getElementById('sm-hoyo').textContent = 'Hoyo ' + (hole+1);
   document.getElementById('sm-par').textContent = par ? 'Par ' + par : '';
   document.getElementById('sm-big').textContent = MIT_SCORES[hole] !== null ? MIT_SCORES[hole] : '–';
@@ -5337,6 +5437,11 @@ function openScoreModal(hole){
 }
 
 function smSetAndClose(v){
+  if(LIVE_MODE){
+    document.getElementById('score-modal').style.display = 'none';
+    liveSmConfirm(v);
+    return;
+  }
   MIT_SCORES[MIT_CUR_HOLE] = v;
   document.getElementById('sm-big').textContent = v;
   renderHolesGrid();
@@ -5345,11 +5450,351 @@ function smSetAndClose(v){
 }
 
 function smClear(){
+  if(LIVE_MODE){
+    document.getElementById('score-modal').style.display = 'none';
+    liveSmConfirm(null);
+    return;
+  }
   MIT_SCORES[MIT_CUR_HOLE] = null;
   document.getElementById('sm-big').textContent = '–';
   renderHolesGrid();
   setTimeout(function(){ smClose(); }, 150);
 }
+
+// ── Live Scoring ────────────────────────────────────────────────
+
+function openLiveView(fecha, cancha){
+  MIT_FECHA = fecha;
+  LIVE_MODE = true;
+  LIVE_HOYO = 1;
+  LIVE_VIEW = 'hoyo';
+  LIVE_LINEA_DATA = null;
+  document.getElementById('mit-fechas').style.display = 'none';
+  document.getElementById('mit-score').style.display = 'none';
+  document.getElementById('mit-live').style.display = 'block';
+  document.getElementById('live-loading').style.display = 'flex';
+  document.getElementById('live-content').style.display = 'none';
+  document.getElementById('live-offline-msg').style.display = 'none';
+  document.getElementById('live-title').textContent = 'Fecha ' + fecha + ' · ' + cancha;
+  document.getElementById('live-toggle-hoyo').className = 'live-toggle-btn active';
+  document.getElementById('live-toggle-tarjeta').className = 'live-toggle-btn';
+  livePoll();
+  livePollStart();
+}
+
+function livePollStart(){
+  livePollStop();
+  LIVE_POLL_TIMER = setInterval(livePoll, 8000);
+}
+
+function livePollStop(){
+  if(LIVE_POLL_TIMER){ clearInterval(LIVE_POLL_TIMER); LIVE_POLL_TIMER = null; }
+}
+
+function livePoll(){
+  if(!MIT_PLAYER || !MIT_FECHA || !LIVE_MODE) return;
+  ngtApiGet('getLineaLive', { fecha: MIT_FECHA, matricula: MIT_PLAYER.matricula })
+    .then(function(r){
+      const offEl = document.getElementById('live-offline-msg');
+      if(r && r.ok){
+        if(!LIVE_LINEA_DATA) liveInitHoyo(r);
+        LIVE_LINEA_DATA = r;
+        document.getElementById('live-loading').style.display = 'none';
+        document.getElementById('live-content').style.display = 'block';
+        if(offEl) offEl.style.display = 'none';
+        liveRender();
+        const allComplete = r.jugadores.every(function(j){ return j.holesCargados === 18; });
+        if(allComplete) livePollStop();
+      } else {
+        if(!LIVE_LINEA_DATA){
+          document.getElementById('live-loading').innerHTML =
+            '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
+            '<p style="color:var(--red);font-size:14px;">' + (r && r.error ? r.error : 'Error de conexión') + '</p>' +
+            '<button class="adm-btn-primary" onclick="mitBackToFechas()" style="margin-top:8px;">← Volver</button></div>';
+        } else if(offEl){
+          offEl.textContent = r && r.error ? r.error : 'Error al actualizar';
+          offEl.style.display = 'block';
+        }
+      }
+    })
+    .catch(function(){
+      const offEl = document.getElementById('live-offline-msg');
+      if(!LIVE_LINEA_DATA){
+        document.getElementById('live-loading').innerHTML =
+          '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
+          '<p style="color:var(--red);font-size:14px;">Sin conexión</p>' +
+          '<button class="adm-btn-primary" onclick="mitBackToFechas()" style="margin-top:8px;">← Volver</button></div>';
+      } else if(offEl){
+        offEl.textContent = 'Sin conexión · reintentando...';
+        offEl.style.display = 'block';
+      }
+    });
+}
+
+function liveInitHoyo(data){
+  for(var h = 0; h < 18; h++){
+    var anyMissing = data.jugadores.some(function(j){ return j.scores[h] === null; });
+    if(anyMissing){ LIVE_HOYO = h + 1; return; }
+  }
+  LIVE_HOYO = 18;
+}
+
+function liveRender(){
+  if(!LIVE_LINEA_DATA) return;
+  var d = LIVE_LINEA_DATA;
+  var chip = document.getElementById('live-linea-chip');
+  if(chip) chip.textContent = 'Línea ' + d.lineaNum;
+
+  liveRenderMatchStrip();
+
+  if(LIVE_VIEW === 'hoyo'){
+    document.getElementById('live-hoyo-view').style.display = 'block';
+    document.getElementById('live-tarjeta-view').style.display = 'none';
+    liveRenderHoyoActual();
+  } else {
+    document.getElementById('live-hoyo-view').style.display = 'none';
+    document.getElementById('live-tarjeta-view').style.display = 'block';
+    liveRenderTarjetaCompleta();
+  }
+
+  var allComplete = d.jugadores.every(function(j){ return j.holesCargados === 18; });
+  document.getElementById('live-complete-view').style.display = allComplete ? 'block' : 'none';
+  if(allComplete) liveRenderComplete();
+}
+
+function liveRenderHoyoActual(){
+  if(!LIVE_LINEA_DATA) return;
+  var d = LIVE_LINEA_DATA;
+  var pares = d.pares || [];
+  var h = LIVE_HOYO - 1;
+  var par = pares[h] || null;
+
+  document.getElementById('live-hoyo-label').textContent = 'Hoyo ' + LIVE_HOYO;
+  document.getElementById('live-par-label').textContent = par ? '· Par ' + par : '';
+
+  var html = '';
+  d.jugadores.forEach(function(jug){
+    var score = jug.scores[h];
+    var stb = jug.stbPorHoyo ? jug.stbPorHoyo[h] : null;
+    var cls = 'hole-circle';
+    if(score !== null){
+      cls += ' filled';
+      if(par){
+        var diff = score - par;
+        if(diff <= -2) cls += ' eagle';
+        else if(diff === -1) cls += ' birdie';
+        else if(diff === 0) cls += ' par';
+        else if(diff === 1) cls += ' bogey';
+        else cls += ' double';
+      }
+    }
+    var uc = jug.ultimoCargadoPor;
+    var cargStr = (uc && uc.hoyo === LIVE_HOYO && uc.matricula !== jug.matricula)
+      ? '<div class="live-cargado-por">↑ ' + (uc.apodo || uc.matricula) + '</div>' : '';
+
+    html += '<div class="live-player-row" onclick="liveOpenScoreModal(' + LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
+      '<div class="live-player-info">' +
+        '<div class="live-player-apodo">' + jug.apodo + '</div>' +
+        '<div class="live-player-hcp">HCP ' + jug.hcpJuego + '</div>' +
+        cargStr +
+      '</div>' +
+      '<div class="live-hole-wrap">' +
+        '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
+          (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
+          (score !== null ? '<span class="hole-score" style="font-size:22px;">' + score + '</span>' : '') +
+        '</div>' +
+        (stb !== null
+          ? '<span class="live-stb-badge">' + stb + '<span class="live-stb-pts">pts</span></span>'
+          : '<span class="live-stb-badge" style="color:var(--g3);">–</span>') +
+      '</div>' +
+    '</div>';
+  });
+  document.getElementById('live-players-body').innerHTML = html;
+}
+
+function liveRenderTarjetaCompleta(){
+  if(!LIVE_LINEA_DATA) return;
+  var d = LIVE_LINEA_DATA;
+  var html = '';
+  d.jugadores.forEach(function(jug){
+    var stbInfo = jug.stbTotal !== null ? ' · STB ' + jug.stbTotal : '';
+    html += '<div class="adm-card" style="margin-bottom:10px;">' +
+      '<div class="adm-card-hdr">' + jug.apodo + stbInfo + '</div>' +
+      '<div class="adm-card-body">' +
+        '<div class="nine-title">IDA · Hoyos 1-9</div><div class="holes-grid">';
+    for(var h = 0; h < 9; h++) html += renderHoleHtmlLive(h, jug);
+    html += '</div><div class="nine-title">VUELTA · Hoyos 10-18</div><div class="holes-grid">';
+    for(var h2 = 9; h2 < 18; h2++) html += renderHoleHtmlLive(h2, jug);
+    html += '</div></div></div>';
+  });
+  document.getElementById('live-tarjeta-view').innerHTML = html;
+}
+
+function renderHoleHtmlLive(h, jug){
+  var pares = (LIVE_LINEA_DATA && LIVE_LINEA_DATA.pares) || [];
+  var par = pares[h];
+  var score = jug.scores[h];
+  var stb = jug.stbPorHoyo ? jug.stbPorHoyo[h] : null;
+  var cls = 'hole-circle';
+  if(score !== null){
+    cls += ' filled';
+    if(par){
+      var diff = score - par;
+      if(diff <= -2) cls += ' eagle';
+      else if(diff === -1) cls += ' birdie';
+      else if(diff === 0) cls += ' par';
+      else if(diff === 1) cls += ' bogey';
+      else cls += ' double';
+    }
+  }
+  return '<div class="hole-cell">' +
+    '<span class="hole-num">H ' + (h+1) + '</span>' +
+    '<div class="' + cls + '" onclick="liveOpenScoreModal(' + (h+1) + ',\'' + jug.matricula + '\')" style="cursor:pointer;">' +
+      (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
+      (score !== null ? '<span class="hole-score">' + score + '</span>' : '') +
+    '</div>' +
+    (stb !== null ? '<span class="hole-stb">' + stb + ' pts</span>' : '<span class="hole-stb empty">&nbsp;</span>') +
+  '</div>';
+}
+
+function liveRenderMatchStrip(){
+  if(!LIVE_LINEA_DATA) return;
+  var ms = LIVE_LINEA_DATA.matches;
+  var el = document.getElementById('live-matches-strip');
+  if(!ms || !ms.length){ el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  var html = '';
+  ms.forEach(function(m){
+    var est = m.estado || '';
+    var dn = est.indexOf(' DN') >= 0;
+    var up = est.indexOf(' UP') >= 0;
+    var as = est === 'AS';
+    var lCls = 'rc-left' + (up ? ' win' : '');
+    var rCls = 'rc-right' + (dn ? ' win' : '');
+    var cCls = 'rc-center' + (up ? ' cleft' : dn ? ' cright' : as ? ' cdraw' : '');
+    var centro = m.hoyosJugados > 0
+      ? '<span class="rc-score">' + (est || '–') + '</span><span style="font-size:9px;opacity:.6;display:block;">H.' + m.hoyosJugados + '</span>'
+      : '<span class="rc-score" style="opacity:.4;">–</span>';
+    html += '<div class="rc-match">' +
+      '<div class="' + lCls + '"><span class="rc-name">' + m.j1Apodo + '</span></div>' +
+      '<div class="' + cCls + '">' + centro + '</div>' +
+      '<div class="' + rCls + '"><span class="rc-name">' + m.j2Apodo + '</span></div>' +
+    '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function liveRenderComplete(){
+  if(!LIVE_LINEA_DATA || !MIT_PLAYER) return;
+  var myMat = String(MIT_PLAYER.matricula);
+  var d = LIVE_LINEA_DATA;
+  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:3px solid var(--red);">Ronda completa</div>' +
+    '<div class="adm-card-body">';
+  d.jugadores.forEach(function(jug){
+    var isMe = jug.matricula === myMat;
+    html += '<div class="live-player-summary">' +
+      '<div><div class="live-sum-name">' + jug.apodo + '</div>' +
+      '<div class="live-sum-stat">Gross ' + (jug.grossParcial || 0) + ' · STB ' + (jug.stbTotal !== null ? jug.stbTotal : '–') + '</div></div>' +
+      (isMe ? '<button class="adm-btn-primary" onclick="liveFirmarMiTarjeta()" style="font-size:13px;padding:8px 14px;">✍ Firmar</button>' : '') +
+    '</div>';
+  });
+  html += '</div></div>';
+  document.getElementById('live-complete-view').innerHTML = html;
+}
+
+function liveOpenScoreModal(hoyo, mat){
+  if(!LIVE_LINEA_DATA) return;
+  LIVE_HOYO = hoyo;
+  LIVE_TARGET_MAT = mat;
+  MIT_CUR_HOLE = hoyo - 1;
+  var jug = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === mat; });
+  var pares = LIVE_LINEA_DATA.pares || [];
+  var par = pares[hoyo - 1];
+  var currentScore = jug ? jug.scores[hoyo - 1] : null;
+  var apodo = jug ? jug.apodo : mat;
+
+  document.getElementById('sm-player-name').textContent = apodo;
+  document.getElementById('sm-player-name').style.display = 'block';
+  document.getElementById('sm-hoyo').textContent = 'Hoyo ' + hoyo;
+  document.getElementById('sm-par').textContent = par ? 'Par ' + par : '';
+  document.getElementById('sm-big').textContent = currentScore !== null ? currentScore : '–';
+  document.getElementById('sm-keypad-low').style.display = 'grid';
+  document.getElementById('sm-keypad-high').style.display = 'none';
+  document.getElementById('score-modal').style.display = 'flex';
+}
+
+function liveSmConfirm(v){
+  if(!LIVE_LINEA_DATA || !LIVE_TARGET_MAT) return;
+  var score = (v === null || v === '') ? null : parseInt(v, 10);
+
+  // Optimistic UI update
+  var jug = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === LIVE_TARGET_MAT; });
+  if(jug){ jug.scores[LIVE_HOYO - 1] = score; }
+  liveRender();
+
+  ngtApiPost({
+    action: 'cargarHoyoLive',
+    fecha: MIT_FECHA,
+    matriculaJugador: LIVE_TARGET_MAT,
+    matriculaCargador: MIT_PLAYER.matricula,
+    hoyo: LIVE_HOYO,
+    score: score,
+  }).then(function(r){
+    if(r && r.ok){
+      LIVE_LINEA_DATA = r;
+      liveRender();
+      if(score !== null) liveAutoAdvance();
+      var allComplete = r.jugadores.every(function(j){ return j.holesCargados === 18; });
+      if(allComplete) livePollStop();
+    }
+  }).catch(function(){ /* next poll will recover */ });
+}
+
+function liveAutoAdvance(){
+  if(!LIVE_LINEA_DATA || LIVE_VIEW !== 'hoyo') return;
+  var jugs = LIVE_LINEA_DATA.jugadores;
+  var allDoneHere = jugs.every(function(j){ return j.scores[LIVE_HOYO - 1] !== null; });
+  if(!allDoneHere) return;
+  for(var h = LIVE_HOYO; h < 18; h++){
+    var anyMissing = jugs.some(function(j){ return j.scores[h] === null; });
+    if(anyMissing){ LIVE_HOYO = h + 1; liveRenderHoyoActual(); return; }
+  }
+}
+
+function liveSetView(view){
+  LIVE_VIEW = view;
+  document.getElementById('live-toggle-hoyo').className = 'live-toggle-btn' + (view === 'hoyo' ? ' active' : '');
+  document.getElementById('live-toggle-tarjeta').className = 'live-toggle-btn' + (view === 'tarjeta' ? ' active' : '');
+  liveRender();
+}
+
+function livePrevHoyo(){ if(LIVE_HOYO > 1){ LIVE_HOYO--; liveRender(); } }
+function liveNextHoyo(){ if(LIVE_HOYO < 18){ LIVE_HOYO++; liveRender(); } }
+
+function liveFirmarMiTarjeta(){
+  if(!LIVE_LINEA_DATA || !MIT_PLAYER) return;
+  var myMat = String(MIT_PLAYER.matricula);
+  var myJug = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === myMat; });
+  if(!myJug) return;
+  MIT_SCORES = myJug.scores.slice();
+  MIT_CANCHA = {
+    nombre:  LIVE_LINEA_DATA.cancha.nombre,
+    pares:   LIVE_LINEA_DATA.pares   || [],
+    indices: LIVE_LINEA_DATA.indices || [],
+  };
+  document.getElementById('mit-hcp').value = myJug.hcpJuego;
+  document.getElementById('mit-ld').checked = myJug.ld || false;
+  document.getElementById('mit-ba').checked = myJug.ba || false;
+  mitFirmarTarjeta();
+}
+
+document.addEventListener('visibilitychange', function(){
+  if(!LIVE_MODE) return;
+  if(document.hidden){ livePollStop(); }
+  else { livePoll(); livePollStart(); }
+});
+
+// ── End Live Scoring ─────────────────────────────────────────
 
 function smShowHigh(){
   document.getElementById('sm-keypad-low').style.display = 'none';
