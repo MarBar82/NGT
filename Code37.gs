@@ -4204,6 +4204,7 @@ function cargarHoyoLive_(params) {
 
   try {
     sh.getRange(rowIdx, 4 + hoyoNum).setValue(scoreVal); // col E para hoyo 1 = col 5
+    SpreadsheetApp.flush();
   } finally {
     lock.releaseLock();
   }
@@ -5691,10 +5692,6 @@ function recalcularTotalesScore_(params, fechaParaPosLb) {
     for (var j = 0; j <= i; j++) { if (cVals[j] === ci) cntBefore++; }
     return rank + cntBefore - 1;
   });
-  if (sh) {
-    try { sh.getRange(3, 4, numP, 1).setValues(allRanks.map(function(r) { return [r]; })); } catch(e) {}
-  }
-
   // Write PosLeaderboard (col 8) for the given fecha's rows in NGT DB
   if (fechaParaPosLb) {
     try {

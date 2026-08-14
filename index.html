@@ -5186,10 +5186,6 @@ function showMitFechas(preloadedPromise){
   fechasPromise.then(r => {
     const fechas = (r && r.data) || [];
     const list = document.getElementById('mit-fechas-list');
-    if(!fechas.length){
-      list.innerHTML = '<div class="s dim" style="text-align:center;padding:24px;">No tenés fechas cargadas todavía</div>';
-      return;
-    }
 
     // Cache pares + indices from misFechas response into sessionStorage so openMitScore
     // can render the holes grid instantly with correct stableford calculation.
@@ -5201,41 +5197,16 @@ function showMitFechas(preloadedPromise){
       }
     });
 
-    // OPTIMIZATION: if there's only one pending (sin scores) fecha, skip the selector
-    // and jump directly to the score screen. Saves one click and one fetch round-trip.
-    const pending = fechas.filter(f => !f.hasScores);
-    if(pending.length === 1){
-      const f = pending[0];
-      openMitScore(f.fecha, f.cancha || '', f.colorTee || 'BLANCAS');
+    // Solo mostrar la fecha más reciente (fechas viene ordenado desc). Las anteriores
+    // ya están cerradas y no hay nada que el jugador deba hacer con ellas.
+    const f = fechas[0];
+    if(!f || f.hasScores){
+      list.innerHTML = '<div class="s dim" style="text-align:center;padding:32px 24px;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;">No tenés tarjetas pendientes</div>';
       return;
     }
 
-    let html = '';
-    fechas.forEach(f => {
-      const hasScore = f.hasScores; // hasScores = col H (Hoyo 1) tiene valor, no HCP que se auto-rellena
-      if(hasScore){
-        // Tarjeta ya firmada — solo lectura, no editable por el jugador
-        html += '<div class="mit-fecha-card mit-fecha-card-locked">' +
-          '<div class="mit-fecha-num">F' + f.fecha + '</div>' +
-          '<div class="mit-fecha-info">' +
-            '<div class="mit-fecha-cancha">' + (f.cancha || 'Sin cancha') + '</div>' +
-            '<div class="mit-fecha-stat" style="color:#15803d;">✓ Tarjeta cargada · HCP ' + f.hcp + '</div>' +
-            '<div style="font-size:10px;color:var(--g4);margin-top:2px;">Para corregir errores, pedile al admin</div>' +
-          '</div>' +
-          '<div style="font-size:18px;opacity:.35;margin-left:6px;">🔒</div>' +
-        '</div>';
-      } else {
-        html += '<div class="mit-fecha-card" onclick="openMitScore(\''+f.fecha+'\', \''+(f.cancha||'').replace(/\'/g,"\\\'")+ '\', \''+(f.colorTee||'BLANCAS')+'\')">' +
-          '<div class="mit-fecha-num">F' + f.fecha + '</div>' +
-          '<div class="mit-fecha-info">' +
-            '<div class="mit-fecha-cancha">' + (f.cancha || 'Sin cancha') + '</div>' +
-            '<div class="mit-fecha-stat">• Pendiente de cargar</div>' +
-          '</div>' +
-          '<div class="mit-fecha-arrow">›</div>' +
-        '</div>';
-      }
-    });
-    list.innerHTML = html;
+    // Un solo item pendiente — auto-jump directo al scorecard
+    openMitScore(f.fecha, f.cancha || '', f.colorTee || 'BLANCAS');
   });
 }
 
@@ -5700,19 +5671,7 @@ function liveRenderHoyoActual(){
   var html = '';
   d.jugadores.forEach(function(jug){
     var score = jug.scores[h];
-    var stb = jug.stbPorHoyo ? jug.stbPorHoyo[h] : null;
-    var cls = 'hole-circle';
-    if(score !== null){
-      cls += ' filled';
-      if(par){
-        var diff = score - par;
-        if(diff <= -2) cls += ' eagle';
-        else if(diff === -1) cls += ' birdie';
-        else if(diff === 0) cls += ' par';
-        else if(diff === 1) cls += ' bogey';
-        else cls += ' double';
-      }
-    }
+    var cls = 'hole-circle' + (score !== null ? ' filled' : '');
     var uc = jug.ultimoCargadoPor;
     var cargStr = (uc && uc.hoyo === LIVE_HOYO && uc.matricula !== jug.matricula)
       ? '<div class="live-cargado-por">↑ ' + (uc.apodo || uc.matricula) + '</div>' : '';
@@ -5725,12 +5684,8 @@ function liveRenderHoyoActual(){
       '</div>' +
       '<div class="live-hole-wrap">' +
         '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
-          (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
           (score !== null ? '<span class="hole-score" style="font-size:22px;">' + score + '</span>' : '') +
         '</div>' +
-        (stb !== null
-          ? '<span class="live-stb-badge">' + stb + '<span class="live-stb-pts">pts</span></span>'
-          : '<span class="live-stb-badge" style="color:var(--g3);">–</span>') +
       '</div>' +
     '</div>';
   });
@@ -5756,29 +5711,13 @@ function liveRenderTarjetaCompleta(){
 }
 
 function renderHoleHtmlLive(h, jug){
-  var pares = (LIVE_LINEA_DATA && LIVE_LINEA_DATA.pares) || [];
-  var par = pares[h];
   var score = jug.scores[h];
-  var stb = jug.stbPorHoyo ? jug.stbPorHoyo[h] : null;
-  var cls = 'hole-circle';
-  if(score !== null){
-    cls += ' filled';
-    if(par){
-      var diff = score - par;
-      if(diff <= -2) cls += ' eagle';
-      else if(diff === -1) cls += ' birdie';
-      else if(diff === 0) cls += ' par';
-      else if(diff === 1) cls += ' bogey';
-      else cls += ' double';
-    }
-  }
+  var cls = 'hole-circle' + (score !== null ? ' filled' : '');
   return '<div class="hole-cell">' +
     '<span class="hole-num">H ' + (h+1) + '</span>' +
     '<div class="' + cls + '" onclick="liveOpenScoreModal(' + (h+1) + ',\'' + jug.matricula + '\')" style="cursor:pointer;">' +
-      (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
       (score !== null ? '<span class="hole-score">' + score + '</span>' : '') +
     '</div>' +
-    (stb !== null ? '<span class="hole-stb">' + stb + ' pts</span>' : '<span class="hole-stb empty">&nbsp;</span>') +
   '</div>';
 }
 
