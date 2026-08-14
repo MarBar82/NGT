@@ -4197,57 +4197,13 @@ function cargarHoyoLive_(params) {
   }
   if (rowIdx < 2) return { ok: false, error: 'Tarjeta no encontrada para ' + jugStr };
 
-  // Leer fila completa para recalcular STB
-  const fullRow = sh.getRange(rowIdx, 1, 1, 24).getValues()[0];
-  const hcpNum  = parseFloat(fullRow[2]);
-  const canchaId = String(fullRow[3] || '').trim();
-  const cd = canchaId
-    ? cachedRead_('cp2_' + canchaId, 300, function(){ return getCanchaPares_(canchaId); })
-    : null;
-  const cpPares   = (cd && cd.pares)   || [];
-  const cpIndices = (cd && cd.indices) || [];
-
-  const scores18 = fullRow.slice(4, 22).map(function(v){ return (v === '' || v === null) ? '' : v; });
-  scores18[hoyoNum - 1] = scoreVal;
-
-  const stbBreak = (!isNaN(hcpNum) && cpPares.length)
-    ? calcStbBreakdown_(scores18, cpPares, cpIndices, hcpNum)
-    : null;
-
-  // STB row (también cacheado)
-  let preStbRow = -1;
-  const preStbSh = getSheet_('STB');
-  if (stbBreak && preStbSh) {
-    const stbCacheKey = 'stbRow_' + fStr + '_' + jugStr;
-    preStbRow = parseInt(cache.get(stbCacheKey) || '0');
-    if (preStbRow < 2) {
-      const stbLast = preStbSh.getLastRow();
-      if (stbLast >= 2) {
-        const stbAB = preStbSh.getRange(2, 1, stbLast - 1, 2).getValues();
-        for (let i = 0; i < stbAB.length; i++) {
-          if (String(stbAB[i][0]).trim() === fStr && String(stbAB[i][1]).trim() === jugStr) {
-            preStbRow = i + 2;
-            try { cache.put(stbCacheKey, String(preStbRow), 21600); } catch(e) {}
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  // Lock → escrituras mínimas
+  // Lock → escritura mínima: solo el score del hoyo en TARJETAS
   const lock = LockService.getScriptLock();
   try { lock.waitLock(30000); }
   catch(e) { return { ok: false, error: 'Servidor ocupado, reintentá' }; }
 
   try {
     sh.getRange(rowIdx, 4 + hoyoNum).setValue(scoreVal); // col E para hoyo 1 = col 5
-    if (stbBreak && preStbRow > 1 && preStbSh) {
-      preStbSh.getRange(preStbRow, 3, 1, 7).setValues([[
-        stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
-        stbBreak.i, stbBreak.j, stbBreak.k
-      ]]);
-    }
   } finally {
     lock.releaseLock();
   }
@@ -4271,7 +4227,19 @@ function cargarHoyoLive_(params) {
   const jugMap2 = {};
   cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap2[String(j.matricula)] = j; });
   const snap = buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap2);
-  return Object.assign({ ok: true }, snap || {});
+
+  // Detectar si el hoyo es de bonus (BA o LD) y no tiene ganador reportado aún
+  let bonusPendiente = null;
+  if (scoreVal !== '' && meta.bonusHoyos) {
+    const bonusEstado = meta.bonusEstado || {};
+    if (hoyoNum === meta.bonusHoyos.ba && !bonusEstado.ba) {
+      bonusPendiente = { tipo: 'ba', hoyo: hoyoNum };
+    } else if (hoyoNum === meta.bonusHoyos.ld && !bonusEstado.ld) {
+      bonusPendiente = { tipo: 'ld', hoyo: hoyoNum };
+    }
+  }
+
+  return Object.assign({ ok: true, bonusPendiente: bonusPendiente }, snap || {});
 }
 
 /**
@@ -4449,10 +4417,71 @@ function doGet(e) {
       case 'canchasAdmin':     result = { ok: true, data: getCanchasAdmin_() }; break;
       case 'getLineaLive':     result = getLineaLive_(params.fecha, params.matricula, params.lineaNum); break;
       case 'getBonusEstado':   result = getBonusEstado_(params); break;
+      case 'getStbFecha':      result = getStbFecha_(params); break;
       default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }
   return callback ? jsonpResponse_(callback, result) : jsonResponse_(result);
+}
+
+/**
+ * Devuelve el ranking stableford de todos los jugadores de una fecha.
+ * Usado por la tab "Stableford" en live scoring.
+ */
+function getStbFecha_(params) {
+  const fStr = String(params.fecha || '').trim();
+  if (!fStr) return { ok: false, error: 'Falta fecha' };
+
+  const meta = getFechaMeta_(fStr);
+  if (!meta) return { ok: false, error: 'Fecha no encontrada' };
+
+  const canchaId = String(meta.canchaId || '').trim();
+  const cd = canchaId
+    ? cachedRead_('cp2_' + canchaId, 600, function(){ return getCanchaPares_(canchaId); })
+    : null;
+  const cpPares   = (cd && cd.pares)   || [];
+  const cpIndices = (cd && cd.indices) || [];
+
+  const shT = getSheet_(SHEETS.TARJETAS);
+  if (!shT) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
+  const nextEmpty = findNextEmptyRow_(shT, 1);
+  if (nextEmpty <= 2) return { ok: true, data: [] };
+  const allRows = shT.getRange(2, 1, nextEmpty - 2, 24).getValues();
+
+  const jugMap = {};
+  cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+
+  const results = [];
+  for (let i = 0; i < allRows.length; i++) {
+    const r = allRows[i];
+    if (String(r[0]).trim() !== fStr) continue;
+    const mat = String(r[1]).trim();
+    const hcp = parseFloat(r[2]);
+    const scores = r.slice(4, 22).map(function(v){ return (v === '' || v === null || v === undefined) ? null : Number(v); });
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    let stbTotal = 0;
+    for (let h = 0; h < 18; h++) {
+      if (scores[h] !== null) stbTotal += calcStablefordHole_(scores[h], cpPares[h] || null, cpIndices[h] || null, isNaN(hcp) ? 0 : hcp);
+    }
+    const gross = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    const jug = jugMap[mat] || {};
+    results.push({
+      matricula:     mat,
+      apodo:         ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)) + '').toUpperCase(),
+      stbTotal:      holesCargados > 0 ? stbTotal : null,
+      holesCargados: holesCargados,
+      grossParcial:  gross,
+    });
+  }
+
+  results.sort(function(a, b){
+    if (a.stbTotal === null && b.stbTotal === null) return 0;
+    if (a.stbTotal === null) return 1;
+    if (b.stbTotal === null) return -1;
+    return b.stbTotal - a.stbTotal;
+  });
+
+  return { ok: true, data: results };
 }
 
 // ════════════ HCP INDEX — Actualización semanal desde VistagolfSouth ════════════

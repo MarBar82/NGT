@@ -1792,6 +1792,17 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 </div>
 
 
+<!-- Bonus modal -->
+<div id="bonus-modal" class="sm-overlay" style="display:none;">
+  <div class="sm-box" style="max-width:340px;" onclick="event.stopPropagation()">
+    <div class="sm-hdr">
+      <div class="sm-player-name" id="bm-titulo"></div>
+      <div class="sm-hoyo" id="bm-subtitulo"></div>
+    </div>
+    <div id="bm-opciones" style="padding:12px;display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</div>
+
 <!-- Confirm Firmar Tarjeta modal -->
 <div id="confirm-modal" class="sm-overlay" style="display:none;" onclick="confirmClose(event)">
   <div class="sm-box confirm-box" onclick="event.stopPropagation()">
@@ -5839,15 +5850,23 @@ function liveRenderMatchBody(data){
       : '<span class="rc-score" style="opacity:.4;">No iniciado</span>';
     html += '<div class="adm-card" style="margin-bottom:10px;"><div class="adm-card-body" style="padding:10px 12px;">';
     html += '<div class="rc-match">' +
-      '<div class="' + lCls + '"><span class="rc-name">' + m.j1Apodo + '</span></div>' +
+      '<div class="' + lCls + '"><span class="rc-name' + (up ? ' win' : '') + '">' + m.j1Apodo + '</span></div>' +
       '<div class="' + cCls + '">' + centro + '</div>' +
-      '<div class="' + rCls + '"><span class="rc-name">' + m.j2Apodo + '</span></div>' +
+      '<div class="' + rCls + '"><span class="rc-name' + (dn ? ' win' : '') + '">' + m.j2Apodo + '</span></div>' +
     '</div>';
-    html += '<div style="display:flex;gap:3px;margin-top:8px;overflow-x:auto;">';
+    html += '<div style="display:flex;gap:3px;margin-top:8px;overflow-x:auto;padding-bottom:2px;">';
     m.detallePorHoyo.forEach(function(det, h){
-      var color = det === 'win' ? '#16a34a' : det === 'lose' ? 'var(--red)' : det === 'halved' ? 'var(--navy)' : 'var(--g2)';
-      var bg = det === 'win' ? '#e8f5e9' : det === 'lose' ? '#fee' : det === 'halved' ? 'var(--off)' : 'transparent';
-      html += '<div style="width:24px;height:24px;border-radius:50%;border:1.5px solid ' + color + ';background:' + bg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:700;color:' + color + ';">' + (h+1) + '</div>';
+      var sym, color, bg, border;
+      if(det === 'win'){
+        sym = 'W'; color = '#fff'; bg = '#16a34a'; border = '#16a34a';
+      } else if(det === 'lose'){
+        sym = 'L'; color = '#fff'; bg = 'var(--red)'; border = 'var(--red)';
+      } else if(det === 'halved'){
+        sym = '='; color = '#fff'; bg = 'var(--navy)'; border = 'var(--navy)';
+      } else {
+        sym = String(h+1); color = 'var(--g3)'; bg = 'transparent'; border = 'var(--g2)';
+      }
+      html += '<div title="Hoyo ' + (h+1) + '" style="width:24px;height:24px;border-radius:50%;border:1.5px solid ' + border + ';background:' + bg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:700;color:' + color + ';">' + sym + '</div>';
     });
     html += '</div></div></div>';
   });
@@ -5858,8 +5877,38 @@ function liveRenderMatchBody(data){
 
 function liveLoadStableford(){
   var el = document.getElementById('live-lb-body');
-  if(el) el.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando...</div>';
-  fetchLBData();
+  if(!el) return;
+  el.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando...</div>';
+  ngtApiGet('getStbFecha', { fecha: MIT_FECHA })
+    .then(function(r){
+      if(!r || !r.ok || !r.data || !r.data.length){
+        el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">Sin datos stableford para esta fecha</div>';
+        return;
+      }
+      var html = '<table style="width:100%;border-collapse:collapse;font-family:\'Barlow Condensed\',sans-serif;">' +
+        '<thead><tr style="border-bottom:2px solid var(--border);font-size:11px;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;">' +
+        '<th style="padding:6px 8px;text-align:left;width:30px;">#</th>' +
+        '<th style="padding:6px 8px;text-align:left;">Jugador</th>' +
+        '<th style="padding:6px 8px;text-align:center;">H.</th>' +
+        '<th style="padding:6px 8px;text-align:right;">STB</th>' +
+        '</tr></thead><tbody>';
+      r.data.forEach(function(p, i){
+        var isMe = MIT_PLAYER && String(p.matricula) === String(MIT_PLAYER.matricula);
+        var rowStyle = isMe ? 'background:rgba(var(--navy-rgb,30,58,138),.08);font-weight:700;' : '';
+        html += '<tr style="border-bottom:1px solid var(--border);' + rowStyle + '">' +
+          '<td style="padding:8px 8px;font-size:13px;color:var(--g4);">' + (i+1) + '</td>' +
+          '<td style="padding:8px 8px;font-size:15px;">' + p.apodo + '</td>' +
+          '<td style="padding:8px 8px;text-align:center;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
+          '<td style="padding:8px 8px;text-align:right;font-size:18px;color:var(--navy);">' +
+            (p.stbTotal !== null ? p.stbTotal : '–') +
+          '</td></tr>';
+      });
+      html += '</tbody></table>';
+      el.innerHTML = html;
+    })
+    .catch(function(){
+      el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Error al cargar</div>';
+    });
 }
 
 // ── Bonus tab ──────────────────────────────────────────────────
@@ -5956,9 +6005,13 @@ function liveSmConfirm(v){
     if(r && r.ok){
       LIVE_LINEA_DATA = r;
       liveRender();
-      if(score !== null) liveAutoAdvance();
-      var allComplete = r.jugadores.every(function(j){ return j.holesCargados === 18; });
+      var allComplete = r.jugadores && r.jugadores.every(function(j){ return j.holesCargados === 18; });
       if(allComplete) livePollStop();
+      if(score !== null && r.bonusPendiente){
+        liveBonusModalAbrir(r.bonusPendiente);
+      } else if(score !== null){
+        liveAutoAdvance();
+      }
     }
   }).catch(function(){ /* next poll will recover */ });
 }
@@ -5972,6 +6025,37 @@ function liveAutoAdvance(){
     var anyMissing = jugs.some(function(j){ return j.scores[h] === null; });
     if(anyMissing){ LIVE_HOYO = h + 1; liveRenderHoyoActual(); return; }
   }
+}
+
+function liveBonusModalAbrir(pending){
+  if(!pending || !LIVE_LINEA_DATA) return;
+  var tipo = pending.tipo;
+  var hoyo = pending.hoyo;
+  var tipoLabel = tipo === 'ba' ? 'Best Approach' : 'Long Drive';
+  document.getElementById('bm-titulo').textContent = tipoLabel + ' — Hoyo ' + hoyo;
+  document.getElementById('bm-subtitulo').textContent = '¿Alguien de tu línea lo ganó?';
+  var jugs = LIVE_LINEA_DATA.jugadores || [];
+  var html = '';
+  jugs.forEach(function(j){
+    html += '<button class="adm-btn-primary" style="font-size:15px;padding:12px;width:100%;text-align:left;" onclick="liveBonusSeleccionar(\'' + tipo + '\',\'' + j.matricula + '\')">' + j.apodo + '</button>';
+  });
+  html += '<button class="adm-btn" style="font-size:14px;padding:10px;width:100%;color:var(--g4);" onclick="liveBonusSeleccionar(\'' + tipo + '\',null)">Nadie ganó</button>';
+  document.getElementById('bm-opciones').innerHTML = html;
+  document.getElementById('bonus-modal').style.display = 'flex';
+}
+
+function liveBonusSeleccionar(tipo, matricula){
+  document.getElementById('bonus-modal').style.display = 'none';
+  var lineaNum = LIVE_LINEA_DATA ? LIVE_LINEA_DATA.lineaNum : null;
+  ngtApiPost({
+    action: 'setBonusGanador',
+    fecha: MIT_FECHA,
+    tipo: tipo,
+    lineaNum: lineaNum,
+    matricula: matricula || '',
+    matriculaReporta: MIT_PLAYER ? MIT_PLAYER.matricula : '',
+  }).catch(function(){});
+  liveAutoAdvance();
 }
 
 function liveSetView(view){
