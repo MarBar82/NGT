@@ -5529,9 +5529,18 @@ function loginSubmitPin() {
     loginBuildKeypad('login-pin-keypad', 'login-pin-dots', function(pin) { LOGIN_PIN = pin; loginSubmitPin(); });
     err.textContent = r.error || 'PIN incorrecto';
   }).catch(function() {
-    LOGIN_PIN = '';
-    loginBuildKeypad('login-pin-keypad', 'login-pin-dots', function(pin) { LOGIN_PIN = pin; loginSubmitPin(); });
-    document.getElementById('login-s2-err').textContent = 'Error de conexión';
+    // Network error or GAS timeout — apply fallback local session if player info is known
+    if (LOGIN_PLAYER_INFO) {
+      var fakeSession = { token: 'local_' + LOGIN_MAT + '_' + Date.now(), exp: Date.now() + 90*24*3600*1000,
+                          mat: LOGIN_MAT, nombre: LOGIN_PLAYER_INFO.nombre || '', apodo: LOGIN_PLAYER_INFO.apodo || '', rol: 'Jugador' };
+      sessionSave(fakeSession.token, fakeSession);
+      applySession(NGT_SESSION);
+      loginHideOverlay();
+    } else {
+      LOGIN_PIN = '';
+      loginBuildKeypad('login-pin-keypad', 'login-pin-dots', function(pin) { LOGIN_PIN = pin; loginSubmitPin(); });
+      document.getElementById('login-s2-err').textContent = 'Error de conexión, intentá de nuevo';
+    }
   });
 }
 
