@@ -2267,7 +2267,7 @@ function eliminarFecha_(params) {
   changes.pb = deleteRowsForFecha(getSheet_('PB'), 2); // col B = fecha
 
   // ── 3. TARJETAS — eliminar filas ─────────────────────────────────────────
-  changes.tarjetas = deleteRowsForFecha(getSheet_(SHEETS.TARJETAS), 2); // col B = fecha
+  changes.tarjetas = deleteRowsForFecha(getSheet_(SHEETS.TARJETAS), 1); // col A = fecha
 
   // ── 4. MATCH — eliminar filas ─────────────────────────────────────────────
   changes.match = deleteRowsForFecha(getSheet_(SHEETS.MATCH), 2); // col B = fecha
@@ -4119,11 +4119,13 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
     horario:    meta.horario || '',
     cancha:     { id: canchaId, nombre: canchaNombre, colorTee: meta.colorTee || 'BLANCAS' },
     hoyoSalida: meta.hoyoSalida || 1,
-    pares:      cpPares,
-    indices:    cpIndices,
-    updatedAt:  Date.now(),
-    jugadores:  jugadores,
-    matches:    matches,
+    pares:         cpPares,
+    indices:       cpIndices,
+    totalLineas:   meta.lineas ? meta.lineas.length : 1,
+    updatedAt:     Date.now(),
+    jugadores:     jugadores,
+    matches:       matches,
+    bonusPendiente: null,
   };
 }
 
@@ -4275,13 +4277,28 @@ function cargarHoyoLive_(params) {
  * Si `matricula` no está en ninguna línea de esa fecha, error.
  * Diseñado para polling cada 5-8s (req 6.3).
  */
-function getLineaLive_(fecha, matricula) {
-  const fStr   = String(fecha);
-  const matStr = String(matricula || '').trim();
-  if (!fStr || !matStr) return { ok: false, error: 'Faltan parámetros' };
+function getLineaLive_(fecha, matricula, lineaNum) {
+  const fStr = String(fecha || '').trim();
+  if (!fStr) return { ok: false, error: 'Falta fecha' };
 
   const meta = getFechaMeta_(fStr);
   if (!meta || !meta.lineas) return { ok: false, error: 'Fecha no encontrada' };
+
+  const jugMap = {};
+  cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+
+  // Si viene lineaNum explícito → vista de solo lectura (cualquier jugador puede pedir)
+  if (lineaNum) {
+    const idx = parseInt(lineaNum) - 1;
+    if (idx < 0 || idx >= meta.lineas.length)
+      return { ok: false, error: 'Línea ' + lineaNum + ' no existe en esta fecha' };
+    const snap = buildLineaSnapshot_(fStr, idx, meta, jugMap);
+    return Object.assign({ ok: true, soloLectura: true }, snap || {});
+  }
+
+  // Sin lineaNum → buscar la línea de la matrícula
+  const matStr = String(matricula || '').trim();
+  if (!matStr) return { ok: false, error: 'Faltan parámetros' };
 
   let lineaIdx = -1;
   for (let i = 0; i < meta.lineas.length; i++) {
@@ -4289,11 +4306,88 @@ function getLineaLive_(fecha, matricula) {
   }
   if (lineaIdx < 0) return { ok: false, error: 'No pertenecés a ninguna línea de esta fecha' };
 
+  const snap = buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap);
+  return Object.assign({ ok: true, soloLectura: false }, snap || {});
+}
+
+function getBonusEstado_(params) {
+  const fStr = String(params.fecha || '').trim();
+  if (!fStr) return { ok: false, error: 'Falta fecha' };
+  const meta = getFechaMeta_(fStr);
+  if (!meta) return { ok: false, error: 'Fecha no encontrada' };
+
+  const bonusHoyos  = meta.bonusHoyos  || {};
+  const bonusEstado = meta.bonusEstado || {};
+  const totalLineas = meta.lineas ? meta.lineas.length : 0;
   const jugMap = {};
   cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
 
-  const snap = buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap);
-  return Object.assign({ ok: true }, snap || {});
+  function buildBonusInfo(tipo) {
+    const hoyo = bonusHoyos[tipo] || null;
+    if (!hoyo) return null;
+    const est = bonusEstado[tipo];
+    let ganador = null;
+    if (est && est.matricula) {
+      const jug = jugMap[String(est.matricula)] || {};
+      ganador = {
+        matricula: est.matricula,
+        apodo: ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : est.matricula)) + '').toUpperCase(),
+        lineaNum: est.lineaNum,
+      };
+    }
+    // Simplified: any line without bonusEstado entry is pending
+    const lineasFaltantes = [];
+    if (!est) {
+      for (let i = 1; i <= totalLineas; i++) lineasFaltantes.push('L' + i);
+    }
+    return { hoyo, ganador, final: lineasFaltantes.length === 0, lineasFaltantes };
+  }
+
+  return { ok: true, ba: buildBonusInfo('ba'), ld: buildBonusInfo('ld') };
+}
+
+function setBonusGanador_(params) {
+  const { fecha, tipo, lineaNum, matricula, matriculaReporta } = params;
+  if (!fecha || !tipo || !lineaNum) return { ok: false, error: 'Faltan parámetros' };
+
+  const fStr = String(fecha).trim();
+  const meta = getFechaMeta_(fStr);
+  if (!meta) return { ok: false, error: 'Fecha no encontrada' };
+
+  const tipoLower = String(tipo).toLowerCase();
+  if (tipoLower !== 'ba' && tipoLower !== 'ld') return { ok: false, error: 'Tipo inválido' };
+
+  const lineaIdx = parseInt(lineaNum) - 1;
+  const reportaMat = String(matriculaReporta || '').trim();
+
+  if (!checkAdmin_(params.adminKey)) {
+    const linea = (meta.lineas || [])[lineaIdx] || [];
+    if (linea.map(String).indexOf(reportaMat) < 0)
+      return { ok: false, error: 'No autorizado' };
+  }
+
+  const props = PropertiesService.getDocumentProperties();
+  let metaAll;
+  try { metaAll = JSON.parse(props.getProperty('FECHA_META') || '{}'); } catch(e) { metaAll = {}; }
+  if (!metaAll[fStr]) metaAll[fStr] = {};
+  if (!metaAll[fStr].bonusEstado) metaAll[fStr].bonusEstado = {};
+
+  let ganador = null;
+  if (matricula) {
+    const jugMap = {};
+    cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+    const jug = jugMap[String(matricula)] || {};
+    ganador = {
+      matricula: String(matricula),
+      apodo: ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : matricula)) + '').toUpperCase(),
+      lineaNum: parseInt(lineaNum),
+    };
+    metaAll[fStr].bonusEstado[tipoLower] = { matricula: String(matricula), lineaNum: parseInt(lineaNum), timestamp: Date.now() };
+    props.setProperty('FECHA_META', JSON.stringify(metaAll));
+  }
+
+  audit_('SET_BONUS_GANADOR', reportaMat, { fecha, tipo, lineaNum, matricula });
+  return { ok: true, tipo, ganador, final: false };
 }
 
 // ════════════ ROUTING ════════════
@@ -4351,7 +4445,8 @@ function doGet(e) {
       }
       case 'loginAdmin':       result = { ok: checkAdmin_(params.key) }; break;
       case 'canchasAdmin':     result = { ok: true, data: getCanchasAdmin_() }; break;
-      case 'getLineaLive':     result = getLineaLive_(params.fecha, params.matricula); break;
+      case 'getLineaLive':     result = getLineaLive_(params.fecha, params.matricula, params.lineaNum); break;
+      case 'getBonusEstado':   result = getBonusEstado_(params); break;
       default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }
@@ -5019,6 +5114,7 @@ function doPost(e) {
       case 'recalcularMatchesFecha': result = recalcularMatchesFecha_(params); break;
       case 'crearCancha':            result = crearCancha_(params); break;
       case 'cargarHoyoLive':     result = cargarHoyoLive_(params); break;
+      case 'setBonusGanador':    result = setBonusGanador_(params); break;
       case 'armarLineas':          result = armarLineas_(params); break;
       case 'fechaLineas':          result = { ok: true, data: cachedRead_('fl_' + params.fecha, 300, function(){ return getFechaLineas_(params.fecha); }) }; break;
       case 'setDoblesFecha':       result = setDoblesFecha_(params); break;

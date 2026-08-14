@@ -694,6 +694,12 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .live-sum-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;}
 .live-sum-stat{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
 .sm-player-name{text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:.1em;opacity:.65;padding-bottom:2px;display:none;}
+.live-bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--navy);display:flex;z-index:500;border-top:2px solid var(--red);padding-bottom:env(safe-area-inset-bottom,0px);}
+.live-nav-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border:none;background:none;color:rgba(255,255,255,.45);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+.live-nav-tab.active{color:#fff;}
+.lnt-icon{font-size:18px;line-height:1;}
+.live-linea-pill{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--navy);border-radius:20px;padding:4px 12px;cursor:pointer;background:none;color:var(--navy);transition:.1s;}
+.live-linea-pill.active{background:var(--navy);color:#fff;}
 
 /* ══════════ HOME ══════════ */
 /* Hide topbar + subnav when Home is the active page */
@@ -1671,44 +1677,74 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <div id="live-loading" class="lb-status" style="display:block;"><div class="spinner"></div>Conectando...</div>
 
     <!-- Main content (hidden until first poll succeeds) -->
-    <div id="live-content" style="display:none;">
+    <div id="live-content" style="display:none;padding-bottom:80px;">
 
-      <!-- Match strip -->
-      <div id="live-matches-strip" style="margin-bottom:10px;display:none;"></div>
-
-      <!-- Toggle: hoyo actual vs tarjeta completa -->
-      <div class="live-toggle-wrap">
-        <button id="live-toggle-hoyo" class="live-toggle-btn active" onclick="liveSetView('hoyo')">Hoyo actual</button>
-        <button id="live-toggle-tarjeta" class="live-toggle-btn" onclick="liveSetView('tarjeta')">Tarjeta completa</button>
+      <!-- Pane: Tarjeta -->
+      <div id="live-pane-tarjeta">
+        <div class="live-toggle-wrap">
+          <button id="live-toggle-hoyo" class="live-toggle-btn active" onclick="liveSetView('hoyo')">Hoyo actual</button>
+          <button id="live-toggle-tarjeta-btn" class="live-toggle-btn" onclick="liveSetView('tarjeta')">Tarjeta completa</button>
+        </div>
+        <div id="live-hoyo-view">
+          <div class="adm-card">
+            <div class="adm-card-hdr">
+              <div class="live-hoyo-hdr">
+                <button class="live-nav-btn" onclick="livePrevHoyo()">‹</button>
+                <div class="live-hoyo-title">
+                  <span id="live-hoyo-label">Hoyo 1</span><span class="live-par-label" id="live-par-label"></span>
+                  <span class="live-linea-chip" id="live-linea-chip"></span>
+                </div>
+                <button class="live-nav-btn" onclick="liveNextHoyo()">›</button>
+              </div>
+            </div>
+            <div class="adm-card-body" style="padding:0;" id="live-players-body"></div>
+          </div>
+        </div>
+        <div id="live-tarjeta-view" style="display:none;"></div>
+        <div id="live-complete-view" style="display:none;" class="live-complete-wrap"></div>
       </div>
 
-      <!-- Hoyo actual view -->
-      <div id="live-hoyo-view">
+      <!-- Pane: Stableford -->
+      <div id="live-pane-stableford" style="display:none;">
         <div class="adm-card">
-          <div class="adm-card-hdr">
-            <div class="live-hoyo-hdr">
-              <button class="live-nav-btn" onclick="livePrevHoyo()">‹</button>
-              <div class="live-hoyo-title">
-                <span id="live-hoyo-label">Hoyo 1</span><span class="live-par-label" id="live-par-label"></span>
-                <span class="live-linea-chip" id="live-linea-chip"></span>
-              </div>
-              <button class="live-nav-btn" onclick="liveNextHoyo()">›</button>
-            </div>
+          <div class="adm-card-hdr">Stableford · General</div>
+          <div class="adm-card-body" style="padding:0;overflow-x:auto;" id="live-lb-body">
+            <div class="lb-status"><div class="spinner"></div>Cargando...</div>
           </div>
-          <div class="adm-card-body" style="padding:0;" id="live-players-body"></div>
         </div>
       </div>
 
-      <!-- Tarjeta completa view -->
-      <div id="live-tarjeta-view" style="display:none;"></div>
+      <!-- Pane: Match -->
+      <div id="live-pane-match" style="display:none;">
+        <div id="live-match-pills" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
+        <div id="live-match-body"></div>
+      </div>
 
-      <!-- Ronda completa section (shown below toggle when all 18 holes done) -->
-      <div id="live-complete-view" style="display:none;" class="live-complete-wrap"></div>
+      <!-- Pane: Bonus -->
+      <div id="live-pane-bonus" style="display:none;">
+        <div id="live-bonus-body"><div class="lb-status"><div class="spinner"></div>Cargando...</div></div>
+      </div>
 
     </div>
 
     <!-- Offline / error notice -->
     <div id="live-offline-msg" class="live-offline" style="display:none;"></div>
+
+    <!-- Bottom nav -->
+    <nav class="live-bottom-nav">
+      <button id="live-ntab-tarjeta" class="live-nav-tab active" onclick="liveSetTab('tarjeta')">
+        <span class="lnt-icon">📋</span>Tarjeta
+      </button>
+      <button id="live-ntab-stableford" class="live-nav-tab" onclick="liveSetTab('stableford')">
+        <span class="lnt-icon">📊</span>Stableford
+      </button>
+      <button id="live-ntab-match" class="live-nav-tab" onclick="liveSetTab('match')">
+        <span class="lnt-icon">⚔️</span>Match
+      </button>
+      <button id="live-ntab-bonus" class="live-nav-tab" onclick="liveSetTab('bonus')">
+        <span class="lnt-icon">🎯</span>Bonus
+      </button>
+    </nav>
 
   </div>
 
@@ -2389,6 +2425,7 @@ function gvizCallback(response){
     });
     html+='</tbody></table>';
     document.getElementById('lb-body').innerHTML=html;
+    const _liveLb=document.getElementById('live-lb-body'); if(_liveLb) _liveLb.innerHTML=html;
     const now=new Date();
     document.getElementById('sync-time').textContent='Actualizado: '+now.toLocaleDateString('es-AR')+' '+now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     setTimeout(setTbHeight,50);
@@ -5020,7 +5057,10 @@ let LIVE_LINEA_DATA = null;
 let LIVE_HOYO = 1;
 let LIVE_TARGET_MAT = null;
 let LIVE_VIEW = 'hoyo';
+let LIVE_TAB = 'tarjeta';
 let LIVE_POLL_TIMER = null;
+let LIVE_MATCH_LINEA = null;
+let LIVE_MATCH_DATA = {};
 
 function mitLogin(){
   const mat = document.getElementById('mit-mat-input').value.trim();
@@ -5466,9 +5506,12 @@ function smClear(){
 function openLiveView(fecha, cancha){
   MIT_FECHA = fecha;
   LIVE_MODE = true;
+  LIVE_TAB = 'tarjeta';
   LIVE_HOYO = 1;
   LIVE_VIEW = 'hoyo';
   LIVE_LINEA_DATA = null;
+  LIVE_MATCH_LINEA = null;
+  LIVE_MATCH_DATA = {};
   document.getElementById('mit-fechas').style.display = 'none';
   document.getElementById('mit-score').style.display = 'none';
   document.getElementById('mit-live').style.display = 'block';
@@ -5477,9 +5520,24 @@ function openLiveView(fecha, cancha){
   document.getElementById('live-offline-msg').style.display = 'none';
   document.getElementById('live-title').textContent = 'Fecha ' + fecha + ' · ' + cancha;
   document.getElementById('live-toggle-hoyo').className = 'live-toggle-btn active';
-  document.getElementById('live-toggle-tarjeta').className = 'live-toggle-btn';
+  document.getElementById('live-toggle-tarjeta-btn').className = 'live-toggle-btn';
+  ['tarjeta','stableford','match','bonus'].forEach(function(t){
+    document.getElementById('live-pane-' + t).style.display = t === 'tarjeta' ? 'block' : 'none';
+    document.getElementById('live-ntab-' + t).className = 'live-nav-tab' + (t === 'tarjeta' ? ' active' : '');
+  });
   livePoll();
   livePollStart();
+}
+
+function liveSetTab(tab){
+  LIVE_TAB = tab;
+  ['tarjeta','stableford','match','bonus'].forEach(function(t){
+    document.getElementById('live-pane-' + t).style.display = t === tab ? 'block' : 'none';
+    document.getElementById('live-ntab-' + t).className = 'live-nav-tab' + (t === tab ? ' active' : '');
+  });
+  if(tab === 'stableford') liveLoadStableford();
+  else if(tab === 'match') liveRenderMatchTab();
+  else if(tab === 'bonus') liveLoadBonus();
 }
 
 function livePollStart(){
@@ -5545,21 +5603,22 @@ function liveRender(){
   var chip = document.getElementById('live-linea-chip');
   if(chip) chip.textContent = 'Línea ' + d.lineaNum;
 
-  liveRenderMatchStrip();
-
-  if(LIVE_VIEW === 'hoyo'){
-    document.getElementById('live-hoyo-view').style.display = 'block';
-    document.getElementById('live-tarjeta-view').style.display = 'none';
-    liveRenderHoyoActual();
-  } else {
-    document.getElementById('live-hoyo-view').style.display = 'none';
-    document.getElementById('live-tarjeta-view').style.display = 'block';
-    liveRenderTarjetaCompleta();
+  if(LIVE_TAB === 'tarjeta'){
+    if(LIVE_VIEW === 'hoyo'){
+      document.getElementById('live-hoyo-view').style.display = 'block';
+      document.getElementById('live-tarjeta-view').style.display = 'none';
+      liveRenderHoyoActual();
+    } else {
+      document.getElementById('live-hoyo-view').style.display = 'none';
+      document.getElementById('live-tarjeta-view').style.display = 'block';
+      liveRenderTarjetaCompleta();
+    }
+    var allComplete = d.jugadores.every(function(j){ return j.holesCargados === 18; });
+    document.getElementById('live-complete-view').style.display = allComplete ? 'block' : 'none';
+    if(allComplete) liveRenderComplete();
+  } else if(LIVE_TAB === 'match'){
+    liveRenderMatchTab();
   }
-
-  var allComplete = d.jugadores.every(function(j){ return j.holesCargados === 18; });
-  document.getElementById('live-complete-view').style.display = allComplete ? 'block' : 'none';
-  if(allComplete) liveRenderComplete();
 }
 
 function liveRenderHoyoActual(){
@@ -5657,12 +5716,60 @@ function renderHoleHtmlLive(h, jug){
   '</div>';
 }
 
-function liveRenderMatchStrip(){
+// ── Match tab ──────────────────────────────────────────────────
+
+function liveRenderMatchTab(){
   if(!LIVE_LINEA_DATA) return;
-  var ms = LIVE_LINEA_DATA.matches;
-  var el = document.getElementById('live-matches-strip');
-  if(!ms || !ms.length){ el.style.display = 'none'; return; }
-  el.style.display = 'block';
+  var d = LIVE_LINEA_DATA;
+  var total = d.totalLineas || 4;
+  var myLinea = d.lineaNum;
+  var sel = LIVE_MATCH_LINEA !== null ? LIVE_MATCH_LINEA : myLinea;
+
+  var pillsHtml = '';
+  for(var i = 1; i <= total; i++){
+    pillsHtml += '<button class="live-linea-pill' + (sel === i ? ' active' : '') + '" onclick="liveSelectMatchLinea(' + i + ')">L' + i + '</button>';
+  }
+  document.getElementById('live-match-pills').innerHTML = pillsHtml;
+
+  if(sel === myLinea){
+    liveRenderMatchBody(d);
+  } else if(LIVE_MATCH_DATA[sel]){
+    liveRenderMatchBody(LIVE_MATCH_DATA[sel]);
+  } else {
+    liveLoadMatchLinea(sel);
+  }
+}
+
+function liveSelectMatchLinea(n){
+  if(!LIVE_LINEA_DATA) return;
+  LIVE_MATCH_LINEA = (n === LIVE_LINEA_DATA.lineaNum) ? null : n;
+  liveRenderMatchTab();
+}
+
+function liveLoadMatchLinea(lineaNum){
+  document.getElementById('live-match-body').innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando línea ' + lineaNum + '...</div>';
+  ngtApiGet('getLineaLive', { fecha: MIT_FECHA, matricula: MIT_PLAYER.matricula, lineaNum: lineaNum })
+    .then(function(r){
+      if(r && r.ok){
+        LIVE_MATCH_DATA[lineaNum] = r;
+        var sel = LIVE_MATCH_LINEA !== null ? LIVE_MATCH_LINEA : (LIVE_LINEA_DATA && LIVE_LINEA_DATA.lineaNum);
+        if(LIVE_TAB === 'match' && sel === lineaNum) liveRenderMatchBody(r);
+      } else {
+        document.getElementById('live-match-body').innerHTML = '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">' + (r && r.error || 'Sin datos') + '</div>';
+      }
+    }).catch(function(){
+      document.getElementById('live-match-body').innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Sin conexión</div>';
+    });
+}
+
+function liveRenderMatchBody(data){
+  var el = document.getElementById('live-match-body');
+  if(!data){ el.innerHTML = '<div class="lb-status"><div class="spinner"></div></div>'; return; }
+  var ms = data.matches;
+  if(!ms || !ms.length){
+    el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">No hay matches en esta línea</div>';
+    return;
+  }
   var html = '';
   ms.forEach(function(m){
     var est = m.estado || '';
@@ -5673,15 +5780,66 @@ function liveRenderMatchStrip(){
     var rCls = 'rc-right' + (dn ? ' win' : '');
     var cCls = 'rc-center' + (up ? ' cleft' : dn ? ' cright' : as ? ' cdraw' : '');
     var centro = m.hoyosJugados > 0
-      ? '<span class="rc-score">' + (est || '–') + '</span><span style="font-size:9px;opacity:.6;display:block;">H.' + m.hoyosJugados + '</span>'
-      : '<span class="rc-score" style="opacity:.4;">–</span>';
+      ? '<span class="rc-score">' + (est || '–') + '</span><span style="font-size:9px;opacity:.6;display:block;">H.' + m.hoyosJugados + ' · ' + m.hoyosRestantes + ' rest.</span>'
+      : '<span class="rc-score" style="opacity:.4;">No iniciado</span>';
+    html += '<div class="adm-card" style="margin-bottom:10px;"><div class="adm-card-body" style="padding:10px 12px;">';
     html += '<div class="rc-match">' +
       '<div class="' + lCls + '"><span class="rc-name">' + m.j1Apodo + '</span></div>' +
       '<div class="' + cCls + '">' + centro + '</div>' +
       '<div class="' + rCls + '"><span class="rc-name">' + m.j2Apodo + '</span></div>' +
     '</div>';
+    html += '<div style="display:flex;gap:3px;margin-top:8px;overflow-x:auto;">';
+    m.detallePorHoyo.forEach(function(det, h){
+      var color = det === 'win' ? '#16a34a' : det === 'lose' ? 'var(--red)' : det === 'halved' ? 'var(--navy)' : 'var(--g2)';
+      var bg = det === 'win' ? '#e8f5e9' : det === 'lose' ? '#fee' : det === 'halved' ? 'var(--off)' : 'transparent';
+      html += '<div style="width:24px;height:24px;border-radius:50%;border:1.5px solid ' + color + ';background:' + bg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:700;color:' + color + ';">' + (h+1) + '</div>';
+    });
+    html += '</div></div></div>';
   });
   el.innerHTML = html;
+}
+
+// ── Stableford tab ─────────────────────────────────────────────
+
+function liveLoadStableford(){
+  var el = document.getElementById('live-lb-body');
+  if(el) el.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando...</div>';
+  fetchLBData();
+}
+
+// ── Bonus tab ──────────────────────────────────────────────────
+
+function liveLoadBonus(){
+  document.getElementById('live-bonus-body').innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando...</div>';
+  ngtApiGet('getBonusEstado', { fecha: MIT_FECHA })
+    .then(function(r){
+      if(r && r.ok) liveRenderBonus(r);
+      else document.getElementById('live-bonus-body').innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">No hay bonus configurados</div>';
+    })
+    .catch(function(){
+      document.getElementById('live-bonus-body').innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Error al cargar</div>';
+    });
+}
+
+function liveRenderBonus(data){
+  var html = '';
+  ['ba','ld'].forEach(function(tipo){
+    var b = data[tipo];
+    if(!b) return;
+    var tipoLabel = tipo === 'ba' ? '🎯 Best Approach' : '💪 Long Drive';
+    var ganadorHtml = b.ganador
+      ? '<strong>' + (b.ganador.apodo || b.ganador.matricula) + '</strong> · Línea ' + b.ganador.lineaNum
+      : '<span style="color:var(--g4);">Todavía nadie</span>';
+    var estadoHtml = b.final
+      ? '<span style="color:#16a34a;font-weight:700;">✓ Resultado final</span>'
+      : '<span style="color:var(--gold,#c9a84c);">Provisorio' + (b.lineasFaltantes && b.lineasFaltantes.length ? ' · falta ' + b.lineasFaltantes.join(', ') : '') + '</span>';
+    html += '<div class="adm-card" style="margin-bottom:10px;">' +
+      '<div class="adm-card-hdr">' + tipoLabel + (b.hoyo ? ' · Hoyo ' + b.hoyo : '') + '</div>' +
+      '<div class="adm-card-body"><div style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;margin-bottom:6px;">' + ganadorHtml + '</div>' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;">' + estadoHtml + '</div></div></div>';
+  });
+  if(!html) html = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">No hay bonus configurados para esta fecha</div>';
+  document.getElementById('live-bonus-body').innerHTML = html;
 }
 
 function liveRenderComplete(){
@@ -5764,7 +5922,7 @@ function liveAutoAdvance(){
 function liveSetView(view){
   LIVE_VIEW = view;
   document.getElementById('live-toggle-hoyo').className = 'live-toggle-btn' + (view === 'hoyo' ? ' active' : '');
-  document.getElementById('live-toggle-tarjeta').className = 'live-toggle-btn' + (view === 'tarjeta' ? ' active' : '');
+  document.getElementById('live-toggle-tarjeta-btn').className = 'live-toggle-btn' + (view === 'tarjeta' ? ' active' : '');
   liveRender();
 }
 
