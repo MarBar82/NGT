@@ -5463,20 +5463,69 @@ function loginStepMat() {
   if (!mat) { err.textContent = 'Ingresá tu matrícula'; return; }
   LOGIN_MAT = mat;
   LOGIN_PIN = '';
-  // Check if player exists and has PIN
+  err.textContent = 'Verificando...';
+  // First verify the player exists
   ngtApiGet('login', { matricula: mat }).then(function(r) {
     if (!r.ok || !r.player) { err.textContent = 'Matrícula no encontrada'; return; }
     const p = r.player;
     LOGIN_PLAYER_INFO = p;
-    // Show PIN step
-    document.getElementById('login-s1').style.display = 'none';
-    document.getElementById('login-s2').style.display = 'block';
-    document.getElementById('login-s2-name').textContent = p.apodo || p.nombre || mat;
-    loginBuildKeypad('login-pin-keypad', 'login-pin-dots', function(pin) {
-      LOGIN_PIN = pin;
-      loginSubmitPin();
+    err.textContent = '';
+    // Probe the PIN backend by sending an empty-PIN request
+    // This lets us detect whether the new GAS is deployed without asking for a PIN first
+    return ngtApiPost({ action: 'loginConPin', matricula: mat, pin: '__probe__' }).then(function(pr) {
+      if (pr.ok) {
+        // Extremely unlikely (empty PIN matched) — log in directly
+        sessionSave(pr.token, pr.player);
+        applySession(NGT_SESSION);
+        loginHideOverlay();
+        return;
+      }
+      const isOldBackend = pr.error && pr.error.indexOf('desconocida') >= 0;
+      if (isOldBackend) {
+        // Apps Script no actualizado — login sin PIN (transición)
+        loginWithLocalSession(mat, p);
+        return;
+      }
+      if (pr.needsPin) {
+        // New backend, no PIN configured yet — go straight to create-PIN step
+        showLoginS3(p);
+        return;
+      }
+      // New backend, PIN exists — show PIN entry
+      showLoginS2(p);
+    }).catch(function() {
+      // POST failed (network/timeout) — login sin PIN
+      loginWithLocalSession(mat, p);
     });
-  }).catch(function(e) { err.textContent = 'Error de conexión'; });
+  }).catch(function() { err.textContent = 'Error de conexión'; });
+}
+
+function loginWithLocalSession(mat, p) {
+  var sess = { token: 'local_' + mat + '_' + Date.now(), exp: Date.now() + 90*24*3600*1000,
+               mat: mat, nombre: p.nombre || '', apodo: p.apodo || '', rol: 'Jugador' };
+  sessionSave(sess.token, sess);
+  applySession(NGT_SESSION);
+  loginHideOverlay();
+}
+
+function showLoginS2(p) {
+  document.getElementById('login-s1').style.display = 'none';
+  document.getElementById('login-s2').style.display = 'block';
+  document.getElementById('login-s2-name').textContent = p.apodo || p.nombre || LOGIN_MAT;
+  loginBuildKeypad('login-pin-keypad', 'login-pin-dots', function(pin) {
+    LOGIN_PIN = pin;
+    loginSubmitPin();
+  });
+}
+
+function showLoginS3(p) {
+  document.getElementById('login-s1').style.display = 'none';
+  document.getElementById('login-s2').style.display = 'none';
+  document.getElementById('login-s3').style.display = 'block';
+  document.getElementById('login-s3-name').textContent = p.apodo || p.nombre || LOGIN_MAT;
+  document.getElementById('login-s3-sub').textContent = 'Creá tu PIN de 4+ dígitos';
+  LOGIN_PIN2_STEP = 1; LOGIN_PIN2_FIRST = '';
+  loginBuildKeypad('login-pin2-keypad', 'login-pin2-dots', function(pin) { loginCrearPinStep(pin); });
 }
 
 function loginStepBack() {
@@ -5497,45 +5546,16 @@ function loginSubmitPin() {
       loginHideOverlay();
       return;
     }
-    // Fallback: if backend not yet updated (before Apps Script deploy), accept any PIN
-    // and create a local session from the player info retrieved in step 1
-    if (r.error && (r.error.indexOf('Acción desconocida') >= 0 || r.error.indexOf('desconocida') >= 0)) {
-      if (LOGIN_PLAYER_INFO) {
-        const fakeSession = { token: 'local_' + LOGIN_MAT + '_' + Date.now(), exp: Date.now() + 90*24*3600*1000,
-                              mat: LOGIN_MAT, nombre: LOGIN_PLAYER_INFO.nombre || '', apodo: LOGIN_PLAYER_INFO.apodo || '', rol: 'Jugador' };
-        sessionSave(fakeSession.token, fakeSession);
-        applySession(NGT_SESSION);
-        loginHideOverlay();
-      } else {
-        err.textContent = 'Desplegá el nuevo Apps Script para activar el login con PIN';
-      }
-      return;
-    }
     if (r.needsPin) {
-      // First time — go to PIN creation step
-      err.textContent = '';
-      LOGIN_NEEDS_PIN = true;
-      LOGIN_PIN2 = ''; LOGIN_PIN2_STEP = 1;
-      document.getElementById('login-s2').style.display = 'none';
-      document.getElementById('login-s3').style.display = 'block';
-      document.getElementById('login-s3-name').textContent = r.apodo || r.nombre || LOGIN_MAT;
-      document.getElementById('login-s3-sub').textContent = 'Creá tu PIN (4+ dígitos)';
-      loginBuildKeypad('login-pin2-keypad', 'login-pin2-dots', function(pin) {
-        loginCrearPinStep(pin);
-      });
+      showLoginS3(LOGIN_PLAYER_INFO || { nombre: r.nombre || '', apodo: r.apodo || '' });
       return;
     }
     LOGIN_PIN = '';
     loginBuildKeypad('login-pin-keypad', 'login-pin-dots', function(pin) { LOGIN_PIN = pin; loginSubmitPin(); });
     err.textContent = r.error || 'PIN incorrecto';
   }).catch(function() {
-    // Network error or GAS timeout — apply fallback local session if player info is known
     if (LOGIN_PLAYER_INFO) {
-      var fakeSession = { token: 'local_' + LOGIN_MAT + '_' + Date.now(), exp: Date.now() + 90*24*3600*1000,
-                          mat: LOGIN_MAT, nombre: LOGIN_PLAYER_INFO.nombre || '', apodo: LOGIN_PLAYER_INFO.apodo || '', rol: 'Jugador' };
-      sessionSave(fakeSession.token, fakeSession);
-      applySession(NGT_SESSION);
-      loginHideOverlay();
+      loginWithLocalSession(LOGIN_MAT, LOGIN_PLAYER_INFO);
     } else {
       LOGIN_PIN = '';
       loginBuildKeypad('login-pin-keypad', 'login-pin-dots', function(pin) { LOGIN_PIN = pin; loginSubmitPin(); });
