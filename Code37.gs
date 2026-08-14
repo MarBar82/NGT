@@ -1861,17 +1861,18 @@ function cargarTarjeta_(params) {
   else newRow[21] = existingRow[23] !== undefined ? existingRow[23] : '';
 
   // ── Compute AB-AE as static values (replaces sheet formulas, avoids recalc cost) ──
-  // AB = IDA (sum H1-H9 = newRow[3..11])
-  // AC = VUELTA (sum H10-H18 = newRow[12..20])
+  // newRow: [0]=hcp, [1]=canchaId, [2]=H1, [3]=H2, ..., [19]=H18, [20]=LD, [21]=BA
+  // AB = IDA (sum H1-H9 = newRow[2..10])
+  // AC = VUELTA (sum H10-H18 = newRow[11..19])
   // AD = GROSS = AB + AC
   // AE = NETO  = AD - HCP (newRow[0])
   let idaSum = 0, idaCount = 0;
-  for (let i = 3; i <= 11; i++) {
+  for (let i = 2; i <= 10; i++) {
     const v = parseFloat(newRow[i]);
     if (!isNaN(v) && newRow[i] !== '') { idaSum += v; idaCount++; }
   }
   let vtaSum = 0, vtaCount = 0;
-  for (let i = 12; i <= 20; i++) {
+  for (let i = 11; i <= 19; i++) {
     const v = parseFloat(newRow[i]);
     if (!isNaN(v) && newRow[i] !== '') { vtaSum += v; vtaCount++; }
   }
@@ -1896,7 +1897,7 @@ function cargarTarjeta_(params) {
     : null;
   const cpPares    = (cd && cd.pares)   || [];
   const cpIndices  = (cd && cd.indices) || [];
-  const myScores18 = newRow.slice(3, 21); // H1..H18
+  const myScores18 = newRow.slice(2, 20); // H1..H18 — newRow[2]=H1, [19]=H18
 
   // Stableford breakdown (pure computation, no I/O)
   const stbBreak = calcStbBreakdown_(myScores18, cpPares, cpIndices, hcpNum);
@@ -2062,7 +2063,7 @@ function cargarTarjeta_(params) {
     sh.getRange(rowIdx, 3, 1, 22).setValues([newRow]);
 
     try {
-      // 2. STB E:K
+      // 2. STB C:I
       let myStWritten = null;
       if (stbBreak && preStbRow > 0 && preStbSh) {
         preStbSh.getRange(preStbRow, 3, 1, 7).setValues([[
@@ -5650,13 +5651,6 @@ function recalcularTotalesScore_(params, fechaParaPosLb) {
     alMatrix.push(alRow);
     cVals.push(total);
     stbTotals[i] = stSum; maTotals[i] = maSum; pbTotals[i] = pbSum;
-  }
-
-  // Optional: write totals back to app SCORE sheet if it still exists
-  const sh = getSheet_('SCORE');
-  if (sh) {
-    try { sh.getRange(3, 38, numP, 8).setValues(alMatrix); } catch(e) {}
-    try { sh.getRange(3,  3, numP, 1).setValues(cVals.map(function(v) { return [v]; })); } catch(e) {}
   }
 
   // Rankings
