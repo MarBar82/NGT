@@ -3956,135 +3956,12 @@ function getJugadorEclectic_(matricula, canchaId) {
 // ════════════ LIVE SCORING ════════════
 
 /**
- * Guarda el score de un hoyo para un jugador durante la ronda.
- * cargadoPor debe pertenecer a la misma línea que matricula (o ser admin).
- * Requisito 6.1.c + 6.1.d del requerimiento.
+ * Construye el snapshot completo de una línea (datos para `getLineaLive`).
+ * Usado internamente por `getLineaLive_` y por `cargarHoyoLive_` (devuelve el
+ * snapshot fresco como respuesta, req 6.2).
  */
-function cargarHoyoLive_(params) {
-  const { fecha, matricula, hoyo, golpes, cargadoPor } = params;
-  if (!fecha || !matricula || !hoyo)
-    return { ok: false, error: 'Faltan parámetros' };
-
-  const hoyoNum = parseInt(hoyo);
-  if (isNaN(hoyoNum) || hoyoNum < 1 || hoyoNum > 18)
-    return { ok: false, error: 'Hoyo inválido (1-18)' };
-
-  const fStr   = String(fecha);
-  const matStr = String(matricula).trim();
-  const cargStr = String(cargadoPor || '').trim();
-  if (!cargStr) return { ok: false, error: 'Falta cargadoPor' };
-
-  // Auth: cargadoPor en la misma línea que matricula (o admin)
-  const isAdmin = checkAdmin_(cargStr);
-  let lineaIdx  = -1;
-
-  const meta = getFechaMeta_(fStr);
-  if (!meta || !meta.lineas) return { ok: false, error: 'Fecha no encontrada' };
-
-  for (let i = 0; i < meta.lineas.length; i++) {
-    const mats = meta.lineas[i].map(String);
-    if (mats.indexOf(matStr) >= 0) {
-      if (isAdmin || mats.indexOf(cargStr) >= 0) { lineaIdx = i; break; }
-    }
-  }
-  if (!isAdmin && lineaIdx < 0) return { ok: false, error: 'No pertenecés a la misma línea' };
-
-  // golpes: vacío o 0 limpia el hoyo; 1-15 es score válido
-  let golpesVal;
-  if (golpes === null || golpes === '' || golpes === 0 || golpes === '0') {
-    golpesVal = '';
-  } else {
-    golpesVal = parseInt(golpes);
-    if (isNaN(golpesVal) || golpesVal < 1 || golpesVal > 15)
-      return { ok: false, error: 'Golpes inválido' };
-  }
-
-  // Leer fila de TARJETAS
-  const sh = getSheet_(SHEETS.TARJETAS);
-  if (!sh) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
-  const nextEmpty = findNextEmptyRow_(sh, 1);
-  if (nextEmpty <= 2) return { ok: false, error: 'Sin tarjetas' };
-  // 0=fecha,1=mat,2=hcp,3=canchaId,4..21=H1..H18,22=LD,23=BA
-  const allRows = sh.getRange(2, 1, nextEmpty - 2, 24).getValues();
-
-  let rowIdx = -1, existingRow = null;
-  for (let i = 0; i < allRows.length; i++) {
-    if (String(allRows[i][0]).trim() === fStr && String(allRows[i][1]).trim() === matStr) {
-      rowIdx = i + 2; existingRow = allRows[i]; break;
-    }
-  }
-  if (rowIdx < 0) return { ok: false, error: 'Tarjeta no encontrada para ' + matStr };
-
-  // Calcular nuevo STB (pre-lock)
-  const hcpNum   = parseFloat(existingRow[2]);
-  const canchaId = String(existingRow[3] || '').trim();
-  const cd = canchaId
-    ? cachedRead_('cp2_' + canchaId, 300, function(){ return getCanchaPares_(canchaId); })
-    : null;
-  const cpPares   = (cd && cd.pares)   || [];
-  const cpIndices = (cd && cd.indices) || [];
-
-  const scores18 = existingRow.slice(4, 22).map(function(v) {
-    return (v === '' || v === null) ? '' : v;
-  });
-  scores18[hoyoNum - 1] = golpesVal;
-
-  const stbBreak = (!isNaN(hcpNum) && cpPares.length)
-    ? calcStbBreakdown_(scores18, cpPares, cpIndices, hcpNum)
-    : null;
-
-  // STB row lookup (pre-lock)
-  let preStbRow = -1;
-  const preStbSh = getSheet_('STB');
-  if (stbBreak && preStbSh) {
-    const stbLast = preStbSh.getLastRow();
-    if (stbLast >= 2) {
-      const stbAB = preStbSh.getRange(2, 1, stbLast - 1, 2).getValues();
-      for (let i = 0; i < stbAB.length; i++) {
-        if (String(stbAB[i][0]).trim() === fStr && String(stbAB[i][1]).trim() === matStr) {
-          preStbRow = i + 2; break;
-        }
-      }
-    }
-  }
-
-  // Lock → escrituras
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); }
-  catch(e) { return { ok: false, error: 'Servidor ocupado, reintentá' }; }
-
-  try {
-    // Hoyo N está en col E+N-1 (1-indexed): E=5 para hoyo 1, col = 4 + hoyoNum
-    sh.getRange(rowIdx, 4 + hoyoNum).setValue(golpesVal);
-
-    if (stbBreak && preStbRow > 0 && preStbSh) {
-      preStbSh.getRange(preStbRow, 3, 1, 7).setValues([[
-        stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
-        stbBreak.i, stbBreak.j, stbBreak.k
-      ]]);
-    }
-  } finally {
-    lock.releaseLock();
-  }
-
-  audit_('CARGAR_HOYO_LIVE', cargStr, { fecha: fStr, matricula: matStr, hoyo: hoyoNum, golpes: golpesVal });
-  return { ok: true, stb: stbBreak ? stbBreak.k : null };
-}
-
-/**
- * Devuelve el estado completo de una línea en una sola llamada:
- * scores hoyo a hoyo de todos los jugadores + estado live de sus matches.
- * Diseñado para polling cada 10s desde el frontend (requisito 6.3).
- */
-function getLineaLive_(fecha, lineaNum) {
-  const fStr = String(fecha);
-  const lNum = parseInt(lineaNum);
-  if (!fStr || isNaN(lNum) || lNum < 1) return null;
-
-  const meta = getFechaMeta_(fStr);
-  if (!meta || !meta.lineas || !meta.lineas[lNum - 1]) return null;
-
-  const lineaMats = meta.lineas[lNum - 1].map(String);
+function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
+  const lineaMats = meta.lineas[lineaIdx].map(String);
   const canchaId  = String(meta.canchaId || '').trim();
 
   const cd = canchaId
@@ -4093,18 +3970,15 @@ function getLineaLive_(fecha, lineaNum) {
   const cpPares   = (cd && cd.pares)   || [];
   const cpIndices = (cd && cd.indices) || [];
 
-  // TARJETAS: una sola lectura
+  // TARJETAS: una sola lectura; 0=fecha,1=mat,2=hcp,3=canchaId,4..21=H1..H18,22=LD,23=BA
   const shT = getSheet_(SHEETS.TARJETAS);
   if (!shT) return null;
   const nextEmpty = findNextEmptyRow_(shT, 1);
   if (nextEmpty <= 2) return null;
-  // 0=fecha,1=mat,2=hcp,3=canchaId,4..21=H1..H18,22=LD,23=BA
   const allRows = shT.getRange(2, 1, nextEmpty - 2, 24).getValues();
 
-  const jugMap = {};
-  cachedRead_('jugadores', 300, getJugadores_).forEach(function(j) {
-    jugMap[String(j.matricula)] = j;
-  });
+  // Cache para ultimoCargadoPor (puesto por cargarHoyoLive_)
+  const cache = CacheService.getScriptCache();
 
   const playerMap = {};
   for (let i = 0; i < allRows.length; i++) {
@@ -4116,39 +3990,65 @@ function getLineaLive_(fecha, lineaNum) {
     const scores = r.slice(4, 22).map(function(v) {
       return (v === '' || v === null || v === undefined) ? null : Number(v);
     });
-    const stb = (!isNaN(hcp) && cpPares.length)
-      ? calcStbBreakdown_(scores.map(function(v){ return v === null ? '' : v; }), cpPares, cpIndices, hcp)
-      : null;
+    const stbPorHoyo = scores.map(function(s, h) {
+      if (s === null) return null;
+      return calcStablefordHole_(s, cpPares[h] || null, cpIndices[h] || null, hcp);
+    });
+    const stbTotal     = stbPorHoyo.reduce(function(t, v){ return t + (v || 0); }, 0);
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    const grossParcial  = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+
+    let ultimoCargadoPor = null;
+    try {
+      const raw = cache.get('lastCarg_' + fStr + '_' + mat);
+      if (raw) ultimoCargadoPor = JSON.parse(raw);
+    } catch(e) {}
+
     playerMap[mat] = {
-      hcp:   isNaN(hcp) ? 0 : hcp,
-      hcp85: isNaN(hcp) ? 0 : Math.round(hcp * 0.85),
-      scores: scores,
-      stb:   stb,
+      hcp:             isNaN(hcp) ? 0 : hcp,
+      hcp85:           isNaN(hcp) ? 0 : Math.round(hcp * 0.85),
+      scores:          scores,
+      ld:              (r[22] === 1 || r[22] === true || String(r[22]) === '1'),
+      ba:              (r[23] === 1 || r[23] === true || String(r[23]) === '1'),
+      stbPorHoyo:      stbPorHoyo,
+      stbTotal:        holesCargados > 0 ? stbTotal : null,
+      grossParcial:    grossParcial,
+      holesCargados:   holesCargados,
+      ultimoCargadoPor: ultimoCargadoPor,
     };
   }
 
-  const players = lineaMats.map(function(mat) {
+  const jugadores = lineaMats.map(function(mat) {
     const jug = jugMap[mat] || {};
-    const pd  = playerMap[mat] || { hcp: 0, hcp85: 0, scores: new Array(18).fill(null), stb: null };
-    const idx = pd.scores.indexOf(null);
+    const pd  = playerMap[mat] || {
+      hcp: 0, hcp85: 0, ld: false, ba: false,
+      scores: new Array(18).fill(null), stbPorHoyo: new Array(18).fill(null),
+      stbTotal: null, grossParcial: 0, holesCargados: 0, ultimoCargadoPor: null,
+    };
+    const firstNull = pd.scores.indexOf(null);
     return {
-      matricula: mat,
-      apodo:    (jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)).toUpperCase(),
-      hcp:      pd.hcp,
-      hcp85:    pd.hcp85,
-      scores:   pd.scores,
-      stbTotal: pd.stb ? pd.stb.k : null,
-      nextHoyo: idx >= 0 ? idx + 1 : 19, // 19 = todos cargados
+      matricula:        mat,
+      apodo:           (jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)).toUpperCase(),
+      hcpJuego:        pd.hcp,
+      scores:          pd.scores,
+      stbPorHoyo:      pd.stbPorHoyo,
+      stbTotal:        pd.stbTotal,
+      grossParcial:    pd.grossParcial,
+      holesCargados:   pd.holesCargados,
+      ld:              pd.ld,
+      ba:              pd.ba,
+      ultimoCargadoPor: pd.ultimoCargadoPor,
+      nextHoyo:        firstNull >= 0 ? firstNull + 1 : 19,
     };
   });
 
-  // Matches de esta línea (una lectura)
+  // Matches de esta línea
   const shM = getSheet_(SHEETS.MATCH);
   const matchPairs = [];
   if (shM) {
     const neM = shM.getLastRow();
     if (neM >= 2) {
-      const mData = shM.getRange(2, 2, neM - 1, 3).getValues(); // B=fecha,C=mat1,D=mat2
+      const mData = shM.getRange(2, 2, neM - 1, 3).getValues();
       for (let i = 0; i < mData.length; i++) {
         if (String(mData[i][0]).trim() !== fStr) continue;
         const m1 = String(mData[i][1]).trim();
@@ -4159,7 +4059,6 @@ function getLineaLive_(fecha, lineaNum) {
     }
   }
 
-  // Estado live hoyo a hoyo para cada match
   const matches = matchPairs.map(function(pair) {
     const pd1  = playerMap[pair.mat1];
     const pd2  = playerMap[pair.mat2];
@@ -4169,8 +4068,8 @@ function getLineaLive_(fecha, lineaNum) {
     const a2   = (jug2.apodo || pair.mat2).toUpperCase();
 
     if (!pd1 || !pd2 || !cpIndices.length) {
-      return { j1: pair.mat1, apodo1: a1, j2: pair.mat2, apodo2: a2,
-               pts1: 0, pts2: 0, hoyosJugados: 0, estado: '', leader: null };
+      return { j1: pair.mat1, j1Apodo: a1, j2: pair.mat2, j2Apodo: a2,
+               estado: '', hoyosJugados: 0, hoyosRestantes: 18, detallePorHoyo: new Array(18).fill(null) };
     }
 
     const ay1 = Math.max(0, pd1.hcp85 - pd2.hcp85);
@@ -4179,6 +4078,7 @@ function getLineaLive_(fecha, lineaNum) {
     const bc2 = Math.max(0, ay2 - 18);
 
     let pts1 = 0, pts2 = 0, hoyosJugados = 0;
+    const detallePorHoyo = new Array(18).fill(null);
     for (let h = 0; h < 18; h++) {
       const g1 = pd1.scores[h], g2 = pd2.scores[h];
       if (g1 === null || g2 === null) continue;
@@ -4186,8 +4086,9 @@ function getLineaLive_(fecha, lineaNum) {
       const adj1 = (ay1 > 0 && ay1 >= idx ? -1 : 0) + (bc1 > 0 && idx <= bc1 ? -1 : 0);
       const adj2 = (ay2 > 0 && ay2 >= idx ? -1 : 0) + (bc2 > 0 && idx <= bc2 ? -1 : 0);
       const net1 = g1 + adj1, net2 = g2 + adj2;
-      if (net1 < net2) pts1++;
-      else if (net2 < net1) pts2++;
+      if (net1 < net2)      { pts1++; detallePorHoyo[h] = 'win'; }
+      else if (net2 < net1) { pts2++; detallePorHoyo[h] = 'lose'; }
+      else                  { detallePorHoyo[h] = 'halved'; }
       hoyosJugados++;
     }
 
@@ -4202,25 +4103,196 @@ function getLineaLive_(fecha, lineaNum) {
     }
 
     return {
-      j1: pair.mat1, apodo1: a1,
-      j2: pair.mat2, apodo2: a2,
-      pts1: pts1, pts2: pts2,
-      hoyosJugados: hoyosJugados,
-      estado: estado,
-      leader: diff > 0 ? pair.mat1 : (diff < 0 ? pair.mat2 : null),
+      j1: pair.mat1, j1Apodo: a1,
+      j2: pair.mat2, j2Apodo: a2,
+      estado:         estado,
+      hoyosJugados:   hoyosJugados,
+      hoyosRestantes: remaining,
+      detallePorHoyo: detallePorHoyo,
     };
   });
 
+  const canchaNombre = meta.canchaName || lookupCanchaName_(canchaId) || '';
   return {
     fecha:      fStr,
-    linea:      lNum,
-    cancha:     meta.canchaName || lookupCanchaName_(canchaId) || '',
-    colorTee:   meta.colorTee   || 'BLANCAS',
+    lineaNum:   lineaIdx + 1,
+    horario:    meta.horario || '',
+    cancha:     { id: canchaId, nombre: canchaNombre, colorTee: meta.colorTee || 'BLANCAS' },
     hoyoSalida: meta.hoyoSalida || 1,
     pares:      cpPares,
-    players:    players,
+    updatedAt:  Date.now(),
+    jugadores:  jugadores,
     matches:    matches,
   };
+}
+
+/**
+ * Guarda el score de un hoyo durante la ronda. Verifica que matriculaCargador
+ * pertenezca a la misma línea que matriculaJugador (req 6.1.c).
+ * Devuelve el snapshot fresco de toda la línea (req 6.2 — mismo shape que getLineaLive).
+ */
+function cargarHoyoLive_(params) {
+  const { fecha, matriculaJugador, matriculaCargador, hoyo, score } = params;
+  if (!fecha || !matriculaJugador || !hoyo)
+    return { ok: false, error: 'Faltan parámetros' };
+
+  const hoyoNum = parseInt(hoyo);
+  if (isNaN(hoyoNum) || hoyoNum < 1 || hoyoNum > 18)
+    return { ok: false, error: 'Hoyo inválido (1-18)' };
+
+  const fStr    = String(fecha);
+  const jugStr  = String(matriculaJugador).trim();
+  const cargStr = String(matriculaCargador || '').trim();
+  if (!cargStr) return { ok: false, error: 'Falta matriculaCargador' };
+
+  // Auth: matriculaCargador en la misma línea que matriculaJugador (o admin)
+  const isAdmin = checkAdmin_(cargStr);
+  const meta    = getFechaMeta_(fStr);
+  if (!meta || !meta.lineas) return { ok: false, error: 'Fecha no encontrada' };
+
+  let lineaIdx = -1;
+  for (let i = 0; i < meta.lineas.length; i++) {
+    const mats = meta.lineas[i].map(String);
+    if (mats.indexOf(jugStr) >= 0 && (isAdmin || mats.indexOf(cargStr) >= 0)) {
+      lineaIdx = i; break;
+    }
+  }
+  if (lineaIdx < 0) return { ok: false, error: 'No autorizado para cargar en esta línea' };
+
+  // score: null/'' borra; entero 1-15 guarda
+  let scoreVal;
+  if (score === null || score === '' || score === undefined) {
+    scoreVal = '';
+  } else {
+    scoreVal = parseInt(score);
+    if (isNaN(scoreVal) || scoreVal < 1 || scoreVal > 15)
+      return { ok: false, error: 'Score inválido' };
+  }
+
+  // Hoja TARJETAS
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
+
+  // Índice de fila en cache (evita leer las N filas en cada tap — req 6.2)
+  const cache    = CacheService.getScriptCache();
+  const rowCacheKey = 'tRow_' + fStr + '_' + jugStr;
+  let rowIdx = parseInt(cache.get(rowCacheKey) || '0');
+
+  if (rowIdx < 2) {
+    const ne = findNextEmptyRow_(sh, 1);
+    if (ne <= 2) return { ok: false, error: 'Sin tarjetas' };
+    const ab = sh.getRange(2, 1, ne - 2, 2).getValues();
+    for (let i = 0; i < ab.length; i++) {
+      if (String(ab[i][0]).trim() === fStr && String(ab[i][1]).trim() === jugStr) {
+        rowIdx = i + 2;
+        try { cache.put(rowCacheKey, String(rowIdx), 21600); } catch(e) {}
+        break;
+      }
+    }
+  }
+  if (rowIdx < 2) return { ok: false, error: 'Tarjeta no encontrada para ' + jugStr };
+
+  // Leer fila completa para recalcular STB
+  const fullRow = sh.getRange(rowIdx, 1, 1, 24).getValues()[0];
+  const hcpNum  = parseFloat(fullRow[2]);
+  const canchaId = String(fullRow[3] || '').trim();
+  const cd = canchaId
+    ? cachedRead_('cp2_' + canchaId, 300, function(){ return getCanchaPares_(canchaId); })
+    : null;
+  const cpPares   = (cd && cd.pares)   || [];
+  const cpIndices = (cd && cd.indices) || [];
+
+  const scores18 = fullRow.slice(4, 22).map(function(v){ return (v === '' || v === null) ? '' : v; });
+  scores18[hoyoNum - 1] = scoreVal;
+
+  const stbBreak = (!isNaN(hcpNum) && cpPares.length)
+    ? calcStbBreakdown_(scores18, cpPares, cpIndices, hcpNum)
+    : null;
+
+  // STB row (también cacheado)
+  let preStbRow = -1;
+  const preStbSh = getSheet_('STB');
+  if (stbBreak && preStbSh) {
+    const stbCacheKey = 'stbRow_' + fStr + '_' + jugStr;
+    preStbRow = parseInt(cache.get(stbCacheKey) || '0');
+    if (preStbRow < 2) {
+      const stbLast = preStbSh.getLastRow();
+      if (stbLast >= 2) {
+        const stbAB = preStbSh.getRange(2, 1, stbLast - 1, 2).getValues();
+        for (let i = 0; i < stbAB.length; i++) {
+          if (String(stbAB[i][0]).trim() === fStr && String(stbAB[i][1]).trim() === jugStr) {
+            preStbRow = i + 2;
+            try { cache.put(stbCacheKey, String(preStbRow), 21600); } catch(e) {}
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Lock → escrituras mínimas
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); }
+  catch(e) { return { ok: false, error: 'Servidor ocupado, reintentá' }; }
+
+  try {
+    sh.getRange(rowIdx, 4 + hoyoNum).setValue(scoreVal); // col E para hoyo 1 = col 5
+    if (stbBreak && preStbRow > 1 && preStbSh) {
+      preStbSh.getRange(preStbRow, 3, 1, 7).setValues([[
+        stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
+        stbBreak.i, stbBreak.j, stbBreak.k
+      ]]);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  // Guardar ultimoCargadoPor en cache (6h = duración de una ronda)
+  if (scoreVal !== '') {
+    const jugMap = {};
+    cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+    const cargJug = jugMap[cargStr] || {};
+    try {
+      cache.put('lastCarg_' + fStr + '_' + jugStr,
+        JSON.stringify({ hoyo: hoyoNum, matricula: cargStr,
+                         apodo: (cargJug.apodo || cargStr).toUpperCase() }), 21600);
+    } catch(e) {}
+  }
+
+  audit_('CARGAR_HOYO_LIVE', cargStr,
+    { fecha: fStr, matriculaJugador: jugStr, hoyo: hoyoNum, score: scoreVal });
+
+  // Devolver snapshot fresco (req 6.2: "el mismo shape que getLineaLive")
+  const jugMap2 = {};
+  cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap2[String(j.matricula)] = j; });
+  const snap = buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap2);
+  return Object.assign({ ok: true }, snap || {});
+}
+
+/**
+ * Devuelve el estado completo de la línea a la que pertenece `matricula`.
+ * Si `matricula` no está en ninguna línea de esa fecha, error.
+ * Diseñado para polling cada 5-8s (req 6.3).
+ */
+function getLineaLive_(fecha, matricula) {
+  const fStr   = String(fecha);
+  const matStr = String(matricula || '').trim();
+  if (!fStr || !matStr) return { ok: false, error: 'Faltan parámetros' };
+
+  const meta = getFechaMeta_(fStr);
+  if (!meta || !meta.lineas) return { ok: false, error: 'Fecha no encontrada' };
+
+  let lineaIdx = -1;
+  for (let i = 0; i < meta.lineas.length; i++) {
+    if (meta.lineas[i].map(String).indexOf(matStr) >= 0) { lineaIdx = i; break; }
+  }
+  if (lineaIdx < 0) return { ok: false, error: 'No pertenecés a ninguna línea de esta fecha' };
+
+  const jugMap = {};
+  cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+
+  const snap = buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap);
+  return Object.assign({ ok: true }, snap || {});
 }
 
 // ════════════ ROUTING ════════════
@@ -4278,7 +4350,7 @@ function doGet(e) {
       }
       case 'loginAdmin':       result = { ok: checkAdmin_(params.key) }; break;
       case 'canchasAdmin':     result = { ok: true, data: getCanchasAdmin_() }; break;
-      case 'getLineaLive':     result = { ok: true, data: getLineaLive_(params.fecha, params.linea) }; break;
+      case 'getLineaLive':     result = getLineaLive_(params.fecha, params.matricula); break;
       default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }
