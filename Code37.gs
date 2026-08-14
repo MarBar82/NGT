@@ -1518,7 +1518,7 @@ function debugMatch_() {
 // ════════════ WRITES ════════════
 function crearFecha_(params) {
   const { adminKey, fecha, canchaId, jugadores, dobles, invitados, colorTee,
-          horario, greenFee, lineas, hoyoSalida } = params;
+          horario, greenFee, lineas, hoyoSalida, bonusHoyos } = params;
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
   if (!fecha || !canchaId || ((!jugadores || !jugadores.length) && (!invitados || !invitados.length))) {
     return { ok: false, error: 'Faltan datos' };
@@ -1631,6 +1631,7 @@ function crearFecha_(params) {
     greenFee:   greenFee || '',
     lineas:     Array.isArray(lineas) ? lineas : [],
     hoyoSalida: parseInt(hoyoSalida) || 1,
+    bonusHoyos: (bonusHoyos && typeof bonusHoyos === 'object') ? bonusHoyos : {},
   };
   props.setProperty('FECHA_META', JSON.stringify(meta));
 

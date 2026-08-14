@@ -1924,6 +1924,21 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             </div>
           </div>
 
+          <div class="adm-row">
+            <div class="adm-field">
+              <label class="adm-label">Hoyo Best Approach <span style="font-size:10px;opacity:.6;">(par 3)</span></label>
+              <select id="adm-bonus-ba" class="adm-input" disabled>
+                <option value="">— Seleccioná cancha primero —</option>
+              </select>
+            </div>
+            <div class="adm-field">
+              <label class="adm-label">Hoyo Long Drive <span style="font-size:10px;opacity:.6;">(par 4/5)</span></label>
+              <select id="adm-bonus-ld" class="adm-input" disabled>
+                <option value="">— Seleccioná cancha primero —</option>
+              </select>
+            </div>
+          </div>
+
           <button class="adm-btn-primary" id="wiz-armar-btn" onclick="wizArmarLineas()" style="margin-top:18px;">⚡ Armar Líneas →</button>
           <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
         </div>
@@ -3441,6 +3456,39 @@ function loadColoresCancha(){
   const hint = document.getElementById('adm-color-hint');
   if(!sel || !colorSel) return;
   applyColoresCancha_(sel.value.trim(), colorSel, hint);
+  loadBonusHoyoSelects_(sel.value.trim());
+}
+
+function loadBonusHoyoSelects_(canchaId){
+  const baSel = document.getElementById('adm-bonus-ba');
+  const ldSel = document.getElementById('adm-bonus-ld');
+  if(!baSel || !ldSel) return;
+  if(!canchaId){
+    baSel.innerHTML = '<option value="">— Seleccioná cancha primero —</option>';
+    ldSel.innerHTML = '<option value="">— Seleccioná cancha primero —</option>';
+    baSel.disabled = true; ldSel.disabled = true;
+    return;
+  }
+  baSel.innerHTML = '<option value="">Cargando...</option>';
+  ldSel.innerHTML = '<option value="">Cargando...</option>';
+  baSel.disabled = true; ldSel.disabled = true;
+  ngtApiGet('canchaPares', { cancha: canchaId }).then(function(r){
+    const pares = (r && r.data && r.data.pares) || [];
+    let baHtml = '<option value="">— Sin BA —</option>';
+    let ldHtml = '<option value="">— Sin LD —</option>';
+    for(var h = 0; h < 18; h++){
+      const par = parseInt(pares[h]) || 0;
+      const hoyo = h + 1;
+      if(par === 3) baHtml += '<option value="' + hoyo + '">Hoyo ' + hoyo + ' (Par 3)</option>';
+      if(par === 4 || par === 5) ldHtml += '<option value="' + hoyo + '">Hoyo ' + hoyo + ' (Par ' + par + ')</option>';
+    }
+    baSel.innerHTML = baHtml;
+    ldSel.innerHTML = ldHtml;
+    baSel.disabled = false; ldSel.disabled = false;
+  }).catch(function(){
+    baSel.innerHTML = '<option value="">— Error al cargar —</option>';
+    ldSel.innerHTML = '<option value="">— Error al cargar —</option>';
+  });
 }
 
 // Valida y recopila datos de Paso 1. Devuelve el objeto de datos o null si hay error.
@@ -3460,6 +3508,12 @@ function wizValidarPaso1_(){
   const greenFee  = feeEl     ? feeEl.value.trim()     : '';
   const hoyoSalidaEl = document.getElementById('adm-hoyo-salida');
   const hoyoSalida   = hoyoSalidaEl ? parseInt(hoyoSalidaEl.value) || 1 : 1;
+  const bonusBaEl = document.getElementById('adm-bonus-ba');
+  const bonusLdEl = document.getElementById('adm-bonus-ld');
+  const bonusHoyos = {
+    ba: (bonusBaEl && bonusBaEl.value) ? parseInt(bonusBaEl.value) : null,
+    ld: (bonusLdEl && bonusLdEl.value) ? parseInt(bonusLdEl.value) : null,
+  };
   const jugadores = [...document.querySelectorAll('#adm-jugadores-list input:checked')].map(i => i.value);
   const dobles    = [];
   const msg = document.getElementById('adm-crear-msg');
@@ -3473,7 +3527,7 @@ function wizValidarPaso1_(){
   if(!jugadores.length){
     msg.className = 'adm-msg err'; msg.textContent = 'Marcá al menos un jugador'; msg.style.display = 'block'; return null;
   }
-  return { fecha, canchaId, colorTee, jugadores, dobles, horario, greenFee, hoyoSalida };
+  return { fecha, canchaId, colorTee, jugadores, dobles, horario, greenFee, hoyoSalida, bonusHoyos };
 }
 
 // Muestra el Paso 2 con los datos ya guardados en WIZ_PASO1_DATA
@@ -3689,8 +3743,9 @@ function wizCrearTodo(){
     dobles:   WIZ_PASO1_DATA.dobles,
     horario:    WIZ_PASO1_DATA.horario    || '',
     greenFee:   WIZ_PASO1_DATA.greenFee   || '',
-    hoyoSalida: WIZ_PASO1_DATA.hoyoSalida || 1,
-    lineas:     lineasParam,
+    hoyoSalida:  WIZ_PASO1_DATA.hoyoSalida || 1,
+    bonusHoyos:  WIZ_PASO1_DATA.bonusHoyos || {},
+    lineas:      lineasParam,
   }).then(r => {
     if(!r.ok){
       msg.className = 'adm-msg err';
