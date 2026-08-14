@@ -5172,6 +5172,12 @@ function mitLogout(){
 }
 
 function showMitFechas(preloadedPromise){
+  // Si hay fecha activa, ir directo al live scoring sin mostrar la lista de fechas
+  if(HOME_FECHA_ACTIVA){
+    openLiveView(HOME_FECHA_ACTIVA, '');
+    return;
+  }
+
   document.getElementById('mit-login').style.display = 'none';
   document.getElementById('mit-score').style.display = 'none';
   document.getElementById('mit-live').style.display = 'none';
@@ -5684,6 +5690,7 @@ function liveRenderHoyoActual(){
       '</div>' +
       '<div class="live-hole-wrap">' +
         '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
+          (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
           (score !== null ? '<span class="hole-score" style="font-size:22px;">' + score + '</span>' : '') +
         '</div>' +
       '</div>' +
@@ -5711,11 +5718,14 @@ function liveRenderTarjetaCompleta(){
 }
 
 function renderHoleHtmlLive(h, jug){
+  var pares = (LIVE_LINEA_DATA && LIVE_LINEA_DATA.pares) || [];
+  var par = pares[h];
   var score = jug.scores[h];
   var cls = 'hole-circle' + (score !== null ? ' filled' : '');
   return '<div class="hole-cell">' +
     '<span class="hole-num">H ' + (h+1) + '</span>' +
     '<div class="' + cls + '" onclick="liveOpenScoreModal(' + (h+1) + ',\'' + jug.matricula + '\')" style="cursor:pointer;">' +
+      (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
       (score !== null ? '<span class="hole-score">' + score + '</span>' : '') +
     '</div>' +
   '</div>';
@@ -5775,39 +5785,63 @@ function liveRenderMatchBody(data){
     el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">No hay matches en esta línea</div>';
     return;
   }
+  // Colores fijos: j1 = azul, j2 = rojo. Consistentes en todo el match.
+  var C1 = '#2563eb';
+  var C2 = '#dc2626';
+
   var html = '';
   ms.forEach(function(m){
     var est = m.estado || '';
     var dn = est.indexOf(' DN') >= 0;
     var up = est.indexOf(' UP') >= 0;
     var as = est === 'AS';
-    var lCls = 'rc-left' + (up ? ' win' : '');
-    var rCls = 'rc-right' + (dn ? ' win' : '');
-    var cCls = 'rc-center' + (up ? ' cleft' : dn ? ' cright' : as ? ' cdraw' : '');
-    var centro = m.hoyosJugados > 0
-      ? '<span class="rc-score">' + (est || '–') + '</span><span style="font-size:9px;opacity:.6;display:block;">H.' + m.hoyosJugados + ' · ' + m.hoyosRestantes + ' rest.</span>'
-      : '<span class="rc-score" style="opacity:.4;">No iniciado</span>';
-    html += '<div class="adm-card" style="margin-bottom:10px;"><div class="adm-card-body" style="padding:10px 12px;">';
-    html += '<div class="rc-match">' +
-      '<div class="' + lCls + '"><span class="rc-name' + (up ? ' win' : '') + '">' + m.j1Apodo + '</span></div>' +
-      '<div class="' + cCls + '">' + centro + '</div>' +
-      '<div class="' + rCls + '"><span class="rc-name' + (dn ? ' win' : '') + '">' + m.j2Apodo + '</span></div>' +
+
+    // Cabecera del match: fondo del color del jugador que va ganando
+    var l1Bg = up ? C1 : (as ? 'var(--g2)' : 'transparent');
+    var l2Bg = dn ? C2 : (as ? 'var(--g2)' : 'transparent');
+    var l1Txt = up ? '#fff' : 'var(--text)';
+    var l2Txt = dn ? '#fff' : 'var(--text)';
+    var cBg = up ? C1 : dn ? C2 : as ? 'var(--g3)' : 'var(--g2)';
+
+    var scoreHtml = m.hoyosJugados > 0
+      ? '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:#fff;line-height:1;">' + (est || '–') + '</span>' +
+        '<span style="font-size:9px;color:rgba(255,255,255,.7);display:block;">H.' + m.hoyosJugados + ' · ' + m.hoyosRestantes + ' rest.</span>'
+      : '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,.5);">No iniciado</span>';
+
+    html += '<div class="adm-card" style="margin-bottom:10px;overflow:hidden;">';
+    // Leyenda de colores
+    html += '<div style="display:flex;gap:16px;padding:6px 12px 4px;background:var(--off);border-bottom:1px solid var(--border);">' +
+      '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;color:' + C1 + ';">● ' + m.j1Apodo + '</span>' +
+      '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;color:' + C2 + ';">● ' + m.j2Apodo + '</span>' +
     '</div>';
-    html += '<div style="display:flex;gap:3px;margin-top:8px;overflow-x:auto;padding-bottom:2px;">';
+    // Barra de estado
+    html += '<div style="display:flex;height:48px;">' +
+      '<div style="flex:1;background:' + l1Bg + ';display:flex;align-items:center;padding:0 12px;">' +
+        '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (up ? '700' : '400') + ';color:' + l1Txt + ';">' + m.j1Apodo + '</span>' +
+      '</div>' +
+      '<div style="width:80px;flex-shrink:0;background:' + cBg + ';display:flex;flex-direction:column;align-items:center;justify-content:center;">' +
+        scoreHtml +
+      '</div>' +
+      '<div style="flex:1;background:' + l2Bg + ';display:flex;align-items:center;justify-content:flex-end;padding:0 12px;">' +
+        '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (dn ? '700' : '400') + ';color:' + l2Txt + ';">' + m.j2Apodo + '</span>' +
+      '</div>' +
+    '</div>';
+    // Hoyos
+    html += '<div style="display:flex;gap:3px;padding:8px 12px;overflow-x:auto;">';
     m.detallePorHoyo.forEach(function(det, h){
-      var sym, color, bg, border;
+      var sym, bg, border, txtColor;
       if(det === 'win'){
-        sym = 'W'; color = '#fff'; bg = '#16a34a'; border = '#16a34a';
+        sym = 'W'; bg = C1; border = C1; txtColor = '#fff';
       } else if(det === 'lose'){
-        sym = 'L'; color = '#fff'; bg = 'var(--red)'; border = 'var(--red)';
+        sym = 'L'; bg = C2; border = C2; txtColor = '#fff';
       } else if(det === 'halved'){
-        sym = '='; color = '#fff'; bg = 'var(--navy)'; border = 'var(--navy)';
+        sym = '='; bg = '#6b7280'; border = '#6b7280'; txtColor = '#fff';
       } else {
-        sym = String(h+1); color = 'var(--g3)'; bg = 'transparent'; border = 'var(--g2)';
+        sym = String(h+1); bg = 'transparent'; border = 'var(--g2)'; txtColor = 'var(--g3)';
       }
-      html += '<div title="Hoyo ' + (h+1) + '" style="width:24px;height:24px;border-radius:50%;border:1.5px solid ' + border + ';background:' + bg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:700;color:' + color + ';">' + sym + '</div>';
+      html += '<div title="Hoyo ' + (h+1) + '" style="width:24px;height:24px;border-radius:50%;border:1.5px solid ' + border + ';background:' + bg + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:700;color:' + txtColor + ';">' + sym + '</div>';
     });
-    html += '</div></div></div>';
+    html += '</div></div>';
   });
   el.innerHTML = html;
 }

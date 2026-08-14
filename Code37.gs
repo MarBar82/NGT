@@ -4240,7 +4240,7 @@ function cargarHoyoLive_(params) {
     }
   }
 
-  return Object.assign({ ok: true, bonusPendiente: bonusPendiente }, snap || {});
+  return Object.assign({ ok: true }, snap || {}, { bonusPendiente: bonusPendiente });
 }
 
 /**
