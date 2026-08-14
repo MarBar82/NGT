@@ -443,6 +443,16 @@ function setNGTScoreField_(fechaStr, matStr, colIdx, value) {
   if (row < 0) {
     row = sh.getLastRow() + 1;
     sh.getRange(row, 1, 1, 8).setValues([[fechaStr, matStr, 0, 0, 0, 0, 0, 0]]);
+  } else {
+    // Guard: verify the found row actually belongs to this fecha+mat (defensive check).
+    const ab2 = sh.getRange(row, 1, 1, 2).getValues()[0];
+    const actualFecha = String(ab2[0] || '').trim();
+    const actualMat   = String(ab2[1] || '').trim();
+    if (actualFecha !== String(fechaStr).trim() || actualMat !== String(matStr).trim()) {
+      audit_('SCORE_ROW_MISMATCH', 'system',
+        { expected: { fecha: fechaStr, mat: matStr }, actual: { fecha: actualFecha, mat: actualMat }, col: colIdx, row: row });
+      return;
+    }
   }
   sh.getRange(row, colIdx).setValue(value);
 }
@@ -2316,10 +2326,10 @@ function resetFecha_(params) {
   // ── 1. TARJETAS — limpiar cols E..AE (27 cols) por fila ───────────────
   const tarjSh = getSheet_(SHEETS.TARJETAS);
   if (tarjSh) {
-    const last = findNextEmptyRow_(tarjSh, 2);
+    const last = findNextEmptyRow_(tarjSh, 1); // col A = fecha (not col B = mat)
     if (last > 2) {
-      const bc = tarjSh.getRange(2, 2, last - 2, 1).getValues(); // col B = fecha
-      bc.forEach(function(r, i) {
+      const ac = tarjSh.getRange(2, 1, last - 2, 1).getValues(); // col A = fecha
+      ac.forEach(function(r, i) {
         if (String(r[0]).trim() === fStr) {
           tarjSh.getRange(i + 2, 5, 1, 27).clearContent();
           changes.tarjetas++;
