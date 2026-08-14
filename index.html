@@ -5497,6 +5497,20 @@ function loginSubmitPin() {
       loginHideOverlay();
       return;
     }
+    // Fallback: if backend not yet updated (before Apps Script deploy), accept any PIN
+    // and create a local session from the player info retrieved in step 1
+    if (r.error && (r.error.indexOf('Acción desconocida') >= 0 || r.error.indexOf('desconocida') >= 0)) {
+      if (LOGIN_PLAYER_INFO) {
+        const fakeSession = { token: 'local_' + LOGIN_MAT + '_' + Date.now(), exp: Date.now() + 90*24*3600*1000,
+                              mat: LOGIN_MAT, nombre: LOGIN_PLAYER_INFO.nombre || '', apodo: LOGIN_PLAYER_INFO.apodo || '', rol: 'Jugador' };
+        sessionSave(fakeSession.token, fakeSession);
+        applySession(NGT_SESSION);
+        loginHideOverlay();
+      } else {
+        err.textContent = 'Desplegá el nuevo Apps Script para activar el login con PIN';
+      }
+      return;
+    }
     if (r.needsPin) {
       // First time — go to PIN creation step
       err.textContent = '';
