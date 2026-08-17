@@ -259,7 +259,7 @@ function getRankingCampeones_() {
   const jugs = cachedRead_('jugadores', 300, getJugadores_);
   const ranking = jugs.map(function(j) {
     const c = getCampeones_(j.matricula) || {};
-    return { matricula: j.matricula, nombre: j.nombre, apodo: j.apodo, p1: c.p1 || 0, p2: c.p2 || 0, p3: c.p3 || 0, podios: c.podios || 0 };
+    return { matricula: j.matricula, nombre: j.nombre, apodo: j.apodo, p1: c.p1 || 0, p2: c.p2 || 0, p3: c.p3 || 0, podios: c.podios || 0, participaciones: c.participaciones || 0 };
   });
   ranking.sort(function(a, b) {
     if (b.p1 !== a.p1) return b.p1 - a.p1;
@@ -2466,6 +2466,7 @@ function eliminarFecha_(params) {
   SpreadsheetApp.flush();
   audit_('ELIMINAR_FECHA', 'admin', { fecha, changes });
   try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
+  try { CacheService.getScriptCache().removeAll(['fechas','fechasConEstado']); } catch(e) {}
 
   // Limpiar FECHA_META para que el botón FECHA desaparezca del home
   try {
@@ -3768,18 +3769,19 @@ function getCampeones_(matricula) {
   if (lr < 2) return { p1:0, p2:0, p3:0, podios:[] };
   const data = sh.getRange(2, 1, lr - 1, 4).getValues();
   const matStr = String(matricula).trim();
-  let p1=0, p2=0, p3=0;
+  let p1=0, p2=0, p3=0, participaciones=0;
   const podios = [];
   data.forEach(r => {
     const m = String(r[1] || '').trim();
     if (m !== matStr) return;
+    participaciones++;
     const pos = parseInt(r[3]);
     const anio = r[0];
     if (pos === 1){ p1++; podios.push({anio: anio, pos: 1}); }
     else if (pos === 2){ p2++; podios.push({anio: anio, pos: 2}); }
     else if (pos === 3){ p3++; podios.push({anio: anio, pos: 3}); }
   });
-  return { p1: p1, p2: p2, p3: p3, podios: podios };
+  return { p1: p1, p2: p2, p3: p3, podios: podios, participaciones: participaciones };
 }
 
 /**

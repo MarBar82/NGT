@@ -1641,7 +1641,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
         <!-- Fecha activa: pastilla tipo card, visible solo cuando HOME_FECHA_ACTIVA -->
         <button class="home-fecha-card" id="home-fecha-btn" style="display:none;cursor:pointer;border:none;text-align:left;width:100%;"
-                onclick="pg('mit',null); showMitFechas()">
+                onclick="pg('mit',null)">
           <div class="hfc-num" id="hfi-num">Fecha —</div>
           <div class="hfc-rows">
             <div class="hfc-row">
@@ -1963,27 +1963,14 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <div class="pg" id="pg-admin">
 <div class="wrap" style="max-width:680px;padding:16px;">
 
-  <!-- Login screen -->
-  <div id="admin-login">
-    <div class="adm-card">
-      <div class="adm-card-hdr">⚙ Admin · Acceso</div>
-      <div class="adm-card-body">
-        <label class="adm-label">Clave de Administrador</label>
-        <input type="password" id="adm-key-input" class="adm-input" placeholder="Ingresá tu clave" inputmode="numeric" autocomplete="off">
-        <button class="adm-btn-primary" onclick="adminLogin()" style="margin-top:14px;">Ingresar</button>
-        <div id="adm-login-error" class="adm-error" style="display:none;"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Admin panel (after login) -->
+  <!-- Admin panel -->
   <div id="admin-panel" style="display:none;">
 
     <!-- HOME: botones de sección -->
     <div id="adm-home">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
         <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);">⚙ Administrador</div>
-        <button onclick="adminLogout()" style="background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);cursor:pointer;">Salir ✕</button>
+        <button onclick="pg('home',null)" style="background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);cursor:pointer;">Salir ✕</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <button class="adm-big-btn" onclick="admGoTo('crear')">
@@ -3493,46 +3480,7 @@ function ngtApiPost(payload){
   }).then(r => r.json());
 }
 
-function adminLogin(){
-  // If user already has Admin role via session, skip key entry
-  if (NGT_SESSION && NGT_SESSION.rol === 'Admin') {
-    ADMIN_KEY_OK = NGT_SESSION.token;
-    showAdminPanel();
-    return;
-  }
-  const key = document.getElementById('adm-key-input').value.trim();
-  const errBox = document.getElementById('adm-login-error');
-  errBox.style.display = 'none';
-  if(!key){
-    errBox.textContent = 'Ingresá la clave';
-    errBox.style.display = 'block';
-    return;
-  }
-  ngtApiGet('loginAdmin', { key: key }).then(r => {
-    if(r.ok){
-      ADMIN_KEY_OK = key;
-      sessionStorage.setItem('ngt_admin_key', key);
-      showAdminPanel();
-    } else {
-      errBox.textContent = 'Clave incorrecta';
-      errBox.style.display = 'block';
-    }
-  }).catch(e => {
-    errBox.textContent = 'Error: ' + e.message;
-    errBox.style.display = 'block';
-  });
-}
-
-function adminLogout(){
-  ADMIN_KEY_OK = '';
-  sessionStorage.removeItem('ngt_admin_key');
-  document.getElementById('admin-panel').style.display = 'none';
-  document.getElementById('admin-login').style.display = 'block';
-  document.getElementById('adm-key-input').value = '';
-}
-
 function showAdminPanel(){
-  document.getElementById('admin-login').style.display = 'none';
   document.getElementById('admin-panel').style.display = 'block';
   admGoHome();
   loadAdminData();
@@ -5093,7 +5041,25 @@ function adminEliminarFechaDesdeGrid(fecha){
   if(!confirm('⚠️ ¿Borrar la Fecha ' + fecha + ' por completo?\n\nSe eliminan tarjetas, STB, matches, PB, SCORE y Leaderboard.\nEsta acción no se puede deshacer.')){
     return;
   }
-  _doEliminarFecha(fecha, null);
+  const grid = document.getElementById('adm-fechas-grid');
+  const tile = grid ? Array.from(grid.querySelectorAll('.adm-fecha-tile')).find(el => {
+    const num = el.querySelector('.adm-fecha-tile-num');
+    return num && num.textContent.trim() === String(fecha);
+  }) : null;
+  if(tile){ tile.style.opacity='0.4'; tile.style.pointerEvents='none'; const lbl=tile.querySelector('.adm-fecha-tile-lbl'); if(lbl) lbl.textContent='Borrando...'; }
+  ngtApiPost({ action:'eliminarFecha', adminKey:ADMIN_KEY_OK, fecha:fecha }).then(r => {
+    if(r.ok){
+      if(tile) tile.remove();
+      try { localStorage.removeItem('ngt_fechaActiva'); } catch(e2){}
+      ngtInitData();
+    } else {
+      if(tile){ tile.style.opacity=''; tile.style.pointerEvents=''; const lbl=tile.querySelector('.adm-fecha-tile-lbl'); if(lbl) lbl.textContent='Fecha'; }
+      alert('✗ ' + (r.error || 'Error al borrar fecha ' + fecha));
+    }
+  }).catch(e => {
+    if(tile){ tile.style.opacity=''; tile.style.pointerEvents=''; const lbl=tile.querySelector('.adm-fecha-tile-lbl'); if(lbl) lbl.textContent='Fecha'; }
+    alert('✗ Error: ' + e.message);
+  });
 }
 
 // Llamado desde el botón al fondo del panel de edición
@@ -5701,7 +5667,7 @@ function loadHistoria() {
     if (!r.ok || !r.data) { body.innerHTML = '<div class="lb-status">Error al cargar ranking</div>'; return; }
     const data = r.data;
     if (sync) sync.textContent = 'Act. ' + new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'});
-    let html = '<table class="hist-rank-table"><thead><tr><th>#</th><th>Jugador</th><th title="1er puesto">🥇</th><th title="2do puesto">🥈</th><th title="3er puesto">🥉</th><th>Podios</th></tr></thead><tbody>';
+    let html = '<table class="hist-rank-table"><thead><tr><th>#</th><th>Jugador</th><th title="1er puesto">🥇</th><th title="2do puesto">🥈</th><th title="3er puesto">🥉</th><th>Participaciones</th></tr></thead><tbody>';
     if (!data.length) { html += '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--g4);">Sin datos</td></tr>'; }
     data.forEach(function(p, i) {
       const posClass = i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : '';
@@ -5712,7 +5678,7 @@ function loadHistoria() {
       html += '<td style="text-align:center;font-weight:700;">' + (p.p1 || 0) + '</td>';
       html += '<td style="text-align:center;">' + (p.p2 || 0) + '</td>';
       html += '<td style="text-align:center;">' + (p.p3 || 0) + '</td>';
-      html += '<td style="text-align:center;">' + (p.podios || 0) + '</td>';
+      html += '<td style="text-align:center;">' + (p.participaciones || 0) + '</td>';
       html += '</tr>';
     });
     html += '</tbody></table>';
@@ -6259,7 +6225,7 @@ function livePoll(){
           document.getElementById('live-loading').innerHTML =
             '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
             '<p style="color:var(--red);font-size:14px;">' + (r && r.error ? r.error : 'Error de conexión') + '</p>' +
-            '<button class="adm-btn-primary" onclick="mitBackToFechas()" style="margin-top:8px;">← Volver</button></div>';
+            '<button class="adm-btn-primary" onclick="pg(\'home\',null)" style="margin-top:8px;">← Volver</button></div>';
         } else if(offEl){
           offEl.textContent = r && r.error ? r.error : 'Error al actualizar';
           offEl.style.display = 'block';
@@ -6272,7 +6238,7 @@ function livePoll(){
         document.getElementById('live-loading').innerHTML =
           '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
           '<p style="color:var(--red);font-size:14px;">Sin conexión</p>' +
-          '<button class="adm-btn-primary" onclick="mitBackToFechas()" style="margin-top:8px;">← Volver</button></div>';
+          '<button class="adm-btn-primary" onclick="pg(\'home\',null)" style="margin-top:8px;">← Volver</button></div>';
       } else if(offEl){
         offEl.textContent = 'Sin conexión · reintentando...';
         offEl.style.display = 'block';
