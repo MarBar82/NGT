@@ -1585,6 +1585,10 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
         Cambiar PIN
       </button>
+      <button class="ham-item" id="ham-admin-btn" style="display:none;" onclick="hamburgerClose(); pg('admin',null)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93A10 10 0 0 0 19.07 19.07"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+        Administración
+      </button>
       <button class="ham-item danger" onclick="hamburgerClose(); ngtLogout()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
         Cerrar sesión
@@ -5426,9 +5430,11 @@ function applySession(sess) {
   if (hamAvatar) hamAvatar.textContent = (sess.apodo || '?').charAt(0).toUpperCase();
   if (hamName) hamName.textContent = sess.apodo || sess.nombre || sess.mat;
   if (hamRol) hamRol.textContent = sess.rol || 'Jugador';
-  // Admin icon — visible only for Admin role
+  // Admin icon (topbar) and hamburger admin item — visible only for Admin role
   const adminIcon = document.getElementById('tb-admin-icon');
   if (adminIcon) adminIcon.style.display = (sess.rol === 'Admin') ? 'flex' : 'none';
+  const hamAdminBtn = document.getElementById('ham-admin-btn');
+  if (hamAdminBtn) hamAdminBtn.style.display = (sess.rol === 'Admin') ? 'flex' : 'none';
   // Pre-populate MIT_PLAYER from session so Cargar Tarjeta doesn't ask for mat again
   if (!MIT_PLAYER) {
     MIT_PLAYER = { matricula: sess.mat, nombre: sess.nombre || '', apodo: sess.apodo || '' };
