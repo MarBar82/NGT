@@ -7555,6 +7555,34 @@ function scoreSymbolHtml(score, par, isTotal){
   return '<span class="' + wrapCls + '">' + score + '</span>';
 }
 
+// ── Generic floating modal ────────────────────────────────────────────────────
+// openFloatingModal(html) injects `html` inside a close-able overlay box.
+// closeFloatingModal() dismisses it with the same fade used by showRondaModal.
+function openFloatingModal(html) {
+  let modal = document.getElementById('floating-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'floating-modal';
+    modal.className = 'ronda-modal';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML =
+    '<div class="ronda-modal-bg" onclick="closeFloatingModal()"></div>' +
+    '<div class="ronda-modal-box">' +
+      '<button class="ronda-modal-close" onclick="closeFloatingModal()">×</button>' +
+      html +
+    '</div>';
+  modal.classList.remove('open');
+  setTimeout(function(){ modal.classList.add('open'); }, 10);
+}
+
+function closeFloatingModal() {
+  const modal = document.getElementById('floating-modal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  setTimeout(function(){ if (modal.parentNode) modal.parentNode.removeChild(modal); }, 200);
+}
+
 /**
  * Modal: muestra la tarjeta hoyo-por-hoyo de una ronda bajo par
  */

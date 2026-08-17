@@ -420,6 +420,60 @@ function getAllNGTScoreData_() {
   }).filter(function(r) { return r.fecha && r.mat; });
 }
 
+/**
+ * Returns the scoring history for a single player, one row per fecha, enriched
+ * with cancha (from FECHA_META) and fechaReal (from CALCULOS!AA:AC).
+ * Response: [{ fecha, cancha, fechaReal, st, ma, pb, total }, ...] sorted ascending.
+ */
+function getJugadorFechas_(matricula) {
+  const matStr = String(matricula || '').trim();
+  if (!matStr) return [];
+
+  const myRows = getAllNGTScoreData_().filter(function(r) { return r.mat === matStr; });
+  if (!myRows.length) return [];
+
+  // fechaNum → real date (ISO 'dd/MM/yyyy') from CALCULOS!AA:AC
+  const fechaDateMap = {};
+  try {
+    const shC = getSheet_('CALCULOS');
+    if (shC) {
+      const lastRowC = shC.getLastRow();
+      if (lastRowC >= 2) {
+        const rows = shC.getRange(2, 27, lastRowC - 1, 3).getValues();
+        rows.forEach(function(row) {
+          const fechaRaw = row[0];
+          const fechaNum = row[2];
+          if (!fechaRaw || !fechaNum) return;
+          const d = fechaRaw instanceof Date ? fechaRaw : new Date(fechaRaw);
+          if (!isNaN(d.getTime())) {
+            fechaDateMap[String(parseInt(fechaNum))] = Utilities.formatDate(d, 'GMT-03:00', 'dd/MM/yyyy');
+          }
+        });
+      }
+    }
+  } catch(e) {}
+
+  // fechaNum → canchaName from FECHA_META
+  const fechaCanchaMap = {};
+  try {
+    const meta = JSON.parse(PropertiesService.getDocumentProperties().getProperty('FECHA_META') || '{}');
+    Object.keys(meta).forEach(function(k) { fechaCanchaMap[k] = meta[k].canchaName || ''; });
+  } catch(e) {}
+
+  return myRows.map(function(r) {
+    const fKey = String(parseInt(r.fecha) || r.fecha);
+    return {
+      fecha:     parseInt(r.fecha) || 0,
+      cancha:    fechaCanchaMap[fKey] || '',
+      fechaReal: fechaDateMap[fKey]   || '',
+      st:        r.st,
+      ma:        r.ma,
+      pb:        r.pb,
+      total:     r.st + r.ma + r.pb,
+    };
+  }).sort(function(a, b) { return a.fecha - b.fecha; });
+}
+
 function findNGTScoreRow_(fechaStr, matStr) {
   const sh = getNGTScoreSheet_();
   if (!sh) return -1;
@@ -4577,6 +4631,7 @@ function doGet(e) {
       case 'matchesForFecha':     result = { ok: true, data: getMatchesForFecha_(params.fecha) }; break;
       case 'matchesFullForFecha': result = { ok: true, data: getMatchesFullForFecha_(params.fecha) }; break;
       case 'misFechas':        result = { ok: true, data: cachedRead_('mf_' + params.matricula, 60, function(){ return getMisFechas_(params.matricula); }) }; break;
+      case 'jugadorFechas':   result = { ok: true, data: getJugadorFechas_(params.matricula) }; break;
       case 'dobleDisponible':  result = { ok: true, data: { tieneDoble: getJugadoresConDobleDisponible_().indexOf(String(params.matricula)) >= 0 } }; break;
       case 'jugadoresConDoble': result = { ok: true, data: cachedRead_('jugadoresConDoble', 60, getJugadoresConDobleDisponible_) }; break;
       case 'fechaDetalle':     result = { ok: true, data: getFechaDetalle_(params.fecha) }; break;
