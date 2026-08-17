@@ -33,11 +33,6 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .tb-brand{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;letter-spacing:.06em;color:#fff;flex:1;}
 .tb-yr{font-size:10px;font-weight:600;letter-spacing:.14em;color:var(--gold);margin-left:6px;}
 
-/* SUBNAV */
-.subnav{background:var(--white);border-bottom:1px solid var(--g2);position:sticky;top:50px;z-index:149;}
-.snb{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--g4);padding:0 20px;height:38px;border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;transition:.12s;white-space:nowrap;}
-.snb:hover{color:var(--navy);}
-.snb.on{color:var(--navy);border-bottom-color:var(--red);}
 
 .wrap{max-width:980px;margin:0 auto;padding:12px 16px;}
 .wrap-narrow{max-width:680px;margin:0 auto;padding:12px 16px;}
@@ -220,8 +215,6 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   .tb-brand{font-size:14px;}
   .tb-yr{display:none;}
 
-  /* Subnav */
-  .snb{padding:0 12px;font-size:12px;}
 
   /* Leaderboard: horizontal scroll */
   .lb-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
@@ -407,9 +400,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   .mh{width:20px;height:20px;font-size:10px;}
     }
 
-/* Fechas dropdown in subnav */
-.snb-drop{position:relative;display:inline-block;}
-.snb-has-drop{cursor:pointer;}
+/* Fechas dropdown panel (above bottom nav) */
 .snb-drop-menu{display:none;position:absolute;top:100%;left:0;background:var(--white);border:var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.15);min-width:140px;z-index:300;overflow:hidden;}
 .snb-drop-menu.open{display:block;}
 .snb-drop-menu button{display:block;width:100%;text-align:left;background:none;border:none;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;border-bottom:1px solid var(--g1);}
@@ -488,7 +479,6 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .pga th.lb-col-num:nth-child(4), .pga td.lb-col-num:nth-child(4) { left:230px; }
 
 /* ADMIN */
-.snb-admin{font-size:16px;padding:0 12px;}
 .adm-fecha-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-bottom:16px;}
 .adm-fecha-tile{background:var(--white);border:var(--border);border-radius:3px;padding:14px 10px 10px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.04);}
 .adm-fecha-tile-num{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:800;color:var(--navy);line-height:1;}
@@ -702,9 +692,8 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .live-linea-pill.active{background:var(--navy);color:#fff;}
 
 /* ══════════ HOME ══════════ */
-/* Hide topbar + subnav when Home is the active page */
-body.home-mode .tb,
-body.home-mode .subnav{
+/* Hide topbar when Home is the active page */
+body.home-mode .tb{
   display:none !important;
 }
 body.home-mode{
@@ -1304,14 +1293,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   .leg-item{font-size:10px;}
 }
 
-/* Cancha más jugada chip (legacy, ya no se usa pero CSS lo dejo) */
-.perf-cancha-most{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:12px;color:var(--g4);text-align:center;
-  padding:8px 10px;background:var(--off);border-radius:3px;
-  margin-bottom:14px;letter-spacing:.04em;
-}
-.perf-cancha-most strong{color:var(--navy);font-weight:800;}
 
 /* Logros */
 .perf-logros{display:flex;gap:10px;flex-wrap:wrap;}
@@ -1332,16 +1313,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .perf-podio-item{display:inline-block;margin:0 6px;}
 .perf-podio-item .y{color:var(--navy);font-weight:700;}
 
-/* Canchas (legacy, mantengo por si reuso) */
-.perf-cancha-list{font-family:'Barlow Condensed',sans-serif;}
-.perf-cancha-row{
-  display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;
-  padding:7px 0;border-bottom:1px solid var(--g1);
-}
-.perf-cancha-row:last-child{border-bottom:none;}
-.perf-cancha-name{font-size:13px;font-weight:700;color:var(--navy);}
-.perf-cancha-veces{font-size:11px;color:var(--g4);font-weight:600;}
-.perf-cancha-prom{font-size:14px;font-weight:800;color:var(--red);min-width:48px;text-align:right;}
 
 /* Eclectic table */
 .perf-ecl-pick{margin-bottom:12px;}
@@ -1439,8 +1410,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 /* Triple bogey o más: cuadrado azul oscuro */
 .tcard-circle.tc-triple{background:#1864ab;border-color:#1864ab;border-radius:5px;}.tcard-circle.tc-triple .tc-sc{color:#fff;}
 .tcard-circle.tc-empty{background:#f0eeea;border-color:#ddd;}
-/* Puntos stableford en rojo y negrita (grid view – legacy) */
-.tcard-stb{font-size:9px;color:var(--red);font-family:'Barlow Condensed',sans-serif;font-weight:700;}
 /* Puntos stableford en tabla */
 .tcard-stb-tbl{font-size:12px;font-weight:700;color:var(--red);font-family:'Barlow Condensed',sans-serif;}
 .tcard-stb-tbl.stb-tot{color:var(--navy);}
@@ -1502,10 +1471,9 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .bnav-item.on .bnav-icon{opacity:1;}
 /* Page bottom padding so content isn't hidden behind bottom nav */
 .pg.with-bnav{padding-bottom:66px;}
-/* Hide subnav on mobile — bottom nav takes over */
-@media (max-width:640px){
-  .subnav{display:none;}
-}
+/* Fechas panel — fixed above bottom nav, shown via .open class on #fechas-menu */
+#fechas-panel-wrap{position:fixed;bottom:66px;left:0;right:0;z-index:300;}
+#fechas-panel-wrap .snb-drop-menu{position:static;border-radius:6px 6px 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.15);}
 /* ══ HAMBURGER MENU ══════════════════════════════════════════════════════════ */
 .hamburger-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;}
 .hamburger-panel{position:fixed;top:0;left:0;bottom:0;width:280px;max-width:82vw;background:var(--white);z-index:501;display:flex;flex-direction:column;box-shadow:4px 0 24px rgba(0,0,0,.25);transform:translateX(-100%);transition:transform .22s ease;}
@@ -1651,20 +1619,11 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   </div>
 </div>
 
-<div class="subnav">
-  <button class="snb on" onclick="pg('home',this)" id="home-btn">🏠 Inicio</button>
-  <button class="snb" onclick="pg('lb',this)">Leader Board</button>
-  <div class="snb-drop">
-    <button class="snb snb-has-drop" onclick="toggleFechasDrop(event)" id="fechas-btn">Fechas ▾</button>
-    <div class="snb-drop-menu" id="fechas-menu">
-      <div id="fechas-menu-items"><button disabled>Cargando...</button></div>
-    </div>
+<!-- fechas-menu: extracted from old subnav, now fixed above bottom nav -->
+<div id="fechas-panel-wrap">
+  <div class="snb-drop-menu" id="fechas-menu">
+    <div id="fechas-menu-items"><button disabled>Cargando...</button></div>
   </div>
-  <button class="snb" onclick="pg('match',this)">Match</button>
-  <button class="snb" onclick="pg('hist',this)">Historia</button>
-  <button class="snb" onclick="pg('perf',this)">Perfiles</button>
-  <button class="snb" onclick="pg('mit',this)">Cargar Tarjeta</button>
-  <button class="snb snb-admin" onclick="pg('admin',this)" title="Admin">⚙</button>
 </div>
 
 <!-- ════ HOME ════ -->
@@ -1678,47 +1637,22 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <div class="home-subtitle">XIV · 2026</div>
       </div>
 
-      <div class="home-fecha-card" id="home-fecha-card-OLD" style="display:none;">
-        <div class="hfc-num" id="hfi-num">Fecha —</div>
-        <div class="hfc-rows">
-          <div class="hfc-row">
-            <div class="hfc-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 22V4a2 2 0 0 1 2-2h11l-2 5h7l-2 5H6"/>
-                <path d="M4 22h6"/>
-              </svg>
-            </div>
-            <div class="hfc-label">Cancha</div>
-            <div class="hfc-value" id="hfi-cancha">Cargando...</div>
-          </div>
-          <div class="hfc-row">
-            <div class="hfc-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-            </div>
-            <div class="hfc-label">Día</div>
-            <div class="hfc-value" id="hfi-date">—</div>
-          </div>
-        </div>
-        <a id="hfi-ver" class="hfi-ver-btn" href="#" style="display:none;">Ver Fecha →</a>
-      </div>
-
       <div class="home-actions">
 
-        <!-- Fecha activa: Live Scoring — visible solo cuando HOME_FECHA_ACTIVA -->
-        <button class="home-btn home-btn-fecha" id="home-fecha-btn" style="display:none;"
+        <!-- Fecha activa: pastilla tipo card, visible solo cuando HOME_FECHA_ACTIVA -->
+        <button class="home-fecha-card" id="home-fecha-btn" style="display:none;cursor:pointer;border:none;text-align:left;width:100%;"
                 onclick="pg('mit',null); showMitFechas()">
-          <span class="hb-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          </span>
-          <span class="hb-txt">
-            <span class="hb-title" id="home-live-title">En Juego</span>
-            <span class="hb-sub" id="home-live-sub">Cargar scores ahora</span>
-          </span>
+          <div class="hfc-num" id="hfi-num">Fecha —</div>
+          <div class="hfc-rows">
+            <div class="hfc-row">
+              <div class="hfc-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4a2 2 0 0 1 2-2h11l-2 5h7l-2 5H6"/><path d="M4 22h6"/></svg>
+              </div>
+              <div class="hfc-label">Cancha</div>
+              <div class="hfc-value cancha" id="hfi-cancha">—</div>
+            </div>
+          </div>
+          <div class="hfi-ver-btn" style="border-radius:0 0 4px 0;">Cargar Score →</div>
         </button>
 
         <button class="home-btn home-btn-primary" onclick="enterTorneoMode()">
@@ -1733,6 +1667,13 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
           </span>
           <span class="hb-txt"><span class="hb-title">Ver Historia</span><span class="hb-sub">Campeones · Años · Perfiles</span></span>
+        </button>
+
+        <button class="home-btn home-btn-admin" id="home-admin-btn" style="display:none;" onclick="pg('admin',null)">
+          <span class="hb-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93A10 10 0 0 0 19.07 19.07"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+          </span>
+          <span class="hb-txt"><span class="hb-title">Admin</span><span class="hb-sub">Fechas · Canchas · Jugadores</span></span>
         </button>
 
       </div>
@@ -2497,7 +2438,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
     Match
   </button>
-  <button class="bnav-item" id="bnt-fechas" onclick="setNavMode('torneo'); pg('lb',null); toggleFechasDrop(event)">
+  <button class="bnav-item" id="bnt-fechas" onclick="setNavMode('torneo'); loadFechasMenu(); toggleFechasDrop(event)">
     <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     Fechas
   </button>
@@ -3421,8 +3362,8 @@ function closeFechasDrop(){
 }
 document.addEventListener('click', function(e){
   const menu = document.getElementById('fechas-menu');
-  const btn = document.getElementById('fechas-btn');
-  if(menu && !menu.contains(e.target) && e.target !== btn) menu.classList.remove('open');
+  const bntFechas = document.getElementById('bnt-fechas');
+  if(menu && !menu.contains(e.target) && e.target !== bntFechas && !bntFechas?.contains(e.target)) menu.classList.remove('open');
 });
 
 // ══ NAV MODE ══════════────────────────────────────────────────────────────────
@@ -3458,9 +3399,7 @@ function updateBnavActive(activeId) {
 
 function pg(id,btn){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
-  document.querySelectorAll('.snb').forEach(b=>b.classList.remove('on'));
-
-  // Toggle home mode: hides topbar + subnav when on home
+  // Toggle home mode: hides topbar when on home
   if(id === 'home'){
     document.body.classList.add('home-mode');
   } else {
@@ -3504,9 +3443,8 @@ function pg(id,btn){
 
 function setTbHeight(){
   const tb=document.querySelector('.tb');
-  const sn=document.querySelector('.subnav');
-  if(tb&&sn){
-    const h = tb.getBoundingClientRect().height + sn.getBoundingClientRect().height;
+  if(tb){
+    const h = tb.getBoundingClientRect().height;
     document.documentElement.style.setProperty('--tb-h', h + 'px');
   }
 }
@@ -4105,8 +4043,7 @@ function finalizarWizard(rFecha, rMatches){
     // Refresh admin data
     loadAdminData();
     // Redirect to Leader Board
-    const lbBtn = document.querySelector('.subnav .snb');
-    if(lbBtn) pg('lb', lbBtn);
+    pg('lb', null);
   }, 1800);
 }
 
@@ -4304,8 +4241,7 @@ function adminGuardarMatches(){
       msg.textContent = '✓ ' + r.count + ' matches guardados';
       document.getElementById('adm-matches-list').innerHTML = '';
       setTimeout(function(){
-        const lbBtn = document.querySelector('.subnav .snb');
-        if(lbBtn) pg('lb', lbBtn);
+        pg('lb', null);
       }, 1500);
     } else {
       msg.className = 'adm-msg err';
@@ -5430,11 +5366,14 @@ function applySession(sess) {
   if (hamAvatar) hamAvatar.textContent = (sess.apodo || '?').charAt(0).toUpperCase();
   if (hamName) hamName.textContent = sess.apodo || sess.nombre || sess.mat;
   if (hamRol) hamRol.textContent = sess.rol || 'Jugador';
-  // Admin icon (topbar) and hamburger admin item — visible only for Admin role
+  // Admin controls — visible only for Admin role (topbar icon, home button, hamburger item)
+  const isAdmin = (sess.rol === 'Admin');
   const adminIcon = document.getElementById('tb-admin-icon');
-  if (adminIcon) adminIcon.style.display = (sess.rol === 'Admin') ? 'flex' : 'none';
+  if (adminIcon) adminIcon.style.display = isAdmin ? 'flex' : 'none';
+  const homeAdminBtn = document.getElementById('home-admin-btn');
+  if (homeAdminBtn) homeAdminBtn.style.display = isAdmin ? 'flex' : 'none';
   const hamAdminBtn = document.getElementById('ham-admin-btn');
-  if (hamAdminBtn) hamAdminBtn.style.display = (sess.rol === 'Admin') ? 'flex' : 'none';
+  if (hamAdminBtn) hamAdminBtn.style.display = isAdmin ? 'flex' : 'none';
   // Pre-populate MIT_PLAYER from session so Cargar Tarjeta doesn't ask for mat again
   if (!MIT_PLAYER) {
     MIT_PLAYER = { matricula: sess.mat, nombre: sess.nombre || '', apodo: sess.apodo || '' };
@@ -6867,8 +6806,7 @@ function mitGuardar(){
       msg.innerHTML = '✓ Tarjeta guardada (' + elapsedSec + 's)';
       // Navigate to leaderboard so the player sees their score reflected in the live LB
       setTimeout(function(){
-        const lbBtn = document.querySelector('.subnav .snb');
-        if(lbBtn) pg('lb', lbBtn);
+        pg('lb', null);
       }, 1800);
     } else {
       // Backend rejected — persistent error banner with retry guidance
@@ -6925,7 +6863,7 @@ function applyFechasMenu(data){
     const lbl = f.completa
       ? 'Fecha ' + f.fecha
       : 'Fecha ' + f.fecha + ' <span style="opacity:.6;font-size:10px;">(en curso · ' + f.firmados + '/' + f.totalJugadores + ')</span>';
-    html += '<button onclick="pg(\'fecha-' + f.fecha + '\', document.getElementById(\'fechas-btn\')); closeFechasDrop();">' + lbl + '</button>';
+    html += '<button onclick="pg(\'fecha-' + f.fecha + '\', null); closeFechasDrop();">' + lbl + '</button>';
   });
   container.innerHTML = html;
 }
@@ -7724,8 +7662,7 @@ function goToProfileFromName(lbName){
       if(m) matricula = m.matricula;
     }
 
-    const perfBtn = Array.from(document.querySelectorAll('.subnav .snb')).find(b => /Perfiles/i.test(b.textContent));
-    pg('perf', perfBtn || null);
+    pg('perf', null);
     if(matricula){
       setTimeout(() => { selectPerf(matricula, null); }, 250);
     } else {
@@ -7786,71 +7723,25 @@ let HOME_FECHA_ACTIVA = 5; // número de fecha — default 5, se actualiza desde
 function applyFechaActiva(fa){
   if(!fa || !fa.fechaNum) return;
   HOME_FECHA_ACTIVA = parseInt(fa.fechaNum) || HOME_FECHA_ACTIVA;
-  // Show live-scoring button on Home
   const btn = document.getElementById('home-fecha-btn');
-  const title = document.getElementById('home-live-title');
-  const sub = document.getElementById('home-live-sub');
   if (btn) {
-    btn.style.display = 'flex';
-    if (title) title.textContent = 'Fecha ' + HOME_FECHA_ACTIVA + ' · En Juego';
-    if (sub && fa.cancha) sub.textContent = fa.cancha;
+    btn.style.display = 'block';
+    const numEl = document.getElementById('hfi-num');
+    const canchaEl = document.getElementById('hfi-cancha');
+    if (numEl) numEl.textContent = 'NGT FECHA ' + HOME_FECHA_ACTIVA + ' · EN JUEGO';
+    if (canchaEl && fa.cancha) canchaEl.textContent = fa.cancha;
   }
 }
 
 function applyHomeData(data){
-  // Legacy elements (hidden but kept to avoid JS errors)
-  const numEl = document.getElementById('hfi-num');
-  const canchaEl = document.getElementById('hfi-cancha');
-  const dateEl = document.getElementById('hfi-date');
-  const hero = document.querySelector('.home-hero');
-
-  if(!data){
-    if(numEl) numEl.textContent = 'Sin fechas';
-    if(canchaEl) canchaEl.textContent = 'Próximamente';
-    if(dateEl) dateEl.textContent = '—';
+  // No-op: próxima fecha display was tied to the OLD card (deleted).
+  // applyFechaActiva handles the active fecha pastilla.
+  // HOME_TARGET_MS kept for any countdown callers.
+  if(data && data.fecha){
+    HOME_TARGET_MS = new Date(data.fecha).getTime();
+  } else {
     HOME_TARGET_MS = null;
-    tickCountdown();
-    return;
   }
-
-  const dateObj = new Date(data.fecha);
-  HOME_TARGET_MS = dateObj.getTime();
-
-  if(numEl) numEl.textContent = 'Fecha ' + (data.fechaNum || '—');
-  if(canchaEl) canchaEl.textContent = data.cancha || 'Cancha a definir';
-  if(dateEl){
-    try {
-      const fmt = new Intl.DateTimeFormat('es-AR', {
-        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-      });
-      let txt = fmt.format(dateObj);
-      txt = txt.charAt(0).toUpperCase() + txt.slice(1);
-      dateEl.textContent = txt;
-    } catch(e){
-      dateEl.textContent = data.fechaDisplay || dateObj.toLocaleDateString('es-AR');
-    }
-  }
-
-  if(hero){
-    if(data.isPast) hero.classList.add('home-finished');
-    else hero.classList.remove('home-finished');
-  }
-
-  // Show "Ver fecha" button if there's an HTML file for this fecha
-  // Convention: fecha-N.html in the same folder as index.html
-  // "Ver Fecha" button: always visible for the upcoming/current fecha
-  const verBtn = document.getElementById('hfi-ver');
-  if(verBtn && data.fechaNum){
-    const num = parseInt(data.fechaNum) || 0;
-    verBtn.href = '#';
-    verBtn.onclick = function(e){ e.preventDefault(); openVerLineas(num); return false; };
-    verBtn.textContent = 'Ver Líneas Fecha ' + num + ' →';
-    verBtn.style.display = 'inline-block';
-  } else if(verBtn) {
-    verBtn.style.display = 'none';
-  }
-
-  // Tick once just to ensure consistent state (no-op now since Falta row is gone)
   tickCountdown();
 }
 
