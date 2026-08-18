@@ -6444,9 +6444,9 @@ function liveRenderMatchBody(data){
     m.detallePorHoyo.forEach(function(det, h){
       var sym, bg, border, txtColor;
       if(det === 'win'){
-        sym = 'W'; bg = C1; border = C1; txtColor = '#fff';
+        sym = String(h+1); bg = C1; border = C1; txtColor = '#fff';
       } else if(det === 'lose'){
-        sym = 'L'; bg = C2; border = C2; txtColor = '#fff';
+        sym = String(h+1); bg = C2; border = C2; txtColor = '#fff';
       } else if(det === 'halved'){
         sym = '='; bg = '#6b7280'; border = '#6b7280'; txtColor = '#fff';
       } else {
