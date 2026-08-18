@@ -544,6 +544,12 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
 .adm-btn-secondary{background:none;color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;padding:6px 12px;border:1px solid var(--navy);border-radius:3px;cursor:pointer;margin-top:8px;}
 .adm-btn-secondary:hover{background:var(--navy);color:#fff;}
+.btn-back{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;color:var(--g4);background:none;border:1px solid var(--g3);border-radius:3px;padding:7px 14px;cursor:pointer;transition:.12s;}
+.btn-back:hover{border-color:var(--navy);color:var(--navy);}
+.adm-card-hdr .btn-back{color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.25);}
+.adm-card-hdr .btn-back:hover{color:#fff;border-color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);}
+.btn-cancel{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);background:none;border:none;padding:6px 10px;cursor:pointer;transition:.12s;}
+.btn-cancel:hover{color:var(--navy);}
 .adm-btn-destructive{width:100%;background:#b91c1c;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:11px;border:none;border-radius:3px;cursor:pointer;transition:.12s;}
 .adm-btn-destructive:hover{background:#991b1b;}
 .adm-btn-destructive:disabled{opacity:.5;cursor:not-allowed;}
@@ -1628,7 +1634,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <input type="password" id="pin-change-confirm" class="adm-input" inputmode="numeric" placeholder="Repetir nuevo PIN">
     <div class="adm-error" id="pin-change-err" style="display:none;margin-top:8px;"></div>
     <button class="adm-btn-primary" onclick="cambiarPinGuardar()" style="margin-top:14px;">Cambiar PIN</button>
-    <button onclick="document.getElementById('pin-change-modal').style.display='none'" style="background:none;border:none;color:var(--g4);cursor:pointer;width:100%;margin-top:8px;font-size:12px;">Cancelar</button>
+    <button class="btn-cancel" onclick="document.getElementById('pin-change-modal').style.display='none'" style="width:100%;margin-top:8px;">Cancelar</button>
   </div>
 </div>
 
@@ -1756,7 +1762,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <div class="adm-card">
       <div class="adm-card-hdr">
         <span id="mit-score-title">Tarjeta</span>
-        <button onclick="mitBackToFechas()" style="float:right;background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:11px;">← Volver</button>
+        <button class="btn-back" onclick="mitBackToFechas()" style="float:right;">← Volver</button>
       </div>
       <div class="adm-card-body">
 
@@ -1807,7 +1813,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
     <!-- Header row -->
     <div style="display:flex;align-items:center;margin-bottom:10px;">
-      <button onclick="mitBackToFechas()" style="background:none;border:none;color:var(--navy);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;padding:0;letter-spacing:.03em;">← Volver</button>
+      <button class="btn-back" onclick="mitBackToFechas()">← Volver</button>
       <span id="live-title" style="flex:1;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
     </div>
 
@@ -1970,7 +1976,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <div id="adm-home">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
         <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);">⚙ Administrador</div>
-        <button onclick="pg('lb',null)" style="background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);cursor:pointer;">Salir ✕</button>
+        <button class="btn-cancel" onclick="pg('lb',null)">Salir ✕</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <button class="adm-big-btn" onclick="admGoTo('crear')">
@@ -1993,7 +1999,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <!-- Crear Fecha (wizard 2 pasos) -->
     <div class="adm-section" id="adm-crear" style="display:none;">
       <div class="adm-sec-back">
-        <button class="adm-sec-back-btn" onclick="admGoHome()">← Volver</button>
+        <button class="btn-back" onclick="admGoHome()">← Volver</button>
         <span class="adm-sec-title">Crear Fecha</span>
       </div>
 
@@ -2086,7 +2092,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           <button class="adm-btn-secondary" onclick="wizAddMatch()" style="margin-top:4px;">+ Agregar match</button>
 
           <div class="adm-btn-row">
-            <button class="adm-btn-ghost" onclick="wizPaso1Back()">← Volver</button>
+            <button class="btn-back" onclick="wizPaso1Back()">← Volver</button>
             <button class="adm-btn-primary" onclick="wizCrearTodo()">✓ Crear Fecha</button>
           </div>
           <div id="adm-s2-msg" class="adm-msg" style="display:none;"></div>
@@ -2099,7 +2105,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <!-- Gestionar Fecha -->
     <div class="adm-section" id="adm-editar" style="display:none;">
       <div class="adm-sec-back">
-        <button class="adm-sec-back-btn" onclick="admGoHome()">← Volver</button>
+        <button class="btn-back" onclick="admGoHome()">← Volver</button>
         <span class="adm-sec-title">Gestionar Fechas</span>
       </div>
 
@@ -2218,7 +2224,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
               </div>
               <div style="display:flex;gap:8px;margin-top:12px;">
                 <button class="adm-btn-primary" onclick="admTarjetaGuardar()" style="flex:2;">Guardar Tarjeta</button>
-                <button class="adm-btn-secondary" onclick="cerrarAdmTarEditor()" style="flex:1;">Cancelar</button>
+                <button class="btn-cancel" onclick="cerrarAdmTarEditor()" style="flex:1;">Cancelar</button>
               </div>
               <div id="adm-tar-msg" class="adm-msg" style="display:none;"></div>
             </div>
@@ -2264,7 +2270,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <!-- Gestionar Canchas -->
     <div class="adm-section" id="adm-canchas" style="display:none;">
       <div class="adm-sec-back">
-        <button class="adm-sec-back-btn" onclick="admGoHome()">← Volver</button>
+        <button class="btn-back" onclick="admGoHome()">← Volver</button>
         <span class="adm-sec-title">Gestionar Canchas</span>
       </div>
 
@@ -2339,7 +2345,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <button class="adm-btn-secondary" onclick="admNcAddRating()" style="margin-top:6px;margin-bottom:14px;">+ Agregar color</button>
     <div style="display:flex;gap:8px;">
       <button class="adm-btn-primary" onclick="admCrearCancha()" style="flex:2;">⛳ Crear Cancha</button>
-      <button class="adm-btn-secondary" onclick="admOcultarNuevaCancha()" style="flex:1;">Cancelar</button>
+      <button class="btn-cancel" onclick="admOcultarNuevaCancha()" style="flex:1;">Cancelar</button>
     </div>
     <div id="adm-nc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
   </div>
@@ -4599,7 +4605,7 @@ function mostrarModalPrioridad_(jugs, onConfirm){
       '</div>' +
       '<div id="prio-rows" style="max-height:280px;overflow-y:auto;margin-bottom:16px;">' + rows + '</div>' +
       '<div style="display:flex;gap:8px;">' +
-        '<button class="adm-btn-ghost" id="prio-cancel-btn" style="flex:1;">Cancelar</button>' +
+        '<button class="btn-cancel" id="prio-cancel-btn" style="flex:1;">Cancelar</button>' +
         '<button class="adm-btn-primary" id="prio-confirm-btn" style="flex:2;">⚡ Armar Líneas</button>' +
       '</div>' +
     '</div>';
@@ -6143,7 +6149,7 @@ function livePoll(){
           document.getElementById('live-loading').innerHTML =
             '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
             '<p style="color:var(--red);font-size:14px;">' + (r && r.error ? r.error : 'Error de conexión') + '</p>' +
-            '<button class="adm-btn-primary" onclick="pg(\'lb\',null)" style="margin-top:8px;">← Volver</button></div>';
+            '<button class="btn-back" onclick="pg(\'lb\',null)" style="margin-top:8px;">← Volver</button></div>';
         } else if(offEl){
           offEl.textContent = r && r.error ? r.error : 'Error al actualizar';
           offEl.style.display = 'block';
@@ -6156,7 +6162,7 @@ function livePoll(){
         document.getElementById('live-loading').innerHTML =
           '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
           '<p style="color:var(--red);font-size:14px;">Sin conexión</p>' +
-          '<button class="adm-btn-primary" onclick="pg(\'lb\',null)" style="margin-top:8px;">← Volver</button></div>';
+          '<button class="btn-back" onclick="pg(\'lb\',null)" style="margin-top:8px;">← Volver</button></div>';
       } else if(offEl){
         offEl.textContent = 'Sin conexión · reintentando...';
         offEl.style.display = 'block';
@@ -6862,7 +6868,7 @@ function renderFechaDinamica(data){
   // ─── HEADER: info card ───
   const canchaName = data.cancha || 'Sin cancha';
   let html = '<div style="margin-bottom:14px;">' +
-    '<button onclick="pg(\'fechas\',null)" style="background:none;border:none;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;padding:0;letter-spacing:.03em;">← Volver</button>' +
+    '<button class="btn-back" onclick="pg(\'fechas\',null)">← Volver</button>' +
   '</div>' +
   '<div class="f2-info-card">' +
     '<div class="f2-info-item">' +
