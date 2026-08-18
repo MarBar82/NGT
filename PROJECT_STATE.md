@@ -66,6 +66,65 @@ Respondé esto al terminar, agregando las respuestas al final de este mismo arch
 
 ---
 
+## ✅ Respuestas de verificación — Tarea 9 (2026-08-18)
+
+**1. ¿Agregaste Roboto Slab al `<link>` de `index.html`?**
+
+Sí. El link quedó:
+```
+family=Barlow+Condensed:wght@400;500;600;700;800
+&family=Barlow:wght@400;500;600
+&family=Oswald:wght@400;700
+&family=Roboto+Slab:wght@700;900
+&display=swap
+```
+Pesos de Roboto Slab: **700 y 900** — los mismos que ya cargaba `fecha.html` y que corresponden a las declaraciones `font-weight:900` en `.fc-num` y `font-weight:700` en `.fc-lnum`.
+
+**2. ¿Reemplazaste el `:root` de `fecha.html`? ¿Se ve algo distinto?**
+
+Sí, reemplazado. El `:root` de `fecha.html` ahora es idéntico al de `index.html` más `--blue-bg:#dbe7f5`.
+
+Diferencias de color que cambian visualmente (todas muy sutiles — mismo tono, paleta más cálida):
+
+| Variable | Antes | Después | Usado en `fecha.html` |
+|----------|-------|---------|----------------------|
+| `--off` | `#F5F5F5` (neutro) | `#f7f6f3` (levemente cálido) | `body`, info boxes, footer |
+| `--g1` | `#F0F0F0` | `#f0eeea` | bordes tenues |
+| `--g2` | `#E0E0E0` | `#e3e0d8` | bordes de cards |
+| `--g4` | `#888` | `#8a8780` | textos secundarios (label, icon) |
+| `--g5` | `#333` | `#3d3c38` | texto info-box |
+
+El impacto visual es mínimo — ningún contraste que se rompe ni color que cambia de categoría. Las cajas de info (`.fc-inf-box`) van a tener un borde `#e3e0d8` en vez de `#E0E0E0`, lo que las hace levemente más cálidas, consistente con el resto del sistema.
+
+Las variables nuevas (`--navy2`, `--g3`, `--text`, `--border`) están definidas pero no son referenciadas por ningún selector de `fecha.html` — confirmado por grep que devolvió vacío.
+
+**3. Punto C — ¿otras fuentes usadas pero no cargadas?**
+
+`index.html` usa estas `font-family` en CSS/JS:
+- `'Barlow Condensed'` → ✅ cargada (400–800)
+- `'Barlow'` → ✅ cargada (400–600)
+- `'Oswald'` → ✅ cargada (400, 700)
+- `'Roboto Slab'` → ✅ **ahora cargada** (700, 900) — era la brecha que corrige esta tarea
+- `Barlow Condensed` sin comillas y `\'Barlow Condensed\'` → misma familia, en strings JS
+
+`fecha.html` usa:
+- `'Barlow Condensed'` → ✅ cargada (400, 600–900)
+- `'Roboto Slab'` → ✅ cargada (700, 900)
+
+No se encontraron otras fuentes usadas en CSS pero no cargadas en ninguno de los dos archivos.
+
+**4. ¿El número de fecha en `index.html` ahora se ve con Roboto Slab?**
+
+Sí, por construcción: `.fc-num` (línea ~908) y `.fc-lnum` (línea ~904) declaran `font-family:'Roboto Slab',serif`. Antes, como Roboto Slab no estaba en el `<link>`, el navegador caía al `serif` genérico (Times New Roman o similar según el SO). Ahora que está cargada, los números de fecha y línea en el modal "Ver Líneas" dentro de `index.html` van a renderizar con Roboto Slab — igual que en `fecha.html`.
+
+**5. Commit y push**
+
+- ✅ Commit: `65ec742` — "Unify design system: Roboto Slab font + color tokens (Task 9)"
+- ✅ Push a `origin/main` exitoso
+- ✅ Solo se modificaron `index.html`, `fecha.html` y `PROJECT_STATE.md` — ningún `.gs` fue tocado
+
+---
+
 ## Roadmap — con esta tarea se completa el roadmap original completo
 
 Con la Tarea 9 se cierra el roadmap completo que armamos en la auditoría inicial: estructura, seguridad, rendimiento, y diseño. No hay más tareas pendientes de esa auditoría — lo que siga después es lo que Marco quiera sumar de nuevo.
