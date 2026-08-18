@@ -2426,43 +2426,24 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 </div>
 </div>
 
-<!-- ════ BOTTOM NAVS (Epic 8) ════ -->
+<!-- ════ BOTTOM NAV ════ -->
 
-<nav class="bottom-nav" id="bnav-torneo" style="display:none;" aria-label="Torneo">
-  <button class="bnav-item" id="bnt-home" onclick="setNavMode('torneo'); pg('home',null)">
-    <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-    Inicio
-  </button>
-  <button class="bnav-item" id="bnt-lb" onclick="setNavMode('torneo'); pg('lb',null); loadLB()">
+<nav class="bottom-nav" id="bnav-main" aria-label="Navegación principal">
+  <button class="bnav-item" id="bnm-lb" onclick="pg('lb',null)">
     <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
     LB
   </button>
-  <button class="bnav-item" id="bnt-match" onclick="setNavMode('torneo'); pg('match',null)">
-    <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-    Match
-  </button>
-  <button class="bnav-item" id="bnt-fechas" onclick="setNavMode('torneo'); pg('fechas',null)">
+  <button class="bnav-item" id="bnm-fechas" onclick="pg('fechas',null)">
     <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     Fechas
   </button>
-</nav>
-
-<nav class="bottom-nav" id="bnav-historia" style="display:none;" aria-label="Historia">
-  <button class="bnav-item" id="bnh-home" onclick="setNavMode('historia'); pg('home',null)">
-    <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-    Inicio
+  <button class="bnav-item" id="bnm-mit" onclick="pg('mit',null)">
+    <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+    Mi Tarjeta
   </button>
-  <button class="bnav-item" id="bnh-historia" onclick="setNavMode('historia'); pg('historia',null); loadHistoria()">
-    <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-    Historia
-  </button>
-  <button class="bnav-item" id="bnh-hist" onclick="setNavMode('historia'); pg('hist',null); loadHist()">
-    <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/></svg>
-    Años
-  </button>
-  <button class="bnav-item" id="bnh-perf" onclick="setNavMode('historia'); pg('perf',null); loadPerfiles()">
-    <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-    Perfiles
+  <button class="bnav-item" id="bnm-match" onclick="pg('match',null)">
+    <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    Match
   </button>
 </nav>
 
@@ -3370,35 +3351,6 @@ document.addEventListener('click', function(e){
 });
 
 // ══ NAV MODE ══════════────────────────────────────────────────────────────────
-let NAV_MODE = ''; // 'torneo' | 'historia' | ''
-
-function setNavMode(mode) {
-  NAV_MODE = mode;
-  const bnt = document.getElementById('bnav-torneo');
-  const bnh = document.getElementById('bnav-historia');
-  if (bnt) bnt.style.display = (mode === 'torneo') ? 'flex' : 'none';
-  if (bnh) bnh.style.display = (mode === 'historia') ? 'flex' : 'none';
-}
-
-function enterTorneoMode() {
-  setNavMode('torneo');
-  pg('lb', null);
-  loadLB();
-  updateBnavActive('bnt-lb');
-}
-
-function enterHistoriaMode() {
-  setNavMode('historia');
-  pg('historia', null);
-  loadHistoria();
-  updateBnavActive('bnh-historia');
-}
-
-function updateBnavActive(activeId) {
-  document.querySelectorAll('.bnav-item').forEach(function(b){ b.classList.remove('on'); });
-  var el = document.getElementById(activeId);
-  if (el) el.classList.add('on');
-}
 
 function pg(id,btn){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
@@ -3417,18 +3369,11 @@ function pg(id,btn){
   window.scrollTo(0,0);
 
   // Update bottom nav active state
-  const pgNavMap = { lb:'bnt-lb', match:'bnt-match', fechas:'bnt-fechas', historia:'bnh-historia', hist:'bnh-hist', perf:'bnh-perf' };
-  if(id === 'home') {
-    document.querySelectorAll('.bnav-item').forEach(function(b){ b.classList.remove('on'); });
-    const homeIds = { torneo:'bnt-home', historia:'bnh-home' };
-    const hid = homeIds[NAV_MODE];
-    if(hid){ const hel = document.getElementById(hid); if(hel) hel.classList.add('on'); }
-  } else if (pgNavMap[id]) {
+  const pgNavMap = { lb:'bnm-lb', fechas:'bnm-fechas', mit:'bnm-mit', match:'bnm-match' };
+  if(pgNavMap[id]){
     document.querySelectorAll('.bnav-item').forEach(function(b){ b.classList.remove('on'); });
     const ael = document.getElementById(pgNavMap[id]); if(ael) ael.classList.add('on');
   }
-
-  if(id==='home')loadHome();
   if(id==='lb')loadLB();
   if(id==='hist')loadHist();
   if(id==='perf')loadPerfPicker();
@@ -5601,7 +5546,6 @@ function hamburgerClose() {
 function miPerfilDirecto() {
   if (!NGT_SESSION) return;
   pg('perf', null);
-  setNavMode('historia');
   loadPerfPicker();
   // Auto-select the logged-in player
   setTimeout(function() {
@@ -7885,6 +7829,7 @@ function ngtInitData(){
   });
 }
 
+pg('lb', null);
 ngtInitData();
 
 // ══════════ VER LÍNEAS MODAL ══════════
