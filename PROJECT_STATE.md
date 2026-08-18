@@ -4,33 +4,37 @@
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
-Progreso: ✅ logo duplicado, ✅ código muerto de admin key, ✅ `fecha.html` dinámico, ✅ `Code37.gs` dividido en 10 módulos (ya deployado y probado). Esta es la tarea 5 — dos limpiezas chicas de prioridad media, antes de pasar a lo visual/UX.
+Progreso: todo lo de prioridad alta y media del roadmap está resuelto. La Tarea 6 fue una auditoría de responsive design (sin tocar código) que encontró 10 componentes con problemas. Esta es la Tarea 7: arreglar los 4 de mayor impacto (los que usa todo jugador, en cada fecha). Los otros 6 (panel admin, wizard, tabla de perfil) quedan para la Tarea 8.
+
+Esta tarea es **solo frontend** (`index.html` y `fecha.html`) — no toca `Code37.gs` ni ningún módulo `.gs`, así que no requiere deploy en Apps Script, solo `git push`.
 
 ---
 
 ## 🎯 Tarea para Claude Code
 
-Son dos limpiezas independientes. Hacelas en este orden y no mezcles los commits (un commit por cada una).
+Arreglá estos 4 puntos, todos ya diagnosticados en la auditoría de la Tarea 6 (podés ver el detalle completo más abajo en este archivo si lo necesitás, en la sección "Informe de auditoría responsive" que dejó la tarea anterior). Probá cada uno achicando la ventana del navegador a ~360px y ~320px de ancho antes de dar por terminado.
 
-### A) Confirmar si `fecha-3.html` es un archivo huérfano
+### 1. Modal "Ver Líneas" en `index.html` — fila de jugador (`.fc-player`) y matches (`.fc-matches`)
 
-1. Buscá cualquier referencia a `fecha-3.html` (o `fecha-3`) en todo el proyecto: `index.html`, todos los `.gs`, `fecha.html`, `fecha-4.html`, `fecha-5.html`, `fecha-6.html`, y cualquier `.md` del repo.
-2. Fijate si `fecha-3.html` tiene la constante `FECHA_NUM` (las otras versiones sí la tienen) y compará su estructura contra `fecha-4.html` para entender si es una versión más vieja/distinta o algo aparte.
-3. Si confirmás que no lo referencia nada del proyecto y que quedó reemplazado por el patrón `fecha.html?f=N`, borralo (`git rm fecha-3.html`) y hacé commit solo con ese cambio.
-4. Si encontrás algo que sí lo usa, o algo que te genere dudas, **no lo borres** — dejalo como está y explicá qué encontraste en la respuesta de verificación.
+- `.fc-player` (~línea 680): hoy usa `grid-template-columns:1fr 80px 80px`, lo que corta apodos largos en pantallas chicas. Agregá una regla `@media(max-width:380px)` que la cambie a `1fr 60px 60px`.
+- `.fc-matches` (~línea 710): hoy usa `grid-template-columns:1fr 1fr`, lo que corta nombres largos separados por "VS". En el mismo `@media(max-width:380px)`, cambiala a una sola columna (`grid-template-columns:1fr`) para que los matches se apilen en vez de cortarse — es más robusto que solo reducir la fuente.
 
-### B) Limpieza automática de sesiones vencidas
+### 2. `fecha.html` — card completa
 
-Contexto: cada login guarda una sesión en `PropertiesService.getDocumentProperties()` con clave `SES_<token>` y expiración de 90 días (ver `guardarSesion_` y `validarSesion_` en `02_Auth.gs`), pero nada borra las que ya vencieron — se acumulan para siempre. `PropertiesService` tiene un límite total de almacenamiento por documento, así que esto puede convertirse en un problema con el tiempo.
+Esta página usa las mismas clases (`.fc-player`, `.fc-matches`) más `.fc-info`, pero tiene su propio bloque de estilos (no comparte CSS con `index.html`), así que hay que arreglarlo acá también, por separado. Agregá un `@media(max-width:380px)` con:
+- `.fc-player{grid-template-columns:1fr 60px 60px}`
+- `.fc-matches{grid-template-columns:1fr}`
+- `.fc-info{grid-template-columns:1fr}` (para que las cajas de info se apilen en vez de comprimirse)
 
-1. En `02_Auth.gs`, agregá una función `limpiarSesionesVencidas_()` que:
-   - Recorra todas las propiedades del documento (`getProperties()`).
-   - Filtre las que empiezan con `SES_`.
-   - Parsee cada una como JSON y compare su campo `exp` contra `Date.now()`.
-   - Borre (`deleteProperty`) las que ya vencieron.
-   - Registre en el log (`Logger.log` o similar) cuántas borró, para poder revisarlo en las ejecuciones del trigger.
-2. Agregá una función instaladora `instalarTriggerLimpiezaSesiones()` que cree un trigger diario para `limpiarSesionesVencidas_`, siguiendo el mismo patrón que ya usa `instalarTriggerWarmup()` en `01_Utils.gs` (primero borrar cualquier trigger existente con ese handler para no duplicar, después crear el nuevo). No hace falta que corra a una hora específica, cualquier hora del día está bien.
-3. No toques `guardarSesion_`, `validarSesion_` ni ninguna otra función de autenticación — esta tarea es puramente agregar la limpieza, no cambiar cómo se crean o validan las sesiones.
+### 3. Carga de tarjeta — círculos de hoyo (`.hole-circle`) en `index.html`
+
+Hoy son `width:48px; height:48px` fijos, y una fila de 9 no entra en un celular angosto. Elegí una de estas dos soluciones (la que te parezca más prolija con el resto del CSS del archivo) y aplicala:
+- Opción A: `@media(max-width:480px){ .hole-circle{ width:36px; height:36px; font-size:13px; } }`
+- Opción B: usar `width:calc((100% - 64px) / 9)` para que se ajuste solo, sin depender de un breakpoint fijo.
+
+### 4. Live Scoring — botones de +/− en `index.html`
+
+Esta sección no tiene ningún `@media`. Lo importante acá no es solo estético: los botones de sumar/restar puntaje tienen que tener un tamaño mínimo táctil de **44×44px** (estándar Apple/Material) para evitar que alguien toque el botón equivocado y cargue un puntaje incorrecto en vivo. Revisá el tamaño actual de esos botones y, si están por debajo de 44px en cualquier breakpoint, ajustalos (padding y/o tamaño fijo) para cumplir ese mínimo en pantallas chicas.
 
 ---
 
@@ -38,55 +42,27 @@ Contexto: cada login guarda una sesión en `PropertiesService.getDocumentPropert
 
 Respondé esto al terminar, agregando las respuestas al final de este mismo archivo:
 
-1. ¿`fecha-3.html` se borró o se dejó? ¿Qué evidencia encontraste para esa decisión (o qué duda te generó)?
-2. ¿Cuántas propiedades `SES_` había hoy en el documento al momento de escribir/probar `limpiarSesionesVencidas_()` (si pudiste consultarlo), y cuántas eran de sesiones ya vencidas?
-3. ¿`instalarTriggerLimpiezaSesiones()` sigue el mismo patrón que `instalarTriggerWarmup()` (evita duplicar triggers si se ejecuta más de una vez)?
-4. ¿Hace falta que yo ejecute manualmente `instalarTriggerLimpiezaSesiones()` una vez desde el editor de Apps Script para que el trigger quede activo (como hicimos en su momento con el trigger de HCP)? Confirmalo.
-5. ¿Hiciste dos commits separados (uno por cada limpieza) y el push correspondiente?
+1. ¿Aplicaste los 4 puntos? Si dejaste alguno sin resolver, ¿cuál y por qué?
+2. En el punto 3 (hole circles), ¿qué opción elegiste (A o B) y por qué?
+3. En el punto 4 (Live Scoring), ¿cuál era el tamaño actual de los botones antes del cambio, y qué tamaño quedó después? Confirmá que llega a 44×44px como mínimo.
+4. ¿Probaste los 4 cambios en un ancho de ventana de ~360px y ~320px? ¿Notaste algún efecto secundario en otro componente que no estaba en la lista?
+5. ¿Hiciste `git commit` y `push`? Confirmá que no tocaste ningún archivo `.gs`.
 
 ---
 
-## ✅ Respuestas de verificación — Tarea 5 (2026-08-18)
+## 📋 Informe de auditoría responsive (Tarea 6 — referencia)
 
-**1. `fecha-3.html`: se borró**
+> Los puntos 1 a 4 de la Tarea 7 (arriba) corresponden a los ítems 1, 2, 3 y 5 de esta lista.
+> Los ítems 6 a 10 quedan para la Tarea 8, no los toques ahora.
 
-Evidencia para la decisión:
-- Búsqueda en todos los `.html`, `.gs` y `.md` del repo: ninguna referencia funcional.
-- `index.html:3413` menciona `fecha-3` solo en un comentario que explica el routing interno del SPA (`// Dynamic fecha routing: id like "fecha-3" → use the single "pg-fecha" page`) — el SPA usa IDs de página internos, no rutas a archivos `.html`.
-- `requerimiento-live-scoring.md` la menciona solo como contexto histórico de documentación.
-- `fecha-3.html` **no tiene la constante `FECHA_NUM`** (las versiones 4/5/6 sí la tienen) — es una versión anterior al patrón, con 423 líneas y sin media queries responsive, estructuralmente distinta e incompatible con `fecha.html?f=3`.
-- Conclusión: archivo huérfano, reemplazado por `fecha.html?f=3`. Eliminado con `git rm`.
+**1. Modal "Ver Líneas" — fila de jugador (`.fc-player`)** — `index.html` ~línea 680. `grid-template-columns:1fr 80px 80px` corta apodos largos en <380px. Fix: `@media(max-width:380px){ .fc-player{grid-template-columns:1fr 60px 60px} }`.
 
-**2. Propiedades `SES_` consultadas**
+**2. Modal "Ver Líneas" — matches (`.fc-matches`)** — `index.html` ~línea 710. `grid-template-columns:1fr 1fr` corta nombres tipo "GARCIA VS MOLINA". Fix: en el mismo `@media`, `grid-template-columns:1fr` (apilado).
 
-No fue posible consultar `PropertiesService` desde el repo local — eso requiere ejecutar código en el entorno de Apps Script. El conteo real de sesiones activas/vencidas solo lo podés ver vos corriendo `limpiarSesionesVencidas_()` manualmente desde el editor de Apps Script (verás el log inmediatamente después de ejecutarla).
+**3. `fecha.html` — card completa** — líneas 41–98. Su único `@media(max-width:440px)` no ajusta layout, solo padding/shadow. Mismos problemas que 1 y 2 en `.fc-player`/`.fc-matches`, más `.fc-info{grid-template-columns:1fr 1fr}` que en 320px deja cajas de ~140px comprimiendo ícono+label+valor. Fix: `@media(max-width:380px)` con las 3 reglas (ver Tarea 7, punto 2).
 
-**3. Patrón anti-duplicado**
+**4. Carga de tarjeta — hole circles (`.hole-circle`)** — `index.html` ~línea 950. `width:48px;height:48px` fijos; fila de 9 hoyos suma 432px+gaps, no entra en 360px. Fix: reducir a 36px en `@media(max-width:480px)`, o usar `calc()` auto-ajustable (ver Tarea 7, punto 3).
 
-Sí. `instalarTriggerLimpiezaSesiones()` sigue exactamente el mismo patrón que `instalarTriggerWarmup()`:
+**5. Live Scoring — sección completa** — `index.html` ~línea 1050–1200. Sin ningún `@media`. Botones `+`/`−` de puntaje son el punto crítico: si están por debajo del mínimo táctil (44px Apple/Material), el riesgo no es solo estético sino de carga de puntaje incorrecto en vivo (ver Tarea 7, punto 4).
 
-```js
-ScriptApp.getProjectTriggers().forEach(function(t) {
-  if (t.getHandlerFunction() === 'limpiarSesionesVencidas_') ScriptApp.deleteTrigger(t);
-});
-ScriptApp.newTrigger('limpiarSesionesVencidas_').timeBased().everyDays(1).create();
-```
-
-Si la ejecutás más de una vez, borra el trigger existente antes de crear el nuevo — no se duplica.
-
-**4. ¿Hay que ejecutarla manualmente una vez?**
-
-**Sí.** Apps Script no crea triggers automáticamente al deployar — requieren ser instalados explícitamente con permisos del propietario del script. El flujo es el mismo que usaste para `instalarTriggerWarmup`:
-
-1. Abrí el proyecto en script.google.com.
-2. Seleccioná la función `instalarTriggerLimpiezaSesiones` en el dropdown.
-3. Ejecutá y autorizá permisos si se solicitan.
-4. Verificá en *Triggers* (reloj) que aparece `limpiarSesionesVencidas_` con frecuencia diaria.
-
-Una vez instalado, corre solo todos los días sin más acción de tu parte.
-
-**5. Commits y push**
-
-Sí, dos commits separados pusheados a `main`:
-- `037ae08` — Remove fecha-3.html (orphan file)
-- `00f4604` — Add session cleanup: limpiarSesionesVencidas_ + trigger installer
+*(Ítems 6–10 — panel de administración, wizard de crear fecha, tabla ecléctica de perfil — quedan documentados para la Tarea 8, no incluidos acá para no alargar este archivo. Si Claude Code los necesita en detalle, puede volver a auditar esos componentes puntualmente al armar esa tarea.)*

@@ -641,6 +641,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .hole-circle.par{background:var(--off);border-color:var(--navy);}  /* par */
 .hole-circle.bogey{background:#fff1e8;border-color:#f97316;}  /* over par */
 .hole-circle.double{background:#fee;border-color:var(--red);}  /* 2+ over par */
+@media(max-width:480px){.hole-circle{width:36px;height:36px;}.hole-circle .hole-score{font-size:15px;}}
 
 /* Bonus checkboxes */
 .mit-bonus{display:flex;flex-direction:column;gap:8px;margin-top:16px;padding:10px;background:var(--off);border-radius:3px;}
@@ -665,7 +666,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .live-toggle-wrap{display:flex;border-radius:3px;overflow:hidden;border:var(--border);margin-bottom:10px;}
 .live-toggle-btn{flex:1;background:var(--white);color:var(--navy);border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;padding:9px;text-transform:uppercase;transition:.12s;}
 .live-toggle-btn.active{background:var(--navy);color:#fff;}
-.live-nav-btn{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;font-size:26px;line-height:1;padding:0 10px;font-weight:700;}
+.live-nav-btn{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;font-size:26px;line-height:1;padding:0 10px;font-weight:700;min-height:44px;display:inline-flex;align-items:center;}
 .live-nav-btn:hover{color:#fff;}
 .live-hoyo-hdr{display:flex;align-items:center;}
 .live-hoyo-title{flex:1;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
@@ -921,6 +922,7 @@ body.home-mode{
 .fc-mvs{color:var(--red);font-weight:900;font-size:8px;margin:0 4px;letter-spacing:.05em;}
 .fc-ftr{background:var(--navy);color:#fff;padding:9px;text-align:center;font-size:9px;letter-spacing:.18em;text-transform:uppercase;border-top:2px solid #c9a84c;}
 .fc-ftour{color:#c9a84c;font-weight:700;}
+@media(max-width:380px){.fc-player{grid-template-columns:1fr 60px 60px}.fc-matches{grid-template-columns:1fr}}
 
 @media(max-width:480px){
   .home-fecha-card{padding:18px 16px 14px;max-width:none;}
