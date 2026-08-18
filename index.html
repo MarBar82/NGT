@@ -1639,65 +1639,24 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   </div>
 </div>
 
-<!-- ════ HOME ════ -->
-<div class="pg on" id="pg-home">
-  <div class="home-hero">
-    <div class="home-content">
-
-      <div class="home-logo-top">
-        <img src="./logo.png" alt="Numa Golf Tour" class="home-logo-img">
-        <div class="home-title">NUMA GOLF TOUR</div>
-        <div class="home-subtitle">XIV · 2026</div>
-      </div>
-
-      <div class="home-actions">
-
-        <!-- Fecha activa: pastilla tipo card, visible solo cuando HOME_FECHA_ACTIVA -->
-        <button class="home-fecha-card" id="home-fecha-btn" style="display:none;cursor:pointer;border:none;text-align:left;width:100%;"
-                onclick="pg('mit',null)">
-          <div class="hfc-num" id="hfi-num">Fecha —</div>
-          <div class="hfc-rows">
-            <div class="hfc-row">
-              <div class="hfc-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4a2 2 0 0 1 2-2h11l-2 5h7l-2 5H6"/><path d="M4 22h6"/></svg>
-              </div>
-              <div class="hfc-label">Cancha</div>
-              <div class="hfc-value cancha" id="hfi-cancha">—</div>
-            </div>
-          </div>
-          <div class="hfi-ver-btn" style="border-radius:0 0 4px 0;">Cargar Score →</div>
-        </button>
-
-        <button class="home-btn home-btn-primary" onclick="enterTorneoMode()">
-          <span class="hb-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          </span>
-          <span class="hb-txt"><span class="hb-title">Ver Torneo</span><span class="hb-sub">Leaderboard · Fechas · Match</span></span>
-        </button>
-
-        <button class="home-btn" onclick="enterHistoriaMode()">
-          <span class="hb-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-          </span>
-          <span class="hb-txt"><span class="hb-title">Ver Historia</span><span class="hb-sub">Campeones · Años · Perfiles</span></span>
-        </button>
-
-        <button class="home-btn home-btn-admin" id="home-admin-btn" style="display:none;" onclick="pg('admin',null)">
-          <span class="hb-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93A10 10 0 0 0 19.07 19.07"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
-          </span>
-          <span class="hb-txt"><span class="hb-title">Admin</span><span class="hb-sub">Fechas · Canchas · Jugadores</span></span>
-        </button>
-
-      </div>
-
-    </div>
-  </div>
-</div>
-
 <!-- ════ LEADER BOARD ════ -->
 <div class="pg" id="pg-lb">
 <div class="wrap" style="padding:0 16px 16px 16px;">
+  <!-- Fecha activa: pastilla tipo card, visible solo cuando HOME_FECHA_ACTIVA -->
+  <button class="home-fecha-card" id="home-fecha-btn" style="display:none;cursor:pointer;border:none;text-align:left;width:100%;margin-bottom:12px;"
+          onclick="pg('mit',null)">
+    <div class="hfc-num" id="hfi-num">Fecha —</div>
+    <div class="hfc-rows">
+      <div class="hfc-row">
+        <div class="hfc-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4a2 2 0 0 1 2-2h11l-2 5h7l-2 5H6"/><path d="M4 22h6"/></svg>
+        </div>
+        <div class="hfc-label">Cancha</div>
+        <div class="hfc-value cancha" id="hfi-cancha">—</div>
+      </div>
+    </div>
+    <div class="hfi-ver-btn" style="border-radius:0 0 4px 0;">Cargar Score →</div>
+  </button>
   <div class="lb-topbar">
     <div class="sync-time" id="sync-time"></div>
     <button class="lb-refresh" onclick="loadLB()">↻ Actualizar</button>
@@ -7700,39 +7659,6 @@ function showPlayerFechaModal(lbName) {
 // ══════════ HOME ══════════
 let HOME_TARGET_MS = null;
 let HOME_TICK_INTERVAL = null;
-
-function loadHome(){
-  // Muestra cache inmediatamente, refresca en background con initData
-  // (así también actualiza el menú de fechas sin costo extra)
-  const cached = localStorage.getItem('ngt_proximaFecha');
-  if(cached){ try { applyHomeData(JSON.parse(cached)); } catch(e){} }
-
-  ngtApiGet('initData').then(r => {
-    const d = (r && r.data) || {};
-    // Fecha activa (con líneas confirmadas y no completada) — fuente primaria para el botón FECHA
-    if(d.fechaActiva !== undefined){
-      applyFechaActiva(d.fechaActiva);
-      try { localStorage.setItem('ngt_fechaActiva', JSON.stringify(d.fechaActiva)); } catch(e){}
-    }
-    if(d.proximaFecha !== undefined){
-      applyHomeData(d.proximaFecha);
-      try { localStorage.setItem('ngt_proximaFecha', JSON.stringify(d.proximaFecha)); } catch(e){}
-    }
-    if(d.fechasConEstado){
-      applyFechasMenu(d.fechasConEstado);
-      try { localStorage.setItem('ngt_fechasEstado', JSON.stringify(d.fechasConEstado)); } catch(e){}
-    }
-    if(d.jugadoresHist && !PERF_JUGADORES){
-      const list = d.jugadoresHist;
-      list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
-      PERF_JUGADORES = list;
-      try { localStorage.setItem('ngt_jugadoresHist', JSON.stringify(list)); } catch(e){}
-    }
-  }).catch(e => {
-    console.error('loadHome error:', e);
-    if(!cached){ const el = document.getElementById('hfi-cancha'); if(el) el.textContent = 'Error de conexión'; }
-  });
-}
 
 let HOME_FECHA_ACTIVA = 5; // número de fecha — default 5, se actualiza desde localStorage/API
 
