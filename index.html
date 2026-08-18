@@ -1025,39 +1025,49 @@ body.home-mode{
 /* Picker filtrable */
 .perf-picker-list{
   margin-top:12px;
-  max-height:360px;
-  overflow-y:auto;
-  border:1px solid var(--g2);
-  border-radius:3px;
-  background:var(--white);
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  padding:4px 0 2px;
 }
 .perf-pick-row{
-  display:flex;
-  width:100%;
+  display:inline-flex;
   align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding:10px 14px;
-  background:var(--white);
-  border:none;
-  border-bottom:1px solid var(--g1);
+  gap:6px;
+  padding:7px 14px;
+  background:var(--off);
+  border:1px solid var(--g2);
+  border-radius:20px;
   cursor:pointer;
   font-family:'Barlow Condensed',sans-serif;
   font-size:13px;
   text-align:left;
-  transition:background .12s ease;
+  transition:background .12s,border-color .12s;
 }
-.perf-pick-row:last-child{border-bottom:none;}
-.perf-pick-row:hover{background:var(--off);}
-.perf-pick-row.on{background:rgba(200,16,46,.08);border-left:3px solid var(--red);padding-left:11px;}
-.perf-pick-name{flex:1;color:var(--text);font-weight:600;}
-.perf-pick-debut{
-  font-size:10px;
-  color:var(--g4);
-  font-weight:500;
-  letter-spacing:.06em;
-  white-space:nowrap;
-}
+.perf-pick-row:hover{background:var(--g1);border-color:var(--g3);}
+.perf-pick-name{color:var(--text);font-weight:600;}
+.perf-pick-debut{font-size:10px;color:var(--g4);font-weight:500;letter-spacing:.06em;}
+
+/* ── FECHAS screen (13.3) ── */
+.fechas-pill{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;background:var(--white);border:1px solid var(--g1);border-radius:8px;margin-bottom:8px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;}
+.fechas-pill:hover,.fechas-pill:active{background:var(--off);}
+.fechas-pill-num{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--navy);white-space:nowrap;}
+.fechas-pill-info{flex:1;min-width:0;}
+.fechas-pill-cancha{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fechas-pill-date{font-size:11px;color:var(--g4);}
+.fechas-pill-stb{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--navy);white-space:nowrap;}
+
+/* ── Player fecha modal table (13.2) ── */
+.pf-modal-hdr{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;letter-spacing:.04em;color:var(--navy);margin-bottom:12px;}
+.pf-table{width:100%;border-collapse:collapse;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-variant-numeric:tabular-nums;}
+.pf-table th{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--g4);padding:4px 8px 6px;border-bottom:1px solid var(--g2);text-align:right;}
+.pf-table th:first-child{text-align:left;}
+.pf-table td{padding:7px 8px;border-bottom:1px solid var(--g1);color:var(--text);text-align:right;}
+.pf-table td:first-child{text-align:left;color:var(--navy);font-weight:700;}
+.pf-table tr:last-child td{border-bottom:none;}
+.pf-table .pf-total{font-weight:800;color:var(--red);}
+.pf-sparkline{margin-top:14px;padding-top:12px;border-top:1px solid var(--g1);}
+.pf-sparkline-lbl{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--g4);margin-bottom:6px;}
 
 .perf-hero{
   background:linear-gradient(135deg, var(--navy) 0%, #001a37 100%);
@@ -2410,6 +2420,14 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 </div>
 </div>
 
+<!-- ════ FECHAS SCREEN ════ -->
+<div class="pg" id="pg-fechas">
+<div class="wrap" style="max-width:680px;padding:16px;">
+  <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);margin-bottom:14px;">Mis Fechas</div>
+  <div id="fechas-screen-body"><div class="lb-status"><div class="spinner"></div>Cargando...</div></div>
+</div>
+</div>
+
 <!-- ════ BOTTOM NAVS (Epic 8) ════ -->
 
 <nav class="bottom-nav" id="bnav-torneo" style="display:none;" aria-label="Torneo">
@@ -2425,7 +2443,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
     Match
   </button>
-  <button class="bnav-item" id="bnt-fechas" onclick="setNavMode('torneo'); loadFechasMenu(); toggleFechasDrop(event)">
+  <button class="bnav-item" id="bnt-fechas" onclick="setNavMode('torneo'); pg('fechas',null)">
     <svg class="bnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     Fechas
   </button>
@@ -2528,7 +2546,7 @@ function refreshBonusCells(){
     const nameSpan = tr.querySelector('.lb-clickable-name');
     if(!nameSpan) return;
     const attr = nameSpan.getAttribute('onclick') || '';
-    const m = attr.match(/goToProfileFromName\('(.+?)'\)/);
+    const m = attr.match(/showPlayerFechaModal\('(.+?)'\)/);
     if(!m) return;
     const nombre = m[1].replace(/\\'/g, "'");
     // Buscar o crear el contenedor de emojis (justo después del span del nombre)
@@ -2610,7 +2628,7 @@ function gvizCallback(response){
       const winHtml = winCell(nombre);
       const top8Html = top8Cell(nombre);
       html+=`<tr><td class="c lb-col-pos">${posCell(pos,i)}</td><td class="c lb-col-mov">${mov}</td>
-        <td class="lb-col-name"><span class="lb-clickable-name" onclick="goToProfileFromName('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span><span class="lb-bonus-slot">${bonusEmojis(nombre)}</span></td>
+        <td class="lb-col-name"><span class="lb-clickable-name" onclick="showPlayerFechaModal('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span><span class="lb-bonus-slot">${bonusEmojis(nombre)}</span></td>
         <td class="c lb-col-num">${ptsHtml}</td><td class="c lb-col-num">${cell(stb)}</td>
         <td class="c lb-col-num">${cell(mch)}</td><td class="c lb-col-num">${pbHtml}</td>
         <td class="c lb-col-num">${cell(fjug)}</td><td class="c lb-col-num">${cell(fgan)}</td>
@@ -2722,7 +2740,7 @@ function refreshWinPctCells(){
     const nameSpan = tr.querySelector('.lb-clickable-name');
     if(!nameSpan) return;
     const attr = nameSpan.getAttribute('onclick') || '';
-    const m = attr.match(/goToProfileFromName\('(.+?)'\)/);
+    const m = attr.match(/showPlayerFechaModal\('(.+?)'\)/);
     if(!m) return;
     const nombre = m[1].replace(/\\'/g, "'");
     const tdWin = tr.querySelector('td.lb-td-win');
@@ -3407,7 +3425,7 @@ function pg(id,btn){
   window.scrollTo(0,0);
 
   // Update bottom nav active state
-  const pgNavMap = { lb:'bnt-lb', match:'bnt-match', historia:'bnh-historia', hist:'bnh-hist', perf:'bnh-perf' };
+  const pgNavMap = { lb:'bnt-lb', match:'bnt-match', fechas:'bnt-fechas', historia:'bnh-historia', hist:'bnh-hist', perf:'bnh-perf' };
   if(id === 'home') {
     document.querySelectorAll('.bnav-item').forEach(function(b){ b.classList.remove('on'); });
     const homeIds = { torneo:'bnt-home', historia:'bnh-home' };
@@ -3425,6 +3443,7 @@ function pg(id,btn){
   if(id==='match')loadMatch();
   if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else if(NGT_SESSION){ MIT_PLAYER={matricula:NGT_SESSION.mat,nombre:NGT_SESSION.nombre||'',apodo:NGT_SESSION.apodo||''}; showMitFechas(); } else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; } }
   if(id==='admin' && NGT_SESSION && NGT_SESSION.rol==='Admin'){ ADMIN_KEY_OK=NGT_SESSION.token; showAdminPanel(); }
+  if(id==='fechas') loadFechasScreen();
   if(fechaNum) loadFechaDinamica(fechaNum);
 }
 
@@ -6874,6 +6893,36 @@ function refreshFecha(num){
   });
 }
 
+// ── loadFechasScreen — renders the fechas pill list for the logged-in user ──
+function loadFechasScreen() {
+  const body = document.getElementById('fechas-screen-body');
+  if (!body) return;
+  if (!NGT_SESSION) {
+    body.innerHTML = '<div class="s dim" style="padding:24px;text-align:center;">Iniciá sesión para ver tus fechas</div>';
+    return;
+  }
+  body.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando fechas...</div>';
+  ngtApiGet('jugadorFechas', { matricula: NGT_SESSION.mat }).then(function(r) {
+    const rows = (r && r.ok && r.data) || [];
+    if (!rows.length) {
+      body.innerHTML = '<div class="s dim" style="padding:24px;text-align:center;">Sin fechas registradas</div>';
+      return;
+    }
+    body.innerHTML = rows.map(function(f) {
+      return '<button class="fechas-pill" onclick="pg(\'fecha-' + f.fecha + '\',null)">' +
+        '<div class="fechas-pill-num">NGT FECHA ' + f.fecha + '</div>' +
+        '<div class="fechas-pill-info">' +
+          '<div class="fechas-pill-cancha">' + (f.cancha || 'Cancha —') + '</div>' +
+          '<div class="fechas-pill-date">' + (f.fechaReal || '') + '</div>' +
+        '</div>' +
+        '<div class="fechas-pill-stb">' + f.st + '</div>' +
+      '</button>';
+    }).join('');
+  }).catch(function(e) {
+    body.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+  });
+}
+
 function loadFechaDinamica(num){
   if(!num) return;
   const container = document.getElementById('fecha-content');
@@ -7221,7 +7270,7 @@ function renderPerfPicker(filter){
   filtered.forEach(j => {
     const nameHtml = perfFmtName(j.nombre);
     const debut = j.anioDebut ? '<span class="perf-pick-debut">desde ' + j.anioDebut + '</span>' : '';
-    html += '<button class="perf-pick-row" onclick="selectPerf(\'' + j.matricula + '\', this)">' +
+    html += '<button class="perf-pick-row" onclick="selectPerf(\'' + j.matricula + '\')">' +
       '<span class="perf-pick-name">' + nameHtml + '</span>' +
       debut +
     '</button>';
@@ -7233,22 +7282,13 @@ function perfFilterPicker(value){
   renderPerfPicker(value);
 }
 
-function selectPerf(matricula, btn){
-  // Highlight selection visually
-  document.querySelectorAll('.perf-pick-row.on').forEach(b => b.classList.remove('on'));
-  if(btn) btn.classList.add('on');
+function selectPerf(matricula){
   loadPerfil(matricula);
-  // Scroll to perfil content
-  setTimeout(() => {
-    const el = document.getElementById('perf-content');
-    if(el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 200);
 }
 
 function loadPerfil(matricula){
-  if(!matricula){ document.getElementById('perf-content').innerHTML = ''; return; }
-  const cont = document.getElementById('perf-content');
-  cont.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando perfil...</div>';
+  if(!matricula) return;
+  openFloatingModal('<div class="lb-status"><div class="spinner"></div>Cargando perfil...</div>');
 
   // 1. Caché en memoria (this session)
   if(PERF_CACHE[matricula]){ renderPerfil(PERF_CACHE[matricula]); return; }
@@ -7267,10 +7307,9 @@ function loadPerfil(matricula){
     } catch(e){}
   }
 
-  cont.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando perfil...</div>';
   ngtApiGet('jugadorPerfil', { matricula: matricula }).then(r => {
     if(!r || !r.ok || !r.data || !r.data.ok){
-      cont.innerHTML = '<div class="lb-error">No se pudo cargar el perfil.</div>';
+      openFloatingModal('<div class="lb-error">No se pudo cargar el perfil.</div>');
       return;
     }
     const d = r.data;
@@ -7279,23 +7318,20 @@ function loadPerfil(matricula){
     try { sessionStorage.setItem(perfKey, JSON.stringify(d)); } catch(e){}
     renderPerfil(d);
   }).catch(e => {
-    cont.innerHTML = '<div class="lb-error">Error: ' + e.message + '</div>';
+    openFloatingModal('<div class="lb-error">Error: ' + e.message + '</div>');
   });
 }
 
 function renderPerfil(data){
-  const cont = document.getElementById('perf-content');
+  openFloatingModal(renderPerfilHtml(data));
+}
+
+function renderPerfilHtml(data){
   const id = data.identidad || {};
   const cif = data.cifras || {};
   const g = data.golpes || {};
   const b = data.bonus || {};
   const c = data.campeones || { p1:0, p2:0, p3:0, podios:[] };
-
-  // Hide picker card after selection (collapse to a "change player" link)
-  const pickerCard = document.querySelector('#pg-perf .adm-card');
-  if(pickerCard){
-    pickerCard.classList.add('perf-collapsed');
-  }
 
   // ── HERO con FOTO ──
   const apoFmt = perfFmtName(id.nombre);
@@ -7456,7 +7492,7 @@ function renderPerfil(data){
     '<div id="perf-ecl-result"><div class="s dim" style="text-align:center;padding:14px;">Elegí una cancha para ver tu mejor score histórico hoyo por hoyo</div></div>' +
   '</div>';
 
-  cont.innerHTML = html;
+  return html;
 }
 
 function loadEclectic(matricula, canchaId){
@@ -7631,48 +7667,89 @@ function closeRondaModal(){
 }
 
 // Navigate from leaderboard click to player profile.
-// LB names come from sheet 2026 NGT SCORE which use the same names as JUGADORES 2026.
-// We match strictly by apodo or full name to avoid false positives from substring matches.
 let LB_JUG_2026 = null;  // cached players from 2026 NGT
-function goToProfileFromName(lbName){
-  const findAndGo = () => {
-    const target = String(lbName || '').toUpperCase().trim();
-    let matricula = null;
-    if(LB_JUG_2026){
-      // Strategy 1: exact match on apodo (e.g. "RACHO" → matricula 89837)
-      let m = LB_JUG_2026.find(j => (j.apodo || '').toUpperCase().trim() === target);
-      if(!m){
-        // Strategy 2: exact match on nombre completo (e.g. "MARCOS BARCHI")
-        m = LB_JUG_2026.find(j => (j.nombre || '').toUpperCase().trim() === target);
-      }
-      if(!m){
-        // Strategy 3: target STARTS WITH apodo+space or contains the full apodo as a word
-        m = LB_JUG_2026.find(j => {
-          const ap = (j.apodo || '').toUpperCase().trim();
-          if(!ap) return false;
-          return target === ap || target.indexOf(ap + ' ') === 0 || target.indexOf(' ' + ap) >= 0;
-        });
-      }
-      if(m) matricula = m.matricula;
-    }
+// ── showPlayerFechaModal — LB name click → floating table of scores per fecha ──
+function showPlayerFechaModal(lbName) {
+  const target = String(lbName || '').toUpperCase().trim();
 
-    pg('perf', null);
-    if(matricula){
-      setTimeout(() => { selectPerf(matricula, null); }, 250);
-    } else {
-      console.warn('goToProfileFromName: no match for "' + lbName + '"');
-    }
-  };
+  function resolveMatricula() {
+    if (!LB_JUG_2026) return null;
+    let m = LB_JUG_2026.find(j => (j.apodo || '').toUpperCase().trim() === target);
+    if (!m) m = LB_JUG_2026.find(j => (j.nombre || '').toUpperCase().trim() === target);
+    if (!m) m = LB_JUG_2026.find(j => {
+      const ap = (j.apodo || '').toUpperCase().trim();
+      return ap && (target === ap || target.indexOf(ap + ' ') === 0 || target.indexOf(' ' + ap) >= 0);
+    });
+    return m ? m.matricula : null;
+  }
 
-  if(!LB_JUG_2026){
-    ngtApiGet('jugadores').then(r => {
+  function fetchAndShow(matricula) {
+    const displayName = lbName;
+    openFloatingModal(
+      '<div class="pf-modal-hdr">' + displayName + '</div>' +
+      '<div class="lb-status"><div class="spinner"></div>Cargando fechas...</div>'
+    );
+    if (!matricula) {
+      openFloatingModal('<div class="pf-modal-hdr">' + displayName + '</div><div class="s dim" style="padding:12px 0;">Jugador no encontrado</div>');
+      return;
+    }
+    ngtApiGet('jugadorFechas', { matricula: matricula }).then(function(r) {
+      const rows = (r && r.ok && r.data) || [];
+      if (!rows.length) {
+        openFloatingModal('<div class="pf-modal-hdr">' + displayName + '</div><div class="s dim" style="padding:12px 0;">Sin fechas registradas</div>');
+        return;
+      }
+      // Build table
+      let tbl = '<table class="pf-table"><thead><tr>' +
+        '<th>Fecha</th><th>STB</th><th>Match</th><th>Bonus</th><th>Total</th>' +
+        '</tr></thead><tbody>';
+      rows.forEach(function(f) {
+        const sub = f.cancha ? '<div style="font-size:10px;color:var(--g4);font-weight:400;">' + f.cancha + (f.fechaReal ? ' · ' + f.fechaReal : '') + '</div>' : '';
+        tbl += '<tr>' +
+          '<td>F' + f.fecha + sub + '</td>' +
+          '<td>' + f.st + '</td>' +
+          '<td>' + f.ma + '</td>' +
+          '<td>' + f.pb + '</td>' +
+          '<td class="pf-total">' + f.total + '</td>' +
+        '</tr>';
+      });
+      tbl += '</tbody></table>';
+      // Build sparkline of total per fecha
+      const totals = rows.map(function(f) { return f.total; });
+      const W = 200, H = 36;
+      const mn = Math.min.apply(null, totals), mx = Math.max.apply(null, totals);
+      const rng = mx - mn || 1;
+      const pts = totals.map(function(v, i) {
+        const x = totals.length === 1 ? W / 2 : (i / (totals.length - 1)) * (W - 8) + 4;
+        const y = H - 4 - ((v - mn) / rng) * (H - 8);
+        return x + ',' + y;
+      }).join(' ');
+      const dots = totals.map(function(v, i) {
+        const x = totals.length === 1 ? W / 2 : (i / (totals.length - 1)) * (W - 8) + 4;
+        const y = H - 4 - ((v - mn) / rng) * (H - 8);
+        return '<circle cx="' + x + '" cy="' + y + '" r="3" fill="var(--red)"/>';
+      }).join('');
+      const spark = '<div class="pf-sparkline"><div class="pf-sparkline-lbl">Total por fecha</div>' +
+        '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" preserveAspectRatio="none" style="display:block;">' +
+          '<polyline points="' + pts + '" fill="none" stroke="var(--red)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+          dots +
+        '</svg></div>';
+      openFloatingModal('<div class="pf-modal-hdr">' + displayName + '</div>' + tbl + spark);
+    }).catch(function(e) {
+      openFloatingModal('<div class="pf-modal-hdr">' + displayName + '</div><div class="lb-error">Error: ' + e.message + '</div>');
+    });
+  }
+
+  if (!LB_JUG_2026) {
+    ngtApiGet('jugadores').then(function(r) {
       LB_JUG_2026 = (r && r.data) || [];
-      findAndGo();
-    }).catch(() => findAndGo());
+      fetchAndShow(resolveMatricula());
+    }).catch(function() { fetchAndShow(null); });
   } else {
-    findAndGo();
+    fetchAndShow(resolveMatricula());
   }
 }
+
 // ══════════ end PERFILES ══════════
 
 // ══════════ HOME ══════════
