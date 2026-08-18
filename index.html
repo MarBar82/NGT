@@ -1055,9 +1055,9 @@ body.home-mode{
 /* ── FECHAS screen (13.3) ── */
 .fechas-pill{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;background:var(--white);border:1px solid var(--g1);border-radius:8px;margin-bottom:8px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;}
 .fechas-pill:hover,.fechas-pill:active{background:var(--off);}
-.fechas-pill-num{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--navy);white-space:nowrap;}
 .fechas-pill-info{flex:1;min-width:0;}
-.fechas-pill-cancha{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fechas-pill-num{font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);margin-bottom:2px;}
+.fechas-pill-cancha{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .fechas-pill-date{font-size:11px;color:var(--g4);}
 .fechas-pill-stb{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--navy);white-space:nowrap;}
 
@@ -1828,10 +1828,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
       <!-- Pane: Tarjeta -->
       <div id="live-pane-tarjeta">
-        <div class="live-toggle-wrap">
-          <button id="live-toggle-hoyo" class="live-toggle-btn active" onclick="liveSetView('hoyo')">Hoyo actual</button>
-          <button id="live-toggle-tarjeta-btn" class="live-toggle-btn" onclick="liveSetView('tarjeta')">Tarjeta completa</button>
-        </div>
         <div id="live-hoyo-view">
           <div class="adm-card">
             <div class="adm-card-hdr">
@@ -1847,7 +1843,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div class="adm-card-body" style="padding:0;" id="live-players-body"></div>
           </div>
         </div>
-        <div id="live-tarjeta-view" style="display:none;"></div>
         <div id="live-complete-view" style="display:none;" class="live-complete-wrap"></div>
       </div>
 
@@ -1943,8 +1938,8 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <div id="bonus-modal" class="sm-overlay" style="display:none;">
   <div class="sm-box" style="max-width:340px;" onclick="event.stopPropagation()">
     <div class="sm-hdr">
-      <div class="sm-player-name" id="bm-titulo"></div>
-      <div class="sm-hoyo" id="bm-subtitulo"></div>
+      <div class="sm-hoyo" id="bm-titulo"></div>
+      <div class="sm-par" id="bm-subtitulo"></div>
     </div>
     <div id="bm-opciones" style="padding:12px;display:flex;flex-direction:column;gap:8px;"></div>
   </div>
@@ -5713,7 +5708,7 @@ function loadHistoria() {
 
 // ── APP INIT ─────────────────────────────────────────────────────────────────
 
-window.addEventListener('load', function() {
+document.addEventListener('DOMContentLoaded', function() {
   // Check for existing session in localStorage (90-day persistence)
   const saved = sessionLoad();
   if (saved) {
@@ -5756,7 +5751,6 @@ let LIVE_MODE = false;
 let LIVE_LINEA_DATA = null;
 let LIVE_HOYO = 1;
 let LIVE_TARGET_MAT = null;
-let LIVE_VIEW = 'hoyo';
 let LIVE_TAB = 'tarjeta';
 let LIVE_POLL_TIMER = null;
 let LIVE_MATCH_LINEA = null;
@@ -5811,15 +5805,16 @@ function mitLogout(){
 }
 
 function showMitFechas(preloadedPromise){
+  document.getElementById('mit-login').style.display = 'none';
+  document.getElementById('mit-score').style.display = 'none';
+  document.getElementById('mit-live').style.display = 'none';
+
   // Si hay fecha activa, ir directo al live scoring sin mostrar la lista de fechas
   if(HOME_FECHA_ACTIVA){
     openLiveView(HOME_FECHA_ACTIVA, '');
     return;
   }
 
-  document.getElementById('mit-login').style.display = 'none';
-  document.getElementById('mit-score').style.display = 'none';
-  document.getElementById('mit-live').style.display = 'none';
   document.getElementById('mit-fechas').style.display = 'block';
 
   document.getElementById('mit-greeting').textContent = '👤 ' + fmtNameForAdm(MIT_PLAYER.nombre);
@@ -5996,7 +5991,7 @@ function openMitScore(fecha, cancha, colorTee){
 
 function mitBackToFechas(){
   if(LIVE_MODE){ livePollStop(); LIVE_MODE = false; }
-  showMitFechas();
+  pg('home', null);
 }
 
 function renderHoleHtml(h){
@@ -6190,7 +6185,6 @@ function openLiveView(fecha, cancha){
   LIVE_MODE = true;
   LIVE_TAB = 'tarjeta';
   LIVE_HOYO = 1;
-  LIVE_VIEW = 'hoyo';
   LIVE_LINEA_DATA = null;
   LIVE_MATCH_LINEA = null;
   LIVE_MATCH_DATA = {};
@@ -6286,15 +6280,8 @@ function liveRender(){
   if(chip) chip.textContent = 'Línea ' + d.lineaNum;
 
   if(LIVE_TAB === 'tarjeta'){
-    if(LIVE_VIEW === 'hoyo'){
-      document.getElementById('live-hoyo-view').style.display = 'block';
-      document.getElementById('live-tarjeta-view').style.display = 'none';
-      liveRenderHoyoActual();
-    } else {
-      document.getElementById('live-hoyo-view').style.display = 'none';
-      document.getElementById('live-tarjeta-view').style.display = 'block';
-      liveRenderTarjetaCompleta();
-    }
+    document.getElementById('live-hoyo-view').style.display = 'block';
+    liveRenderHoyoActual();
     var allComplete = d.jugadores.every(function(j){ return j.holesCargados === 18; });
     document.getElementById('live-complete-view').style.display = allComplete ? 'block' : 'none';
     if(allComplete) liveRenderComplete();
@@ -6338,23 +6325,6 @@ function liveRenderHoyoActual(){
   document.getElementById('live-players-body').innerHTML = html;
 }
 
-function liveRenderTarjetaCompleta(){
-  if(!LIVE_LINEA_DATA) return;
-  var d = LIVE_LINEA_DATA;
-  var html = '';
-  d.jugadores.forEach(function(jug){
-    var stbInfo = jug.stbTotal !== null ? ' · STB ' + jug.stbTotal : '';
-    html += '<div class="adm-card" style="margin-bottom:10px;">' +
-      '<div class="adm-card-hdr">' + jug.apodo + stbInfo + '</div>' +
-      '<div class="adm-card-body">' +
-        '<div class="nine-title">IDA · Hoyos 1-9</div><div class="holes-grid">';
-    for(var h = 0; h < 9; h++) html += renderHoleHtmlLive(h, jug);
-    html += '</div><div class="nine-title">VUELTA · Hoyos 10-18</div><div class="holes-grid">';
-    for(var h2 = 9; h2 < 18; h2++) html += renderHoleHtmlLive(h2, jug);
-    html += '</div></div></div>';
-  });
-  document.getElementById('live-tarjeta-view').innerHTML = html;
-}
 
 function renderHoleHtmlLive(h, jug){
   var pares = (LIVE_LINEA_DATA && LIVE_LINEA_DATA.pares) || [];
@@ -6487,6 +6457,8 @@ function liveRenderMatchBody(data){
 
 // ── Stableford tab ─────────────────────────────────────────────
 
+var LIVE_STB_DATA = null;
+
 function liveLoadStableford(){
   var el = document.getElementById('live-lb-body');
   if(!el) return;
@@ -6497,6 +6469,7 @@ function liveLoadStableford(){
         el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">Sin datos stableford para esta fecha</div>';
         return;
       }
+      LIVE_STB_DATA = r;
       var html = '<table style="width:100%;border-collapse:collapse;font-family:\'Barlow Condensed\',sans-serif;">' +
         '<thead><tr style="border-bottom:2px solid var(--border);font-size:11px;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;">' +
         '<th style="padding:6px 8px;text-align:left;width:30px;">#</th>' +
@@ -6507,7 +6480,8 @@ function liveLoadStableford(){
       r.data.forEach(function(p, i){
         var isMe = MIT_PLAYER && String(p.matricula) === String(MIT_PLAYER.matricula);
         var rowStyle = isMe ? 'background:rgba(var(--navy-rgb,30,58,138),.08);font-weight:700;' : '';
-        html += '<tr style="border-bottom:1px solid var(--border);' + rowStyle + '">' +
+        html += '<tr style="border-bottom:1px solid var(--border);cursor:pointer;' + rowStyle + '"' +
+          ' onclick="showPlayerScorecardModal(\'' + p.matricula + '\')">' +
           '<td style="padding:8px 8px;font-size:13px;color:var(--g4);">' + (i+1) + '</td>' +
           '<td style="padding:8px 8px;font-size:15px;">' + p.apodo + '</td>' +
           '<td style="padding:8px 8px;text-align:center;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
@@ -6521,6 +6495,26 @@ function liveLoadStableford(){
     .catch(function(){
       el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Error al cargar</div>';
     });
+}
+
+function showPlayerScorecardModal(matricula) {
+  if(!LIVE_STB_DATA || !LIVE_STB_DATA.data) return;
+  const p = LIVE_STB_DATA.data.find(function(d){ return String(d.matricula) === String(matricula); });
+  if(!p) return;
+  const pares = LIVE_STB_DATA.pares || [];
+  const indices = LIVE_STB_DATA.indices || [];
+  const canchaName = (LIVE_LINEA_DATA && LIVE_LINEA_DATA.canchaName) || '';
+  const hcpStr = p.hcp !== null && p.hcp !== undefined ? 'HCP ' + p.hcp : '';
+  const hdrParts = [p.apodo, hcpStr, canchaName].filter(Boolean);
+  const stbStr = p.stbTotal !== null && p.stbTotal !== undefined ? p.stbTotal + ' pts' : '—';
+  const html =
+    '<div class="pf-modal-hdr">' + hdrParts.join(' · ') + '</div>' +
+    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;color:var(--g4);margin-bottom:12px;">' +
+      'STB: <strong style="color:var(--navy);font-size:16px;">' + stbStr + '</strong>' +
+      ' · ' + p.holesCargados + '/18 hoyos' +
+    '</div>' +
+    renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || []);
+  openFloatingModal(html);
 }
 
 // ── Bonus tab ──────────────────────────────────────────────────
@@ -6629,7 +6623,7 @@ function liveSmConfirm(v){
 }
 
 function liveAutoAdvance(){
-  if(!LIVE_LINEA_DATA || LIVE_VIEW !== 'hoyo') return;
+  if(!LIVE_LINEA_DATA) return;
   var jugs = LIVE_LINEA_DATA.jugadores;
   var allDoneHere = jugs.every(function(j){ return j.scores[LIVE_HOYO - 1] !== null; });
   if(!allDoneHere) return;
@@ -6670,12 +6664,6 @@ function liveBonusSeleccionar(tipo, matricula){
   liveAutoAdvance();
 }
 
-function liveSetView(view){
-  LIVE_VIEW = view;
-  document.getElementById('live-toggle-hoyo').className = 'live-toggle-btn' + (view === 'hoyo' ? ' active' : '');
-  document.getElementById('live-toggle-tarjeta-btn').className = 'live-toggle-btn' + (view === 'tarjeta' ? ' active' : '');
-  liveRender();
-}
 
 function livePrevHoyo(){ if(LIVE_HOYO > 1){ LIVE_HOYO--; liveRender(); } }
 function liveNextHoyo(){ if(LIVE_HOYO < 18){ LIVE_HOYO++; liveRender(); } }
@@ -6830,7 +6818,7 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 // Auto-login player if session saved
-window.addEventListener('load', function(){
+document.addEventListener('DOMContentLoaded', function(){
   const savedMat = sessionStorage.getItem('ngt_player_mat');
   if(savedMat){
     ngtApiGet('login', { matricula: savedMat }).then(r => {
@@ -6916,8 +6904,8 @@ function loadFechasScreen() {
     }
     body.innerHTML = rows.map(function(f) {
       return '<button class="fechas-pill" onclick="pg(\'fecha-' + f.fecha + '\',null)">' +
-        '<div class="fechas-pill-num">NGT FECHA ' + f.fecha + '</div>' +
         '<div class="fechas-pill-info">' +
+          '<div class="fechas-pill-num">NGT FECHA ' + f.fecha + '</div>' +
           '<div class="fechas-pill-cancha">' + (f.cancha || 'Cancha —') + '</div>' +
           '<div class="fechas-pill-date">' + (f.fechaReal || '') + '</div>' +
         '</div>' +
@@ -6968,7 +6956,10 @@ function renderFechaDinamica(data){
 
   // ─── HEADER: info card ───
   const canchaName = data.cancha || 'Sin cancha';
-  let html = '<div class="f2-info-card">' +
+  let html = '<div style="margin-bottom:14px;">' +
+    '<button onclick="pg(\'fechas\',null)" style="background:none;border:none;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;padding:0;letter-spacing:.03em;">← Volver</button>' +
+  '</div>' +
+  '<div class="f2-info-card">' +
     '<div class="f2-info-item">' +
       '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="2"/><path d="M4 2l12 5-12 5"/><path d="M2 22h20" opacity=".35"/></svg>' +
       '<div class="f2-info-body"><span class="f2-info-lbl">Fecha ' + data.fecha + ' · Cancha</span><span class="f2-info-val">' + canchaName + '</span></div>' +
@@ -7541,13 +7532,19 @@ function renderEclectic(data){
  *   - Bogey (+1): cuadrado simple
  *   - Doble bogey o más (+2 o más): doble cuadrado
  */
-function renderTarjeta18Hoyos(scores, pares, scoreLabel){
+function renderTarjeta18Hoyos(scores, pares, scoreLabel, indices, stbPorHoyo){
   scoreLabel = scoreLabel || 'Score';
 
   function nine(from, to, lbl){
     let h = '<table class="perf-ecl-table"><thead><tr><th class="lbl">' + lbl + '</th>';
     for(let i = from; i < to; i++) h += '<th><div class="perf-ecl-hoyo">H' + (i+1) + '</div></th>';
     h += '<th><div class="perf-ecl-hoyo">Tot</div></th></tr></thead><tbody>';
+    // Hándicap row (optional)
+    if(indices && indices.length){
+      h += '<tr><td class="lbl">Hándicap</td>';
+      for(let i = from; i < to; i++) h += '<td><span class="perf-ecl-par">' + (indices[i] || '—') + '</span></td>';
+      h += '<td></td></tr>';
+    }
     // Par row
     h += '<tr><td class="lbl">Par</td>';
     let parTot = 0;
@@ -7568,6 +7565,19 @@ function renderTarjeta18Hoyos(scores, pares, scoreLabel){
       else allOk = false;
     }
     h += '<td>' + scoreSymbolHtml(allOk ? scoreTot : null, parTot, true) + '</td></tr>';
+    // Puntos STB row (optional)
+    if(stbPorHoyo && stbPorHoyo.length){
+      h += '<tr><td class="lbl">Puntos</td>';
+      let stbTot = 0;
+      let stbAllOk = true;
+      for(let i = from; i < to; i++){
+        const v = stbPorHoyo[i];
+        h += '<td><span class="perf-ecl-par">' + (v !== null && v !== undefined ? v : '—') + '</span></td>';
+        if(v !== null && v !== undefined) stbTot += v;
+        else stbAllOk = false;
+      }
+      h += '<td><span class="perf-ecl-par">' + (stbAllOk ? stbTot : '—') + '</span></td></tr>';
+    }
     h += '</tbody></table>';
     return h;
   }
