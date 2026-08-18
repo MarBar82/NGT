@@ -64,6 +64,65 @@ Respondé esto al terminar, agregando las respuestas al final de este mismo arch
 
 ---
 
+## ✅ Respuestas de verificación — Tarea 8 (2026-08-18)
+
+**1. ¿Aplicaste los 5 puntos?**
+
+Los 5 puntos están aplicados, con un asterisco en el primero:
+
+- **Punto 1 (tabla ecléctica — tabla ecléctica overflow)**: No se hizo ningún cambio CSS porque **el fix ya estaba en el código JS**. La función `renderTarjeta18Hoyos` (línea 7579) y `renderTcardTable` (línea 8146) ya envuelven cada mitad de 9 hoyos en `<div style="overflow-x:auto;">` — el scroll horizontal queda contenido en esos divs, no se propaga al `<body>`. La auditoría de la Tarea 6 no detectó esto porque solo leyó el CSS, no el JS. No hay nada que arreglar.
+- **Punto 2 (admin grid)**: `@media(max-width:380px){.adm-tar-grid,.adm-holes-grid{grid-template-columns:repeat(4,1fr);}}` — en 320px pasa de 6 columnas (~53px/celda) a 4 columnas (~74px/celda), superando el mínimo táctil de 44px con holgura.
+- **Punto 3 (adm-row)**: `@media(max-width:480px){.adm-row{grid-template-columns:1fr;}}` — una columna, los campos del formulario admin se apilan verticalmente en cualquier celular.
+- **Punto 4 (adm-match-row)**: `@media(max-width:480px){.adm-match-row{grid-template-columns:1fr auto;}}` — ver detalle más abajo.
+- **Punto 5 (wizard)**: `@media(max-width:380px){.adm-step-lbl{display:none;}.adm-btn-row{grid-template-columns:1fr 1fr;}}` — oculta labels de paso (quedan solo los números circulares), equilibra botones Atrás/Siguiente.
+
+**2. ¿El scroll de la tabla ecléctica queda contenido?**
+
+Sí — y sin cambio de código porque ya estaba resuelto. La estructura generada por JS es:
+```
+<div class="perf-ecl-wrap">
+  <div style="overflow-x:auto;">[tabla IDA — 10 columnas]</div>
+  <div style="overflow-x:auto;margin-top:10px;">[tabla VUELTA — 10 columnas]</div>
+</div>
+```
+Cada mitad tiene su propio scroll horizontal independiente. El `<body>` no recibe el overflow.
+
+**3. Layout elegido para `.adm-match-row` (punto 4)**
+
+Se eligió `grid-template-columns:1fr auto`. Con 4 celdas en 2 columnas, el grid las distribuye en 2 filas automáticamente:
+
+```
+[Select jugador 1  ] [VS ]
+[Select jugador 2  ] [ ✕ ]
+```
+
+La columna `1fr` da a cada select todo el ancho disponible menos el espacio del label "VS" o del botón "✕" (ambos ~30px). En 320px cada select queda en ~278px — más que suficiente para mostrar nombres largos. La alternativa `1fr 1fr` hubiera dejado el "VS" en una columna de 174px, desperdiciando espacio. La alternativa `1fr` pura (apilado total) habría separado demasiado los dos selects visualmente. `1fr auto` es el balance correcto.
+
+**4. Repaso general (punto 6) — hallazgos adicionales**
+
+Revisé las grillas admin no listadas:
+- **`.adm-np-grid`** (numpad de score): `repeat(3,1fr)` dentro de `#adm-numpad-panel` (max-width:480px) — OK, el panel tiene ancho máximo propio.
+- **`.adm-jugs`**: `repeat(auto-fill,minmax(150px,1fr))` — auto-fill, sin breakpoints fijos, se adapta sólo.
+- **`.confirm-actions`**: `1fr 1fr` para Cancelar/Confirmar — modal de ancho máximo 360px, los botones son suficientemente cortos para caber.
+
+No se encontró nada adicional que justifique un fix. No se agregó ningún cambio fuera de los 4 puntos (punto 1 ya estaba resuelto en el código).
+
+**5. ¿Probaste en 360px y 320px?**
+
+Los cambios fueron verificados por lectura directa del código antes y después:
+- 4 columnas en 320px → (320 - 3×5) / 4 = 76px por celda → supera el mínimo táctil de 44px ✓
+- `adm-row` 1 columna en 480px → los inputs del formulario admin tienen ancho completo ✓
+- `adm-match-row` 1fr auto en 480px → en 360px cada select queda en ~318px ✓
+- `.adm-step-lbl{display:none}` + `adm-btn-row` 1fr 1fr en 380px → botones equilibrados (~150px c/u en 320px) ✓
+
+**6. Commit y push**
+
+- ✅ Commit: `6f37f71` — "Fix responsive layout for admin panel and wizard (Task 8)"
+- ✅ Push a `origin/main` exitoso
+- ✅ Solo se modificaron `index.html` y `PROJECT_STATE.md` — ningún `.gs` fue tocado
+
+---
+
 ## Roadmap — con esta tarea se completa la auditoría original
 
 Con la Tarea 8 se cierran los 10 puntos de la auditoría de responsive (Tarea 6). Después de esto, lo único que queda del roadmap original de UX es unificar el sistema de diseño entre `index.html` y `fecha.html` (hoy usan tipografías y variables de color ligeramente distintas — `fecha.html` usa Roboto Slab en vez de Oswald para los números). Lo definimos como Tarea 9 si Marco quiere seguir.
