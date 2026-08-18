@@ -3,9 +3,6 @@
  */
 
 // ════════════ CONFIG ════════════
-const ADMIN_KEY = '89837';
-const ADMIN_MATRICULA = '89837';
-
 const SHEETS = {
   TARJETAS:  'TARJETAS',
   MATCH:     'MATCH',
@@ -270,12 +267,9 @@ function getRankingCampeones_() {
   return { ok: true, data: ranking };
 }
 
-// ── checkAdmin_ — acepta clave compartida legacy O token de sesión con ROL=Admin ──
 function checkAdmin_(key) {
   if (!key) return false;
-  const k = String(key).trim();
-  if (k === ADMIN_KEY) return true;
-  const sess = validarSesion_(k);
+  const sess = validarSesion_(String(key).trim());
   return !!(sess && sess.rol === 'Admin');
 }
 function checkPlayer_(matricula, apodo) {
@@ -4663,7 +4657,6 @@ function doGet(e) {
         result = { ok: !!p, player: p };
         break;
       }
-      case 'loginAdmin':       result = { ok: checkAdmin_(params.key) }; break;
       case 'validateSession': {
         const sess = validarSesion_(params.token);
         if (!sess) { result = { ok: false, error: 'Sesión inválida' }; break; }

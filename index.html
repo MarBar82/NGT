@@ -5723,18 +5723,6 @@ document.addEventListener('DOMContentLoaded', function() {
     loginShowOverlay();
   }
 
-  // Legacy: restore admin key from sessionStorage (for users who haven't migrated to PIN yet)
-  const legacyKey = sessionStorage.getItem('ngt_admin_key');
-  if (legacyKey && !NGT_SESSION) {
-    ngtApiGet('loginAdmin', { key: legacyKey }).then(function(r) {
-      if (r.ok) {
-        ADMIN_KEY_OK = legacyKey;
-        // Don't show admin panel automatically; just keep key available
-      } else {
-        sessionStorage.removeItem('ngt_admin_key');
-      }
-    });
-  }
 });
 
 
