@@ -453,11 +453,28 @@ function getJugadorFechas_(matricula) {
     }
   } catch(e) {}
 
-  // fechaNum → canchaName from FECHA_META
+  // fechaNum → canchaName: TARJETAS first (covers all fechas with cards), FECHA_META as fallback
   const fechaCanchaMap = {};
   try {
+    const shT = getSheet_(SHEETS.TARJETAS);
+    if (shT) {
+      const lastT = shT.getLastRow();
+      if (lastT >= 2) {
+        const tRows = shT.getRange(2, 1, lastT - 1, 4).getValues(); // A=fecha, B=mat, C=hcp, D=canchaId
+        tRows.forEach(function(row) {
+          const fKey = String(parseInt(row[0]) || row[0]);
+          if (!fKey || fKey === '0' || fechaCanchaMap[fKey]) return;
+          const cId = String(row[3] || '').trim();
+          if (cId) fechaCanchaMap[fKey] = lookupCanchaName_(cId) || cId;
+        });
+      }
+    }
+  } catch(e) {}
+  try {
     const meta = JSON.parse(PropertiesService.getDocumentProperties().getProperty('FECHA_META') || '{}');
-    Object.keys(meta).forEach(function(k) { fechaCanchaMap[k] = meta[k].canchaName || ''; });
+    Object.keys(meta).forEach(function(k) {
+      if (!fechaCanchaMap[k] && meta[k].canchaName) fechaCanchaMap[k] = meta[k].canchaName;
+    });
   } catch(e) {}
 
   return myRows.map(function(r) {
@@ -734,8 +751,8 @@ function getMatchesFullForFecha_(fecha) {
 
     const hcpA   = parseFloat(tarjA[2]);
     const hcpB   = parseFloat(tarjB[2]);
-    const hcp85A = isNaN(hcpA) ? 0 : Math.round(hcpA * 0.85);
-    const hcp85B = isNaN(hcpB) ? 0 : Math.round(hcpB * 0.85);
+    const hcp85A = isNaN(hcpA) ? 0 : hcpA;
+    const hcp85B = isNaN(hcpB) ? 0 : hcpB;
     const ayA = Math.max(0, hcp85A - hcp85B);
     const ayB = Math.max(0, hcp85B - hcp85A);
     const bcA = Math.max(0, ayA - 18);
@@ -3660,8 +3677,8 @@ function calcStablefordHole_(score, par, indice, hcpJuego) {
   const s = parseInt(score);
   if (isNaN(s) || s <= 0) return null;
   if (hcpJuego === null || hcpJuego === undefined || hcpJuego === '') return null;
-  const hcp85 = Math.round(parseFloat(hcpJuego) * 0.85);
-  const extras = Math.floor((hcp85 + 18 - indice) / 18);
+  const hcpEff = Math.round(parseFloat(hcpJuego));
+  const extras = Math.floor((hcpEff + 18 - indice) / 18);
   const netoDiff = s - par - extras;
   if (netoDiff <= -3) return 5;
   if (netoDiff === -2) return 4;
@@ -4239,7 +4256,7 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
 
     playerMap[mat] = {
       hcp:             isNaN(hcp) ? 0 : hcp,
-      hcp85:           isNaN(hcp) ? 0 : Math.round(hcp * 0.85),
+      hcp85:           isNaN(hcp) ? 0 : hcp,
       scores:          scores,
       ld:              (r[22] === 1 || r[22] === true || String(r[22]) === '1'),
       ba:              (r[23] === 1 || r[23] === true || String(r[23]) === '1'),
@@ -4701,18 +4718,22 @@ function getStbFecha_(params) {
     const hcp = parseFloat(r[2]);
     const scores = r.slice(4, 22).map(function(v){ return (v === '' || v === null || v === undefined) ? null : Number(v); });
     const holesCargados = scores.filter(function(s){ return s !== null; }).length;
-    let stbTotal = 0;
-    for (let h = 0; h < 18; h++) {
-      if (scores[h] !== null) stbTotal += calcStablefordHole_(scores[h], cpPares[h] || null, cpIndices[h] || null, isNaN(hcp) ? 0 : hcp);
-    }
+    const hcpEff = isNaN(hcp) ? 0 : hcp;
+    const stbPorHoyo = scores.map(function(s, h) {
+      return s !== null ? calcStablefordHole_(s, cpPares[h] || null, cpIndices[h] || null, hcpEff) : null;
+    });
+    const stbTotal = stbPorHoyo.reduce(function(t, v){ return t + (v || 0); }, 0);
     const gross = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
     const jug = jugMap[mat] || {};
     results.push({
       matricula:     mat,
       apodo:         ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)) + '').toUpperCase(),
+      hcp:           isNaN(hcp) ? null : hcp,
       stbTotal:      holesCargados > 0 ? stbTotal : null,
       holesCargados: holesCargados,
       grossParcial:  gross,
+      scores:        scores,
+      stbPorHoyo:    stbPorHoyo,
     });
   }
 
@@ -4723,7 +4744,7 @@ function getStbFecha_(params) {
     return b.stbTotal - a.stbTotal;
   });
 
-  return { ok: true, data: results };
+  return { ok: true, data: results, pares: cpPares, indices: cpIndices };
 }
 
 // ════════════ HCP INDEX — Actualización semanal desde VistagolfSouth ════════════

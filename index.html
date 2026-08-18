@@ -6404,16 +6404,22 @@ function liveRenderMatchBody(data){
     var dn = est.indexOf(' DN') >= 0;
     var up = est.indexOf(' UP') >= 0;
     var as = est === 'AS';
+    // j1 wins when UP or closed-out without DN (e.g. "3&2")
+    var j1Wins = up || (est.indexOf('&') >= 0 && !dn);
+    var j2Wins = dn;
 
-    // Cabecera del match: fondo del color del jugador que va ganando
-    var l1Bg = up ? C1 : (as ? 'var(--g2)' : 'transparent');
-    var l2Bg = dn ? C2 : (as ? 'var(--g2)' : 'transparent');
-    var l1Txt = up ? '#fff' : 'var(--text)';
-    var l2Txt = dn ? '#fff' : 'var(--text)';
-    var cBg = up ? C1 : dn ? C2 : as ? 'var(--g3)' : 'var(--g2)';
+    // Always show "X UP" from the winner's perspective
+    var stripped = est.replace(' DN', '');
+    var displayEst = (dn && stripped.indexOf('&') < 0) ? stripped + ' UP' : stripped;
+
+    var l1Bg = j1Wins ? C1 : (as ? 'var(--g2)' : 'transparent');
+    var l2Bg = j2Wins ? C2 : (as ? 'var(--g2)' : 'transparent');
+    var l1Txt = j1Wins ? '#fff' : 'var(--text)';
+    var l2Txt = j2Wins ? '#fff' : 'var(--text)';
+    var cBg = j1Wins ? C1 : j2Wins ? C2 : as ? 'var(--g3)' : 'var(--g2)';
 
     var scoreHtml = m.hoyosJugados > 0
-      ? '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:#fff;line-height:1;">' + (est || '–') + '</span>' +
+      ? '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:#fff;line-height:1;">' + (displayEst || '–') + '</span>' +
         '<span style="font-size:9px;color:rgba(255,255,255,.7);display:block;">H.' + m.hoyosJugados + ' · ' + m.hoyosRestantes + ' rest.</span>'
       : '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,.5);">No iniciado</span>';
 
@@ -6426,13 +6432,13 @@ function liveRenderMatchBody(data){
     // Barra de estado
     html += '<div style="display:flex;height:48px;">' +
       '<div style="flex:1;background:' + l1Bg + ';display:flex;align-items:center;padding:0 12px;">' +
-        '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (up ? '700' : '400') + ';color:' + l1Txt + ';">' + m.j1Apodo + '</span>' +
+        '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (j1Wins ? '700' : '400') + ';color:' + l1Txt + ';">' + m.j1Apodo + '</span>' +
       '</div>' +
       '<div style="width:80px;flex-shrink:0;background:' + cBg + ';display:flex;flex-direction:column;align-items:center;justify-content:center;">' +
         scoreHtml +
       '</div>' +
       '<div style="flex:1;background:' + l2Bg + ';display:flex;align-items:center;justify-content:flex-end;padding:0 12px;">' +
-        '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (dn ? '700' : '400') + ';color:' + l2Txt + ';">' + m.j2Apodo + '</span>' +
+        '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (j2Wins ? '700' : '400') + ';color:' + l2Txt + ';">' + m.j2Apodo + '</span>' +
       '</div>' +
     '</div>';
     // Hoyos
