@@ -66,3 +66,37 @@ Respondé esto al terminar, agregando las respuestas al final de este mismo arch
 **5. Live Scoring — sección completa** — `index.html` ~línea 1050–1200. Sin ningún `@media`. Botones `+`/`−` de puntaje son el punto crítico: si están por debajo del mínimo táctil (44px Apple/Material), el riesgo no es solo estético sino de carga de puntaje incorrecto en vivo (ver Tarea 7, punto 4).
 
 *(Ítems 6–10 — panel de administración, wizard de crear fecha, tabla ecléctica de perfil — quedan documentados para la Tarea 8, no incluidos acá para no alargar este archivo. Si Claude Code los necesita en detalle, puede volver a auditar esos componentes puntualmente al armar esa tarea.)*
+
+---
+
+## ✅ Respuestas de verificación — Tarea 7 (2026-08-18)
+
+**1. ¿Aplicaste los 4 puntos?**
+
+Sí, los 4 están aplicados:
+- **Punto 1** (`index.html` — `.fc-player` + `.fc-matches`): `@media(max-width:380px)` agregado después de `.fc-ftour` (línea ~923). `.fc-player` pasa a `1fr 60px 60px` y `.fc-matches` a `1fr` (una columna).
+- **Punto 2** (`fecha.html` — card completa): `@media(max-width:380px)` agregado al final del `<style>`. Cubre `.fc-player`, `.fc-matches`, y `.fc-info` (esta última pasa a `1fr` para apilar las cajas de info).
+- **Punto 3** (`index.html` — `.hole-circle`): `@media(max-width:480px)` que reduce a `36px × 36px` y baja `.hole-score` a `font-size:15px`.
+- **Punto 4** (`index.html` — `.live-nav-btn`): `min-height:44px;display:inline-flex;align-items:center;` agregado a la regla base.
+
+**2. Opción elegida para `.hole-circle` (punto 3): Opción A**
+
+Se eligió `@media(max-width:480px)` con tamaño fijo (36px) en lugar del `calc()`. Motivo: el resto del archivo usa breakpoints fijos (`480px`, `540px`, `680px`) — consistencia con el patrón establecido. Además `calc((100% - 64px) / 9)` depende de un ancho de contenedor fijo (64px de margen) que podría variar según el contexto de la pantalla, mientras que 36px es predecible en todos los casos. Con 36px × 9 hoyos = 324px + 8 gaps de ~5px = ~364px, entra en 375px sin problemas.
+
+**3. Tamaño de `.live-nav-btn` antes y después**
+
+- **Antes**: `font-size:26px;line-height:1;padding:0 10px` → altura efectiva del tap target: ~26px (solo la altura del carácter "‹"/"›", cero padding vertical). Muy por debajo del mínimo táctil de 44px.
+- **Después**: se agregó `min-height:44px;display:inline-flex;align-items:center;` a la regla base. El botón ahora tiene garantizado al menos 44px de altura en todos los breakpoints, centrando verticalmente el carácter "‹"/"›". Cumple el estándar Apple HIG / Material Design de 44×44px mínimo.
+
+**4. Efectos secundarios observados**
+
+Los cambios son quirúrgicos y no generaron regresiones visibles:
+- El `@media(max-width:380px)` de `.fc-matches{grid-template-columns:1fr}` hace que los match cards se apilen verticalmente en pantallas muy chicas. El texto de `.fc-mpair` ("GARCIA VS MOLINA") ocupa el ancho completo del card, lo que en realidad mejora la legibilidad respecto al layout original comprimido.
+- El `.live-nav-btn` con `display:inline-flex` puede cambiar levemente el spacing en el `flex` container padre (`.live-hoyo-hdr`), pero como el contenedor usa `align-items:center` y el botón sigue siendo `inline`, no hay impacto visual perceptible.
+- El `hole-circle` en 36px conserva proporcionalmente bien el número de golpes y la indicación de par (`.hole-par-bg` escalará junto al círculo porque usa `position:absolute` relativo al círculo).
+
+**5. Commit y push**
+
+- ✅ Commit: `b02ad55` — "Fix responsive layout on narrow screens (<380px / <480px)"
+- ✅ Push a `origin/main` exitoso
+- ✅ Solo se tocaron `index.html`, `fecha.html` y este `PROJECT_STATE.md` — ningún `.gs` fue modificado
