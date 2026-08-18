@@ -1566,6 +1566,10 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
         Cambiar PIN
       </button>
+      <button class="ham-item" onclick="hamburgerClose(); pg('historia-hub',null)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        Historia
+      </button>
       <button class="ham-item" id="ham-admin-btn" style="display:none;" onclick="hamburgerClose(); pg('admin',null)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93A10 10 0 0 0 19.07 19.07"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
         Administración
@@ -1667,23 +1671,57 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 </div>
 </div>
 
-<!-- ════ PERFILES ════ -->
-<div class="pg" id="pg-perf">
+<!-- ════ HISTORIA HUB ════ -->
+<div class="pg" id="pg-historia-hub">
 <div class="wrap" style="max-width:780px;padding:16px;">
 
-  <!-- Player picker -->
-  <div class="adm-card" style="margin-bottom:14px;" onclick="if(this.classList.contains('perf-collapsed')){this.classList.remove('perf-collapsed');event.stopPropagation();}">
-    <div class="adm-card-hdr">👤 Perfil de Jugador</div>
-    <div class="adm-card-body" onclick="event.stopPropagation();">
-      <label class="adm-label">Buscar jugador</label>
-      <input type="text" id="perf-search" class="adm-input" placeholder="Escribí un nombre o apodo..." oninput="perfFilterPicker(this.value)" autocomplete="off">
-      <div id="perf-picker-list" class="perf-picker-list">
-        <div class="s dim" style="padding:14px;text-align:center;">Cargando jugadores...</div>
+  <div class="adm-tabs hist-hub-tabs" style="margin-bottom:16px;">
+    <button class="adm-tab on" id="htab-campeones" onclick="histHubTab('campeones')">Campeones</button>
+    <button class="adm-tab" id="htab-anos" onclick="histHubTab('anos')">Años</button>
+    <button class="adm-tab" id="htab-perfiles" onclick="histHubTab('perfiles')">Perfiles</button>
+  </div>
+
+  <!-- Panel: Ranking Histórico (was pg-historia) -->
+  <div id="htab-panel-campeones">
+    <div class="lb-topbar">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);">Ranking Histórico</div>
+      <div class="sync-time" id="historia-sync" style="margin-left:auto;"></div>
+      <button class="lb-refresh" onclick="loadHistoria()">↻ Actualizar</button>
+    </div>
+    <div id="historia-body"><div class="lb-status"><div class="spinner"></div>Cargando ranking...</div></div>
+  </div>
+
+  <!-- Panel: Años / Head-to-Head (was pg-hist) -->
+  <div id="htab-panel-anos" style="display:none;">
+    <div class="lb-topbar">
+      <div class="filter-group">
+        <label for="hist-year">Año</label>
+        <select id="hist-year" onchange="filterHistByYear()">
+          <option value="">Todos</option>
+        </select>
       </div>
+      <div class="sync-time" id="hist-sync" style="margin-left:auto;"></div>
+      <button class="lb-refresh" onclick="loadHist()">↻ Actualizar</button>
+    </div>
+    <div class="lb-wrap">
+      <div id="hist-body"><div class="lb-status"><div class="spinner"></div>Cargando historia del tour...</div></div>
     </div>
   </div>
 
-  <div id="perf-content"></div>
+  <!-- Panel: Perfiles (was pg-perf) -->
+  <div id="htab-panel-perfiles" style="display:none;">
+    <div class="adm-card" id="perf-picker-card" style="margin-bottom:14px;" onclick="if(this.classList.contains('perf-collapsed')){this.classList.remove('perf-collapsed');event.stopPropagation();}">
+      <div class="adm-card-hdr">👤 Perfil de Jugador</div>
+      <div class="adm-card-body" onclick="event.stopPropagation();">
+        <label class="adm-label">Buscar jugador</label>
+        <input type="text" id="perf-search" class="adm-input" placeholder="Escribí un nombre o apodo..." oninput="perfFilterPicker(this.value)" autocomplete="off">
+        <div id="perf-picker-list" class="perf-picker-list">
+          <div class="s dim" style="padding:14px;text-align:center;">Cargando jugadores...</div>
+        </div>
+      </div>
+    </div>
+    <div id="perf-content"></div>
+  </div>
 
 </div>
 </div>
@@ -2343,37 +2381,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   <div class="lb-wrap">
     <div id="match-body"><div class="lb-status"><div class="spinner"></div>Cargando matches...</div></div>
   </div>
-</div>
-</div>
-
-<!-- ════ HISTORIA ════ -->
-<div class="pg" id="pg-hist">
-<div class="wrap" style="padding:0 16px 16px 16px;">
-  <div class="lb-topbar">
-    <div class="filter-group">
-      <label for="hist-year">Año</label>
-      <select id="hist-year" onchange="filterHistByYear()">
-        <option value="">Todos</option>
-      </select>
-    </div>
-    <div class="sync-time" id="hist-sync" style="margin-left:auto;"></div>
-    <button class="lb-refresh" onclick="loadHist()">↻ Actualizar</button>
-  </div>
-  <div class="lb-wrap">
-    <div id="hist-body"><div class="lb-status"><div class="spinner"></div>Cargando historia del tour...</div></div>
-  </div>
-</div>
-</div>
-
-<!-- ════ HISTORIA — Ranking Campeones ════ -->
-<div class="pg" id="pg-historia">
-<div class="wrap" style="max-width:680px;padding:16px;">
-  <div class="lb-topbar">
-    <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);">Ranking Histórico</div>
-    <div class="sync-time" id="historia-sync" style="margin-left:auto;"></div>
-    <button class="lb-refresh" onclick="loadHistoria()">↻ Actualizar</button>
-  </div>
-  <div id="historia-body"><div class="lb-status"><div class="spinner"></div>Cargando ranking...</div></div>
 </div>
 </div>
 
@@ -3334,8 +3341,7 @@ function pg(id,btn){
     const ael = document.getElementById(pgNavMap[id]); if(ael) ael.classList.add('on');
   }
   if(id==='lb')loadLB();
-  if(id==='hist')loadHist();
-  if(id==='perf')loadPerfPicker();
+  if(id==='historia-hub')histHubTab('campeones');
   if(id==='match')loadMatch();
   if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else if(NGT_SESSION){ MIT_PLAYER={matricula:NGT_SESSION.mat,nombre:NGT_SESSION.nombre||'',apodo:NGT_SESSION.apodo||''}; showMitFechas(); } else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; } }
   if(id==='admin' && NGT_SESSION && NGT_SESSION.rol==='Admin'){ ADMIN_KEY_OK=NGT_SESSION.token; showAdminPanel(); }
@@ -5502,10 +5508,30 @@ function hamburgerClose() {
   if (panel) panel.classList.remove('open');
 }
 
+function histHubTab(tab){
+  document.querySelectorAll('.hist-hub-tabs .adm-tab').forEach(function(t){ t.classList.remove('on'); });
+  document.getElementById('htab-panel-campeones').style.display = 'none';
+  document.getElementById('htab-panel-anos').style.display = 'none';
+  document.getElementById('htab-panel-perfiles').style.display = 'none';
+  if(tab === 'campeones'){
+    document.getElementById('htab-campeones').classList.add('on');
+    document.getElementById('htab-panel-campeones').style.display = '';
+    loadHistoria();
+  } else if(tab === 'anos'){
+    document.getElementById('htab-anos').classList.add('on');
+    document.getElementById('htab-panel-anos').style.display = '';
+    loadHist();
+  } else if(tab === 'perfiles'){
+    document.getElementById('htab-perfiles').classList.add('on');
+    document.getElementById('htab-panel-perfiles').style.display = '';
+    loadPerfPicker();
+  }
+}
+
 function miPerfilDirecto() {
   if (!NGT_SESSION) return;
-  pg('perf', null);
-  loadPerfPicker();
+  pg('historia-hub', null);
+  histHubTab('perfiles');
   // Auto-select the logged-in player
   setTimeout(function() {
     const inp = document.getElementById('perf-search');
@@ -7106,7 +7132,7 @@ function perfFmtName(nombreFull){
 
 function loadPerfPicker(){
   // Make sure picker is expanded when entering this page
-  const pickerCard = document.querySelector('#pg-perf .adm-card');
+  const pickerCard = document.getElementById('perf-picker-card');
   if(pickerCard) pickerCard.classList.remove('perf-collapsed');
   // Clear previous content
   const cont = document.getElementById('perf-content');
