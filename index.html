@@ -1744,7 +1744,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <div class="adm-card">
       <div class="adm-card-hdr">
         <span id="mit-greeting">Mis Fechas</span>
-        <button onclick="mitLogout()" style="float:right;background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:11px;">Salir ✕</button>
       </div>
       <div class="adm-card-body">
         <div id="mit-fechas-list">Cargando...</div>
@@ -1971,7 +1970,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <div id="adm-home">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
         <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);">⚙ Administrador</div>
-        <button onclick="pg('home',null)" style="background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);cursor:pointer;">Salir ✕</button>
+        <button onclick="pg('lb',null)" style="background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);cursor:pointer;">Salir ✕</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <button class="adm-big-btn" onclick="admGoTo('crear')">
@@ -5893,7 +5892,7 @@ function openMitScore(fecha, cancha, colorTee){
 
 function mitBackToFechas(){
   if(LIVE_MODE){ livePollStop(); LIVE_MODE = false; }
-  pg('home', null);
+  showMitFechas();
 }
 
 function renderHoleHtml(h){
@@ -6144,7 +6143,7 @@ function livePoll(){
           document.getElementById('live-loading').innerHTML =
             '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
             '<p style="color:var(--red);font-size:14px;">' + (r && r.error ? r.error : 'Error de conexión') + '</p>' +
-            '<button class="adm-btn-primary" onclick="pg(\'home\',null)" style="margin-top:8px;">← Volver</button></div>';
+            '<button class="adm-btn-primary" onclick="pg(\'lb\',null)" style="margin-top:8px;">← Volver</button></div>';
         } else if(offEl){
           offEl.textContent = r && r.error ? r.error : 'Error al actualizar';
           offEl.style.display = 'block';
@@ -6157,7 +6156,7 @@ function livePoll(){
         document.getElementById('live-loading').innerHTML =
           '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
           '<p style="color:var(--red);font-size:14px;">Sin conexión</p>' +
-          '<button class="adm-btn-primary" onclick="pg(\'home\',null)" style="margin-top:8px;">← Volver</button></div>';
+          '<button class="adm-btn-primary" onclick="pg(\'lb\',null)" style="margin-top:8px;">← Volver</button></div>';
       } else if(offEl){
         offEl.textContent = 'Sin conexión · reintentando...';
         offEl.style.display = 'block';
