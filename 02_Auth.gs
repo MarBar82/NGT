@@ -203,3 +203,40 @@ function checkPlayerByMat_(matricula) {
   }
   return false;
 }
+
+// ── Limpieza de sesiones vencidas ──────────────────────────────────────────
+
+function limpiarSesionesVencidas_() {
+  const props = PropertiesService.getDocumentProperties();
+  const all = props.getProperties();
+  const now = Date.now();
+  const totalSes = Object.keys(all).filter(function(k){ return k.indexOf('SES_') === 0; }).length;
+  let borradas = 0;
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf('SES_') !== 0) return;
+    try {
+      const s = JSON.parse(all[key]);
+      if (now > s.exp) {
+        props.deleteProperty(key);
+        borradas++;
+      }
+    } catch(e) {
+      // Propiedad malformada — borrar también para no acumular basura
+      props.deleteProperty(key);
+      borradas++;
+    }
+  });
+  Logger.log('limpiarSesionesVencidas_: borradas=' + borradas + ' de ' + totalSes + ' sesiones SES_ totales');
+}
+
+function instalarTriggerLimpiezaSesiones() {
+  // Eliminar triggers existentes para no duplicar
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'limpiarSesionesVencidas_') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('limpiarSesionesVencidas_')
+    .timeBased()
+    .everyDays(1)
+    .create();
+  Logger.log('Trigger limpieza de sesiones instalado: diario.');
+}
