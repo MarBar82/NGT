@@ -6195,8 +6195,6 @@ function openLiveView(fecha, cancha){
   document.getElementById('live-content').style.display = 'none';
   document.getElementById('live-offline-msg').style.display = 'none';
   document.getElementById('live-title').textContent = 'Fecha ' + fecha + ' · ' + cancha;
-  document.getElementById('live-toggle-hoyo').className = 'live-toggle-btn active';
-  document.getElementById('live-toggle-tarjeta-btn').className = 'live-toggle-btn';
   ['tarjeta','stableford','match','bonus'].forEach(function(t){
     document.getElementById('live-pane-' + t).style.display = t === 'tarjeta' ? 'block' : 'none';
     document.getElementById('live-ntab-' + t).className = 'live-nav-tab' + (t === 'tarjeta' ? ' active' : '');
