@@ -700,13 +700,6 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .live-linea-pill.active{background:var(--navy);color:#fff;}
 
 /* ══════════ HOME ══════════ */
-/* Hide topbar when Home is the active page */
-body.home-mode .tb{
-  display:none !important;
-}
-body.home-mode{
-  background:var(--navy);
-}
 
 .home-hero{
   position:relative;
@@ -3409,12 +3402,6 @@ function updateBnavActive(activeId) {
 
 function pg(id,btn){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
-  // Toggle home mode: hides topbar when on home
-  if(id === 'home'){
-    document.body.classList.add('home-mode');
-  } else {
-    document.body.classList.remove('home-mode');
-  }
 
   // Dynamic fecha routing: id like "fecha-3" → use the single "pg-fecha" page
   let pageId = id;
@@ -7898,7 +7885,6 @@ function ngtInitData(){
   });
 }
 
-document.body.classList.add('home-mode');
 ngtInitData();
 
 // ══════════ VER LÍNEAS MODAL ══════════
