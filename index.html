@@ -493,7 +493,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-edit-panel-close:hover{border-color:var(--navy);color:var(--navy);}
 .adm-big-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--white);border:var(--border);border-radius:3px;padding:24px 12px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.04);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);transition:.12s;width:100%;}
 .adm-big-btn:hover{background:var(--off);border-color:var(--navy);}
-.adm-big-btn .adm-big-icon{font-size:30px;line-height:1;}
+.adm-big-btn .adm-big-icon{width:32px;height:32px;display:flex;align-items:center;justify-content:center;}
 .adm-sec-back{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
 .adm-sec-back-btn{background:none;border:1px solid var(--g3);border-radius:3px;padding:6px 12px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--g4);}
 .adm-sec-back-btn:hover{border-color:var(--navy);color:var(--navy);}
@@ -522,8 +522,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-tar-hole-input{width:100%;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--navy);padding:5px 2px;border:1px solid var(--g3);border-radius:3px;background:var(--white);box-sizing:border-box;}
 .adm-tar-hole-input:focus{border-color:var(--navy);outline:none;}
 .mit-fecha-card-locked{cursor:default;background:var(--off);opacity:.85;}
-.adm-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);margin-bottom:14px;}
-.adm-card-hdr{background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.06em;padding:12px 16px;border-bottom:3px solid var(--red);}
+.adm-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 20px rgba(0,0,0,.06);margin-bottom:14px;}
+.adm-card-hdr{background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;letter-spacing:.05em;padding:12px 16px;border-bottom:4px solid var(--red);}
+.adm-card-hdr.danger{background:#7f1d1d;border-bottom-color:#b91c1c;}
 .adm-card-body{padding:18px;}
 .adm-label{display:block;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--g4);margin-bottom:5px;}
 .adm-input{width:100%;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;color:var(--navy);padding:8px 12px;border:1px solid var(--g3);border-radius:3px;background:var(--white);box-sizing:border-box;}
@@ -541,6 +542,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
 .adm-btn-secondary{background:none;color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;padding:6px 12px;border:1px solid var(--navy);border-radius:3px;cursor:pointer;margin-top:8px;}
 .adm-btn-secondary:hover{background:var(--navy);color:#fff;}
+.adm-btn-destructive{width:100%;background:#b91c1c;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:11px;border:none;border-radius:3px;cursor:pointer;transition:.12s;}
+.adm-btn-destructive:hover{background:#991b1b;}
+.adm-btn-destructive:disabled{opacity:.5;cursor:not-allowed;}
 .adm-error{background:#fee;color:#c8102e;padding:10px;border-radius:3px;font-size:13px;margin-top:10px;border-left:3px solid var(--red);}
 .adm-msg{padding:10px;border-radius:3px;font-size:13px;margin-top:10px;font-family:'Barlow Condensed',sans-serif;}
 .adm-msg.ok{background:#e8f5e9;color:#16a34a;border-left:3px solid #16a34a;}
@@ -1984,18 +1988,18 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <button class="adm-big-btn" onclick="admGoTo('crear')">
-          <span class="adm-big-icon">📅</span>Crear Fecha
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>Crear Fecha
         </button>
         <button class="adm-big-btn" onclick="admGoTo('editar')">
-          <span class="adm-big-icon">✏</span>Gestionar Fechas
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>Gestionar Fechas
         </button>
         <button class="adm-big-btn" onclick="admActualizarHcp()" id="adm-hcp-btn">
-          <span class="adm-big-icon">🏌️</span>
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span>
           <span>Actualizar HCP</span>
           <span id="adm-hcp-btn-sub" style="font-size:9px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--g4);margin-top:-4px;">Consulta la AAG</span>
         </button>
         <button class="adm-big-btn" onclick="admGoTo('canchas')">
-          <span class="adm-big-icon">⛳</span>Gestionar Canchas
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Gestionar Canchas
         </button>
       </div>
     </div>
@@ -2256,13 +2260,13 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
         <!-- BORRAR FECHA — al fondo del panel de edición -->
         <div class="adm-card" style="border-color:#fca5a5;">
-          <div class="adm-card-hdr" style="background:#7f1d1d;border-bottom-color:#b91c1c;">🗑 Borrar Fecha</div>
+          <div class="adm-card-hdr danger">Borrar Fecha</div>
           <div class="adm-card-body">
             <p style="font-size:12px;color:var(--g4);line-height:1.5;margin:0 0 12px;">
               Elimina esta fecha por completo: tarjetas, STB, matches, SCORE y Leaderboard.<br>
               <strong style="color:#b91c1c;">Esta acción no se puede deshacer.</strong>
             </p>
-            <button class="adm-btn-primary" onclick="adminEliminarFecha()" style="background:#b91c1c;">🗑 Borrar Fecha Completa</button>
+            <button class="adm-btn-destructive" onclick="adminEliminarFecha()">Borrar Fecha Completa</button>
             <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
           </div>
         </div>
@@ -5320,12 +5324,14 @@ function sessionLoad() {
     if (!raw) return null;
     const s = JSON.parse(raw);
     if (!s || Date.now() > s.exp) { localStorage.removeItem('ngt_session'); return null; }
+    if (s.matricula && !s.mat) s.mat = s.matricula;
     return s;
   } catch(e) { return null; }
 }
 
 function sessionSave(token, player) {
   const s = Object.assign({ token: token, exp: Date.now() + 90*24*3600*1000 }, player);
+  if (s.matricula && !s.mat) s.mat = s.matricula;
   localStorage.setItem('ngt_session', JSON.stringify(s));
   NGT_SESSION = s;
 }
