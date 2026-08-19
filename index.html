@@ -1379,6 +1379,12 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   .perf-ecl-table .perf-ecl-hoyo{font-size:10px;}
   .perf-ecl-table .lbl{font-size:10px;width:42px;}
 }
+/* Compact variant used inside Stableford accordion (keeps both 9-hole tables in viewport width) */
+.perf-ecl-table.compact .sc-sym{width:22px;height:22px;font-size:11px;}
+.perf-ecl-table.compact .lbl{width:34px;font-size:9px;}
+.perf-ecl-table.compact th,.perf-ecl-table.compact td{padding:4px 2px;}
+.perf-ecl-table.compact .perf-ecl-hoyo{font-size:9px;}
+.perf-ecl-table.compact .perf-ecl-par{font-size:11px;}
 /* ══════════ end PERFILES ══════════ */
 
 /* Confirm modal */
@@ -6367,7 +6373,7 @@ function liveLoadStableford(){
       LIVE_STB_DATA = r;
       var pares   = r.pares   || [];
       var indices = r.indices || [];
-      var html = '<table style="width:100%;border-collapse:collapse;font-family:\'Barlow Condensed\',sans-serif;">' +
+      var html = '<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-family:\'Barlow Condensed\',sans-serif;">' +
         '<thead><tr style="border-bottom:2px solid var(--border);font-size:11px;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;">' +
         '<th style="padding:6px 8px;text-align:left;width:30px;">#</th>' +
         '<th style="padding:6px 8px;text-align:left;">Jugador</th>' +
@@ -6378,7 +6384,7 @@ function liveLoadStableford(){
         var isMe = MIT_PLAYER && String(p.matricula) === String(MIT_PLAYER.matricula);
         var rowBg = isMe ? 'background:rgba(var(--navy-rgb,30,58,138),.08);font-weight:700;' : '';
         var mat = p.matricula;
-        var scorecard = renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || []);
+        var scorecard = renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true);
         html += '<tr style="border-bottom:1px solid var(--border);cursor:pointer;' + rowBg + '"' +
           ' onclick="liveStbToggle(\'' + mat + '\')">' +
           '<td style="padding:8px 8px;font-size:13px;color:var(--g4);">' + (i+1) + '</td>' +
@@ -7555,11 +7561,12 @@ function renderEclectic(data){
  *   - Bogey (+1): cuadrado simple
  *   - Doble bogey o más (+2 o más): doble cuadrado
  */
-function renderTarjeta18Hoyos(scores, pares, scoreLabel, indices, stbPorHoyo){
+function renderTarjeta18Hoyos(scores, pares, scoreLabel, indices, stbPorHoyo, compact){
   scoreLabel = scoreLabel || 'Score';
+  var tblClass = 'perf-ecl-table' + (compact ? ' compact' : '');
 
   function nine(from, to, lbl){
-    let h = '<table class="perf-ecl-table"><thead><tr><th class="lbl">' + lbl + '</th>';
+    let h = '<table class="' + tblClass + '"><thead><tr><th class="lbl">' + lbl + '</th>';
     for(let i = from; i < to; i++) h += '<th><div class="perf-ecl-hoyo">H' + (i+1) + '</div></th>';
     h += '<th><div class="perf-ecl-hoyo">Tot</div></th></tr></thead><tbody>';
     // Hándicap row (optional)
