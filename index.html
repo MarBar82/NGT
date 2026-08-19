@@ -1481,6 +1481,13 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .tb-player-avatar{width:24px;height:24px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;overflow:hidden;}
 .tb-player-avatar img,.ham-avatar img{width:100%;height:100%;object-fit:cover;display:block;}
 .tb-player-apodo{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:rgba(255,255,255,.9);text-transform:uppercase;}
+/* ══ FECHA ACTIVA STRIP ══════════════════════════════════════════════════════ */
+#fecha-activa-strip{position:fixed;bottom:66px;left:0;right:0;z-index:195;background:#0d1f36;border-top:2px solid var(--red);display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:40px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+#fecha-activa-strip:active{background:#162840;}
+.fas-info{display:flex;align-items:center;gap:7px;overflow:hidden;}
+.fas-icon{width:14px;height:14px;flex-shrink:0;stroke:var(--red);}
+#fas-label{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.9);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fas-cta{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.06em;color:var(--red);white-space:nowrap;flex-shrink:0;}
 /* ══ BOTTOM NAV (Epic 8) ══════════════════════════════════════════════════════ */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--navy);display:flex;align-items:stretch;z-index:200;border-top:1px solid rgba(255,255,255,.1);padding-bottom:env(safe-area-inset-bottom);}
 .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:9px 4px;border:none;background:none;color:rgba(255,255,255,.5);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;-webkit-tap-highlight-color:transparent;touch-action:manipulation;transition:.12s;}
@@ -2383,6 +2390,15 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);margin-bottom:14px;">Mis Fechas</div>
   <div id="fechas-screen-body"><div class="lb-status"><div class="spinner"></div>Cargando...</div></div>
 </div>
+</div>
+
+<!-- ════ FECHA ACTIVA STRIP ════ -->
+<div id="fecha-activa-strip" style="display:none;" onclick="pg('mit',null)">
+  <div class="fas-info">
+    <svg class="fas-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <span id="fas-label">NGT Fecha — · En juego</span>
+  </div>
+  <div class="fas-cta">Continuar →</div>
 </div>
 
 <!-- ════ BOTTOM NAV ════ -->
@@ -3340,6 +3356,15 @@ function pg(id,btn){
   if(id==='admin' && NGT_SESSION && NGT_SESSION.rol==='Admin'){ ADMIN_KEY_OK=NGT_SESSION.token; showAdminPanel(); }
   if(id==='fechas') loadFechasScreen();
   if(fechaNum) loadFechaDinamica(fechaNum);
+  // Show/hide fecha activa strip — hidden inside Live Scoring (pg-mit), visible elsewhere
+  var strip = document.getElementById('fecha-activa-strip');
+  if (strip) {
+    if (id === 'mit') {
+      strip.style.display = 'none';
+    } else if (strip.dataset.active === '1') {
+      strip.style.display = 'flex';
+    }
+  }
 }
 
 function setTbHeight(){
@@ -7688,6 +7713,21 @@ function applyFechaActiva(fa){
     const canchaEl = document.getElementById('hfi-cancha');
     if (numEl) numEl.textContent = 'NGT FECHA ' + HOME_FECHA_ACTIVA + ' · EN JUEGO';
     if (canchaEl && fa.cancha) canchaEl.textContent = fa.cancha;
+    // Fecha/hora on the card (populated if backend provides it)
+    var dateEl = document.getElementById('hfi-fecha');
+    if (dateEl) dateEl.textContent = fa.fechaStr || '';
+  }
+  // Franja persistente — visible everywhere except inside Live Scoring
+  var strip = document.getElementById('fecha-activa-strip');
+  if (strip) {
+    var label = 'NGT FECHA ' + HOME_FECHA_ACTIVA + ' · EN JUEGO';
+    document.getElementById('fas-label').textContent = label;
+    strip.dataset.active = '1';
+    // Only show if we're not currently inside pg-mit
+    var mitPg = document.getElementById('pg-mit');
+    if (!mitPg || !mitPg.classList.contains('on')) {
+      strip.style.display = 'flex';
+    }
   }
 }
 
