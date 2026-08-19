@@ -4,116 +4,62 @@
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
-Progreso: Tarea 14 cerrada y verificada. Al definir el fix de concurrencia (lo que iba a ser la Tarea 15), Marco aclaró que los jugadores no usan el botón individual "✍ Firmar" — usan "Finalizar Ronda" para cerrar la línea completa. Al revisar qué hace ese botón hoy, encontré un hueco funcional más importante que el de concurrencia: **"Finalizar Ronda" no guarda nada, solo cierra la pantalla.** Esta versión de la Tarea 15 corrige eso, más el fix de concurrencia original. Es una tarea con impacto real en los datos del torneo — probá bien cada parte, un commit por parte (A a C).
+Progreso: Tarea 15 cerrada y verificada (commits `ca7b6f3` y `a8c3d8b`) — "Finalizar Ronda" ya guarda de verdad a los 4 jugadores, "Revisar Tarjetas" re-sincroniza el Leaderboard, y `cargarTarjeta_` usa el mismo mutex por jugador que `cargarHoyoLive_`. Verificando esa tarea encontré un caso borde chico en la Parte B — esta Tarea 16 lo cierra. Es un fix de una línea, un solo archivo, no requiere deploy en Apps Script.
 
 ---
 
 ## 🎯 Contexto de la tarea
 
-Los puntos que alimentan el Leaderboard de temporada, Historia y Win%/Top 8% (Stableford, Match, Bonus, Doble de cada fecha) se escriben en la hoja `SCORE` **únicamente** dentro de `cargarTarjeta_` (`04_Writes.gs`, líneas 264-624) — es la función que dispara el botón individual "✍ Firmar" (`liveFirmarMiTarjeta()`). Cargar los 18 hoyos vía `cargarHoyoLive_` (lo que hace el jugador en la pantalla normal de Live Scoring) solo escribe la hoja `TARJETAS` (el score crudo hoyo por hoyo) — nunca toca `SCORE`.
+En la Tarea 15 Parte B se agregó la variable global `LIVE_REVIEW_MAT` (`index.html`, línea ~5638): se pone en `liveVerTarjetaJugador(mat)` para marcar "este guardado viene de Revisar Tarjetas, hay que re-firmar al jugador después", y se limpia (`LIVE_REVIEW_MAT = null`) únicamente dentro de `handleOk` en `liveSmConfirm`, cuando efectivamente se guarda un hoyo editado.
 
-Hoy "Finalizar Ronda" (agregado en la Tarea 13) solo hace `livePollStop(); pg('lb', null)` — cierra la pantalla y te lleva al Leaderboard, sin llamar a `cargarTarjeta_` para nadie. Si ningún jugador toca "✍ Firmar" por su cuenta (que es lo que confirmó Marco que pasa en la práctica), **los puntos de esa fecha nunca le llegan al Leaderboard**, aunque los 18 hoyos de los 4 jugadores estén perfectamente cargados y visibles dentro de Live Scoring mientras dura la carga.
+El problema: si el usuario entra a "Revisar Tarjetas", abre la tarjeta de un jugador solo para mirarla (sin tocar ningún hoyo) y la cierra con la X o tocando el fondo, `LIVE_REVIEW_MAT` nunca se limpia — queda "pegado" con la matrícula de ese jugador. Como es una variable de la página, no se resetea al cambiar de fecha. Entonces: si más adelante (fecha siguiente, línea distinta) ese mismo jugador carga un hoyo de forma normal durante Live Scoring, `liveSmConfirm` va a comparar `LIVE_REVIEW_MAT === mat`, encontrar que coincide (por la matrícula vieja pegada), y tratar ese guardado normal como si fuera una edición de revisión: no dispara `liveAutoAdvancePlayer` (así que no avanza automáticamente al siguiente jugador) y en cambio llama a `liveFirmarJugador` de forma innecesaria.
 
-Ya charlamos con Marco cómo tiene que comportarse esto:
-1. "Finalizar Ronda" pasa a guardar (firmar) automáticamente a los 4 jugadores de la línea — el botón individual "✍ Firmar" se saca, ya no hace falta.
-2. Si después de finalizar se corrige un hoyo desde "Revisar Tarjetas", ese jugador se vuelve a guardar automáticamente — sin que nadie tenga que acordarse de tocar nada de nuevo.
+No corrompe datos ni pierde información — el hoyo se guarda igual — pero rompe la UX de auto-avance para ese jugador puntual, de forma confusa (parece un bug intermitente porque solo pasa si antes alguien miró su tarjeta en Revisar Tarjetas sin editar nada).
 
 ---
 
 ## 🎯 Tarea para Claude Code
 
-### Parte A — "Finalizar Ronda" guarda de verdad a los 4 jugadores
+En `openLiveView(fecha, cancha)` (`index.html`, ~línea 6064 — la función que arranca Live Scoring para una fecha/línea, donde ya se resetean `LIVE_LINEA_DATA`, `LIVE_MATCH_LINEA`, `LIVE_MATCH_DATA`, etc.), agregá una línea más:
 
-- Cuando se toca "🏁 Finalizar Ronda" (dentro de `liveRenderComplete()`), antes de navegar a Leaderboard, llamá a la acción `cargarTarjeta` (la misma que ya usa `liveFirmarMiTarjeta()`) una vez por cada uno de los 4 jugadores de `LIVE_LINEA_DATA.jugadores`, usando los datos que ya están cargados en el cliente (scores, HCP, LD/BA si corresponde) — no hace falta pedirle nada nuevo al backend para armar estos datos.
-- Mostrá un estado de "Guardando..." mientras se procesan los 4. Con el mutex por jugador que vas a implementar en la Parte C, deberías poder mandarlos en paralelo sin riesgo — pero si preferís hacerlo secuencial por simplicidad, también está bien, elegí lo que te resulte más prolijo de manejar en términos de errores parciales.
-- Si alguno de los 4 falla, que los que salieron bien queden guardados igual (no todo-o-nada) — mostrá un aviso claro de cuál/cuáles fallaron para que Marco o el jugador sepan que hay que reintentar esa tarjeta puntual.
-- Sacá el botón "✍ Firmar" individual y la función `liveFirmarMiTarjeta()` — confirmá con grep que no se usa en otro lado antes de borrarla (ojo: `mitFirmarTarjeta()`/`mitGuardar()` es una función DISTINTA, del flujo viejo de carga manual sin Live Scoring — esa no se toca).
+```js
+LIVE_REVIEW_MAT = null;
+```
 
-### Parte B — Editar desde "Revisar Tarjetas" re-sincroniza el Leaderboard
+Así cada vez que se entra a Live Scoring de cero para una fecha, el flag de revisión arranca limpio, sin importar qué haya quedado pegado de una sesión anterior.
 
-Cuando se corrige un hoyo desde la tarjeta editable de "Revisar Tarjetas" (`renderTarjeta18HoyosEditable`, agregada en la Tarea 13 Parte F — reutiliza el mismo modal de teclado numérico que la carga normal), además de guardar ese hoyo puntual (como ya hace), llamá también a `cargarTarjeta` para ESE jugador específico, para que el Leaderboard quede sincronizado con la corrección.
+Confirmá con grep que no hay otro lugar donde `LIVE_REVIEW_MAT` debería resetearse también (por ejemplo, al cerrar la vista de Live Scoring por completo, si existe una función de "salir" separada de `openLiveView`).
 
-**Importante:** esto es específico del flujo de "Revisar Tarjetas" — la carga normal de hoyos durante la ronda (antes de tocar "Finalizar Ronda") **no** debe disparar `cargarTarjeta` en cada hoyo, solo al finalizar (Parte A) o al corregir después desde Revisar Tarjetas (esta parte). Fijate bien de distinguir ambos flujos en el código — probablemente haga falta un parámetro o una variable de contexto que indique "este guardado viene de la vista de revisión" para no confundir los dos casos.
-
-### Parte C — Extender el mutex por jugador a `cargarTarjeta_` (fix de concurrencia)
-
-Con las Partes A y B, `cargarTarjeta_` se va a llamar mucho más seguido dentro del mismo flujo de Live Scoring, así que este fix pasa a ser más importante todavía.
-
-- En `cargarTarjeta_` (`04_Writes.gs`), agregá el mismo mutex por jugador+fecha que ya usa `cargarHoyoLive_` (`07_LiveScoring.gs`, clave `plk_{fecha}_{matricula}`, vía `CacheService`) alrededor de la sección crítica que lee y después escribe la fila del jugador en `TARJETAS`. El objetivo: que `cargarHoyoLive_` y `cargarTarjeta_` nunca puedan operar en simultáneo sobre la fila del mismo jugador — sin volver a traer el lock global de `LockService` que se sacó en la Tarea 14 (eso volvería a generar la lentitud entre líneas distintas que ya arreglamos).
-- Evaluá si el TTL de 8 segundos que usa `cargarHoyoLive_` le alcanza a `cargarTarjeta_` (que hace más escrituras y puede tardar más) — si no, ajustalo, y contame el criterio que usaste.
-- Confirmá con grep que no hay otra función que escriba directamente a `TARJETAS` para un jugador+fecha fuera de estas dos, que también debería entrar en este mismo mutex.
+No hace falta tocar nada más — `liveVerTarjetaJugador` y `handleOk` en `liveSmConfirm` quedan igual que en la Tarea 15.
 
 ---
 
 ## ❓ Preguntas de verificación
 
-1. **Parte A:** ¿los 4 jugadores quedan guardados en el Leaderboard al tocar "Finalizar Ronda"? ¿Probaste el caso de que uno falle — los otros 3 quedan guardados igual? ¿Confirmaste que `liveFirmarMiTarjeta()` no se usaba en ningún otro lado antes de borrarla?
-2. **Parte B:** ¿cómo distinguiste el guardado normal (que no debe firmar) del guardado desde "Revisar Tarjetas" (que sí debe firmar)? ¿Probaste corregir un hoyo después de finalizar y confirmar que el Leaderboard se actualiza solo para ese jugador?
-3. **Parte C:** ¿qué TTL usaste para el lock de `cargarTarjeta_`? ¿Encontraste alguna otra función que debería sumarse a este mutex?
-4. ¿Hiciste un commit por cada parte (A a C)? Hash y mensaje de cada uno.
-5. ¿Algo de esta tarea te generó dudas sobre cómo distinguir los flujos o manejar errores parciales? Contame qué decidiste y por qué.
+1. ¿Agregaste el reset en `openLiveView`? ¿Encontraste algún otro lugar donde convenga resetear `LIVE_REVIEW_MAT` (por ejemplo, al salir de Live Scoring)?
+2. ¿Hiciste el commit? Hash y mensaje.
+3. ¿Algo de esta tarea te generó dudas? Contame qué decidiste y por qué.
 
 ---
 
-## ✅ Respuestas de verificación — Tarea 15
+## ✅ Respuestas de verificación — Tarea 16
 
-**1. Parte A — Finalizar Ronda:**
+**1. Reset en `openLiveView` y otros lugares:**
 
-"Finalizar Ronda" ahora llama `liveFinalizar()`:
-- Reemplaza el área de botones con "Guardando tarjetas..." + spinner
-- Llama `liveFirmarJugador(jug)` en paralelo para los 4 jugadores via `Promise.all`
-- `liveFirmarJugador` hace `ngtApiPost({action:'cargarTarjeta', matricula, fecha, hcp:jug.hcpJuego, scores, ld, ba})` y rechaza la promesa si `r.ok===false` (mismo patrón que `doPost` en live scoring)
-- Si todos OK → navega a LB
-- Si alguno falla → los que salieron bien quedan guardados (Promise.all espera todos los resultados); se muestra quién falló con botón "↺ Reintentar" (que re-llama `liveFinalizar()`) y "Ir al LB →"
+Sí, agregué `LIVE_REVIEW_MAT = null;` en `openLiveView` (línea 6071 en index.html), junto con los otros resets de `LIVE_LINEA_DATA`, `LIVE_MATCH_LINEA` y `LIVE_MATCH_DATA`.
 
-No pude probar con una fecha real en producción. El manejo de errores parciales está diseñado para ser no-bloquante: cada falla es independiente porque cada `catch` devuelve `{ok:false}` en lugar de rechazar el Promise.all.
+Evalué los otros candidatos:
 
-Confirmé con grep que `liveFirmarMiTarjeta()` solo era llamada desde el botón "✍ Firmar" en `liveRenderComplete()` (línea 6471) y desde ningún otro lugar. El botón individual fue eliminado también de `liveRenderComplete()`.
+- **`closeFloatingModal()`**: descartado. Esta función genérica también se llama cuando el usuario hace la transición tarjeta-revisión → score modal (línea 6583: `onclick="closeFloatingModal();liveOpenScoreModal(...)"`). Si reseteara `LIVE_REVIEW_MAT` ahí, lo limpiaría en el momento equivocado — justo antes de que el usuario edite el hoyo — convirtiendo el flujo de revisión en un guardado normal sin re-firma.
 
-**2. Parte B — Revisar Tarjetas re-firma:**
+- **Salir de Live Scoring (`pg('lb')`, `LIVE_MODE=false`)**: no es necesario. Cuando el usuario sale de Live Scoring y después vuelve a entrar (nueva fecha, nueva línea), siempre pasa por `openLiveView` — que ahora ya limpia el flag. Agregar el reset también en la salida sería defensivo pero redundante.
 
-La distinción entre flujo normal y revisión se hace con la variable global `LIVE_REVIEW_MAT` (inicialmente `null`):
+- **Escenario within-session (mismo jugador, misma sesión)**: structuralmente imposible. "Revisar Tarjetas" solo aparece en `liveRenderComplete()`, que requiere `holesCargados === 18` para TODOS los jugadores. Una vez que se llega ahí, no hay más scoring normal disponible en esa sesión. El unique path real del bug es cross-session/cross-fecha, y `openLiveView` lo cubre completamente.
 
-- **Flujo normal:** el usuario toca una fila en `liveRenderHoyoActual()` → `liveOpenScoreModal(hoyo, mat)`. `LIVE_REVIEW_MAT` permanece `null`.
-- **Flujo revisión:** el usuario entra a `liveVerTarjetaJugador(mat)` → el código setea `LIVE_REVIEW_MAT = mat` → la tarjeta editable tiene celdas con `onclick="closeFloatingModal(); liveOpenScoreModal(hoyo, mat)"` → `LIVE_REVIEW_MAT` sigue siendo `mat` cuando el score modal se abre.
+**2. Commit:**
 
-En `handleOk(r)` dentro de `liveSmConfirm`:
-```js
-if(LIVE_REVIEW_MAT === mat){
-  LIVE_REVIEW_MAT = null;
-  var jugRev = r.jugadores.find(function(j){ return j.matricula === mat; });
-  if(jugRev) liveFirmarJugador(jugRev).catch(function(e){ liveShowToast('Error al actualizar LB: ' + e.message); });
-} else {
-  liveAutoAdvancePlayer(hoyo, mat);
-}
-```
+`143106c` — `Tarea 16 — reset LIVE_REVIEW_MAT en openLiveView (index.html)`
 
-`LIVE_REVIEW_MAT` se limpia inmediatamente antes del `liveFirmarJugador` (no después, para evitar double-fire si la promesa es lenta).
+**3. Dudas:**
 
-No pude probar en producción. El flag se borra en tres situaciones implícitas: (1) después de cada firma exitosa, (2) si el usuario hace otro `liveVerTarjetaJugador` que lo sobreescribe con el nuevo mat, (3) implícitamente si el usuario vuelve al flujo normal sin pasar por revisión.
-
-**3. Parte C — TTL del lock en `cargarTarjeta_`:**
-
-Usé **TTL de 30 segundos** (vs 8s para `cargarHoyoLive_`). Razonamiento:
-- `cargarHoyoLive_` hace 1 sola escritura en TARJETAS → típicamente <1s → 8s es holgado
-- `cargarTarjeta_` hace ~6-8 escrituras en 4-5 hojas distintas (TARJETAS, STB, MATCH ×N, SCORE ×M, PB, dobles si aplica) → puede tardar 5-15s en GAS
-- El lock lo sigo soltando inmediatamente en el `finally`, así que el TTL solo importa si el proceso muere a mitad de camino
-
-Otras funciones que escriben a TARJETAS:
-- **`setBonusWinners_`** (admin): escribe solo cols W/X (LD/BA) para cada jugador de la fecha. No comparte las filas de H1-H18 con `cargarHoyoLive_`. Además, es admin-only y no se llama durante el flujo de Live Scoring. No necesita el mutex.
-- **`armarLineas_`** (línea 9 de 04_Writes.gs): escribe solo cols A-B (fecha/mat), C (hcp inicial), D (canchaId), Y (color tee) cuando crea las filas al armar la línea. Solo modifica columnas de metadata, nunca las de scores. No necesita el mutex.
-
-**4. Commits:**
-
-- `ca7b6f3` — `Tarea 15 Partes A+B — Finalizar Ronda guarda los 4 jugadores + re-firma en revisión` (index.html)
-- `a8c3d8b` — `Tarea 15 Parte C — mutex por jugador en cargarTarjeta_ (04_Writes.gs)` (04_Writes.gs)
-
-**5. Decisiones y dudas:**
-
-- **Paralelo vs secuencial para los 4 saves:** Elegí paralelo (`Promise.all`) porque con el mutex por jugador (Parte C) ya no hay riesgo de race entre `cargarTarjeta_` de jugadores distintos. Paralelo reduce el tiempo de espera de 4× a 1×. Secuencial hubiera sido más fácil de depurar errores parciales, pero más lento y sin beneficio real de seguridad.
-
-- **Re-firma silenciosa en revisión:** Decidí NO mostrar un spinner ni un toast de éxito para la re-firma en `handleOk` — el usuario ya recibió feedback del guardado del hoyo (el círculo se actualizó), y un segundo toast de "LB actualizado" sería ruido. Solo muestro error si falla.
-
-- **¿Qué pasa si el usuario toca "Revisar Tarjetas" durante el live scoring normal (antes de completar los 18 hoyos)?** El botón "Revisar Tarjetas" solo existe en `liveRenderComplete()`, que se muestra cuando `holesCargados === 18` para todos. Así que no hay acceso a revisión mid-round. `LIVE_REVIEW_MAT` solo se setea desde `liveVerTarjetaJugador`, que solo es accesible desde esa vista.
-
-- **Reintentar falla parcial:** el botón "↺ Reintentar" vuelve a llamar `liveFinalizar()` completa (los 4 jugadores). Los que ya se guardaron reciben un segundo `cargarTarjeta` — esto es idempotente (sobrescribe con los mismos datos), así que no es un problema. Alternativa: guardar qué mats fallaron y reintentar solo esos — pero aumenta la complejidad sin beneficio visible.
+La única duda fue si `closeFloatingModal` necesitaba el reset. Después de trazar el flujo (el mismo `closeFloatingModal` se llama en la transición tarjeta→score-modal), quedó claro que no. El fix de una línea en `openLiveView` es suficiente y no toca nada más, como pedía la tarea.
