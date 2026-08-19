@@ -70,79 +70,72 @@ function getWinProbabilities_(simulations) {
   const SIMS = simulations || 5000;
   const NUM_FECHAS = 8;
 
-  // Read SCORE with detailed per-fecha breakdown
-  const sh = getSheet_(SHEETS.SCORE);
-  if (!sh) return null;
-  const lr = sh.getLastRow();
-  if (lr < 2) return null;
-  const totalCols = 4 + 4 * NUM_FECHAS;
-  const data = sh.getRange(2, 1, lr - 1, totalCols).getValues();
+  // Read SCORE using the canonical long-format reader (A=fecha, B=mat, C=STB, D=Match,
+  // E=Bonus, F=Doble, G=PosFecha, H=PosLeaderboard) — matches what 03_Reads/04_Writes use.
+  // The old wide-format read (A=mat, B=nombre, C=total, then 4-col fecha blocks) was wrong
+  // and caused validMats to never match, returning an empty players list every time.
+  const allScoreRows = getAllNGTScoreData_();
+  if (!allScoreRows || !allScoreRows.length) return null;
 
-  // Get valid player matriculas (filters out phantom/template rows)
+  // Get valid player matriculas and their nombres
   const jugadoresList = getJugadores_();
   const validMats = {};
-  jugadoresList.forEach(j => { validMats[String(j.matricula).trim()] = true; });
+  const matNombre = {};
+  jugadoresList.forEach(j => {
+    const m = String(j.matricula).trim();
+    validMats[m] = true;
+    matNombre[m] = (j.nombre || m);
+  });
 
-  // Helper to detect "DB used"
-  function isDbUsed(v) {
-    if (v === true) return true;
-    const s = String(v || '').toUpperCase().trim();
-    if (s === 'TRUE' || s === 'VERDADERO' || s === 'SI' || s === 'YES') return true;
-    const n = parseFloat(v);
-    return !isNaN(n) && n > 0;
-  }
-
-  // PASS 1: detect global fechasJugadas at tournament level.
-  // A fecha is "played" if at least one player has ST > 0 in it.
+  // PASS 1: detect global fechasJugadas (highest fecha number seen with at least one ST > 0)
   let globalFechasJugadas = 0;
-  data.forEach(r => {
-    const m = String(r[0] || '').trim();
-    if (!validMats[m]) return;
-    for (let f = 0; f < NUM_FECHAS; f++) {
-      const idx = 4 + f * 4;
-      const st = parseFloat(r[idx]);
-      if (!isNaN(st) && st > 0 && (f + 1) > globalFechasJugadas) {
-        globalFechasJugadas = f + 1;
-      }
-    }
+  allScoreRows.forEach(r => {
+    if (!validMats[r.mat]) return;
+    const f = parseInt(r.fecha) || 0;
+    if (r.st > 0 && f > globalFechasJugadas) globalFechasJugadas = f;
   });
   const fechasRestantes = Math.max(0, NUM_FECHAS - globalFechasJugadas);
 
-  // PASS 2: build players, only counting fechas they actually played
-  // within the first globalFechasJugadas tournament fechas.
-  const players = [];
-  data.forEach(r => {
-    const m = String(r[0] || '').trim();
-    const nombre = String(r[1] || '').trim();
-    if (!validMats[m]) return;     // skip phantom/template rows
-    const total = parseFloat(r[2]) || 0;
+  // PASS 2: group rows by player, build per-fecha history
+  // r.db from getAllNGTScoreData_ is a Number (0 or >0 if doble was used/scored)
+  const byMat = {};
+  allScoreRows.forEach(r => {
+    if (!validMats[r.mat]) return;
+    const f = parseInt(r.fecha) || 0;
+    if (f < 1 || f > globalFechasJugadas) return;
+    if (!byMat[r.mat]) byMat[r.mat] = [];
+    byMat[r.mat].push(r);
+  });
 
+  // Aggregate current total points per player from the SCORE rows themselves
+  const totalByMat = {};
+  allScoreRows.forEach(r => {
+    if (!validMats[r.mat]) return;
+    totalByMat[r.mat] = (totalByMat[r.mat] || 0) + r.st + r.ma + r.pb + (r.db || 0);
+  });
+
+  const players = [];
+  Object.keys(validMats).forEach(m => {
+    const fechaRows = byMat[m] || [];
     let stHistory = [], maHistory = [], pbHistory = [];
     let dobleUsed = false;
     let playedCount = 0;
 
-    for (let f = 0; f < globalFechasJugadas; f++) {
-      const idx = 4 + f * 4;
-      const stRaw = r[idx], maRaw = r[idx+1], pbRaw = r[idx+2], dbRaw = r[idx+3];
-      const st = parseFloat(stRaw);
-      const ma = parseFloat(maRaw);
-      const pb = parseFloat(pbRaw);
-      // Player played this fecha if their ST is positive (everyone scores at least
-      // a few stableford points if they actually played). MA can be 0 legitimately.
-      const played = (!isNaN(st) && st > 0) || (!isNaN(ma) && ma > 0);
+    fechaRows.forEach(r => {
+      const played = r.st > 0 || r.ma > 0;
       if (played) {
         playedCount++;
-        stHistory.push(isNaN(st) ? 0 : st);
-        maHistory.push(isNaN(ma) ? 0 : ma);
-        pbHistory.push(isNaN(pb) ? 0 : pb);
-        if (isDbUsed(dbRaw)) dobleUsed = true;
+        stHistory.push(r.st);
+        maHistory.push(r.ma);
+        pbHistory.push(r.pb);
+        if (r.db > 0) dobleUsed = true;
       }
-    }
+    });
 
     players.push({
       matricula: m,
-      nombre: nombre,
-      currentPoints: total,
+      nombre: matNombre[m] || m,
+      currentPoints: totalByMat[m] || 0,
       stHistory: stHistory,
       maHistory: maHistory,
       pbHistory: pbHistory,
@@ -277,7 +270,7 @@ function getWinProbabilities_(simulations) {
 function getWinProbabilitiesCached_() {
   try {
     const cache = CacheService.getScriptCache();
-    const key = 'winProbs_v4';   // bumped: missed-fechas fix
+    const key = 'winProbs_v5';   // bumped: long-format SCORE reader fix
     const cached = cache.get(key);
     if (cached) {
       try { return JSON.parse(cached); } catch (e) {}

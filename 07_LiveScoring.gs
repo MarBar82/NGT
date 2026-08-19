@@ -15,15 +15,33 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
   const cpPares   = (cd && cd.pares)   || [];
   const cpIndices = (cd && cd.indices) || [];
 
-  // TARJETAS: una sola lectura; 0=fecha,1=mat,2=hcp,3=canchaId,4..21=H1..H18,22=LD,23=BA
+  // TARJETAS: 0=fecha,1=mat,2=hcp,3=canchaId,4..21=H1..H18,22=LD,23=BA
   const shT = getSheet_(SHEETS.TARJETAS);
   if (!shT) return null;
-  const nextEmpty = findNextEmptyRow_(shT, 1);
-  if (nextEmpty <= 2) return null;
-  const allRows = shT.getRange(2, 1, nextEmpty - 2, 24).getValues();
 
-  // Cache para ultimoCargadoPor (puesto por cargarHoyoLive_)
+  // Cache shared for row-index fast-path AND ultimoCargadoPor reads
   const cache = CacheService.getScriptCache();
+
+  // Fast path: if all 4 player row indices are already in cache, read only that block
+  // (avoids re-scanning the full TARJETAS sheet on every save/poll)
+  const lineaRowIdxs = lineaMats.map(function(mat) {
+    const v = cache.get('tRow_' + fStr + '_' + mat);
+    return v ? parseInt(v) : 0;
+  });
+  const allRowsCached = lineaRowIdxs.every(function(r) { return r >= 2; });
+
+  let allRows, rowStart;
+  if (allRowsCached) {
+    const minR = Math.min.apply(null, lineaRowIdxs);
+    const maxR = Math.max.apply(null, lineaRowIdxs);
+    allRows  = shT.getRange(minR, 1, maxR - minR + 1, 24).getValues();
+    rowStart = minR;
+  } else {
+    const nextEmpty = findNextEmptyRow_(shT, 1);
+    if (nextEmpty <= 2) return null;
+    allRows  = shT.getRange(2, 1, nextEmpty - 2, 24).getValues();
+    rowStart = 2;
+  }
 
   const playerMap = {};
   for (let i = 0; i < allRows.length; i++) {
@@ -31,6 +49,10 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
     if (String(r[0]).trim() !== fStr) continue;
     const mat = String(r[1]).trim();
     if (lineaMats.indexOf(mat) < 0) continue;
+    // Populate row cache on slow-path reads so future calls take the fast path
+    if (!allRowsCached) {
+      try { cache.put('tRow_' + fStr + '_' + mat, String(rowStart + i), 21600); } catch(e) {}
+    }
     const hcp    = parseFloat(r[2]);
     const scores = r.slice(4, 22).map(function(v) {
       return (v === '' || v === null || v === undefined) ? null : Number(v);
@@ -240,16 +262,29 @@ function cargarHoyoLive_(params) {
   }
   if (rowIdx < 2) return { ok: false, error: 'Tarjeta no encontrada para ' + jugStr };
 
-  // Lock → escritura mínima: solo el score del hoyo en TARJETAS
-  const lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); }
-  catch(e) { return { ok: false, error: 'Servidor ocupado, reintentá' }; }
+  // Per-player mutex via CacheService — avoids global script lock contention with cargarTarjeta_,
+  // which holds LockService.getScriptLock() for up to 30s during heavy 6-write operations.
+  // TTL of 8s means the lock auto-expires if the process crashes mid-write.
+  // Race condition risk: two simultaneous requests for the SAME player + hoyo in the ~30ms
+  // window between cache.get() and cache.put(). Worst case: last write wins (no corruption).
+  const lockKey = 'plk_' + fStr + '_' + jugStr;
+  const lockId  = String(Date.now()) + '_' + Math.floor(Math.random() * 1e9);
+  let lockAcquired = false;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (!cache.get(lockKey)) {
+      cache.put(lockKey, lockId, 8);
+      Utilities.sleep(30);
+      if (cache.get(lockKey) === lockId) { lockAcquired = true; break; }
+    }
+    Utilities.sleep(300);
+  }
+  if (!lockAcquired) return { ok: false, error: 'Servidor ocupado, reintentá' };
 
   try {
-    sh.getRange(rowIdx, 4 + hoyoNum).setValue(scoreVal); // col E para hoyo 1 = col 5
+    sh.getRange(rowIdx, 4 + hoyoNum).setValue(scoreVal);
     SpreadsheetApp.flush();
   } finally {
-    lock.releaseLock();
+    try { cache.remove(lockKey); } catch(e) {}
   }
 
   // Guardar ultimoCargadoPor en cache (6h = duración de una ronda)
