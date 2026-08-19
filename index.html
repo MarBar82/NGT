@@ -1356,8 +1356,10 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   text-align:left;font-size:11px;font-weight:700;color:var(--g4);
   text-transform:uppercase;letter-spacing:.06em;width:50px;
 }
-.perf-ecl-hoyo{font-size:11px;font-weight:600;color:var(--g4);}
+.perf-ecl-table thead th:not(.lbl){background:var(--navy);}
+.perf-ecl-hoyo{font-size:11px;font-weight:600;color:#fff;}
 .perf-ecl-par{font-size:13px;font-weight:600;color:var(--text);}
+.perf-par-row td{background:var(--g1);}
 .perf-ecl-score{font-size:14px;font-weight:800;color:var(--navy);}
 .perf-ecl-score.tri{color:#dc2626;}
 .perf-ecl-totals{
@@ -7576,7 +7578,7 @@ function renderTarjeta18Hoyos(scores, pares, scoreLabel, indices, stbPorHoyo){
       h += '<td></td></tr>';
     }
     // Par row
-    h += '<tr><td class="lbl">Par</td>';
+    h += '<tr class="perf-par-row"><td class="lbl">Par</td>';
     let parTot = 0;
     for(let i = from; i < to; i++){
       const p = pares[i];
@@ -7597,7 +7599,7 @@ function renderTarjeta18Hoyos(scores, pares, scoreLabel, indices, stbPorHoyo){
     h += '<td>' + scoreSymbolHtml(allOk ? scoreTot : null, parTot, true) + '</td></tr>';
     // Puntos STB row (optional)
     if(stbPorHoyo && stbPorHoyo.length){
-      h += '<tr><td class="lbl">Puntos</td>';
+      h += '<tr class="perf-par-row"><td class="lbl">Puntos</td>';
       let stbTot = 0;
       let stbAllOk = true;
       for(let i = from; i < to; i++){
