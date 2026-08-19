@@ -6629,6 +6629,18 @@ function liveSmConfirm(v){
   if(jug){ jug.scores[hoyo - 1] = score; }
   liveRender();
 
+  // Optimistic auto-advance: 3 of 4 saves feel instant (no wait for backend).
+  // Only the last player on a hole must wait — the server decides bonus eligibility.
+  // Review-mode edits (LIVE_REVIEW_MAT) always wait too, since re-firma needs the server response.
+  var optimisticAdvanced = false;
+  if(score !== null && LIVE_REVIEW_MAT !== mat) {
+    var allDoneHere = LIVE_LINEA_DATA.jugadores.every(function(j){ return j.scores[hoyo - 1] !== null; });
+    if(!allDoneHere) {
+      liveAutoAdvancePlayer(hoyo, mat);
+      optimisticAdvanced = true;
+    }
+  }
+
   function doPost(){
     return ngtApiPost({
       action: 'cargarHoyoLive',
@@ -6661,7 +6673,7 @@ function liveSmConfirm(v){
         LIVE_REVIEW_MAT = null;
         var jugRev = r.jugadores.find(function(j){ return j.matricula === mat; });
         if(jugRev) liveFirmarJugador(jugRev).catch(function(e){ liveShowToast('Error al actualizar LB: ' + e.message); });
-      } else {
+      } else if(!optimisticAdvanced) {
         liveAutoAdvancePlayer(hoyo, mat);
       }
     }
