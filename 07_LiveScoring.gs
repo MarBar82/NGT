@@ -157,6 +157,10 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
       else if (net2 < net1) { pts2++; detallePorHoyo[h] = 'lose'; }
       else                  { detallePorHoyo[h] = 'halved'; }
       hoyosJugados++;
+      // Early termination: match is decided when |diff| > holes remaining — stop counting.
+      // Prevents impossible results like "8&2" when hoyos are still played for other formats.
+      const diffSoFar = pts1 - pts2;
+      if (Math.abs(diffSoFar) > (18 - hoyosJugados)) break;
     }
 
     const diff      = pts1 - pts2;
