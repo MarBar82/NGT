@@ -1478,7 +1478,8 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .tb-admin-icon:hover{color:#fff;background:rgba(255,255,255,.1);}
 .tb-player-chip{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:4px 10px 4px 6px;cursor:pointer;}
 .tb-player-chip:hover{background:rgba(255,255,255,.14);}
-.tb-player-avatar{width:24px;height:24px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;}
+.tb-player-avatar{width:24px;height:24px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;overflow:hidden;}
+.tb-player-avatar img,.ham-avatar img{width:100%;height:100%;object-fit:cover;display:block;}
 .tb-player-apodo{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:rgba(255,255,255,.9);text-transform:uppercase;}
 /* ══ BOTTOM NAV (Epic 8) ══════════════════════════════════════════════════════ */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--navy);display:flex;align-items:stretch;z-index:200;border-top:1px solid rgba(255,255,255,.1);padding-bottom:env(safe-area-inset-bottom);}
@@ -1501,7 +1502,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .hamburger-wrap.open{pointer-events:auto;display:block;}
 .ham-header{background:var(--navy);padding:20px 18px 16px;display:flex;align-items:center;justify-content:space-between;}
 .ham-player{display:flex;align-items:center;gap:10px;}
-.ham-avatar{width:36px;height:36px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;color:#fff;}
+.ham-avatar{width:36px;height:36px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;color:#fff;overflow:hidden;}
 .ham-name{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.04em;color:#fff;}
 .ham-rol{font-size:10px;letter-spacing:.1em;color:var(--gold);font-weight:700;text-transform:uppercase;}
 .ham-close{background:none;border:none;color:rgba(255,255,255,.7);font-size:22px;cursor:pointer;padding:0;}
@@ -1539,9 +1540,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       <div class="tb-player-avatar" id="tb-player-avatar">?</div>
       <span class="tb-player-apodo" id="tb-player-apodo">—</span>
     </div>
-    <button class="tb-admin-icon" id="tb-admin-icon" onclick="pg('admin',null)" style="display:none;" title="Admin">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93A10 10 0 0 0 19.07 19.07"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
-    </button>
   </div>
 </div>
 
@@ -5247,19 +5245,34 @@ function applySession(sess) {
   const avatarEl = document.getElementById('tb-player-avatar');
   const apodoEl = document.getElementById('tb-player-apodo');
   if (chip) chip.style.display = 'flex';
-  if (avatarEl) avatarEl.textContent = (sess.apodo || sess.nombre || '?').charAt(0).toUpperCase();
   if (apodoEl) apodoEl.textContent = sess.apodo || sess.nombre || sess.mat;
+  // Set avatars with real photo + initial fallback
+  var mat = sess.mat || '';
+  var displayName = sess.apodo || sess.nombre || '?';
+  var initial = displayName.charAt(0).toUpperCase();
+  function setAvatar(el) {
+    if (!el) return;
+    if (mat) {
+      var img = document.createElement('img');
+      img.alt = initial;
+      img.src = './fotos/' + mat + '.jpg';
+      img.onerror = function() { el.removeChild(img); el.textContent = initial; };
+      el.textContent = '';
+      el.appendChild(img);
+    } else {
+      el.textContent = initial;
+    }
+  }
+  setAvatar(avatarEl);
   // Update hamburger header
   const hamAvatar = document.getElementById('ham-avatar');
   const hamName = document.getElementById('ham-name');
   const hamRol = document.getElementById('ham-rol');
-  if (hamAvatar) hamAvatar.textContent = (sess.apodo || '?').charAt(0).toUpperCase();
+  setAvatar(hamAvatar);
   if (hamName) hamName.textContent = sess.apodo || sess.nombre || sess.mat;
   if (hamRol) hamRol.textContent = sess.rol || 'Jugador';
-  // Admin controls — visible only for Admin role (topbar icon only)
+  // Admin visibility (hamburger only — handled in Part B)
   const isAdmin = (sess.rol === 'Admin');
-  const adminIcon = document.getElementById('tb-admin-icon');
-  if (adminIcon) adminIcon.style.display = isAdmin ? 'flex' : 'none';
   // Pre-populate MIT_PLAYER from session so Cargar Tarjeta doesn't ask for mat again
   if (!MIT_PLAYER) {
     MIT_PLAYER = { matricula: sess.mat, nombre: sess.nombre || '', apodo: sess.apodo || '' };
@@ -5553,9 +5566,7 @@ function ngtLogout() {
   MIT_PLAYER = null;
   // Reset topbar
   const chip = document.getElementById('tb-player-chip');
-  const adminIcon = document.getElementById('tb-admin-icon');
   if (chip) chip.style.display = 'none';
-  if (adminIcon) adminIcon.style.display = 'none';
   // Show login overlay
   loginShowOverlay();
   document.getElementById('login-s1').style.display = 'block';
