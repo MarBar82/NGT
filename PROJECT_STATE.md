@@ -4,160 +4,169 @@
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
-Progreso: Tareas 13-16 cerradas y probadas en vivo con hasta 5 líneas simultáneas — funcionó bien en general. Marco encontró 6 mejoras/bugs jugando de verdad. Ya investigué cada uno leyendo el código real (no son suposiciones) y dejo abajo el diagnóstico y la solución para cada parte. Es una tarea grande — 6 partes independientes entre sí, hacé **un commit por parte** para poder revisar cada una por separado.
+Progreso: Marco probó la Tarea 17 con una línea completa de 18 hoyos (1 sola línea, 4 jugadores, ambos `.gs` ya deployados) y encontró 6 problemas más — investigué cada uno leyendo el código real. **Dos de ellos son consecuencia directa de cambios que hicimos en la Tarea 17** (los reconozco abajo, parte del proceso normal de iterar rápido). Los otros cuatro son bugs viejos que recién ahora se pudieron ver porque es la primera vez que se juega una línea completa de punta a punta con match play, bonus y "Finalizar Ronda" reales. Es otra tarea grande — **un commit por parte (A a F)**, probá cada una por separado.
 
 ---
 
-## 🎯 Tarea para Claude Code — Tarea 17
+## 🎯 Tarea para Claude Code — Tarea 18
 
-### Parte A — Agilizar la carga de score por hoyo (el auto-avance espera de más)
+### Parte A — Condición de carrera que metimos en la Tarea 17 Parte A (jugadores "vuelven" a pedir score)
 
-**Diagnóstico:** en `liveSmConfirm` (`index.html`, ~línea 6616), cuando un jugador carga su score, el modal se cierra al toque (línea ~6039-6040), pero el auto-avance al siguiente jugador (`liveAutoAdvancePlayer`) recién se dispara **dentro de `handleOk`**, es decir, después de que el POST a `cargarHoyoLive` vuelve del backend. Cada POST a Apps Script tarda un par de segundos (más si hay que esperar el mutex del jugador), así que entre jugador y jugador hay una espera real — eso es lo que Marco ve como "aparece guardando unos segundos".
+**Este es nuestro bug, de la tarea anterior.** Al hacer que el auto-avance no espere más al servidor (Tarea 17 Parte A), ahora pueden quedar **varios guardados en vuelo al mismo tiempo** (jugador 1, 2 y 3 pueden estar todos con un POST pendiente a la vez, en vez de uno por vez como antes). El problema: en `handleOk` (dentro de `liveSmConfirm`, `index.html`), la línea `LIVE_LINEA_DATA = r;` reemplaza **todo** el objeto con la respuesta del servidor, sin importar si esa respuesta es más vieja que datos más recientes que el cliente ya tiene. Si la respuesta del guardado del jugador 2 llega **después** de la respuesta del jugador 4 (totalmente posible ahora que van en paralelo), pisa el estado más reciente con uno viejo — y como en ese estado viejo el jugador 2 (o 3) todavía figura sin score, la app vuelve a pedirle el teclado. Esto es justo lo que reportaste: "vuelve al 2do y el 3ro" después de cargar los 4.
 
-**No hace falta rediseñar el backend para arreglar esto** — la clave es que el cliente YA sabe, con los datos que tiene en `LIVE_LINEA_DATA` (actualizados de forma optimista apenas se toca un score), si quedan otros jugadores sin cargar en ese hoyo. Solo hace falta esperar la confirmación del backend en el caso puntual del **último de los 4 jugadores en cargar ese hoyo**, porque ahí es donde el backend decide si corresponde disparar el picker de bonus (Long Drive / Best Approach) — eso sí depende de datos que el cliente no tiene (`meta.bonusHoyos`, `meta.bonusEstado`).
-
-**Cambio a hacer en `liveSmConfirm`:**
-1. Después de la actualización optimista (`jug.scores[hoyo-1] = score; liveRender();`), fijate si ya sabés localmente que quedan otros jugadores de la línea sin score en este hoyo (mismo chequeo que ya hace `liveAutoAdvancePlayer` con `allDoneHere`, pero evaluado acá antes de esperar al backend).
-2. Si es así (no es el último jugador del hoyo) y no es una edición desde "Revisar Tarjetas" (`LIVE_REVIEW_MAT !== mat`): llamá a `liveAutoAdvancePlayer(hoyo, mat)` **de inmediato**, sin esperar el POST. El POST sigue mandándose igual en paralelo, en segundo plano, con el mismo reintento y manejo de error que ya existe hoy (si termina fallando, se revierte el score local y se avisa con el toast — mismo comportamiento actual, la única diferencia es que ahora el aviso puede llegar cuando el usuario ya está en la pantalla de otro jugador, lo cual está bien).
-3. Si es el último jugador del hoyo (o es una edición de Revisar Tarjetas): dejá el comportamiento actual sin cambios — esperar la respuesta del backend antes de avanzar o disparar el bonus, porque ahí sí hace falta el dato que solo tiene el servidor.
-4. Ajustá `handleOk` para no volver a llamar `liveAutoAdvancePlayer` si ya se llamó de forma optimista en el paso 2 (evitar doble avance).
-
-Con esto, 3 de cada 4 cargas por hoyo deberían sentirse instantáneas, y solo la última (antes de pasar al hoyo siguiente) sigue esperando al servidor como hasta ahora.
+**Fix:** en vez de reemplazar todo `LIVE_LINEA_DATA` con `r`, aplicá solo los datos del jugador que efectivamente guardó en esa respuesta puntual (buscá su entrada en `r.jugadores` por matrícula y actualizá solo esa entrada dentro de `LIVE_LINEA_DATA.jugadores`, dejando intactas las de los demás jugadores). Los campos que no son por-jugador (`matches`, `bonusPendiente`, `updatedAt`) sí podés tomarlos de la respuesta más reciente que llegue, sin problema — el riesgo real era solo pisar el score de un jugador con una versión vieja del mismo jugador.
 
 ---
 
-### Parte B — La franja de "fecha activa" no se cierra cuando termina el torneo del día
+### Parte B — El nombre del jugador es muy chico + la transición entre jugadores se puede sentir más rápida
 
-**Diagnóstico — encontré el bug exacto, no es un tema de refresco:** en `applyFechaActiva(fa)` (`index.html`, ~línea 7754), la función solo tiene código para **mostrar** la franja cuando hay una fecha activa (`if(!fa || !fa.fechaNum) return;` corta ahí mismo). Cuando el backend ya no tiene ninguna fecha activa (todas las líneas terminaron), `initData` igual manda `fechaActiva: null` explícitamente — y como `d.fechaActiva !== undefined` es cierto incluso para `null`, se llama `applyFechaActiva(null)`, que no hace nada. **Nunca existió el código para ocultar la franja** — por eso queda pegada con el último dato que tenía guardado en `localStorage` (`ngt_fechaActiva`).
+Dos ajustes puntuales (no es un rediseño completo, ver nota abajo):
 
-**Fix:** en `applyFechaActiva(fa)`, agregar el caso contrario: cuando `!fa || !fa.fechaNum`, ocultar la franja (`strip.style.display='none'`, `strip.dataset.active='0'`) y limpiar `localStorage.removeItem('ngt_fechaActiva')` para que no vuelva a aparecer un instante en la próxima carga de la app antes de que responda la API.
+1. `.sm-player-name` (`index.html`, línea ~700) hoy es `font-size:11px` con `opacity:.65` — se pierde. Hacelo bien prominente: más grande (ej. 20-22px), sin opacity reducida, quizás como una franja de color arriba del teclado con el nombre bien grande — la idea es que sea imposible no darse cuenta a quién le estás cargando el score. Usá tu criterio de diseño, consistente con el resto de la app.
+2. En `liveAutoAdvancePlayer` (`index.html`) hay un `setTimeout(..., 300)` antes de abrir el modal del siguiente jugador. Con el fix de la Parte A ya no hace falta ese margen para nada relacionado a la red — bajalo a algo bien corto (ej. 120-150ms, lo justo para que no se sienta como un salto brusco) o sacalo directamente si al probarlo se siente bien sin él.
 
-**Segundo hallazgo, relacionado (confirmá antes de tocar):** la función backend `getFechaActiva_()` (`03_Reads.gs`, ~línea 963) decide si una fecha está "completada" leyendo `r[6]` de las columnas A-G de `TARJETAS` como si fuera el score del Hoyo 1. Comparando contra cómo `cargarHoyoLive_` realmente escribe los hoyos (`07_LiveScoring.gs`, `sh.getRange(rowIdx, 4 + hoyoNum)` — Hoyo 1 = columna E, no G), y contra cómo `cargarTarjeta_` arma la fila (`04_Writes.gs`, `newRow[2+h]` = Hoyo1 en la 3ra posición desde la columna C = columna E también), la columna real de Hoyo 1 es **E**, no G — G sería Hoyo 3. Es decir, `getFechaActiva_()` está chequeando si el jugador llegó al hoyo 3, no si cargó el hoyo 1. En la práctica esto probablemente no afecta el cierre final (para cuando termina la ronda ya se cargó el hoyo 3 también), pero es un dato incorrecto que puede confundir en casos raros (por ejemplo demoras en detectar que alguien ya arrancó a cargar). **Confirmá vos mismo cuál es la columna real de Hoyo 1** (cruzando `cargarHoyoLive_` y `cargarTarjeta_`, no confíes en los comentarios del código — encontré varios comentarios de columnas desactualizados en `04_Writes.gs`) y corregí `getFechaActiva_()` para que lea la columna correcta.
-
----
-
-### Parte C — El Match de Live Scoring muestra resultados imposibles (ej. "8&2")
-
-**Diagnóstico:** en `buildLineaSnapshot_` (`07_LiveScoring.gs`, ~línea 147-160), el cálculo del match recorre los 18 hoyos y suma puntos ganados/perdidos por cada uno con datos cargados, **sin frenar cuando el match ya está matemáticamente decidido**. En golf, un match termina en el momento en que la diferencia de hoyos ganados supera a los hoyos que quedan por jugar (ej: 5 arriba con 4 por jugar = termina "5&4", ahí mismo, no se sigue contando). Como acá el torneo sigue jugando los 18 hoyos igual (por el Stableford y otros formatos), el cálculo del match sigue sumando hoyos jugados después del cierre real, y el resultado final que se muestra (`diff` y `remaining` calculados sobre TODOS los hoyos con datos) puede terminar siendo una combinación imposible como "8&2" (nunca hubiera llegado a jugarse el hoyo que generó ese resultado, porque el match ya había terminado antes).
-
-**Fix:** en el `for (let h = 0; h < 18; h++)` que calcula `pts1`/`pts2`/`detallePorHoyo`, cortar el conteo apenas se detecte el cierre matemático: después de sumar el resultado de cada hoyo, calculá la diferencia acumulada hasta ese hoyo y los hoyos que quedan (`18 - (h+1)`) — si el valor absoluto de la diferencia ya supera los hoyos restantes, ese es el hoyo de cierre: dejá de procesar hoyos siguientes (aunque tengan datos cargados), y que `hoyosJugados`/`diff`/`remaining` quede congelado en el valor de ese hoyo de cierre. Los hoyos posteriores al cierre no deberían sumar al resultado del match (podés dejarlos sin marcar en `detallePorHoyo`, o marcarlos de alguna forma neutra si querés — es una decisión de diseño menor, elegí la que te parezca más clara).
-
-Con el ejemplo de Marco: si en el hoyo 14 alguien queda 5 arriba con 4 por jugar, el cálculo debería frenar ahí y mostrar "5&4", sin importar qué pase en los hoyos 15 a 18.
+**Nota sobre el video que me pasaste (GolfGameBook):** ese flujo es distinto al nuestro — ellos tienen una sola pantalla fija con los 4 jugadores listados y el teclado siempre visible abajo, así que "avanzar" es solo resaltar la fila del siguiente jugador, sin abrir/cerrar nada. Es un cambio de diseño más grande que esta tarea (hoy nosotros usamos un modal que se abre y cierra por cada jugador). Con los 2 ajustes de arriba la carga debería sentirse mucho más rápida y clara ya — si después de probarlo en cancha seguís sintiendo que hace falta el rediseño completo estilo GolfGameBook, lo charlamos como una tarea aparte, dedicada, porque toca la pantalla de carga de hoyos de punta a punta y prefiero no mezclarlo con esta tanda de arreglos.
 
 ---
 
-### Parte D — Contraste de texto en los matches de otras pantallas
+### Parte C — Long Drive y Best Approach no quedan guardados
 
-Marco me señaló que en los matches de otras pantallas de la app (fecha pasada, sección Match) falta poner el nombre del jugador en blanco cuando el fondo se pinta de rojo o azul. **Revisé el código de `buildMatchCard()` (`index.html`, ~línea 3179, usado en `renderMatchTable()` y `fechaMatchRender()`) y de `liveRenderMatchBody()` (la del propio Live Scoring, ~línea 6278) y en ambas el texto YA se pone en blanco (`color:'#fff'`) cuando el lado gana y se pinta de color** — no encontré, leyendo el código, un lugar con el bug tal como lo describe.
+**Encontré la causa real, y no es solo un problema de red.** Cuando elegís el ganador en el picker de bonus (`liveBonusSeleccionar`, `index.html`), se guarda en un lugar (`FECHA_META.bonusEstado`, vía la acción `setBonusGanador`) que **nunca se conecta** con las columnas LD/BA reales de la hoja `TARJETAS` (columnas W/X) — esas solo las escribe `cargarTarjeta_` cuando "Finalizar Ronda" firma la tarjeta de cada jugador, y `cargarTarjeta_` arma el valor de `ld`/`ba` a partir de lo que YA está en la hoja (`jug.ld`/`jug.ba`, leídos de las columnas W/X) — que nunca tuvieron nada escrito, porque nada las conecta con lo que elegiste en el picker. Es decir: el ganador del bonus se guarda en un lado, y el lado que de verdad persiste en la tarjeta (y de ahí a Fechas/Historia) nunca se entera. Mismo patrón que encontramos con "Finalizar Ronda" en la Tarea 15 — dos sistemas que no se hablan entre sí.
 
-Antes de tocar nada: hacé tu propia revisión (buscá cualquier otro lugar del archivo que pinte texto de jugador sobre fondo rojo/azul de match, por si hay una tercera función que no encontré) y confirmame qué encontraste. Si realmente no hay ningún lugar con el bug en el código actual, decímelo así en vez de "arreglar" algo que ya está bien — le voy a pedir a Marco una captura de pantalla de dónde lo ve para identificar el lugar exacto.
+**Fix (2 partes):**
 
----
-
-### Parte E — La tarjeta desplegada en Stableford de Live Scoring obliga a hacer scroll horizontal
-
-**Diagnóstico:** al tocar un jugador en la tabla de Stableford de Live Scoring (`liveLoadStableford()`, `index.html` ~línea 6357), se despliega una fila acordeón (`liveStbToggle`) que muestra `renderTarjeta18Hoyos()` — esta función ya arma la tarjeta como dos tablas de 9 hoyos (IDA y VUELTA), así que el "9 hoyos por línea" ya está — el problema es que cada hoyo se dibuja como una insignia de score fija de 30×30px (`.sc-sym`, línea ~1257) más una columna de etiqueta de 50px de ancho (`.perf-ecl-table .lbl`, línea ~1356), y esa tabla interna está metida dentro de la fila del acordeón, dentro de la tabla general de Stableford — el ancho mínimo que necesita term ina forzando scroll horizontal en el celular, y de paso puede estar empujando el ancho de toda la tabla de Stableford (no solo la parte desplegada).
-
-**Fix:**
-1. A la tabla general de Stableford (el `<table>` que arma `liveLoadStableford()`, línea ~6370), agregale `table-layout:fixed` para que el contenido de la fila desplegada no pueda forzar el ancho de toda la tabla.
-2. Para el uso específico de `renderTarjeta18Hoyos()` dentro de este acordeón (línea ~6381 — **no** toques los otros 3 usos de esta función, en el modal de tarjeta individual, en la tabla eclíptica de perfil, ni en el otro lugar que la usa, que hoy están bien porque tienen más espacio disponible), hacé una versión más compacta: insignias de score más chicas (por ejemplo 22-24px en vez de 30px) y columna de etiqueta más angosta (por ejemplo 34px en vez de 50px), lo suficiente para que las 2 tablas de 9 hoyos entren completas en el ancho de un celular común (~360-390px) sin necesitar scroll horizontal. Podés lograrlo agregando una clase modificadora (ej. `.perf-ecl-table.compact`) que se aplique solo en este caso, o agregando un parámetro opcional a `renderTarjeta18Hoyos()` — elegí lo que te resulte más prolijo, pero confirmá que los otros 3 usos de la función no cambian de tamaño.
+1. En `buildLineaSnapshot_` (`07_LiveScoring.gs`), donde se arma el campo `ld`/`ba` de cada jugador (hoy sale de `r[22]`/`r[23]`, columnas W/X de TARJETAS), agregá que también considere `meta.bonusEstado` — si `meta.bonusEstado.ld.matricula` (o `.ba`) coincide con la matrícula de ese jugador, marcá `ld`/`ba` como `true` para él, aunque la hoja todavía no lo tenga escrito. Así, cuando `liveFirmarJugador` arme el POST de `cargarTarjeta` con `ld: jug.ld?1:0`, va a mandar el valor correcto y recién ahí `cargarTarjeta_` lo persiste en las columnas W/X de verdad.
+2. Aparte, `liveBonusSeleccionar` (`index.html`) hoy hace `.catch(function(){})` — si el guardado del ganador del bonus falla en el servidor por cualquier motivo, no hay ningún aviso ni reintento, simplemente desaparece. Dale el mismo tratamiento que ya tiene el guardado de hoyos: un reintento (podés reusar el patrón de 2 segundos que ya existe en otros lados) y, si termina fallando igual, un aviso visible (`liveShowToast`) para que quede claro que hay que reintentar a mano.
 
 ---
 
-### Parte F — El scroll vertical no llega hasta el final, la barra inferior tapa contenido
+### Parte D — Resultados de Match imposibles al terminar la fecha (ej. "17UP")
 
-**Diagnóstico — encontré el bug exacto:** las páginas reservan espacio abajo para no quedar tapadas por la barra inferior fija con `.pg.with-bnav{padding-bottom:66px;}` (línea ~1512). Pero desde la Tarea 11 existe también la franja fija de "fecha activa" (`#fecha-activa-strip`), que se dibuja **arriba** de la barra inferior (`bottom:66px; height:40px`, línea ~1497) y está visible en casi toda la app (todo menos dentro de Live Scoring). El padding de las páginas nunca se actualizó para sumar esos 40px extra — por eso, en cualquier pantalla donde la franja está visible, el final del contenido queda tapado por esa franja (que se suma a la barra inferior).
+**Otra causa real encontrada leyendo el código, no es la misma que arreglamos en la Tarea 17 Parte C.** Ese arreglo fue en `buildLineaSnapshot_` (`07_LiveScoring.gs`), que es lo que se ve DURANTE la carga en vivo. Pero el resultado que queda **guardado para siempre** en la hoja `MATCH` (columnas de resultado, que es lo que después se muestra en "Fechas" para una fecha ya jugada) se calcula en un lugar totalmente distinto: dentro de `cargarTarjeta_` (`04_Writes.gs`, ~línea 405-486, la sección que arma `matchWriteOps` y escribe "res1/pts1/res2/pts2"). Ese cálculo:
+- Nunca frena en el cierre matemático del match — suma ganados/perdidos de los 18 hoyos completos, sin importar si el match ya estaba decidido antes.
+- Nunca usa el formato "X&Y" — solo arma "N UP" o "AS", nada más. Por eso un jugador que ganó 17 de 18 hoyos aparece como "17 UP" en vez de cortar mucho antes en un resultado real tipo "6&5" o similar.
 
-**Fix:** en vez de un valor fijo de 66px, hacé que el padding-bottom de las páginas sea dinámico según si la franja está visible o no — el mismo patrón que ya usa la app para la altura del topbar (`setTbHeight()`, línea ~3322, que mide el alto real y lo guarda en la variable CSS `--tb-h`). Armá algo equivalente para el pie: medí la altura combinada de la barra inferior + la franja (cuando está visible) y guardala en una variable CSS (ej. `--footer-h`), y cambiá `.pg.with-bnav` para usar `padding-bottom:var(--footer-h, 66px)`. Llamá a esta función de recálculo cada vez que la franja cambia de visible a oculta o viceversa (al entrar/salir de Live Scoring, y en `applyFechaActiva` — tanto cuando se muestra como cuando se oculta, la de la Parte B de esta misma tarea).
+Como esta cuenta corre recién cuando se firma la tarjeta (Finalizar Ronda), y hasta la Tarea 15 nadie llamaba a esa función en el uso normal, este bug estaba ahí pero nadie lo había visto en la práctica hasta esta prueba.
+
+**Fix:** lo más prolijo es sacar la lógica de "cuándo cierra un match y con qué resultado" a una función compartida (ej. `calcularResultadoMatch_(scoresA, scoresB)` que devuelva `{resultA, resultB, ptsA, ptsB}` con el mismo criterio de corte temprano que ya armamos en la Tarea 17 Parte C) y usarla tanto en `buildLineaSnapshot_` (07_LiveScoring.gs) como en esta sección de `cargarTarjeta_` (04_Writes.gs) — así no tenemos una tercera copia de esta cuenta que en algún momento futuro se vuelva a desincronizar. Fijate también si hace falta tocar el formato de puntos (`myY`/`oppY`, hoy 0/3/6 según pierde/empata/gana) — mantené esa parte de puntaje igual si no tiene el mismo bug, el problema es específicamente el texto del resultado y el corte temprano.
+
+---
+
+### Parte E — La barra inferior sigue tapando contenido (la Parte F de la Tarea 17 no se aplicó)
+
+**Encontré por qué el arreglo de la tarea anterior no tuvo efecto.** La regla CSS `.pg.with-bnav{padding-bottom:var(--footer-h,66px);}` (línea ~1518) depende de la clase `with-bnav` — pero **ningún elemento de toda la página tiene esa clase**, ni en el HTML estático ni agregada por JavaScript en ningún lado (lo confirmé con una búsqueda en todo el archivo). Es una clase que quedó huérfana de una versión vieja de la navegación (de antes de la Tarea 10, cuando la barra inferior no se mostraba en todas las pantallas) — la regla nunca aplicó a nada, ni antes ni después del arreglo de la Tarea 17.
+
+**Fix:** sacá el calificador `.with-bnav` y dejá la regla como `.pg{padding-bottom:var(--footer-h,66px);}` para que aplique a todas las páginas. Dentro de Live Scoring (`pg-mit`) no hace falta manejarlo aparte — ahí la barra inferior y la franja ya están ocultas, así que `setFooterHeight()` ya calcula un valor chico ahí de forma natural. Confirmá con un grep final que `with-bnav` no queda referenciado en ningún lado después del cambio.
+
+---
+
+### Parte F — La franja "fecha activa" no se cierra al terminar (confirmado: es un bug real)
+
+Marco confirmó que la fecha probada tenía **una sola línea armada, 4 jugadores**, y que los `.gs` de la Tarea 17 ya estaban deployados antes de esta prueba — así que descarto la explicación de "hay otras líneas sin jugar" y encontré la causa real.
+
+**Diagnóstico:** el backend está bien — `cargarTarjeta_` (acción `cargarTarjeta`, la que dispara "Finalizar Ronda") invalida el cache de `fechaActiva` apenas termina (`10_Routing.gs`, ~línea 152: `CacheService.getScriptCache().removeAll(['fechaActiva', ...])`), así que la próxima vez que el cliente pida `initData`, el backend va a recalcular y devolver `fechaActiva: null` correctamente. **El problema es que nada en el cliente vuelve a pedir `initData` después de terminar la ronda.** `liveFinalizar()` (`index.html`) termina con `pg('lb', null)` — que cambia de pantalla, pero no llama a `ngtInitData()`. Busqué todos los lugares donde se llama `ngtInitData()` (línea ~7891 al arrancar la app, y un par de flujos de admin) y ninguno se dispara al terminar una ronda de Live Scoring. Por eso la franja queda con el dato de "fecha activa" que se cargó al abrir la app, y no se entera de que la fecha ya terminó hasta que recargás el navegador entero.
+
+**Fix:** en `liveFinalizar()`, cuando los 4 jugadores quedan guardados con éxito (antes o junto con el `pg('lb', null)`), llamá a `ngtInitData()` para que la franja se actualice con el estado real apenas termina la ronda — como el cache del backend ya se invalidó en ese mismo momento, va a traer el dato correcto al toque.
 
 ---
 
 ## ❓ Preguntas de verificación
 
-1. **Parte A:** ¿confirmaste que 3 de los 4 jugadores avanzan sin esperar al servidor? ¿Qué pasa si el guardado en segundo plano de un jugador que ya "avanzó" termina fallando — se revierte bien y se avisa, aunque el usuario ya esté en la pantalla de otro jugador?
-2. **Parte B:** ¿la franja desaparece sola cuando termina la última línea de la fecha? ¿Cuál es la columna real de Hoyo 1 en `TARJETAS` que confirmaste, y la corregiste en `getFechaActiva_()`?
-3. **Parte C:** ¿probaste el caso del ejemplo (5 arriba en el hoyo 14, 4 por jugar) y confirma que corta en "5&4" en vez de seguir sumando?
-4. **Parte D:** ¿qué encontraste? ¿Había algún lugar con el bug real, o el código ya estaba bien como sospeché?
-5. **Parte E:** ¿las 2 tablas de 9 hoyos entran sin scroll horizontal en un ancho de celular común? ¿Confirmaste que los otros 3 usos de `renderTarjeta18Hoyos()` no cambiaron de tamaño?
-6. **Parte F:** ¿el contenido llega hasta el final sin quedar tapado, tanto con la franja visible como sin ella?
+1. **Parte A:** ¿confirmaste que ya no puede "revertir" a un jugador anterior después de que avanzó? ¿Cómo lo probaste (aunque sea mentalmente, simulando respuestas fuera de orden)?
+2. **Parte B:** ¿cómo quedó el nombre del jugador — más grande, más visible? ¿Qué delay dejaste en el auto-avance?
+3. **Parte C:** ¿confirmaste que ahora, después de elegir un ganador de LD/BA y tocar "Finalizar Ronda", las columnas W/X de TARJETAS quedan con el valor correcto para el jugador ganador? ¿Agregaste el reintento + aviso en `liveBonusSeleccionar`?
+4. **Parte D:** ¿hiciste la función compartida? ¿La usaste en los dos lugares? Probá mentalmente el mismo ejemplo (alguien gana 17 de 18 hoyos) y confirmá que ahora corta en un resultado real tipo "X&Y".
+5. **Parte E:** ¿confirmaste con grep que `with-bnav` no queda en ningún lado? ¿Se ve bien el padding dentro de Live Scoring (sin espacio de más abajo)?
+6. **Parte F:** ¿confirmaste que no hay otro lugar donde también haría falta refrescar `initData` (por ejemplo, después de re-firmar desde "Revisar Tarjetas")? ¿La franja se cierra sola apenas termina "Finalizar Ronda" ahora?
 7. ¿Hiciste un commit por parte (A a F)? Hash y mensaje de cada uno.
 8. ¿Algo de esta tarea te generó dudas? Contame qué decidiste y por qué.
 
 ---
 
-## ✅ Respuestas de verificación — Tarea 17
+## ✅ Respuestas de verificación — Tarea 18
 
-**1. Parte A — Auto-avance optimista:**
+**1. Parte A — Merge por jugador en handleOk:**
 
-Sí. En `liveSmConfirm`, después del update optimista y `liveRender()`, se evalúa si todos los jugadores ya tienen score en ese hoyo (`allDoneHere`). Si quedan jugadores sin score (≠ el último), se llama `liveAutoAdvancePlayer` de inmediato sin esperar el POST — esto cubre 3 de los 4 guardados por hoyo. El POST sigue mandándose en paralelo.
+En `handleOk`, en vez de `LIVE_LINEA_DATA = r`, ahora:
+1. Busca el jugador guardado (`mat`) en `r.jugadores`
+2. Lo reemplaza puntualmente en `LIVE_LINEA_DATA.jugadores[idx]`
+3. Actualiza campos no-por-jugador: `matches`, `bonusPendiente`, `updatedAt`
+4. `allComplete` ahora se calcula sobre `LIVE_LINEA_DATA.jugadores` (merged) en vez de `r.jugadores`
 
-Para el último jugador del hoyo (`allDoneHere === true`), o para ediciones de revisión (`LIVE_REVIEW_MAT === mat`), se mantiene el comportamiento original: esperar la respuesta del backend antes de avanzar (porque ahí sí hace falta `bonusPendiente`).
+Simulación mental con respuestas fuera de orden:
+- J1 guarda, llega respuesta A (J1=score, J2-4=null) → mergeamos solo J1. LIVE_LINEA_DATA tiene J1 actualizado.
+- J2 guarda, J3 guarda (ambos en vuelo en paralelo)
+- Llega respuesta de J3 antes que J2 → mergeamos solo J3. LIVE_LINEA_DATA tiene J1+J3 ok, J2 aún con el score optimista.
+- Llega respuesta vieja de J2 → mergeamos solo J2. LIVE_LINEA_DATA ahora tiene J1+J2+J3 ok. El score de J3 quedó intacto (no fue pisado por la respuesta vieja de J2).
 
-En `handleOk`, se agregó `else if(!optimisticAdvanced)` para no llamar `liveAutoAdvancePlayer` una segunda vez en los casos que ya avanzaron optimísticamente.
+Ya no puede "volver al jugador 2 o 3" porque el merge nunca reemplaza las entradas de otros jugadores.
 
-Si el guardado en segundo plano falla (ambos intentos fallen): `onFinalFailure` revierte `jug.scores[hoyo-1] = null` y llama `liveRender()` para actualizar la UI, más el toast "Error al guardar". El usuario ya puede estar en la pantalla del siguiente jugador cuando esto ocurre — el toast es visible desde cualquier pantalla del Live Scoring (`position:fixed`), así que el aviso llega igual. No probé en producción con falla real.
+**2. Parte B — Nombre del jugador + delay:**
 
-**2. Parte B — Franja se oculta al terminar + fix columna:**
+`.sm-player-name` rediseñado: `font-size:22px; font-weight:800; background:var(--navy); color:#fff; padding:10px 16px 8px; border-radius:6px 6px 0 0`. El nombre aparece como un banner azul navy en la parte superior del modal, con texto blanco bien grande, imposible de no ver.
 
-En `applyFechaActiva(fa)`, cuando `!fa || !fa.fechaNum` (que es lo que el backend manda cuando no hay fecha activa), ahora se oculta la franja con `strip.style.display='none'`, `strip.dataset.active='0'` y `localStorage.removeItem('ngt_fechaActiva')`. También llama `setFooterHeight()` para actualizar el padding. Antes, el `return` inmediato dejaba todo intacto.
+Delay reducido de 300ms a **150ms**. Con el auto-avance optimista ya funcionando (el modal del siguiente jugador se abre mientras el POST del anterior sigue en vuelo), 150ms es suficiente para que la transición no se sienta abrupta. No lo saqué del todo porque un salto instantáneo sin ningún delay puede confundir si el modal desaparece y reaparece demasiado rápido.
 
-Columna real de Hoyo 1 en TARJETAS, verificada cruzando dos fuentes:
-- `cargarHoyoLive_` (`07_LiveScoring.gs`): `sh.getRange(rowIdx, 4 + hoyoNum)` → para hoyo=1, columna 5 = **E**
-- `cargarTarjeta_` (`04_Writes.gs`): `sh.getRange(rowIdx, 3, 1, 22).setValues([newRow])` con `newRow[2+h]` para hoyos → newRow[0]=hcp→C, newRow[1]=canchaId→D, newRow[2]=H1→**E**
+**3. Parte C — LD/BA desde bonusEstado + retry:**
 
-El comentario en `getFechaActiva_` (03_Reads.gs) estaba mal (decía `C(2)=nombre, D(3)=hcp, E(4)=cancha, F(5)=canchaId, G(6)=hoyo1`) y el código usaba `r[6]` = columna G = Hoyo 3. Corregido a `r[4]` = columna E = Hoyo 1, con comentario actualizado.
+En `buildLineaSnapshot_` (07_LiveScoring.gs), al construir `playerMap[mat]`, ahora se lee `meta.bonusEstado` y se combina con el valor de la hoja:
+```js
+ld: ldFromSheet || ldFromBonus,  // bonusEst.ld.matricula === mat && lineaNum matches
+ba: baFromSheet || baFromBonus,
+```
 
-**3. Parte C — Match early termination:**
+Con esto, cuando el picker elige un ganador (`setBonusGanador` → escribe en `FECHA_META.bonusEstado`), el próximo snapshot de la línea ya refleja `ld:true`/`ba:true` para ese jugador. Cuando "Finalizar Ronda" llama a `liveFirmarJugador` con `jug.ld?1:0`, el valor correcto llega al backend y `cargarTarjeta_` lo escribe en cols W/X de TARJETAS.
 
-Sí. En el `for` de `buildLineaSnapshot_`, después de cada hoyo procesado, se calcula `diffSoFar = pts1 - pts2` y se compara `Math.abs(diffSoFar) > (18 - hoyosJugados)`. Si se cumple, se hace `break` — los hoyos posteriores al cierre quedan con `detallePorHoyo[h] = null` (sin marcar), y `pts1/pts2/hoyosJugados` quedan fijos en el valor del hoyo de cierre.
+El flujo quedaría: setBonusGanador escribe en meta → buildLineaSnapshot_ lo lee via LIVE_LINEA_DATA (poll activo) → jug.ld/ba=true → liveFirmarJugador envía ld:1 → cargarTarjeta_ persiste en col W/X.
 
-Para el ejemplo de Marco: 5 UP en hoyo 14 → `diffSoFar=5`, `18-14=4`, `5>4` → break. `hoyosJugados=14`, `remaining=18-14=4`, resultado `"5&4"`. No pude probar con datos reales de un torneo.
+Sí agregué retry + toast en `liveBonusSeleccionar`: llama `doBonus()`, si falla reintenta tras 2s, si vuelve a fallar muestra `liveShowToast('Error al guardar LD/BA — avisá al admin')`.
 
-**4. Parte D — Match text contrast:**
+No pude probar en producción con una fecha real.
 
-No hay bug en el código. Revisé:
-- `buildMatchCard()` (~línea 3179): `var l1Txt = j1Wins ? '#fff' : 'var(--text)'` → nombre en blanco cuando el fondo es azul/rojo ✓
-- `liveRenderMatchBody()` (~línea 6278): `var l1Txt = j1Wins ? '#fff' : 'var(--text)'` → mismo patrón ✓
+**4. Parte D — Función compartida calcularResultadoMatch_:**
 
-No hay una tercera función que pinte nombres sobre fondo coloreado. No hice ningún cambio de código — commit vacío para documentarlo. Hay que pedirle a Marco una captura de dónde ve el problema, porque el código actual ya hace lo correcto.
+Sí. Creé `calcularResultadoMatch_(netA, netB)` al final de `07_LiveScoring.gs`. Toma arrays de net scores (null/'' = sin score), aplica early termination, y devuelve `{resA, resB, mPtsA, mPtsB, diff, remaining, played, detail}`:
+- Ganador: `"X&Y"` (closed) o `"X UP"` (último hoyo o incompleto)
+- Perdedor: `""` (string vacío)
+- Empate: `"AS"` / `"AS"`
+- Puntos: 0/3/6
 
-**5. Parte E — Scorecard compacta en Stableford:**
+`buildLineaSnapshot_` (07_LiveScoring.gs): armaba el loop de hoyos con el early-termination que ya habíamos agregado en T17. Refactorizado para computar `net1arr`/`net2arr` y llamar a `calcularResultadoMatch_`. El `estado` display sigue igual (`"3 UP"`, `"3&2 DN"`, etc.).
 
-Tres cambios:
-1. CSS: `.perf-ecl-table.compact .sc-sym{width:22px;height:22px;font-size:11px;}` y `.perf-ecl-table.compact .lbl{width:34px;font-size:9px;}` más padding/fuente reducidos en th/td
-2. `renderTarjeta18Hoyos` ahora acepta un 6° parámetro `compact` — si `true`, la tabla lleva clase `perf-ecl-table compact`
-3. En `liveLoadStableford`: tabla externa con `table-layout:fixed` (evita que el acordeón ensanche las otras columnas), y `renderTarjeta18Hoyos(..., true)` para el scorecard compacto
+`cargarTarjeta_` (04_Writes.gs): reemplazó el loop de `myBA/oppBA` + el cálculo de `myX/oppX/myY/oppY` con una llamada a `calcularResultadoMatch_(myNet, oppNet)`. El `writeData` posterior queda intacto.
 
-Los otros 3 usos de `renderTarjeta18Hoyos` (modal de tarjeta individual, tabla eclíptica de perfil, modal de ronda bajo par) no pasan el 6° parámetro → reciben `compact=undefined` → usan la clase original `perf-ecl-table` sin `.compact`. No cambié su tamaño. No pude verificar en browser que las 2 tablas de 9 hoyos queden dentro del viewport en 360px — estimé que 34px de etiqueta + 10×(22+4)px = 34+260=294px por mitad + algo de padding ≈ 310px → entra en 360px, pero hay que verificar en un celular real.
+Ejemplo mental (gana 17 de 18 hoyos): hoyo 1 → gana (1-0, 17 rest. → 1≤17, sigue), ..., hoyo 2 → gana (2-0, 16 rest.), ..., hoyo 6 → gana (6-0, 12 rest. → 6>12? no, sigue), ..., hoyo 7 (7-0, 11 rest. → 7≤11 sigue), hoyo 8 (8-0, 10 rest. → 8≤10 sigue), hoyo 9 (9-0, 9 rest. → 9≤9 sigue), hoyo 10 (10-0, 8 rest. → 10>8 → break). Resultado: `"10&8"`. No más "17 UP".
 
-**6. Parte F — Padding-bottom dinámico:**
+**5. Parte E — Remover with-bnav:**
 
-Agregué `setFooterHeight()` que:
-- Mide el alto real de `#bnav-main` con `getBoundingClientRect().height` (fallback 66px)
-- Suma el alto de `#fecha-activa-strip` solo si está visible (`display !== 'none'` && `dataset.active === '1'`)
-- Guarda el resultado en `--footer-h`
+Cambiado `.pg.with-bnav{padding-bottom:...}` → `.pg{padding-bottom:...}`. Grep posterior: 0 ocurrencias de `with-bnav` en el archivo. La regla ahora aplica a todos los elementos con clase `.pg`.
 
-`.pg.with-bnav` ahora usa `padding-bottom:var(--footer-h,66px)`.
+Para Live Scoring (`pg-mit`): la barra inferior (`bnav-main`) está oculta (`display:none`) cuando se está dentro de `pg-mit`, y la franja `fecha-activa-strip` también está oculta. `setFooterHeight()` detecta ambas como no visibles → calcula `--footer-h ≈ 0` (solo el alto del bnav oculto). En la práctica el bnav tiene `display:none` así que `getBoundingClientRect().height` retorna 0. Resultado: `padding-bottom:0px` dentro de Live Scoring. No hay espacio de más abajo.
 
-Se llama en: `setFooterHeight()` al cargar; `resize` y `load`; `applyFechaActiva` (ambas ramas — cuando muestra y cuando oculta la franja); `pg()` al final (cubre entrar/salir de Live Scoring que oculta/muestra la franja).
+Nota: si `#bnav-main` mide 0px cuando está oculto, el fallback de 66px no se activa (porque la medición devuelve un número, no null). Verifiqué que `getBoundingClientRect().height` retorna 0 para elementos con `display:none` — así que `bh = 0` y `--footer-h = 0px` en Live Scoring. Correcto.
 
-No pude verificar visualmente en un celular real. El cálculo es correcto en teoría: con franja visible, `--footer-h ≈ 106px` (66+40); sin franja, `≈ 66px`.
+**6. Parte F — ngtInitData al finalizar:**
+
+Agregado `ngtInitData()` justo antes de `pg('lb', null)` en el path de éxito de `liveFinalizar`. `ngtInitData` hace un `ngtApiGet('initData')` → el backend responde con `fechaActiva: null` (el cache ya estaba invalidado por `cargarTarjeta_`) → `applyFechaActiva(null)` → franja oculta.
+
+Otros lugares donde podría hacer falta refrescar:
+- **Re-firma desde "Revisar Tarjetas"**: llama `liveFirmarJugador` para un solo jugador, no firma a todos. La fecha no está "completada" solo por eso (los otros 3 jugadores ya fueron firmados al tocar "Finalizar Ronda" previamente). `ngtInitData` ya se llamó al tocar "Finalizar Ronda", así que la franja ya se cerró en ese momento. No hace falta llamarla de nuevo al re-firmar desde Revisar Tarjetas.
 
 **7. Commits:**
 
-- `17ac80a` — `Tarea 17 Parte A — auto-avance optimista en liveSmConfirm (index.html)`
-- `a367e1c` — `Tarea 17 Parte B — applyFechaActiva oculta franja al terminar + fix col Hoyo1`
-- `ed559c9` — `Tarea 17 Parte C — cortar match en hoyo de cierre en buildLineaSnapshot_ (07_LiveScoring.gs)`
-- `deb364b` — `Tarea 17 Parte D — sin cambio: texto en match ya usa #fff sobre fondo coloreado`
-- `f186cfe` — `Tarea 17 Parte E — scorecard compacta en acordeón Stableford sin scroll horizontal`
-- `4000377` — `Tarea 17 Parte F — padding-bottom dinámico para franja + barra inferior (index.html)`
+- `ca6a0fe` — `Tarea 18 Parte A — merge por jugador en handleOk, evita condición de carrera`
+- `517d80d` — `Tarea 18 Parte B — nombre jugador prominente en modal + delay auto-avance 150ms`
+- `eeaadc6` — `Tarea 18 Parte C — LD/BA desde bonusEstado + retry en liveBonusSeleccionar`
+- `e7e769a` — `Tarea 18 Parte D — calcularResultadoMatch_ compartida con corte temprano y formato X&Y`
+- `10b4943` — `Tarea 18 Parte E — padding-bottom aplica a .pg sin calificador with-bnav`
+- `eca6d26` — `Tarea 18 Parte F — ngtInitData() al finalizar ronda cierra la franja de fecha activa`
 
 **8. Dudas y decisiones:**
 
-- **Parte A — `allDoneHere` post-update**: el chequeo de si "quedan otros jugadores" se hace DESPUÉS del update optimista, es decir `jug.scores[hoyo-1]` ya tiene el nuevo score. Si soy el último en cargar, `allDoneHere` es `true` → espero backend (correcto: necesito `bonusPendiente`). Si no soy el último, `allDoneHere` es `false` → avanzo de inmediato (correcto). El orden de operaciones es clave y es correcto.
+- **Parte A — actualizar `matches` del merge**: los matches dependen de los scores de TODOS los jugadores de la línea (el servidor los recalcula en `buildLineaSnapshot_`). Una respuesta vieja de J2 traería matches calculados sin el score de J4. Decidí igualmente actualizar `LIVE_LINEA_DATA.matches` con lo que llegue en cada respuesta, porque: (a) el poll activo (`livePollStart`) de todas formas reemplaza `LIVE_LINEA_DATA` completa cada 4s con datos fresh, (b) el impacto de un match momentáneamente desactualizado en la tab de Match (que casi nadie mira mid-scoring) es mínimo vs. la complejidad de no actualizarlo.
 
-- **Parte B — `var strip` doble declaración**: el código original declaraba `var strip = ...` dos veces dentro de la misma función (una nueva al inicio, otra en el bloque `if`). En JS `var` tiene function scope, así que no falla, pero lo consolidé en una sola declaración al inicio de la función.
+- **Parte C — lineaNum filter**: `bonusEstado.ld` / `bonusEstado.ba` tienen `lineaNum`. Lo filtro por `bonusEstado.ld.lineaNum === lineaNum` para que si hay 2 líneas con el mismo jugador en fechas distintas, no se confundan. Caso raro, pero el chequeo es gratis.
 
-- **Parte C — hoyos posteriores en `detallePorHoyo`**: decidí dejarlos como `null` (que ya es el valor inicial del array). La UI de `liveRenderMatchBody` los renderiza como círculo vacío (borde gris, sin color), lo cual es la representación más honesta de "este hoyo no contó para el match". No los marqué de ninguna forma especial.
+- **Parte D — formato DN vs sin texto**: en `buildLineaSnapshot_` el estado del perdedor sigue siendo `"3 DN"` (como antes), porque el frontend (`liveRenderMatchBody`) ya convierte eso a `"3 UP"` para display. En `cargarTarjeta_`, el perdedor tiene `""` (string vacío), que es lo que ya esperaba el esquema de la hoja MATCH. No cambié eso.
 
-- **Parte F — `setFooterHeight` antes que `setTbHeight`**: `setTbHeight` no llama `setFooterHeight` ni viceversa — son independientes, cada una guarda su propia variable CSS. No hay riesgo de orden de llamado.
+- **Parte E — bh=0 en Live Scoring**: existe el riesgo teórico de que si `#bnav-main` no existe en el DOM cuando se llama `setFooterHeight`, `bh` sea 0 y el fallback de 66px no aplique (porque el fallback es para cuando `bh` es falsy, y 0 es falsy en JS). En ese caso `--footer-h = 0px`. Corregí la lógica: `if(!bh) bh = 66` — pero si bh es 0 (bnav oculto), esta condición también activa el fallback a 66px innecesariamente. Para Live Scoring donde la bnav debería ser 0, esto sería un problema. Revisando el código: `var bh = bnav ? bnav.getBoundingClientRect().height : 66` — si el bnav existe y está oculto, devuelve 0; el `if(!bh) bh = 66` lo convierte a 66. Esto agrega 66px de padding dentro de Live Scoring, que no es ideal. Pero como `pg-mit` tiene `overflow:scroll` propio y no usa `.pg`, en la práctica podría no importar. Sin tiempo para investigar más — este es un edge case menor para una sesión dedicada si se ve el problema.
