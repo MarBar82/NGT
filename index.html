@@ -698,9 +698,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .live-sum-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;}
 .live-sum-stat{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
 .sm-player-name{text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:.1em;opacity:.65;padding-bottom:2px;display:none;}
-.live-bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--navy);display:flex;z-index:500;border-top:2px solid var(--red);padding-bottom:env(safe-area-inset-bottom,0px);}
+.live-bottom-nav{display:flex;border-bottom:2px solid var(--red);border-radius:0;}
 .live-nav-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border:none;background:none;color:rgba(255,255,255,.45);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
-.live-nav-tab.active{color:#fff;}
+.live-nav-tab.active{color:#fff;border-bottom:2px solid var(--red);margin-bottom:-2px;}
 .lnt-icon{font-size:18px;line-height:1;}
 .live-linea-pill{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--navy);border-radius:20px;padding:4px 12px;cursor:pointer;background:none;color:var(--navy);transition:.1s;}
 .live-linea-pill.active{background:var(--navy);color:#fff;}
@@ -1659,6 +1659,13 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <div class="hfc-label">Cancha</div>
         <div class="hfc-value cancha" id="hfi-cancha">—</div>
       </div>
+      <div class="hfc-row" id="hfi-fecha-row" style="display:none;">
+        <div class="hfc-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div class="hfc-label">Fecha</div>
+        <div class="hfc-value" id="hfi-fecha">—</div>
+      </div>
     </div>
     <div class="hfi-ver-btn" style="border-radius:0 0 4px 0;">Cargar Score →</div>
   </button>
@@ -1812,15 +1819,31 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
     <!-- Header row -->
     <div style="display:flex;align-items:center;margin-bottom:10px;">
-      <button class="btn-back" onclick="mitBackToFechas()">← Volver</button>
+      <button class="btn-back" onclick="livePollStop(); LIVE_MODE=false; pg('lb',null)">← Volver</button>
       <span id="live-title" style="flex:1;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
     </div>
+
+    <!-- Section tabs (inline, above content) -->
+    <nav class="live-bottom-nav" style="margin-bottom:12px;">
+      <button id="live-ntab-tarjeta" class="live-nav-tab active" onclick="liveSetTab('tarjeta')">
+        <span class="lnt-icon">📋</span>Tarjeta
+      </button>
+      <button id="live-ntab-stableford" class="live-nav-tab" onclick="liveSetTab('stableford')">
+        <span class="lnt-icon">📊</span>Stableford
+      </button>
+      <button id="live-ntab-match" class="live-nav-tab" onclick="liveSetTab('match')">
+        <span class="lnt-icon">⚔️</span>Match
+      </button>
+      <button id="live-ntab-bonus" class="live-nav-tab" onclick="liveSetTab('bonus')">
+        <span class="lnt-icon">🎯</span>Bonus
+      </button>
+    </nav>
 
     <!-- Loading state -->
     <div id="live-loading" class="lb-status" style="display:block;"><div class="spinner"></div>Conectando...</div>
 
     <!-- Main content (hidden until first poll succeeds) -->
-    <div id="live-content" style="display:none;padding-bottom:80px;">
+    <div id="live-content" style="display:none;">
 
       <!-- Pane: Tarjeta -->
       <div id="live-pane-tarjeta">
@@ -1867,22 +1890,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
     <!-- Offline / error notice -->
     <div id="live-offline-msg" class="live-offline" style="display:none;"></div>
-
-    <!-- Bottom nav -->
-    <nav class="live-bottom-nav">
-      <button id="live-ntab-tarjeta" class="live-nav-tab active" onclick="liveSetTab('tarjeta')">
-        <span class="lnt-icon">📋</span>Tarjeta
-      </button>
-      <button id="live-ntab-stableford" class="live-nav-tab" onclick="liveSetTab('stableford')">
-        <span class="lnt-icon">📊</span>Stableford
-      </button>
-      <button id="live-ntab-match" class="live-nav-tab" onclick="liveSetTab('match')">
-        <span class="lnt-icon">⚔️</span>Match
-      </button>
-      <button id="live-ntab-bonus" class="live-nav-tab" onclick="liveSetTab('bonus')">
-        <span class="lnt-icon">🎯</span>Bonus
-      </button>
-    </nav>
 
   </div>
 
@@ -3352,6 +3359,9 @@ function pg(id,btn){
   if(id==='lb')loadLB();
   if(id==='historia-hub')histHubTab('campeones');
   if(id==='match')loadMatch();
+  // Hide bottom nav inside Live Scoring, show it everywhere else
+  var bnavEl = document.getElementById('bnav-main');
+  if (bnavEl) bnavEl.style.display = id === 'mit' ? 'none' : '';
   if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else if(NGT_SESSION){ MIT_PLAYER={matricula:NGT_SESSION.mat,nombre:NGT_SESSION.nombre||'',apodo:NGT_SESSION.apodo||''}; showMitFechas(); } else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; } }
   if(id==='admin' && NGT_SESSION && NGT_SESSION.rol==='Admin'){ ADMIN_KEY_OK=NGT_SESSION.token; showAdminPanel(); }
   if(id==='fechas') loadFechasScreen();
@@ -7715,7 +7725,11 @@ function applyFechaActiva(fa){
     if (canchaEl && fa.cancha) canchaEl.textContent = fa.cancha;
     // Fecha/hora on the card (populated if backend provides it)
     var dateEl = document.getElementById('hfi-fecha');
-    if (dateEl) dateEl.textContent = fa.fechaStr || '';
+    var dateRow = document.getElementById('hfi-fecha-row');
+    if (dateEl && fa.fechaStr) {
+      dateEl.textContent = fa.fechaStr;
+      if (dateRow) dateRow.style.display = '';
+    }
   }
   // Franja persistente — visible everywhere except inside Live Scoring
   var strip = document.getElementById('fecha-activa-strip');
