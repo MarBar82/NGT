@@ -6811,14 +6811,27 @@ function liveBonusModalAbrir(pending){
 function liveBonusSeleccionar(tipo, matricula){
   document.getElementById('bonus-modal').style.display = 'none';
   var lineaNum = LIVE_LINEA_DATA ? LIVE_LINEA_DATA.lineaNum : null;
-  ngtApiPost({
+  var payload = {
     action: 'setBonusGanador',
     fecha: MIT_FECHA,
     tipo: tipo,
     lineaNum: lineaNum,
     matricula: matricula || '',
     matriculaReporta: MIT_PLAYER ? MIT_PLAYER.matricula : '',
-  }).catch(function(){});
+  };
+  function doBonus(){
+    return ngtApiPost(payload).then(function(r){
+      if(!r || !r.ok) throw new Error((r && r.error) || 'Error del servidor');
+      return r;
+    });
+  }
+  doBonus().catch(function(){
+    setTimeout(function(){
+      doBonus().catch(function(){
+        liveShowToast('Error al guardar ' + tipo.toUpperCase() + ' — avisá al admin');
+      });
+    }, 2000);
+  });
   liveAutoAdvance();
 }
 

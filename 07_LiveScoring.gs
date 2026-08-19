@@ -71,12 +71,20 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
       if (raw) ultimoCargadoPor = JSON.parse(raw);
     } catch(e) {}
 
+    const bonusEst = meta.bonusEstado || {};
+    const lineaNum = lineaIdx + 1;
+    const ldFromSheet = (r[22] === 1 || r[22] === true || String(r[22]) === '1');
+    const baFromSheet = (r[23] === 1 || r[23] === true || String(r[23]) === '1');
+    const ldFromBonus = bonusEst.ld && String(bonusEst.ld.matricula || '').trim() === mat
+                        && bonusEst.ld.lineaNum === lineaNum;
+    const baFromBonus = bonusEst.ba && String(bonusEst.ba.matricula || '').trim() === mat
+                        && bonusEst.ba.lineaNum === lineaNum;
     playerMap[mat] = {
       hcp:             isNaN(hcp) ? 0 : hcp,
       hcp85:           isNaN(hcp) ? 0 : hcp,
       scores:          scores,
-      ld:              (r[22] === 1 || r[22] === true || String(r[22]) === '1'),
-      ba:              (r[23] === 1 || r[23] === true || String(r[23]) === '1'),
+      ld:              ldFromSheet || ldFromBonus,
+      ba:              baFromSheet || baFromBonus,
       stbPorHoyo:      stbPorHoyo,
       stbTotal:        holesCargados > 0 ? stbTotal : null,
       grossParcial:    grossParcial,
