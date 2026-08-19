@@ -532,14 +532,27 @@ function cargarTarjeta_(params) {
   const currentDobles_ = getDoblesForFecha_(fecha);
 
   // ── Lock: writes only ────────────────────────────────────────────────────
-  // Lock is held only for the write phase — reads done above keep hold-time
-  // short so up to ~15 simultaneous submissions can queue within 30 s.
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(30000); // 30 s max (Apps Script ceiling)
-  } catch (e) {
-    return { ok: false, error: 'Servidor muy ocupado, esperá unos segundos e intentá de nuevo' };
+  // Per-player CacheService mutex (same key as cargarHoyoLive_: plk_{fecha}_{mat}).
+  // Prevents cargarHoyoLive_ and cargarTarjeta_ from writing TARJETAS simultaneously
+  // for the same player, without re-introducing the global LockService contention
+  // that was removed in Tarea 14 (which would serialize all lines again).
+  //
+  // TTL = 30 s (vs 8 s for cargarHoyoLive_): cargarTarjeta_ does ~6-8 sheet writes
+  // across TARJETAS/STB/MATCH/SCORE/PB and can realistically take 5-15 s.
+  // 8 s was enough for cargarHoyoLive_'s single-cell write; 30 s gives a safe margin.
+  const cache2  = CacheService.getScriptCache();
+  const lockKey = 'plk_' + fStr + '_' + mStr;
+  const lockId  = String(Date.now()) + '_' + Math.floor(Math.random() * 1e9);
+  let lockAcquired = false;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (!cache2.get(lockKey)) {
+      cache2.put(lockKey, lockId, 30);
+      Utilities.sleep(30);
+      if (cache2.get(lockKey) === lockId) { lockAcquired = true; break; }
+    }
+    Utilities.sleep(300);
   }
+  if (!lockAcquired) return { ok: false, error: 'Servidor muy ocupado, esperá unos segundos e intentá de nuevo' };
 
   let dobleMsg = null;
   try {
@@ -596,7 +609,7 @@ function cargarTarjeta_(params) {
       }
     }
   } finally {
-    lock.releaseLock();
+    try { cache2.remove(lockKey); } catch(e) {}
   }
 
   // Recalculate totals (AL:AS, C, D, LEADERBOARD) from NGT DB now that all writes are done.
