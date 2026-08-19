@@ -6143,11 +6143,14 @@ function livePoll(){
 }
 
 function liveInitHoyo(data){
-  for(var h = 0; h < 18; h++){
+  var hs = (data.hoyoSalida || 1) - 1; // 0-based start
+  for(var k = 0; k < 18; k++){
+    var h = (hs + k) % 18;
     var anyMissing = data.jugadores.some(function(j){ return j.scores[h] === null; });
     if(anyMissing){ LIVE_HOYO = h + 1; return; }
   }
-  LIVE_HOYO = 18;
+  // All complete — land on last hole of the round in circular order
+  LIVE_HOYO = ((hs + 17) % 18) + 1;
 }
 
 function liveRender(){
@@ -6510,7 +6513,11 @@ function liveAutoAdvance(){
   var jugs = LIVE_LINEA_DATA.jugadores;
   var allDoneHere = jugs.every(function(j){ return j.scores[LIVE_HOYO - 1] !== null; });
   if(!allDoneHere) return;
-  for(var h = LIVE_HOYO; h < 18; h++){
+  var hs = (LIVE_LINEA_DATA.hoyoSalida || 1) - 1; // 0-based
+  var curOff = (LIVE_HOYO - 1 - hs + 18) % 18;
+  for(var k = 1; k < 18; k++){
+    var nextOff = (curOff + k) % 18;
+    var h = (hs + nextOff) % 18; // 0-based hole index
     var anyMissing = jugs.some(function(j){ return j.scores[h] === null; });
     if(anyMissing){ LIVE_HOYO = h + 1; liveRenderHoyoActual(); return; }
   }
@@ -6548,8 +6555,8 @@ function liveBonusSeleccionar(tipo, matricula){
 }
 
 
-function livePrevHoyo(){ if(LIVE_HOYO > 1){ LIVE_HOYO--; liveRender(); } }
-function liveNextHoyo(){ if(LIVE_HOYO < 18){ LIVE_HOYO++; liveRender(); } }
+function livePrevHoyo(){ LIVE_HOYO = LIVE_HOYO === 1 ? 18 : LIVE_HOYO - 1; liveRender(); }
+function liveNextHoyo(){ LIVE_HOYO = LIVE_HOYO === 18 ? 1 : LIVE_HOYO + 1; liveRender(); }
 
 function liveFirmarMiTarjeta(){
   if(!LIVE_LINEA_DATA || !MIT_PLAYER) return;
