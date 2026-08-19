@@ -494,4 +494,3 @@ function calcularResultadoMatch_(netA, netB) {
   return { resA: resA, resB: resB, mPtsA: mPtsA, mPtsB: mPtsB,
            diff: diff, remaining: remaining, played: played, detail: detail };
 }
-}
