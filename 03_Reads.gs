@@ -1010,12 +1010,41 @@ function getFechaActiva_() {
 
     // Devolver esta fecha si no está completada (o si no pudimos verificar)
     if (!completada) {
+      // Resolver fecha calendario real desde CALCULOS!AA:AC (columnas 27-29, base 1)
+      var fechaStr = '';
+      try {
+        var shC = getSheet_('CALCULOS');
+        if (shC) {
+          var lastRowC = shC.getLastRow();
+          if (lastRowC >= 2) {
+            var calRows = shC.getRange(2, 27, lastRowC - 1, 3).getValues();
+            for (var ci = 0; ci < calRows.length; ci++) {
+              var calFechaNum = parseInt(calRows[ci][2]);
+              if (calFechaNum === fNum) {
+                var d = calRows[ci][0] instanceof Date ? calRows[ci][0] : new Date(calRows[ci][0]);
+                if (!isNaN(d.getTime())) {
+                  fechaStr = Utilities.formatDate(d, 'GMT-03:00', 'dd/MM/yyyy');
+                }
+                break;
+              }
+            }
+          }
+        }
+      } catch(e) {}
+      // Combinar con horario: "dd/mm/aaaa · hh:mm" o solo la parte disponible
+      var horario = m.horario || '';
+      if (fechaStr && horario) {
+        fechaStr = fechaStr + ' · ' + horario;
+      } else if (!fechaStr && horario) {
+        fechaStr = horario;
+      }
       return {
-        fechaNum: fNum,
-        cancha:   m.canchaName || '',
-        horario:  m.horario    || '',
-        greenFee: m.greenFee   || '',
-        colorTee: m.colorTee   || 'BLANCAS',
+        fechaNum:  fNum,
+        fechaStr:  fechaStr,
+        cancha:    m.canchaName || '',
+        horario:   horario,
+        greenFee:  m.greenFee   || '',
+        colorTee:  m.colorTee   || 'BLANCAS',
         hasLineas: true,
       };
     }
