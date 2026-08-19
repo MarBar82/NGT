@@ -6539,6 +6539,7 @@ function liveFinalizar(){
   Promise.all(promises).then(function(results){
     var failed = results.filter(function(r){ return !r.ok; });
     if(!failed.length){
+      ngtInitData(); // refresh fechaActiva strip — backend invalidates its cache when cargarTarjeta_ runs
       pg('lb', null);
     } else {
       var names = failed.map(function(r){ return r.apodo; }).join(', ');
