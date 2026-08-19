@@ -704,6 +704,8 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .lnt-icon{font-size:16px;line-height:1;}
 .live-linea-pill{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--navy);border-radius:20px;padding:4px 12px;cursor:pointer;background:none;color:var(--navy);transition:.1s;}
 .live-linea-pill.active{background:var(--navy);color:#fff;}
+@keyframes live-saving-pulse{0%,100%{opacity:.6}50%{opacity:1}}
+.hole-circle.saving{box-shadow:0 0 0 3px var(--gold);animation:live-saving-pulse .9s ease-in-out infinite;}
 
 /* ══════════ HOME ══════════ */
 
@@ -5634,6 +5636,9 @@ let LIVE_TAB = 'tarjeta';
 let LIVE_POLL_TIMER = null;
 let LIVE_MATCH_LINEA = null;
 let LIVE_MATCH_DATA = {};
+let LIVE_LOCAL_SEQ = 0;   // increments on every local write; poll ignores stale responses
+let LIVE_SAVING_MAT = null;  // matricula of player whose score is in-flight (visual feedback)
+let LIVE_SAVING_HOYO = null; // hoyo of the in-flight save
 
 function mitLogin(){
   // If already authenticated via NGT_SESSION, skip the mat-only login
@@ -6104,12 +6109,14 @@ function livePollStop(){
 
 function livePoll(){
   if(!MIT_PLAYER || !MIT_FECHA || !LIVE_MODE) return;
+  var seqAtPollTime = LIVE_LOCAL_SEQ;
   ngtApiGet('getLineaLive', { fecha: MIT_FECHA, matricula: MIT_PLAYER.matricula })
     .then(function(r){
       const offEl = document.getElementById('live-offline-msg');
       if(r && r.ok){
         if(!LIVE_LINEA_DATA) liveInitHoyo(r);
-        LIVE_LINEA_DATA = r;
+        // Only overwrite local data if no local write happened while this poll was in flight
+        if(LIVE_LOCAL_SEQ === seqAtPollTime) LIVE_LINEA_DATA = r;
         document.getElementById('live-loading').style.display = 'none';
         document.getElementById('live-content').style.display = 'block';
         if(offEl) offEl.style.display = 'none';
@@ -6184,6 +6191,7 @@ function liveRenderHoyoActual(){
   d.jugadores.forEach(function(jug){
     var score = jug.scores[h];
     var cls = 'hole-circle' + (score !== null ? ' filled' : '');
+    if(LIVE_SAVING_MAT === jug.matricula && LIVE_SAVING_HOYO === LIVE_HOYO) cls += ' saving';
     var uc = jug.ultimoCargadoPor;
     var cargStr = (uc && uc.hoyo === LIVE_HOYO && uc.matricula !== jug.matricula)
       ? '<div class="live-cargado-por">↑ ' + (uc.apodo || uc.matricula) + '</div>' : '';
@@ -6480,21 +6488,35 @@ function liveOpenScoreModal(hoyo, mat){
 function liveSmConfirm(v){
   if(!LIVE_LINEA_DATA || !LIVE_TARGET_MAT) return;
   var score = (v === null || v === '') ? null : parseInt(v, 10);
+  var hoyo = LIVE_HOYO;
+  var mat = LIVE_TARGET_MAT;
+
+  // Mark in-flight for visual feedback + sequence guard
+  LIVE_SAVING_MAT = mat;
+  LIVE_SAVING_HOYO = hoyo;
+  LIVE_LOCAL_SEQ++;
 
   // Optimistic UI update
-  var jug = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === LIVE_TARGET_MAT; });
-  if(jug){ jug.scores[LIVE_HOYO - 1] = score; }
+  var jug = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === mat; });
+  if(jug){ jug.scores[hoyo - 1] = score; }
   liveRender();
 
-  ngtApiPost({
-    action: 'cargarHoyoLive',
-    fecha: MIT_FECHA,
-    matriculaJugador: LIVE_TARGET_MAT,
-    matriculaCargador: MIT_PLAYER.matricula,
-    hoyo: LIVE_HOYO,
-    score: score,
-  }).then(function(r){
+  function doPost(){
+    return ngtApiPost({
+      action: 'cargarHoyoLive',
+      fecha: MIT_FECHA,
+      matriculaJugador: mat,
+      matriculaCargador: MIT_PLAYER.matricula,
+      hoyo: hoyo,
+      score: score,
+    });
+  }
+
+  function handleOk(r){
+    LIVE_SAVING_MAT = null;
+    LIVE_SAVING_HOYO = null;
     if(r && r.ok){
+      LIVE_LOCAL_SEQ++;
       LIVE_LINEA_DATA = r;
       liveRender();
       var allComplete = r.jugadores && r.jugadores.every(function(j){ return j.holesCargados === 18; });
@@ -6502,10 +6524,61 @@ function liveSmConfirm(v){
       if(score !== null && r.bonusPendiente){
         liveBonusModalAbrir(r.bonusPendiente);
       } else if(score !== null){
-        liveAutoAdvance();
+        liveAutoAdvancePlayer(hoyo, mat);
       }
     }
-  }).catch(function(){ /* next poll will recover */ });
+  }
+
+  doPost().then(handleOk).catch(function(){
+    // Retry once after 2 s
+    setTimeout(function(){
+      doPost().then(handleOk).catch(function(){
+        // Two failures: clear saving state, revert optimistic update, show error
+        LIVE_SAVING_MAT = null;
+        LIVE_SAVING_HOYO = null;
+        if(LIVE_LINEA_DATA){
+          var j2 = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === mat; });
+          if(j2 && j2.scores[hoyo - 1] === score){ j2.scores[hoyo - 1] = null; }
+        }
+        liveRender();
+        liveShowToast('Error al guardar — verificá tu conexión');
+      });
+    }, 2000);
+  });
+}
+
+function liveAutoAdvancePlayer(hoyo, justSavedMat){
+  if(!LIVE_LINEA_DATA) return;
+  var jugs = LIVE_LINEA_DATA.jugadores;
+  // If all players done on this hole, move to next hole
+  var allDoneHere = jugs.every(function(j){ return j.scores[hoyo - 1] !== null; });
+  if(allDoneHere){ liveAutoAdvance(); return; }
+  // Find next player after justSavedMat without a score for this hole
+  var curIdx = -1;
+  for(var i = 0; i < jugs.length; i++){ if(jugs[i].matricula === justSavedMat){ curIdx = i; break; } }
+  if(curIdx < 0) return;
+  for(var k = 1; k <= jugs.length; k++){
+    var next = jugs[(curIdx + k) % jugs.length];
+    if(next.scores[hoyo - 1] === null){
+      setTimeout(function(){ liveOpenScoreModal(hoyo, next.matricula); }, 300);
+      return;
+    }
+  }
+}
+
+function liveShowToast(msg){
+  var el = document.getElementById('live-toast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'live-toast';
+    el.style.cssText = 'position:fixed;bottom:110px;left:50%;transform:translateX(-50%);z-index:9999;' +
+      'font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700;padding:10px 18px;' +
+      'border-radius:4px;background:var(--red);color:#fff;pointer-events:none;transition:opacity .3s;opacity:0;white-space:nowrap;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  setTimeout(function(){ el.style.opacity = '0'; }, 3000);
 }
 
 function liveAutoAdvance(){
