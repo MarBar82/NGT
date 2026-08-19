@@ -7764,10 +7764,15 @@ let HOME_TICK_INTERVAL = null;
 let HOME_FECHA_ACTIVA = 5; // número de fecha — default 5, se actualiza desde localStorage/API
 
 function applyFechaActiva(fa){
-  if(!fa || !fa.fechaNum) return;
+  var strip = document.getElementById('fecha-activa-strip');
+  if(!fa || !fa.fechaNum) {
+    if(strip){ strip.style.display='none'; strip.dataset.active='0'; }
+    localStorage.removeItem('ngt_fechaActiva');
+    setFooterHeight();
+    return;
+  }
   HOME_FECHA_ACTIVA = parseInt(fa.fechaNum) || HOME_FECHA_ACTIVA;
   // Franja persistente — visible everywhere except inside Live Scoring
-  var strip = document.getElementById('fecha-activa-strip');
   if (strip) {
     var label = 'NGT FECHA ' + HOME_FECHA_ACTIVA + (fa.horario ? ' · ' + fa.horario : ' · EN JUEGO');
     document.getElementById('fas-label').textContent = label;
@@ -7777,6 +7782,7 @@ function applyFechaActiva(fa){
     if (!mitPg || !mitPg.classList.contains('on')) {
       strip.style.display = 'flex';
     }
+    setFooterHeight();
   }
 }
 

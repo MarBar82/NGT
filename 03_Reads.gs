@@ -986,7 +986,9 @@ function getFechaActiva_() {
       try {
         const ne = findNextEmptyRow_(shT, 1);
         if (ne > 2) {
-          // A(0)=fecha, B(1)=mat, C(2)=nombre, D(3)=hcp, E(4)=cancha, F(5)=canchaId, G(6)=hoyo1
+          // A(0)=fecha, B(1)=mat, C(2)=hcp, D(3)=canchaId, E(4)=Hoyo1 — verified against
+          // cargarHoyoLive_ (getRange(rowIdx,4+hoyoNum) → hoyo1=col5=E) and
+          // cargarTarjeta_ (writes from col C: C=hcp,D=canchaId,E=H1).
           const rows = shT.getRange(2, 1, ne - 2, 7).getValues();
           const jugadoresFecha = rows.filter(function(r) {
             const f   = String(r[0] || '').trim();
@@ -995,7 +997,7 @@ function getFechaActiva_() {
           });
           if (jugadoresFecha.length > 0) {
             const conScores = jugadoresFecha.filter(function(r) {
-              const hoyo1 = r[6]; // col H — solo tiene valor cuando el jugador cargó su tarjeta
+              const hoyo1 = r[4]; // col E — only has a value when the player's scorecard was saved
               return hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined && hoyo1 !== false;
             });
             completada = conScores.length === jugadoresFecha.length;
