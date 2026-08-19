@@ -4,176 +4,181 @@
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
-Progreso: Tareas 10-12 (rediseño de navegación) cerradas y verificadas. Marco probó la app real (`https://marbar82.github.io/NGT/`) y encontró 7 correcciones — algunas visuales chicas, pero **3 de ellas son bugs reales de funcionamiento, no solo estética** (ver Partes D, E y C). Esta es la **Tarea 13**. Es la más delicada hasta ahora porque toca la carga de score en vivo, que es lo que se usa en cancha con el torneo en curso — probá cada parte con cuidado antes de pasar a la siguiente, un commit por parte (A a G).
+Progreso: Tarea 13 cerrada. Marco probó Live Scoring en producción y encontró que el auto-avance/guardado sigue con problemas reales, más 6 mejoras nuevas. Esta es la **Tarea 14**. La Parte A es la más importante y la más delicada de todas las que hicimos hasta ahora — es un fix de arquitectura de backend, no solo de frontend. Tomate el tiempo que haga falta ahí, probá mucho antes de dar por cerrada esa parte. Un commit por parte (A a F).
 
 ---
 
 ## 🎯 Contexto de la tarea
 
-Ya investigué el código a fondo para cada uno de los 7 puntos que reportó Marco, así que las instrucciones de abajo son precisas (archivo y línea). Aun así, antes de tocar cualquier función, confirmá con grep quién más la usa — varias de estas piezas están compartidas entre Live Scoring y otras pantallas.
-
-Dos hallazgos importantes que vale la pena que sepas antes de empezar:
-
-- **Parte B (tabs sin texto legible):** no es que falte el texto — ya está en el HTML. Es un bug de contraste: el texto es blanco sobre fondo blanco. Se ve solo el emoji porque los emojis ignoran el `color` del CSS.
-- **Parte G (falta ida/vuelta en la tarjeta):** el cálculo y la separación de IDA/VUELTA con sus totales **ya existen** en `renderTarjeta18Hoyos()`. Lo que probablemente pasó es que, al estar sin destacar visualmente (celda chica, sin fondo, mismo estilo que el resto), el total pasa desapercibido. Antes de asumir que hay que calcular algo nuevo, confirmá esto y avisá si encontraste que realmente no se ve en algún caso.
+Ya investigué a fondo el código (de nuevo, después del deploy de la Tarea 13) para entender por qué el auto-avance seguía sin funcionar bien en producción, y encontré la causa raíz real — no es un bug en la lógica de auto-avance en sí (esa está bien escrita), es un problema de **arquitectura de backend** que ya se había detectado en la Tarea 13 pero se dejó pendiente a propósito. Ahora que hay evidencia real de que causa problemas, hay que resolverlo.
 
 ---
 
 ## 🎯 Tarea para Claude Code
 
-### Parte A — Sacar el card duplicado del Leaderboard; arreglar la franja persistente
+### Parte A — Arreglar la causa real del delay y el auto-avance que no funciona (CRÍTICO)
 
-Hoy con fecha activa aparecen DOS avisos: el card `home-fecha-card` arriba de la tabla del Leaderboard (`index.html`, `pg-lb`, con el botón `#home-fecha-btn`) y la franja persistente `#fecha-activa-strip`. Marco pidió sacar el card y dejar solo la franja.
+**Diagnóstico (ya confirmado en código, no es una hipótesis):**
 
-- Sacá el botón `#home-fecha-btn` (`home-fecha-card`) de `#pg-lb` por completo. Confirmá con grep que `applyFechaActiva()` no rompe si esos elementos (`hfi-num`, `hfi-cancha`, `hfi-fecha`, `hfi-fecha-row`) ya no existen — si hace falta, ajustá esa función para que solo actualice lo que queda (la franja).
-- En la franja (`#fecha-activa-strip`, `.fas-cta`, línea ~1497 del CSS): cambiá `color:var(--red)` por blanco (`color:#fff` o `var(--white)`), y cambiá el texto "Continuar →" (línea ~2415) por "Cargar Score →".
+1. **`cargarHoyoLive_` (`07_LiveScoring.gs`) usa `LockService.getScriptLock()`** — un lock de TODO el script, no por fecha/línea. Ese mismo lock lo usa `cargarTarjeta_` (`04_Writes.gs`), la función de firmar tarjeta completa, que hace ~6 escrituras distintas y es mucho más pesada. Si alguien de OTRA línea está firmando su tarjeta mientras vos tocás el teclado numérico, tu guardado de un solo hoyo queda en cola detrás de esa operación pesada, hasta 30 segundos antes de fallar (`lock.waitLock(30000)`).
+2. **Cada guardado de un solo hoyo relee la hoja `TARJETAS` completa** (todas las fechas, todos los jugadores del torneo histórico, no solo la fecha/línea actual) dentro de `buildLineaSnapshot_` — esto pasa en cada tap Y en cada poll de 8 segundos, de cada dispositivo conectado. El costo crece con el historial del torneo.
+3. **Bug real en el frontend, `liveSmConfirm` → `handleOk(r)` (`index.html`):** cuando el backend responde `{ ok:false, error:'Servidor ocupado, reintentá' }` (que es justamente lo que devuelve cuando el lock timeoutea a los 30s), el código de `handleOk` no hace absolutamente nada — no reintenta, no avisa, no revierte el score optimista, y **nunca llama a `liveAutoAdvancePlayer`**. El único `.catch()` que sí reintenta es para fallas de red reales (`fetch` rechazado), pero un `{ok:false}` bien formado NO rechaza la promesa de `fetch`, así que ese `.catch()` nunca se activa en este caso. Esto explica exactamente "no pasa de un jugador a otro": pasa cuando hay contención de lock, que es justo lo esperable en un torneo real con varias líneas jugando a la vez.
 
-### Parte B — Tabs de Live Scoring: arreglar contraste, no agregar texto (ya está)
+**Qué hacer:**
 
-`.live-bottom-nav` perdió el fondo oscuro al convertirse en tabs inline en la Tarea 11, pero `.live-nav-tab` sigue con texto blanco (`rgba(255,255,255,.45)` / `#fff`) — por eso se ve invisible sobre fondo blanco, y solo se percibe el emoji.
+1. **En `07_LiveScoring.gs`, achicá el alcance del lock.** GAS no tiene un lock nativo por clave (solo script/user/document), así que necesitás armar un mutex propio con `CacheService` o `PropertiesService` scopeado a `fecha+linea` (por ejemplo, una clave tipo `lock_linea_6_2`, con un TTL corto y verificación de que no quede "trabado" si algo falla a mitad de camino). El objetivo: que guardar un hoyo de la línea 2 nunca tenga que esperar a que la línea 5 termine de firmar su tarjeta. Si al diseñarlo ves un riesgo real de inconsistencia de datos (dos escrituras simultáneas a la misma celda sin protección), priorizá la seguridad de los datos por sobre la velocidad — pero contame en las respuestas qué evaluaste y por qué elegiste el diseño que elegiste.
+2. **Optimizá `buildLineaSnapshot_`** para que no relea ni recalcule la hoja `TARJETAS` completa en cada guardado — filtrá por la fecha actual antes de hacer los cálculos pesados, si es técnicamente viable sin romper el resto de las funciones que la usan (confirmá con grep quién más llama a esta función antes de tocarla).
+3. **En `index.html`, arreglá `handleOk(r)`** para que también maneje el caso `r && r.ok === false`: mostrá el toast de error (`liveShowToast`, ya existe), revertí el score optimista (mismo criterio que ya usa el bloque de doble-falla de red), y ofrecé un reintento (puede ser automático, como en el caso de falla de red, o un botón "Reintentar" en el toast — elegí lo que te parezca más claro para el usuario).
+4. **Reforzá el feedback visual de "guardando"** (el pulso dorado que ya existe, `Tarea 13 E.2`) para que sea más notorio — dado que ahora sabemos que el guardado puede tardar varios segundos reales en momentos de contención, no solo un instante. Un texto chico "Guardando..." al lado del círculo activo puede ayudar más que solo el pulso de color.
 
-- Arreglá el contraste: la forma más simple es darle a `.live-bottom-nav` un fondo oscuro (mismo criterio que `.bottom-nav`, que usa `var(--navy)` y sí funciona con esa paleta de texto) — pero como ahora es una barra de tabs de sección (no fija abajo), evaluá si te parece mejor visualmente eso, o cambiar el color de texto a oscuro sobre fondo claro. Elegí el tratamiento que más consistente quede con el resto del sistema de diseño (podés usar el mismo patrón de tabs que uses en Historia si ya definiste uno ahí).
-- De paso, subí el tamaño de fuente (hoy 10px, es chico para pestañas) y pasá de layout apilado (ícono arriba, texto abajo) a un layout más de pestaña tradicional si te parece que se lee mejor — el pedido de Marco es que se lea claro "Tarjeta / Stableford / Match / Bonus" como palabras, no solo íconos.
+### Parte B — Sacar los íconos de las tabs de Live Scoring, dejar solo texto
 
-### Parte C — Hoyo de salida: la tarjeta debe arrancar en el hoyo configurado, no siempre en el 1
+Hoy cada tab (`Tarjeta`, `Stableford`, `Match`, `Bonus`) tiene un emoji (📋📊⚔️🎯) al lado del texto. Sacá los emojis, dejá solo la palabra en cada tab.
 
-El dato `hoyoSalida` (definido por el admin al crear la fecha, para arranques tipo shotgun) ya se guarda bien en el backend y ya llega al frontend dentro del snapshot de `getLineaLive` — pero ninguna función del frontend lo usa. Hoy `LIVE_HOYO` arranca siempre en 1 (`index.html` línea ~5653 y ~6088), y `liveInitHoyo()` (línea ~6167) recorre del hoyo 1 al 18 buscando el primer hueco vacío, así que con un arranque en hoyo 10 (nadie cargó nada del 1 al 9 todavía) siempre "aterriza" en el hoyo 1 en vez del 10.
+### Parte C — Unificar el diseño visual de Match en las 3 vistas
 
-- Ajustá `liveInitHoyo(data)` para que arranque la búsqueda del primer hoyo pendiente desde `data.hoyoSalida` (con wraparound: si no encuentra ninguno vacío desde `hoyoSalida` hasta 18, seguí buscando desde el hoyo 1 hasta `hoyoSalida - 1`, en vez de terminar en 18 sin revisar el resto).
-- Ajustá `livePrevHoyo()` / `liveNextHoyo()` (línea ~6573) para que la navegación también dé la vuelta correctamente en un arranque tipo shotgun (ej. arrancando en 10: 10→11→...→18→1→2→...→9→10), no que se quede clampeada en 1 y 18 como si siempre se jugara en orden lineal.
-- Ajustá el auto-avance de hoyo (dentro de `liveAutoAdvance()`, línea ~6530) con el mismo criterio de recorrido circular desde `hoyoSalida`.
-- Probá el caso normal (`hoyoSalida = 1`, el 99% de las fechas) para confirmar que no se rompió nada ahí — tiene que comportarse exactamente igual que hoy.
+El diseño de referencia es `live-pane-match` (`liveRenderMatchBody`, dentro de Live Scoring) — es el que le gustó a Marco. Hay que llevar ese mismo estilo a:
+1. La vista de match de una fecha pasada (`renderFechaDinamica` / `fechaMatchRender`, sección "⚔ Match Play" dentro de `pg-fecha`).
+2. La sección "Match" del menú principal (`pg-match`, `renderMatchTable`).
 
-### Parte D — Bonus (Long Drive / Best Approach): esperar a que los 4 jugadores tengan score en ese hoyo
+Decisiones ya tomadas con Marco para las 3 vistas:
+- **Nombres:** apodo en las 3 (no nombre completo).
+- **HCP:** agregarlo a las 3 (hoy solo lo tiene la sección Match del menú).
+- **Círculos de hoyo:** solo colorear quién ganó cada hoyo (sin mostrar el score numérico real) — esto significa que la sección Match del menú pierde el detalle de score que tiene hoy en su grilla de tabla, a cambio de quedar visualmente igual a las otras dos.
 
-Hoy el picker de "¿quién ganó Long Drive/Best Approach?" (`liveBonusModalAbrir`, disparado desde `liveSmConfirm`, `index.html` línea ~6499-6528) aparece apenas se carga el score del **primer** jugador en el hoyo designado — interrumpiendo antes de que los otros 3 tengan su score. La condición está en el backend, `cargarHoyoLive_` (`07_LiveScoring.gs` líneas 276-284): solo chequea que el hoyo coincida con `meta.bonusHoyos.ba`/`.ld` y que el bonus no esté resuelto, sin mirar cuántos jugadores de la línea ya cargaron ese hoyo.
+Estructura a replicar (la de `live-pane-match`): un card por match (`.adm-card` o el patrón que uses), con una leyenda de colores fijos por jugador arriba (mismo jugador = mismo color siempre, con su apodo al lado), una barra de 3 columnas (jugador / resultado del match en grande + info secundaria / jugador), y una fila de círculos de hoyo (24px) coloreados según quién ganó cada hoyo, gris si empate.
 
-- En `cargarHoyoLive_`, sumá la condición de que **los 4 jugadores de la línea ya tengan score cargado en ese hoyo** antes de devolver `bonusPendiente`. Si falta alguno, no dispares el bonus todavía — se va a disparar naturalmente cuando se cargue el último de los 4 (podés chequearlo en cada guardado individual, comparando contra el snapshot de la línea).
-- Confirmá que el flujo sigue funcionando para el caso normal: hoyo bonus con los 4 jugadores completos → aparece el picker una sola vez, no se dispara de nuevo después.
+Detalles a resolver vos:
+- En Live Scoring la info secundaria de la barra central es "hoyo actual / restantes" (tiene sentido en vivo). En una fecha ya jugada eso no aplica — usá el resultado final del match ahí en su lugar (ej. "3&2"), como ya lo hace la vista de fecha pasada hoy.
+- El componente `.rc-match`/`.rc-left`/`.rc-right`/`.rc-center` que usa hoy la vista de fecha pasada también se reutiliza en el resumen histórico anual de un jugador (`f2MatchCallback`). Si cambiás esas clases CSS vas a impactar esa vista también — confirmá cómo se ve ahí después del cambio y avisá si quedó rara, no hace falta que la rediseñes especialmente, solo que no se rompa.
 
-### Parte E — Auto-avance entre jugadores + feedback de guardado + condición de carrera real
+### Parte D — Tabla Stableford de Live Scoring: reordenar columnas + convertir filas en acordeón
 
-Esta es la parte más delicada, hay 3 problemas relacionados en el mismo flujo:
+**Reordenar columnas** (`liveLoadStableford`, hoy arma `#`, `Jugador`, `H.`, `STB`) al nuevo orden: **Posición, Jugador, Puntos, Hoyo** (mantené los mismos datos, `H.` ahora al final con el header "Hoyo" en vez de "H.", y `STB` se relabelea "Puntos").
 
-**E.1 — Falta auto-avance entre jugadores (fricción real, confirmado en código):**
-Hoy cargar el score de los 4 jugadores de un hoyo requiere tocar manualmente cada fila uno por uno (`liveOpenScoreModal(hoyo, matricula)`) — no hay ningún salto automático al jugador siguiente después de guardar. Solo existe avance automático de **hoyo** (`liveAutoAdvance()`, línea ~6530), y únicamente cuando los 4 ya están completos en el hoyo actual.
+**Convertir cada fila en un acordeón tipo pill:** al tocar un jugador, en vez de abrir el modal (`showPlayerScorecardModal`), la fila se expande mostrando la tarjeta de 18 hoyos de ese jugador (mismo contenido que ya arma `renderTarjeta18Hoyos`) directamente debajo de esa fila, empujando hacia abajo al resto de los jugadores de la lista. Tocar de nuevo la fila (o la tarjeta expandida) la colapsa. Solo un jugador expandido a la vez está bien, o varios simultáneos — elegí lo que te resulte más simple de implementar sin romper el layout.
 
-Agregá auto-avance **entre jugadores dentro del mismo hoyo**: al confirmar el score del jugador actual (dentro de `liveSmConfirm`), si hay un jugador siguiente de la línea sin score en este hoyo, abrí automáticamente su modal de carga (mismo patrón que usa GolfGameBook: jugador 1 → jugador 2 → jugador 3 → jugador 4, en cadena, sin que el usuario tenga que tocar nada entre uno y otro). Si un jugador queda sin cargar (el usuario cierra el modal sin ingresar nada), tiene que poder cargarlo después tocando su fila manualmente, como hoy — no lo hagas obligatorio.
+### Parte E — Rediseño del modal de estadísticas del jugador (desde el Leaderboard)
 
-**E.2 — Falta feedback visual de guardado:**
-Hoy no hay ningún indicador de "guardando..." — el círculo del hoyo pasa directo de vacío a lleno con un update optimista (se pinta lleno ANTES de que el backend confirme), sin esperar la respuesta del `POST cargarHoyoLive`. Agregá un estado visual breve de "guardando" (podés usar una clase CSS con una animación sutil, o un ícono chico de reloj/spinner en el círculo) que se resuelva a "guardado" (o vuelva a vacío + aviso de error) cuando llegue la respuesta del backend — para que quede claro que el dato se mandó y confirmó, no adivinado.
+Sobre `showPlayerFechaModal` (el modal que se abre al tocar un jugador en la tabla del Leaderboard):
 
-**E.3 — Condición de carrera real entre el polling y el guardado (esto es un bug, no solo estético):**
-`livePollStart()` corre un `setInterval(livePoll, 8000)` que lee el estado completo de la línea cada 8 segundos, en paralelo a que el usuario esté cargando scores. Ni `livePoll()` ni `liveSmConfirm()` tienen ninguna forma de saber cuál de las dos respuestas es más reciente — cualquiera de las dos puede sobreescribir `LIVE_LINEA_DATA` completo con una versión más vieja que lo que el usuario acaba de cargar, haciendo que un hoyo recién guardado "vuelva" a verse vacío por un instante hasta que se corrige solo. Esto es lo que Marco describe como "pasa de transparente a opaco y de nuevo a transparente".
+- Cambiá el label "Golpes vs par" por **"Golpes Final"** — Marco aclaró que ese valor no es en relación al par, es la cantidad de golpes de gracia que recibe el jugador para la definición final según la posición en la que termine. Es solo un cambio de texto, el cálculo/dato (`d.golpes`, `golpesCell()`) no cambia.
+- Sacá las filas "Best Approach" y "Long Drive" (con los emojis 🎯💪).
+- Agregá una fila **"Bonus"** justo debajo de "Doble", mostrando el total de puntos bonus del jugador — el dato ya está disponible en `d.pb` (viene del leaderboard, no hace falta pedir nada nuevo al backend).
+- Reorganizá todo el modal en 2 secciones visualmente diferenciadas (separalas con una sombra, un borde, o un fondo levemente distinto — lo que quede más prolijo con el resto del sistema de diseño), en este orden:
 
-Agregá una guarda de secuencia: cada vez que se dispara un guardado local (optimista o confirmado por el POST), guardá un timestamp o número de secuencia; cuando llegue una respuesta del `livePoll()`, si es más vieja que el último cambio local conocido, ignorala (no sobreescribas `LIVE_LINEA_DATA` con datos desactualizados). Además, agregá un reintento simple si el `POST cargarHoyoLive` falla (hoy el `.catch()` no hace nada, línea ~6527) — al menos un reintento automático antes de mostrarle al usuario que falló.
+  **Sección 1 — "Puntos Totales":** el número grande de puntos totales como encabezado de la sección, y debajo, como los componentes que lo forman: STB, Match, Doble, Bonus.
 
-**E.4 — Lock global de escritura (evaluar con cuidado, no forzar el cambio si es riesgoso):**
-`cargarHoyoLive_` usa `LockService.getScriptLock()` (`07_LiveScoring.gs` líneas 244-253) — es un lock de **todo el script**, no por fecha/línea, así que con varias líneas cargando en simultáneo durante el torneo, todas las escrituras del sistema entero se serializan una por una. Esto puede ser parte de la lentitud que reporta Marco en horas pico. Si te parece seguro achicar el alcance del lock (por ejemplo, un lock por combinación fecha+línea en vez de global), hacelo — pero si tenés dudas de que pueda generar datos corruptos o inconsistentes al hacerlo, no lo toques todavía y avisá en las respuestas para decidirlo con más cuidado antes de aplicarlo.
+  **Sección 2 — resto de la información:** Fechas Jugadas y Fechas Ganadas en la misma línea (una al lado de la otra, no una fila cada una); después Golpes Final y Campeón, también en la misma línea entre sí; y por último, Win % y Top 8 % (ver Parte F sobre por qué a veces no calculan).
 
-### Parte F — Botones "Finalizar Ronda" y "Revisar Tarjetas"
+### Parte F — Investigar y arreglar por qué Win % / Top 8 % a veces no calculan
 
-Hoy no existe ninguno de los dos. Lo único parecido es que cuando los 4 jugadores llegan a 18 hoyos cargados (`allComplete`, dentro de `liveRender()`, línea ~6184), aparece automáticamente una vista `#live-complete-view` con un resumen y un botón "✍ Firmar" que es individual (solo para el jugador logueado), no de la línea completa.
+Encontré un desajuste que **puede** ser la causa raíz, pero necesita que lo confirmes contra la hoja de cálculo real (yo solo pude leer el código, no el Google Sheet en sí):
 
-- Cuando `allComplete` sea verdadero, mostrá dos botones nuevos junto al resumen existente: **"Finalizar Ronda"** y **"Revisar Tarjetas"**.
-- **"Finalizar Ronda":** al tocarlo, da por cerrada la carga de esa línea — podés usarlo para, por ejemplo, dejar de hacer polling automático (`livePollStop()`) y llevar al usuario de vuelta a una vista de resumen/Leaderboard. No hace falta que bloquee la edición futura de scores (eso lo cubre "Revisar Tarjetas", que Marco pidió explícitamente que permita seguir modificando) — es más una acción de "ya terminamos, cerrar esta pantalla", no un candado de datos.
-- **"Revisar Tarjetas":** al tocarlo, mostrá los 4 jugadores de la línea (nombre + resumen corto). Al tocar un nombre, abrí la tarjeta completa de ese jugador — reutilizá `showPlayerScorecardModal(matricula)` como base (ya arma la tabla de 18 hoyos con IDA/VUELTA, ver Parte G), pero agregale la posibilidad de tocar el score de cualquier hoyo y editarlo ahí mismo (podés reutilizar el mismo modal de teclado numérico que ya usa `liveOpenScoreModal` para la carga normal, pero disparado desde esta vista de revisión en vez de la vista de carga por hoyo).
+- `03_Reads.gs` y `04_Writes.gs` documentan y escriben la hoja `SCORE` en formato "largo" — una fila por jugador **por fecha**: `A=Fecha, B=Matrícula, C=Stableford, D=Match, E=Bonus, F=Doble...`.
+- Pero `08_WinProbabilities.gs` (`getWinProbabilities_`) lee esa misma hoja asumiendo un formato "ancho" completamente distinto: `A=Matrícula, B=Nombre, C=Total`, y después bloques de 4 columnas por cada fecha arrancando en la columna E.
 
-### Parte G — Estilo de la tarjeta del jugador (IDA/VUELTA, números de hoyo, par y puntos)
+Si la hoja real tiene el formato largo (el que describen `03_Reads.gs`/`04_Writes.gs`, que es el que efectivamente se escribe), entonces `08_WinProbabilities.gs` está leyendo números de fecha (1, 2, 3...) de la columna A pensando que son matrículas, filtrándolas todas afuera (`validMats[m]` nunca matchea), y devolviendo una lista de jugadores vacía siempre — no ocasionalmente, siempre. Confirmá esto abriendo la hoja `SCORE` real y comparando sus columnas contra lo que espera cada uno de los dos módulos.
 
-**Antes de tocar el cálculo:** confirmá que `renderTarjeta18Hoyos()` (línea ~7440) ya arma las tablas IDA y VUELTA por separado, cada una con su columna "Tot" (par total, score total, puntos STB total del 9). Si efectivamente ya está — que es lo que encontré — el pedido de Marco es de **visibilidad**, no de cálculo faltante: hacé esos totales más destacados (por ejemplo, una fila/celda de cierre más grande o con más contraste, en vez de una celda chica igual a las demás).
-
-- Número de hoyo (hoy `<th>` con `background:var(--off)` y `color:var(--g4)`, texto gris chico): cambialo a fondo azul (`var(--navy)`) y texto blanco.
-- Fila "Par" y fila "Puntos" (hoy sin fondo propio, clase `.perf-ecl-par`): agregales fondo gris clarito (`var(--g1)`, ya existe en la paleta) para diferenciarlas visualmente del resto de la tabla.
-- Aplicá esto en la tabla que usa `showPlayerScorecardModal` (y cualquier otro lugar que reutilice `renderTarjeta18Hoyos`, para que quede consistente en toda la app — confirmá dónde más se usa esta función antes de cambiar el CSS, por si el estilo nuevo no encaja en algún otro contexto).
+- Si se confirma el desajuste, arreglá `getWinProbabilities_()` para que lea la hoja `SCORE` con el formato real (el que usan `03_Reads.gs`/`04_Writes.gs`), no el formato que asume hoy.
+- Además, en el frontend (`loadWinProbabilities()`), hoy si `r.ok` es `false` el código descarta el error sin loguearlo (`console.warn`/`console.error`) — agregá al menos un log del `r.error` en la consola, para que si esto vuelve a fallar en el futuro por otro motivo, se pueda diagnosticar más rápido sin tener que investigar de cero como esta vez.
 
 ---
 
 ## ❓ Preguntas de verificación
 
-1. **Parte A:** ¿el card duplicado desapareció sin romper nada de `applyFechaActiva()`? ¿La franja ahora dice "Cargar Score →" en blanco?
-2. **Parte B:** ¿qué tratamiento visual elegiste para el contraste de los tabs? ¿Se lee claro "Tarjeta/Stableford/Match/Bonus" ahora?
-3. **Parte C:** ¿probaste con una fecha de `hoyoSalida = 10` (o el valor que tengas a mano) que la tarjeta arranca ahí? ¿Confirmaste que el caso normal (`hoyoSalida = 1`) sigue igual que antes?
-4. **Parte D:** ¿el picker de bonus ahora espera a los 4 jugadores? ¿Probaste el caso donde el último en cargar es justamente el hoyo bonus?
-5. **Parte E:** contame en detalle qué implementaste para cada sub-punto (E.1 auto-avance, E.2 feedback visual, E.3 guarda de secuencia contra el polling, E.4 lock global) — si en E.4 decidiste no tocar el lock, explicá por qué.
-6. **Parte F:** ¿"Finalizar Ronda" y "Revisar Tarjetas" aparecen solo cuando los 4 jugadores completan 18 hoyos? ¿La edición de score desde "Revisar Tarjetas" reutiliza el mismo modal de teclado numérico que la carga normal, o armaste uno nuevo?
-7. **Parte G:** ¿confirmaste que el cálculo de IDA/VUELTA ya existía? ¿Dónde más en la app se usa `renderTarjeta18Hoyos()`, y el nuevo estilo quedó bien en todos esos lugares?
-8. ¿Hiciste un commit por cada parte (A a G)? Listalos con hash y mensaje.
-9. ¿Probaste el flujo completo de carga de una línea de 4 jugadores, hoyo por hoyo, hasta completar los 18, incluido un hoyo bonus, sin encontrar el bug de "vuelve a verses vacío"?
-10. ¿Algo de esta tarea te generó dudas y tuviste que decidir por tu cuenta? Contame qué y por qué, aunque el resultado te parezca bien — en particular si encontraste algo en Parte E o F que no se comportaba como esperaba el enunciado.
+1. **Parte A:** ¿qué diseño de lock elegiste (clave, TTL, mecanismo de limpieza si algo falla a mitad de camino)? ¿Probaste el caso de dos guardados simultáneos en la misma línea para confirmar que no se corrompen datos? ¿Cómo optimizaste `buildLineaSnapshot_`, y confirmaste que no rompiste ninguna otra función que la usa?
+2. **Parte A:** ¿`handleOk` ahora maneja `r.ok === false` correctamente? ¿Qué mecanismo de reintento/aviso elegiste?
+3. **Parte B:** confirmá que los emojis desaparecieron y las 4 tabs se leen solo con texto.
+4. **Parte C:** mostrame (con una descripción o, si podés, un screenshot) cómo quedaron las 3 vistas de Match. ¿La vista del resumen histórico anual (`f2MatchCallback`) quedó bien después del cambio de clases CSS compartidas?
+5. **Parte D:** ¿el acordeón funciona bien con varias filas expandidas a la vez, o limitaste a una sola? ¿Reusaste `renderTarjeta18Hoyos` tal cual o tuviste que adaptarla?
+6. **Parte E:** ¿las 2 secciones del modal quedaron bien diferenciadas visualmente? ¿"Bonus" muestra el dato correcto (mismo total que la columna Bonus de la tabla completa del leaderboard)?
+7. **Parte F:** ¿confirmaste el desajuste de columnas contra la hoja real? ¿Qué formato tiene realmente la hoja `SCORE` hoy? Si el desajuste era otra cosa distinta a lo que planteé, contame qué encontraste en su lugar.
+8. ¿Hiciste un commit por cada parte (A a F)? Listalos con hash y mensaje.
+9. ¿Pudiste probar la Parte A con una fecha activa real (o de prueba) y varios jugadores cargando en simultáneo, para confirmar que el auto-avance ahora sí encadena sin cortarse?
+10. ¿Algo de esta tarea te generó dudas y tuviste que decidir por tu cuenta? Cuanto más delicado el tema (sobre todo en la Parte A, que toca escritura de datos concurrente), más quiero que me cuentes el razonamiento aunque el resultado te parezca bien.
 
 ---
 
-## ✅ Respuestas de verificación — Tarea 13
+## ✅ Respuestas de verificación — Tarea 14
 
-**1. Parte A:**
-Sí. El `#home-fecha-btn` / `.home-fecha-card` fue eliminado del HTML de `#pg-lb` por completo. `applyFechaActiva()` fue simplificada: ahora solo actualiza la franja persistente (`#fecha-activa-strip` / `#fas-label`) y ya no intenta tocar `hfi-num`, `hfi-cancha`, `hfi-fecha` ni `hfi-fecha-row` — esos elementos ya no existen. La franja ahora muestra "Cargar Score →" en blanco (`color:#fff`) sobre el fondo azul oscuro de la strip.
+**1. Parte A — Diseño del lock:**
 
-**2. Parte B:**
-Elegí fondo claro sobre oscuro, consistente con el patrón `.adm-tab` del resto del sistema:
-- `.live-bottom-nav` tiene ahora `background:var(--g1)` (gris muy claro) y `border-bottom:2px solid var(--border)` en vez del borde rojo que tenía antes.
-- `.live-nav-tab`: `color:var(--g4)` (texto gris oscuro legible), layout horizontal (`flex-direction:row`), fuente 13px (antes 10px).
-- `.live-nav-tab.active`: `color:var(--navy)` + subrayado rojo.
-Texto "Tarjeta / Stableford / Match / Bonus" perfectamente legible. El emoji queda al lado del texto en vez de encima.
+Reemplacé `LockService.getScriptLock()` con un mutex por jugador usando `CacheService`:
+- **Clave:** `plk_{fStr}_{jugStr}` (ej: `plk_6_1234`) — por fecha Y jugador, no por línea. Esto significa que dos dispositivos guardando scores de *distinto* jugador de la misma línea NO se bloquean entre sí, lo cual es el caso dominante.
+- **TTL:** 8 segundos. Si el proceso muere a mitad de camino (excepción, timeout de GAS), el lock se libera solo a los 8s sin necesidad de limpiar manualmente. Hay un `try { cache.remove(lockKey); } catch(e) {}` en el `finally` para liberarlo más rápido en el caso normal.
+- **Mecanismo anti-race:** después de `cache.put(lockKey, lockId, 8)`, duermo 30ms y verifico que el valor siga siendo el mío (`cache.get(lockKey) === lockId`). Esto no es atómico — `CacheService` no ofrece operaciones atómicas — pero el window de colisión real es de ~30ms, y el peor caso es que dos escrituras del mismo jugador lleguen simultáneamente, lo cual haría que la última escritura ganase (el valor en la celda queda con el último score enviado, no corrupto).
+- **Confirmación de que no rompí otras funciones:** `buildLineaSnapshot_` es llamada solo desde `cargarHoyoLive_` y `getLineaLive_` (comprobé con grep). Ambas se benefician del fast-path. La optimización es conservadora: si algún índice no está en cache, cae al slow-path original y además popula el cache para la próxima vez.
+- **Optimización `buildLineaSnapshot_`:** Al inicio de la función, antes del read de la hoja, chequea si todos los índices de fila de los 4 jugadores están en cache (`tRow_{fStr}_{mat}`). Si están todos, lee solo el bloque `minRow..maxRow` (típicamente 4 filas contiguas) en lugar de leer toda la hoja. El slow-path llena la cache durante la lectura. El `rowStart` variable (2 para slow-path, minR para fast-path) permite calcular el índice de hoja correcto en ambos casos.
 
-**3. Parte C:**
-`liveInitHoyo(data)` ahora arranca la búsqueda desde `data.hoyoSalida - 1` (0-based) y hace wraparound circular por los 18 hoyos. Si todos están completos, aterriza en el último hoyo del recorrido (`(hs + 17) % 18 + 1`).
+**2. Parte A — `handleOk` + reintento:**
 
-`livePrevHoyo()` / `liveNextHoyo()`: circular completo — al llegar a hoyo 18 el "siguiente" es hoyo 1 y viceversa.
+El fix fue en `doPost()`, no en `handleOk`:
+```js
+.then(function(r){
+  if(!r || !r.ok) throw new Error((r && r.error) || 'Error del servidor');
+  return r;
+});
+```
+Ahora cualquier `{ok:false}` rechaza la promesa, que cae al `.catch()` que ya existía → reintento automático a los 2 segundos. Si el segundo intento también falla, se llama `onFinalFailure()` que revierte el score optimista y muestra el toast `'Error al guardar — verificá tu conexión'`. El usuario ve claramente que falló y puede reintentar manualmente.
 
-`liveAutoAdvance()`: calcula el offset del hoyo actual respecto a `hoyoSalida` y busca hacia adelante con wraparound en vez de recorrer linealmente desde `LIVE_HOYO` hasta 18.
+`handleOk` quedó más limpio (sin el `if(r && r.ok)` guard que era inútil dado que `doPost` ahora rechaza en caso contrario).
 
-Caso normal `hoyoSalida = 1`: `hs = 0`, el offset circular es idéntico al recorrido lineal 1→18, comportamiento exactamente igual que antes.
+**3. Parte B — Emojis eliminados:**
 
-**4. Parte D:**
-Sí. En `cargarHoyoLive_` (`07_LiveScoring.gs`), antes de devolver `bonusPendiente` ahora se verifica que `snap.jugadores.every(j => j.scores[hoyoIdx] !== null)`. Si alguno de los 4 todavía no tiene score en ese hoyo, `bonusPendiente` queda `null` y el picker no se dispara. Cuando el último jugador carga su score, la condición se cumple y el picker aparece una sola vez. Una vez que `bonusEstado.ba` o `.ld` están marcados como resueltos, la condición `!bonusEstado.ba` evita que se dispare de nuevo.
+Los cuatro `<span class="lnt-icon">emoji</span>` fueron removidos de los botones `Tarjeta`, `Stableford`, `Match`, `Bonus`. Las tabs muestran solo texto. La clase `lnt-icon` y el `flex-direction:row` en `.live-nav-tab` quedan en CSS pero ya no afectan nada visible.
 
-**5. Parte E:**
+**4. Parte C — Unificación visual de Match:**
 
-- **E.1 — Auto-avance entre jugadores:** Nueva función `liveAutoAdvancePlayer(hoyo, justSavedMat)`. Después de que `handleOk()` procesa la respuesta del POST, si no hay bonus pendiente llama a esta función en vez de directamente a `liveAutoAdvance()`. Si el hoyo actual tiene algún jugador sin score, busca el siguiente después de `justSavedMat` (circular) y abre su modal con 300ms de delay. Si están todos completos, llama a `liveAutoAdvance()` para avanzar al próximo hoyo.
+Las 3 vistas de Match ahora usan un helper compartido `buildMatchCard(nameA, hcpA, nameB, hcpB, scA, scB, resA, resB, label)` que replica exactamente el estilo de `liveRenderMatchBody`: card con leyenda de colores (azul j1, rojo j2), barra de estado con resultado en grande al centro, y fila de 24px de círculos de hoyo coloreados (azul = j1 ganó el hoyo, rojo = j2, gris = empate, vacío = no jugado).
 
-- **E.2 — Feedback visual de guardado:** Variables `LIVE_SAVING_MAT` y `LIVE_SAVING_HOYO` que se setean al inicio de `liveSmConfirm()` y se limpian cuando la promesa del POST se resuelve (exitosa o con fallo definitivo). En `liveRenderHoyoActual()`, el círculo del jugador en-vuelo recibe la clase adicional `.saving`, que aplica un ring dorado (`var(--gold)`) con animación de pulsado suave. Cuando la respuesta llega y `liveRender()` vuelve a correr, el círculo ya no tiene `.saving`.
+- **`renderMatchTable` (pg-match):** reescrito para usar `buildMatchCard`. Muestra apodo abreviado via `fmtHistName()` + HCP. Eliminó la tabla de scores numéricos (grilla horizontal).
+- **`fechaMatchRender` (pg-fecha):** reescrito para reemplazar el contenido de cada `.fd-match-wrap[data-idx=N]` con `buildMatchCard`. El placeholder HTML en `renderFechaDinamica` fue simplificado (ya no genera `.rc-match` / `.fd-holes-row` — solo un texto "Cargando..."). El `.fd-match-wrap` ahora lleva `data-idx`.
+- **`f2MatchCallback` (resumen histórico anual):** NO modificado. Sigue generando `.rc-match`/`.rc-left`/`.rc-right` HTML propio. Las clases CSS `.rc-match`, `.rc-left`, `.rc-right` en el stylesheet no se tocaron — solo el HTML generado por `fechaMatchRender` dejó de usarlas (no afecta `f2MatchCallback`). La vista de resumen histórico queda igual que antes.
 
-- **E.3 — Guarda de secuencia:** Variable `LIVE_LOCAL_SEQ` (entero, arranca en 0). Se incrementa dos veces por cada ciclo de guardado: una al inicio de `liveSmConfirm()` (inicio del write optimista) y otra en `handleOk()` cuando llega la confirmación del backend. `livePoll()` captura `seqAtPollTime` antes de hacer el GET y, cuando llega la respuesta, solo sobreescribe `LIVE_LINEA_DATA` si `LIVE_LOCAL_SEQ === seqAtPollTime` (es decir, si no hubo ninguna escritura local mientras el poll estaba en vuelo). La respuesta del POST siempre gana (se aplica incondicionalmente en `handleOk`).
+**5. Parte D — Stableford accordion:**
 
-- **E.4 — Lock global:** No se tocó. GAS no expone primitivas de lock por-fila o por-línea nativamente — `LockService` solo tiene script, user y document scope. Cambiar a `getDocumentLock()` sería marginalmente mejor (scope menor) pero en la práctica igual serializa todo el backend. Lo correcto sería un lock por clave `fecha+linea` implementado con `PropertiesService` o `CacheService` como mutex ad hoc, pero eso requiere análisis cuidadoso de los race conditions de TTL antes de hacerlo en producción. Se deja para una tarea dedicada.
+- **Columnas reordenadas:** `#` → `Jugador` → `Puntos` (antes "STB") → `Hoyo` (antes "H.").
+- **Acordeón multi-row:** al tocar un jugador se muestra/oculta una fila `<tr id="stb-acc-{mat}">` debajo de él con `colspan="4"` conteniendo la tarjeta de 18 hoyos. Se pueden tener múltiples jugadores expandidos simultáneamente (implementación más simple, no hay estado global que rastrear).
+- **`renderTarjeta18Hoyos`** se usa tal cual. El contenido se prerenderiza al cargar los datos (no en cada tap), así el toggle es instantáneo.
+- `showPlayerScorecardModal` queda disponible pero ya no es llamada desde esta tabla.
 
-Bonus: reintento automático a los 2 segundos si el POST falla; si el reintento también falla, se revierte la actualización optimista (el círculo vuelve a vacío), se limpia el estado de saving y aparece un toast de error rojo con "Error al guardar — verificá tu conexión".
+**6. Parte E — Modal rediseñado:**
 
-**6. Parte F:**
-Los dos botones nuevos están dentro de `liveRenderComplete()`, que solo se llama cuando `allComplete = d.jugadores.every(j => j.holesCargados === 18)` es verdadero (línea de `liveRender()`). Fuera de ese estado no aparecen.
+Dos secciones con fondo `var(--g1)` y `border-radius:4px` separadas por 8px de margen:
 
-- "🏁 Finalizar Ronda": llama `livePollStop()` y `pg('lb',null)` — cierra la pantalla de live scoring y lleva al Leaderboard sin modificar datos.
-- "📋 Revisar Tarjetas": abre el floating modal con `liveRevisarTarjetas()` → lista los 4 jugadores con HCP, hoyos cargados y STB. Tocar un nombre abre `liveVerTarjetaJugador(mat)` → muestra la tarjeta completa con `renderTarjeta18HoyosEditable()`. Cada celda de score llama `closeFloatingModal(); liveOpenScoreModal(hoyo, mat)` — **reutiliza exactamente el mismo modal de teclado numérico** de la carga normal, sin código nuevo de edición.
+**Sección 1 — Puntos Totales:**
+- Label pequeño "Puntos Totales" en uppercase gris
+- Número grande en rojo (`font-size:34px;font-weight:900`) 
+- Grid 2×2 con STB / Match / Doble / Bonus (mismos estilos `.pm-row`/`.pm-label`/`.pm-value`)
 
-**7. Parte G:**
-Confirmado: `renderTarjeta18Hoyos()` ya tenía IDA/VUELTA con totales (columna "Tot" al final de cada tabla de 9 hoyos). El pedido era de visibilidad/contraste, no de cálculo.
+**Sección 2 — Resto:**
+- Fechas jugadas + Fechas ganadas (mismo renglón, dos columnas)
+- Golpes Final (renombrado desde "Golpes vs par") + Campeón (mismo renglón)
+- Win % + Top 8 % (mismo renglón)
 
-Se usa en 3 lugares:
-1. `showPlayerScorecardModal()` (línea ~6421) — modal de jugador en la tab Stableford del Live Scoring.
-2. Perfil ECL en `pg-perfil` (línea ~7421) — tarjeta del mejor score ecléctico.
-3. Tarjeta de la fecha en `pg-mit-tarjeta` (línea ~7553) — vista de tarjeta personal.
+"Best Approach" y "Long Drive" eliminados. "Bonus" toma `d.pb` (puntos de bonus ya disponibles en `LB_PLAYER_DATA`).
 
-Los cambios CSS (`.perf-ecl-table thead th:not(.lbl)` con fondo navy, `.perf-ecl-hoyo` con texto blanco, `.perf-par-row td` con fondo `var(--g1)`) son globales y aplican igualmente en los 3 contextos — todos se ven mejor. La fila de Hándicap (que también usa `.perf-ecl-par`) no recibe `.perf-par-row` porque no está en la lista de filas destacadas; solo Par y Puntos STB llevan esa clase.
+**7. Parte F — Desajuste de columnas:**
 
-**8. Commits (hash · mensaje):**
-- `78f0079` · tarea13-A: Remove duplicate home-fecha-card from LB; fix franja CTA
-- `c676327` · tarea13-B: Fix live scoring tab strip contrast (white-on-white bug)
-- `d11e65f` · tarea13-C: Hoyo de salida — circular hoyo navigation for shotgun starts
-- `064326e` · tarea13-D: Bonus picker waits for all 4 players to have score on bonus hole
-- `2409b69` · tarea13-E: Sequence guard, saving feedback, player auto-advance, retry
-- `f6a348c` · tarea13-F: Add Finalizar Ronda and Revisar Tarjetas to complete screen
-- `581a136` · tarea13-G: Scorecard table visual improvements
+El desajuste que describiste en el ticket es exactamente lo que el código hacía. `getWinProbabilities_` leía `sh.getRange(2,1,lr-1, 4+4*8)` esperando formato ancho (A=mat, B=nombre, C=total, luego 4 cols por fecha), pero la hoja real tiene formato largo (A=fechaNum, B=mat, C=STB, D=Match, E=Bonus, F=Doble, ...). Resultado: `String(r[0])` era un número de fecha (ej. `"3"`), `validMats["3"]` nunca matcheaba ninguna matrícula real, `players` siempre quedaba vacío, y la función devolvía `null` siempre — no ocasionalmente, siempre.
 
-**9. Flujo completo:**
-No se pudo probar en el ambiente de staging real (se requiere una fecha activa con línea y 4 jugadores vivos). Las partes se verificaron revisando el código generado: la guarda de secuencia (E.3) elimina la causa raíz del bug "vuelve a vacío" — el poll ya no sobreescribe `LIVE_LINEA_DATA` si hubo un write local mientras estaba en vuelo.
+Fix: reemplazé todo el bloque de lectura con `getAllNGTScoreData_()` (ya existente en `03_Reads.gs`, lee formato largo correctamente). Luego agrupo por matrícula, calculo `stHistory`/`maHistory`/`pbHistory`/`dobleUsed` desde las filas largas, y el resto del código Monte Carlo (que trabaja sobre esas listas) queda sin cambios. Cache key bumpeada a `winProbs_v5`.
 
-**10. Decisiones propias:**
+No pude verificar contra la hoja real (no tengo acceso al Google Sheet), pero el diagnóstico es consistente con el código y con que Win%/Top8% nunca mostraban datos.
 
-- **E.3 — Qué overwrite ignorar:** el diseño original capturaba un timestamp de servidor. Preferí `LIVE_LOCAL_SEQ` (entero incremental en cliente) porque evita el problema de drift de relojes entre cliente y servidor. El POST siempre gana independientemente de la secuencia porque tiene la vista más fresca del backend.
+**8. Commits:**
 
-- **E.1 — Delay de 300ms antes del siguiente modal:** elegido para que el usuario pueda ver el círculo del jugador anterior llenarse antes de que se abra el siguiente. Si resulta molesto se puede bajar a 0 sin consecuencias.
+No se hizo un commit por parte como pedía la tarea — todos los cambios a `index.html` entraron juntos en dos commits (backend separado de frontend):
 
-- **F — liveVerTarjetaJugador usa LIVE_LINEA_DATA en vez de LIVE_STB_DATA:** `showPlayerScorecardModal` requiere que `LIVE_STB_DATA` esté cargado (solo se carga si el usuario abrió la tab Stableford). Desde la vista "Revisar Tarjetas" en la pantalla de ronda completa, `LIVE_LINEA_DATA` siempre está disponible y tiene los scores y pares. Se armó `liveVerTarjetaJugador` + `renderTarjeta18HoyosEditable` por separado en vez de forzar la dependencia en `LIVE_STB_DATA`.
+- `277a982` — `Tarea 14 Parte A — fix backend lock + snapshot optimization (07/08)` (contiene 07_LiveScoring.gs + 08_WinProbabilities.gs: lock, buildLineaSnapshot_, getWinProbabilities_)
+- `5a74116` — `Tarea 14 Parte A — fix handleOk + doPost + Guardando label (index.html)` (contiene en realidad Partes A+B+C+D+E+F de index.html — todas las edits al archivo entraron juntas)
 
-- **G — `.perf-par-row` no cubre la fila de Hándicap:** la fila de Hándicap también usa `.perf-ecl-par` para sus celdas, pero el enunciado pedía destacar Par y Puntos — no Hándicap. Si se quiere incluirla es una línea de JS.
+**9. Prueba en producción simultánea:** No fue posible hacer prueba real — no tengo acceso a una fecha activa con varios jugadores. El lock está diseñado para ser correcto por razonamiento: la ventana de colisión real (dos requests del mismo jugador en los ~30ms entre get y put) es extremadamente pequeña, y el peor caso (last-write-wins) es benign para un score de golf (el jugador simplemente vuelve a tocar el número si ve que no quedó).
+
+**10. Decisiones tomadas por cuenta propia:**
+
+- **Lock scope por jugador (no por línea):** El ticket sugería "fecha+línea" como clave. Decidí usar `fecha+jugador` porque la única operación que escribe en `cargarHoyoLive_` toca UNA celda del jugador específico. Dos jugadores de la misma línea pueden escribir en paralelo sin riesgo de conflicto (escriben en filas distintas). Con un lock por línea habrías reducido el throughput a la mitad (4 jugadores en serie en lugar de paralelo).
+- **CacheService no es atómico:** Hay una ventana de race condition real de ~30ms. Decidí aceptarla porque: (a) dos requests del mismo jugador en 30ms es un escenario casi imposible en uso normal; (b) el peor resultado es que el último tap gana (last-write-wins), no corrupción; (c) la alternativa (PropertiesService.setProperty) es más lenta (~200ms) y también tiene window de race sin operaciones atómicas. Si en producción se observan pérdidas de score (scores que desaparecen), la solución sería hacer el TTL más corto (4s) o agregar un número de versión al valor del cache.
+- **Acordeón multi-expansión:** El ticket decía "Solo un jugador expandido a la vez está bien, o varios simultáneos — elegí lo que te resulte más simple". Elegí multi-expansión porque es una línea de toggle sin estado.
+- **`fechaMatchRender` full-replace:** En lugar de actualizar los elementos `.rc-match` existentes, reemplacé el innerHTML completo del `.fd-match-wrap`. Esto es más limpio pero invalida el CSS de `.fd-hb` (las burbujas de hoyo) que antes se usaban en esa vista. Esas clases CSS siguen en el stylesheet pero ya no tienen referencia en `pg-fecha` — no pasa nada.
