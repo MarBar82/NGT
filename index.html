@@ -6460,8 +6460,75 @@ function liveRenderComplete(){
       (isMe ? '<button class="adm-btn-primary" onclick="liveFirmarMiTarjeta()" style="font-size:13px;padding:8px 14px;">✍ Firmar</button>' : '') +
     '</div>';
   });
-  html += '</div></div>';
+  html += '</div>' +
+    '<div class="adm-card-body" style="border-top:1px solid var(--g1);display:flex;gap:8px;padding-top:12px;">' +
+    '<button class="adm-btn" onclick="livePollStop();pg(\'lb\',null)" style="flex:1;font-size:14px;padding:10px;">🏁 Finalizar Ronda</button>' +
+    '<button class="adm-btn-primary" onclick="liveRevisarTarjetas()" style="flex:1;font-size:14px;padding:10px;">📋 Revisar Tarjetas</button>' +
+    '</div></div>';
   document.getElementById('live-complete-view').innerHTML = html;
+}
+
+function liveRevisarTarjetas(){
+  if(!LIVE_LINEA_DATA) return;
+  var d = LIVE_LINEA_DATA;
+  var html = '<div class="pf-modal-hdr">Revisar Tarjetas</div>';
+  d.jugadores.forEach(function(jug){
+    var stbStr = jug.stbTotal !== null && jug.stbTotal !== undefined ? jug.stbTotal + ' pts' : '—';
+    html += '<div class="live-player-summary" onclick="liveVerTarjetaJugador(\'' + jug.matricula + '\')" style="cursor:pointer;padding:12px 0;">' +
+      '<div><div class="live-sum-name">' + jug.apodo + '</div>' +
+      '<div class="live-sum-stat">HCP ' + jug.hcpJuego + ' · ' + jug.holesCargados + '/18 · STB ' + stbStr + '</div></div>' +
+      '<div style="color:var(--g4);font-size:20px;font-family:sans-serif;">›</div>' +
+    '</div>';
+  });
+  openFloatingModal(html);
+}
+
+function liveVerTarjetaJugador(mat){
+  if(!LIVE_LINEA_DATA) return;
+  var jug = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === mat; });
+  if(!jug) return;
+  var pares = LIVE_LINEA_DATA.pares || [];
+  var indices = LIVE_LINEA_DATA.indices || [];
+  var stbStr = jug.stbTotal !== null && jug.stbTotal !== undefined ? jug.stbTotal + ' pts' : '—';
+  var html = '<div class="pf-modal-hdr">' + jug.apodo + ' · HCP ' + jug.hcpJuego + '</div>' +
+    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;color:var(--g4);margin-bottom:12px;">' +
+    'STB: <strong style="color:var(--navy);font-size:16px;">' + stbStr + '</strong> · ' + jug.holesCargados + '/18 hoyos</div>' +
+    renderTarjeta18HoyosEditable(jug, pares, indices);
+  openFloatingModal(html);
+}
+
+function renderTarjeta18HoyosEditable(jug, pares, indices){
+  var mat = jug.matricula;
+  var scores = jug.scores || [];
+  function nine(from, to, lbl){
+    var h = '<table class="perf-ecl-table"><thead><tr><th class="lbl">' + lbl + '</th>';
+    for(var i = from; i < to; i++) h += '<th><div class="perf-ecl-hoyo">H' + (i+1) + '</div></th>';
+    h += '<th><div class="perf-ecl-hoyo">Tot</div></th></tr></thead><tbody>';
+    // Par row
+    h += '<tr class="perf-par-row"><td class="lbl">Par</td>';
+    var parTot = 0;
+    for(var i = from; i < to; i++){
+      var p = pares[i];
+      h += '<td><span class="perf-ecl-par">' + (p || '—') + '</span></td>';
+      if(p) parTot += p;
+    }
+    h += '<td><span class="perf-ecl-par">' + parTot + '</span></td></tr>';
+    // Score row — each cell tappable to edit
+    h += '<tr><td class="lbl">Score</td>';
+    var scoreTot = 0;
+    var allOk = true;
+    for(var i = from; i < to; i++){
+      var s = scores[i];
+      h += '<td style="cursor:pointer;" onclick="closeFloatingModal();liveOpenScoreModal(' + (i+1) + ',\'' + mat + '\')">' + scoreSymbolHtml(s, pares[i]) + '</td>';
+      if(s !== null && s !== undefined) scoreTot += s; else allOk = false;
+    }
+    h += '<td>' + scoreSymbolHtml(allOk ? scoreTot : null, parTot, true) + '</td></tr>';
+    h += '</tbody></table>';
+    return h;
+  }
+  return '<div style="overflow-x:auto;">' + nine(0, 9, 'IDA') + '</div>' +
+         '<div style="overflow-x:auto;margin-top:10px;">' + nine(9, 18, 'VUELTA') + '</div>' +
+         '<p style="margin:10px 0 0;font-family:\'Barlow Condensed\',sans-serif;font-size:11px;color:var(--g4);text-align:center;letter-spacing:.04em;">TOCÁ UN SCORE PARA EDITAR</p>';
 }
 
 function liveOpenScoreModal(hoyo, mat){
