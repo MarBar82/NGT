@@ -3349,7 +3349,6 @@ function setFooterHeight(){
   var bnav = document.getElementById('bnav-main');
   var strip = document.getElementById('fecha-activa-strip');
   var bh = bnav ? bnav.getBoundingClientRect().height : 66;
-  if(!bh) bh = 66;
   var sh = (strip && strip.style.display !== 'none' && strip.dataset.active === '1')
     ? (strip.getBoundingClientRect().height || 40) : 0;
   document.documentElement.style.setProperty('--footer-h', (bh + sh) + 'px');
