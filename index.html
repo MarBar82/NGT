@@ -5635,6 +5635,7 @@ let LIVE_MATCH_DATA = {};
 let LIVE_LOCAL_SEQ = 0;   // increments on every local write; poll ignores stale responses
 let LIVE_SAVING_MAT = null;  // matricula of player whose score is in-flight (visual feedback)
 let LIVE_SAVING_HOYO = null; // hoyo of the in-flight save
+let LIVE_REVIEW_MAT = null;  // set when editing from "Revisar Tarjetas" — triggers re-firma after save
 
 function mitLogin(){
   // If already authenticated via NGT_SESSION, skip the mat-only login
@@ -6459,24 +6460,71 @@ function liveRenderBonus(data){
 
 function liveRenderComplete(){
   if(!LIVE_LINEA_DATA || !MIT_PLAYER) return;
-  var myMat = String(MIT_PLAYER.matricula);
   var d = LIVE_LINEA_DATA;
   var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:3px solid var(--red);">Ronda completa</div>' +
     '<div class="adm-card-body">';
   d.jugadores.forEach(function(jug){
-    var isMe = jug.matricula === myMat;
     html += '<div class="live-player-summary">' +
       '<div><div class="live-sum-name">' + jug.apodo + '</div>' +
       '<div class="live-sum-stat">Gross ' + (jug.grossParcial || 0) + ' · STB ' + (jug.stbTotal !== null ? jug.stbTotal : '–') + '</div></div>' +
-      (isMe ? '<button class="adm-btn-primary" onclick="liveFirmarMiTarjeta()" style="font-size:13px;padding:8px 14px;">✍ Firmar</button>' : '') +
     '</div>';
   });
   html += '</div>' +
-    '<div class="adm-card-body" style="border-top:1px solid var(--g1);display:flex;gap:8px;padding-top:12px;">' +
-    '<button class="adm-btn" onclick="livePollStop();pg(\'lb\',null)" style="flex:1;font-size:14px;padding:10px;">🏁 Finalizar Ronda</button>' +
-    '<button class="adm-btn-primary" onclick="liveRevisarTarjetas()" style="flex:1;font-size:14px;padding:10px;">📋 Revisar Tarjetas</button>' +
+    '<div id="live-complete-actions" class="adm-card-body" style="border-top:1px solid var(--g1);display:flex;gap:8px;padding-top:12px;">' +
+    '<button class="adm-btn-primary" onclick="liveFinalizar()" style="flex:1;font-size:14px;padding:10px;">🏁 Finalizar Ronda</button>' +
+    '<button class="adm-btn" onclick="liveRevisarTarjetas()" style="flex:1;font-size:14px;padding:10px;">📋 Revisar Tarjetas</button>' +
     '</div></div>';
   document.getElementById('live-complete-view').innerHTML = html;
+}
+
+function liveFirmarJugador(jug){
+  return ngtApiPost({
+    action: 'cargarTarjeta',
+    matricula: jug.matricula,
+    fecha: MIT_FECHA,
+    hcp: jug.hcpJuego,
+    scores: (jug.scores || []).map(function(s){ return (s === null || s === undefined) ? '' : s; }),
+    ld: jug.ld ? 1 : 0,
+    ba: jug.ba ? 1 : 0,
+  }).then(function(r){
+    if(!r || !r.ok) throw new Error((r && r.error) || 'Error del servidor');
+    return r;
+  });
+}
+
+function liveFinalizar(){
+  if(!LIVE_LINEA_DATA) return;
+  var d = LIVE_LINEA_DATA;
+  var actions = document.getElementById('live-complete-actions');
+  if(actions) actions.innerHTML =
+    '<div style="text-align:center;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;color:var(--g4);padding:10px;width:100%;">' +
+    '<div class="spinner" style="display:inline-block;margin-right:8px;"></div>Guardando tarjetas...</div>';
+
+  livePollStop();
+
+  var promises = d.jugadores.map(function(jug){
+    return liveFirmarJugador(jug)
+      .then(function(){ return { apodo: jug.apodo, ok: true }; })
+      .catch(function(e){ return { apodo: jug.apodo, ok: false, error: e.message }; });
+  });
+
+  Promise.all(promises).then(function(results){
+    var failed = results.filter(function(r){ return !r.ok; });
+    if(!failed.length){
+      pg('lb', null);
+    } else {
+      var names = failed.map(function(r){ return r.apodo; }).join(', ');
+      if(actions) actions.innerHTML =
+        '<div style="background:rgba(220,38,38,.08);border-radius:4px;padding:10px 12px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;margin-bottom:8px;width:100%;">' +
+          '<div style="color:var(--red);font-weight:700;margin-bottom:2px;">⚠ Error guardando: ' + names + '</div>' +
+          '<div style="color:var(--g4);">Los demás quedaron guardados. Reintentá o avisá al admin.</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;width:100%;">' +
+          '<button class="adm-btn" onclick="liveFinalizar()" style="flex:1;font-size:14px;padding:10px;">↺ Reintentar</button>' +
+          '<button class="adm-btn-primary" onclick="pg(\'lb\',null)" style="flex:1;font-size:14px;padding:10px;">Ir al LB →</button>' +
+        '</div>';
+    }
+  });
 }
 
 function liveRevisarTarjetas(){
@@ -6496,6 +6544,7 @@ function liveRevisarTarjetas(){
 
 function liveVerTarjetaJugador(mat){
   if(!LIVE_LINEA_DATA) return;
+  LIVE_REVIEW_MAT = mat; // mark review mode so handleOk re-firmas this player after any hoyo edit
   var jug = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === mat; });
   if(!jug) return;
   var pares = LIVE_LINEA_DATA.pares || [];
@@ -6606,7 +6655,14 @@ function liveSmConfirm(v){
     if(score !== null && r.bonusPendiente){
       liveBonusModalAbrir(r.bonusPendiente);
     } else if(score !== null){
-      liveAutoAdvancePlayer(hoyo, mat);
+      if(LIVE_REVIEW_MAT === mat){
+        // Editing from "Revisar Tarjetas" — re-firma this player to keep LB in sync
+        LIVE_REVIEW_MAT = null;
+        var jugRev = r.jugadores.find(function(j){ return j.matricula === mat; });
+        if(jugRev) liveFirmarJugador(jugRev).catch(function(e){ liveShowToast('Error al actualizar LB: ' + e.message); });
+      } else {
+        liveAutoAdvancePlayer(hoyo, mat);
+      }
     }
   }
 
@@ -6713,22 +6769,6 @@ function liveBonusSeleccionar(tipo, matricula){
 function livePrevHoyo(){ LIVE_HOYO = LIVE_HOYO === 1 ? 18 : LIVE_HOYO - 1; liveRender(); }
 function liveNextHoyo(){ LIVE_HOYO = LIVE_HOYO === 18 ? 1 : LIVE_HOYO + 1; liveRender(); }
 
-function liveFirmarMiTarjeta(){
-  if(!LIVE_LINEA_DATA || !MIT_PLAYER) return;
-  var myMat = String(MIT_PLAYER.matricula);
-  var myJug = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === myMat; });
-  if(!myJug) return;
-  MIT_SCORES = myJug.scores.slice();
-  MIT_CANCHA = {
-    nombre:  LIVE_LINEA_DATA.cancha.nombre,
-    pares:   LIVE_LINEA_DATA.pares   || [],
-    indices: LIVE_LINEA_DATA.indices || [],
-  };
-  document.getElementById('mit-hcp').value = myJug.hcpJuego;
-  document.getElementById('mit-ld').checked = myJug.ld || false;
-  document.getElementById('mit-ba').checked = myJug.ba || false;
-  mitFirmarTarjeta();
-}
 
 document.addEventListener('visibilitychange', function(){
   if(!LIVE_MODE) return;
