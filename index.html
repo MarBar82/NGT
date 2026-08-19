@@ -6681,9 +6681,26 @@ function liveSmConfirm(v){
     LIVE_SAVING_MAT = null;
     LIVE_SAVING_HOYO = null;
     LIVE_LOCAL_SEQ++;
-    LIVE_LINEA_DATA = r;
+    // Merge only this player's entry from the server response.
+    // Replacing the whole LIVE_LINEA_DATA would clobber scores saved by parallel
+    // optimistic-advance requests if an older response arrives after a newer one.
+    if(LIVE_LINEA_DATA && LIVE_LINEA_DATA.jugadores && r && r.jugadores) {
+      var savedJug = r.jugadores.find(function(j){ return j.matricula === mat; });
+      if(savedJug) {
+        var jugIdx = -1;
+        for(var _i = 0; _i < LIVE_LINEA_DATA.jugadores.length; _i++){
+          if(LIVE_LINEA_DATA.jugadores[_i].matricula === mat){ jugIdx = _i; break; }
+        }
+        if(jugIdx >= 0) LIVE_LINEA_DATA.jugadores[jugIdx] = savedJug;
+      }
+      if(r.matches !== undefined) LIVE_LINEA_DATA.matches = r.matches;
+      LIVE_LINEA_DATA.bonusPendiente = r.bonusPendiente;
+      if(r.updatedAt !== undefined) LIVE_LINEA_DATA.updatedAt = r.updatedAt;
+    } else {
+      LIVE_LINEA_DATA = r;
+    }
     liveRender();
-    var allComplete = r.jugadores && r.jugadores.every(function(j){ return j.holesCargados === 18; });
+    var allComplete = LIVE_LINEA_DATA.jugadores && LIVE_LINEA_DATA.jugadores.every(function(j){ return j.holesCargados === 18; });
     if(allComplete) livePollStop();
     if(score !== null && r.bonusPendiente){
       liveBonusModalAbrir(r.bonusPendiente);
@@ -6691,7 +6708,7 @@ function liveSmConfirm(v){
       if(LIVE_REVIEW_MAT === mat){
         // Editing from "Revisar Tarjetas" — re-firma this player to keep LB in sync
         LIVE_REVIEW_MAT = null;
-        var jugRev = r.jugadores.find(function(j){ return j.matricula === mat; });
+        var jugRev = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === mat; });
         if(jugRev) liveFirmarJugador(jugRev).catch(function(e){ liveShowToast('Error al actualizar LB: ' + e.message); });
       } else if(!optimisticAdvanced) {
         liveAutoAdvancePlayer(hoyo, mat);
