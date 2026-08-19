@@ -152,30 +152,25 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
     const bc1 = Math.max(0, ay1 - 18);
     const bc2 = Math.max(0, ay2 - 18);
 
-    let pts1 = 0, pts2 = 0, hoyosJugados = 0;
-    const detallePorHoyo = new Array(18).fill(null);
+    // Build net score arrays (handicap-adjusted), then delegate to shared function
+    const net1arr = new Array(18).fill(null);
+    const net2arr = new Array(18).fill(null);
     for (let h = 0; h < 18; h++) {
       const g1 = pd1.scores[h], g2 = pd2.scores[h];
-      if (g1 === null || g2 === null) continue;
-      const idx  = cpIndices[h] || 0;
-      const adj1 = (ay1 > 0 && ay1 >= idx ? -1 : 0) + (bc1 > 0 && idx <= bc1 ? -1 : 0);
-      const adj2 = (ay2 > 0 && ay2 >= idx ? -1 : 0) + (bc2 > 0 && idx <= bc2 ? -1 : 0);
-      const net1 = g1 + adj1, net2 = g2 + adj2;
-      if (net1 < net2)      { pts1++; detallePorHoyo[h] = 'win'; }
-      else if (net2 < net1) { pts2++; detallePorHoyo[h] = 'lose'; }
-      else                  { detallePorHoyo[h] = 'halved'; }
-      hoyosJugados++;
-      // Early termination: match is decided when |diff| > holes remaining — stop counting.
-      // Prevents impossible results like "8&2" when hoyos are still played for other formats.
-      const diffSoFar = pts1 - pts2;
-      if (Math.abs(diffSoFar) > (18 - hoyosJugados)) break;
+      if (g1 !== null && g2 !== null) {
+        const idx  = cpIndices[h] || 0;
+        const adj1 = (ay1 > 0 && ay1 >= idx ? -1 : 0) + (bc1 > 0 && idx <= bc1 ? -1 : 0);
+        const adj2 = (ay2 > 0 && ay2 >= idx ? -1 : 0) + (bc2 > 0 && idx <= bc2 ? -1 : 0);
+        net1arr[h] = g1 + adj1;
+        net2arr[h] = g2 + adj2;
+      }
     }
-
-    const diff      = pts1 - pts2;
-    const remaining = 18 - hoyosJugados;
+    const mr = calcularResultadoMatch_(net1arr, net2arr);
+    const diff      = mr.diff;
+    const remaining = mr.remaining;
     const abs       = Math.abs(diff);
     let estado = '';
-    if (hoyosJugados > 0) {
+    if (mr.played > 0) {
       if (diff === 0) estado = 'AS';
       else if (abs > remaining) estado = abs + '&' + remaining + (diff < 0 ? ' DN' : '');
       else estado = diff > 0 ? (diff + ' UP') : (abs + ' DN');
@@ -185,9 +180,9 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
       j1: pair.mat1, j1Apodo: a1,
       j2: pair.mat2, j2Apodo: a2,
       estado:         estado,
-      hoyosJugados:   hoyosJugados,
+      hoyosJugados:   mr.played,
       hoyosRestantes: remaining,
-      detallePorHoyo: detallePorHoyo,
+      detallePorHoyo: mr.detail,
     };
   });
 
@@ -454,4 +449,49 @@ function setBonusGanador_(params) {
 
   audit_('SET_BONUS_GANADOR', reportaMat, { fecha, tipo, lineaNum, matricula });
   return { ok: true, tipo, ganador, final: false };
+}
+
+/**
+ * Shared match play calculator: given net score arrays for two players, returns
+ * per-player result strings, match points, and hole-by-hole detail.
+ * Applies early termination (match closes when |diff| > remaining holes).
+ * Used by buildLineaSnapshot_ (live display) and cargarTarjeta_ (persisted result).
+ *
+ * @param {Array} netA  18-entry array of net scores for player A (null/''=no score)
+ * @param {Array} netB  18-entry array of net scores for player B (null/''=no score)
+ * @returns {{resA,resB,mPtsA,mPtsB,diff,remaining,played,detail}}
+ *   resA/resB: "2&1", "3 UP", "AS", or "" (loser)
+ *   mPtsA/mPtsB: 0=lost, 3=halved, 6=won
+ */
+function calcularResultadoMatch_(netA, netB) {
+  var ptsA = 0, ptsB = 0, played = 0;
+  var detail = new Array(18).fill(null);
+  for (var h = 0; h < 18; h++) {
+    var a = netA[h], b = netB[h];
+    if (a === null || a === '' || a === undefined || b === null || b === '' || b === undefined) continue;
+    var na = Number(a), nb = Number(b);
+    if (na < nb)      { ptsA++; detail[h] = 'win'; }
+    else if (nb < na) { ptsB++; detail[h] = 'lose'; }
+    else              { detail[h] = 'halved'; }
+    played++;
+    if (Math.abs(ptsA - ptsB) > (18 - played)) break;
+  }
+  var diff      = ptsA - ptsB;
+  var remaining = 18 - played;
+  var abs       = Math.abs(diff);
+  var resA = '', resB = '', mPtsA = 0, mPtsB = 0;
+  if (played > 0) {
+    if (diff === 0) {
+      resA = 'AS'; resB = 'AS'; mPtsA = 3; mPtsB = 3;
+    } else if (abs > remaining) {
+      if (diff > 0) { resA = abs + '&' + remaining; mPtsA = 6; }
+      else          { resB = abs + '&' + remaining; mPtsB = 6; }
+    } else {
+      if (diff > 0) { resA = diff + ' UP'; mPtsA = 6; }
+      else          { resB = abs  + ' UP'; mPtsB = 6; }
+    }
+  }
+  return { resA: resA, resB: resB, mPtsA: mPtsA, mPtsB: mPtsB,
+           diff: diff, remaining: remaining, played: played, detail: detail };
+}
 }

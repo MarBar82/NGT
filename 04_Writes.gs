@@ -461,19 +461,11 @@ function cargarTarjeta_(params) {
           oppNet[h] = (oppG !== null && !isNaN(oppG)) ? oppG + adjOpp : '';
         }
 
-        let myBA = 0, oppBA = 0;
-        for (let h = 0; h < 18; h++) {
-          if (myNet[h] !== '' && oppNet[h] !== '') {
-            if (myNet[h]  < oppNet[h]) myBA++;
-            if (oppNet[h] < myNet[h])  oppBA++;
-          }
-        }
-        const myBB  = myBA  - oppBA;
-        const oppBB = oppBA - myBA;
-        const myX   = myBB  > 0 ? (myBB  + ' UP') : (myBB  === 0 ? 'AS' : '');
-        const oppX  = oppBB > 0 ? (oppBB + ' UP') : (oppBB === 0 ? 'AS' : '');
-        const myY   = myX  === '' ? 0 : (myX  === 'AS' ? 3 : 6);
-        const oppY  = oppX === '' ? 0 : (oppX === 'AS' ? 3 : 6);
+        const matchCalc = calcularResultadoMatch_(myNet, oppNet);
+        const myX  = matchCalc.resA;
+        const oppX = matchCalc.resB;
+        const myY  = matchCalc.mPtsA;
+        const oppY = matchCalc.mPtsB;
 
         // Write [res1, pts1, res2, pts2] to cols E..H of the single match row
         const writeData = isMat1 ? [[myX, myY, oppX, oppY]] : [[oppX, oppY, myX, myY]];
