@@ -272,14 +272,19 @@ function cargarHoyoLive_(params) {
   cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap2[String(j.matricula)] = j; });
   const snap = buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap2);
 
-  // Detectar si el hoyo es de bonus (BA o LD) y no tiene ganador reportado aún
+  // Detectar si el hoyo es de bonus (BA o LD) y no tiene ganador reportado aún.
+  // Solo disparar cuando los 4 jugadores de la línea tengan score en ese hoyo.
   let bonusPendiente = null;
-  if (scoreVal !== '' && meta.bonusHoyos) {
+  if (scoreVal !== '' && meta.bonusHoyos && snap && snap.jugadores) {
     const bonusEstado = meta.bonusEstado || {};
-    if (hoyoNum === meta.bonusHoyos.ba && !bonusEstado.ba) {
-      bonusPendiente = { tipo: 'ba', hoyo: hoyoNum };
-    } else if (hoyoNum === meta.bonusHoyos.ld && !bonusEstado.ld) {
-      bonusPendiente = { tipo: 'ld', hoyo: hoyoNum };
+    const hoyoIdx = hoyoNum - 1;
+    const allHaveScore = snap.jugadores.every(function(j){ return j.scores[hoyoIdx] !== null; });
+    if (allHaveScore) {
+      if (hoyoNum === meta.bonusHoyos.ba && !bonusEstado.ba) {
+        bonusPendiente = { tipo: 'ba', hoyo: hoyoNum };
+      } else if (hoyoNum === meta.bonusHoyos.ld && !bonusEstado.ld) {
+        bonusPendiente = { tipo: 'ld', hoyo: hoyoNum };
+      }
     }
   }
 
