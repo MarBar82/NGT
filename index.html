@@ -1076,6 +1076,13 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .pf-table .pf-total{font-weight:800;color:var(--red);}
 .pf-sparkline{margin-top:14px;padding-top:12px;border-top:1px solid var(--g1);}
 .pf-sparkline-lbl{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--g4);margin-bottom:6px;}
+/* Player stats modal (Parte F) */
+.pm-stats{display:flex;flex-direction:column;gap:0;}
+.pm-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--g1);font-family:'Barlow Condensed',sans-serif;}
+.pm-row:last-child{border-bottom:none;}
+.pm-label{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--g4);}
+.pm-value{font-size:14px;font-weight:700;color:var(--text);text-align:right;}
+.pm-divider{height:1px;background:var(--g2);margin:6px 0;}
 
 .perf-hero{
   background:linear-gradient(135deg, var(--navy) 0%, #001a37 100%);
@@ -2477,6 +2484,9 @@ function dobleCell(doble,pd){
   return '<span class="s dim">–</span>';
 }
 
+// ══ LB player data map — populated by gvizCallback for use in the player modal ══
+let LB_PLAYER_DATA = {};   // keyed by NOMBRE uppercase → row data object
+
 // ══ Bonus emojis per player (Best Approach + Long Drive wins) ══
 // Loaded dynamically from backend (bonusesAcum endpoint) which reads TARJETAS 2026.
 let PLAYER_BONUSES = {};   // keyed by NOMBRE uppercase (matches LB names)
@@ -2552,21 +2562,12 @@ function gvizCallback(response){
     const table=response.table;
     const rows=table.rows.filter(r=>r.c&&r.c.some(c=>c&&c.v!==null&&c.v!==''));
     if(!rows.length){document.getElementById('lb-body').innerHTML='<div class="lb-error">No hay datos.</div>';return;}
+    LB_PLAYER_DATA={};
     let html=`<table class="pga"><thead><tr>
       <th class="c lb-col-pos">Pos</th>
       <th class="c lb-col-mov">Mov</th>
       <th class="lb-col-name">Jugador</th>
       <th class="c lb-col-num">Pts</th>
-      <th class="c lb-col-num">STB</th>
-      <th class="c lb-col-num">MCH</th>
-      <th class="c lb-col-num">Bonus</th>
-      <th class="c lb-col-num">F.Jug</th>
-      <th class="c lb-col-num">F.Gan</th>
-      <th class="c lb-col-num">Doble</th>
-      <th class="c lb-col-num">Golpes</th>
-      <th class="c lb-col-champ">Champ</th>
-      <th class="c lb-th-win" title="Probabilidad de ganar la temporada (Monte Carlo)">Win %</th>
-      <th class="c lb-th-top8" title="Probabilidad de quedar entre los 8 con ventaja para la final">Top 8 %</th>
     </tr></thead><tbody>`;
     rows.forEach((row,i)=>{
       const pos=v(row,0),nombre=v(row,1),movDir=v(row,2),movQty=v(row,3);
@@ -2574,30 +2575,13 @@ function gvizCallback(response){
       const fjug=v(row,8),fgan=v(row,9);
       const doble=v(row,10),pd=v(row,11),golpes=v(row,12),champ=v(row,13);
       if(!nombre)return;
-      if(i<3) console.log('LB Row '+i+':', 'movDir=['+movDir+'] movQty=['+movQty+']');
+      // Store all data for the player modal
+      LB_PLAYER_DATA[nombre.toUpperCase().trim()]={pos,nombre,movDir,movQty,pts,stb,mch,pb,fjug,fgan,doble,pd,golpes,champ};
       const mov=movCell(movDir,movQty);
-      const movNum=(()=>{const q=parseInt(movQty)||0;if(!q)return '<span class="s dim">—</span>';
-        // Determine direction from movDir to apply correct color
-        const d=String(movDir).trim();
-        const up=d.indexOf('⬆')>=0||d.indexOf('↑')>=0||d.toUpperCase()==='UP';
-        const dn=d.indexOf('⬇')>=0||d.indexOf('↓')>=0||d.toUpperCase()==='DN'||d.toUpperCase()==='DOWN';
-        if(up||q>0)return `<span class="mov-up">${Math.abs(q)}</span>`;
-        if(dn||q<0)return `<span class="mov-dn">${Math.abs(q)}</span>`;
-        return `<span class="s dim">${q}</span>`;})();
       const ptsHtml=pts&&pts!=='-'&&pts!=='0'?`<span class="s" style="color:var(--red);">${pts}</span>`:'<span class="s dim">–</span>';
-      const pbHtml=pb&&pb!=='0'&&pb!=='-'?`<span class="s bonus">+${pb}</span>`:'<span class="s dim">–</span>';
-      const winHtml = winCell(nombre);
-      const top8Html = top8Cell(nombre);
       html+=`<tr><td class="c lb-col-pos">${posCell(pos,i)}</td><td class="c lb-col-mov">${mov}</td>
         <td class="lb-col-name"><span class="lb-clickable-name" onclick="showPlayerFechaModal('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span><span class="lb-bonus-slot">${bonusEmojis(nombre)}</span></td>
-        <td class="c lb-col-num">${ptsHtml}</td><td class="c lb-col-num">${cell(stb)}</td>
-        <td class="c lb-col-num">${cell(mch)}</td><td class="c lb-col-num">${pbHtml}</td>
-        <td class="c lb-col-num">${cell(fjug)}</td><td class="c lb-col-num">${cell(fgan)}</td>
-        <td class="c lb-col-num">${dobleCell(doble,pd)}</td>
-        <td class="c lb-col-num">${golpesCell(golpes)}</td>
-        <td class="c lb-col-champ"><span class="trophy">${champ||''}</span></td>
-        <td class="c lb-td-win">${winHtml}</td>
-        <td class="c lb-td-top8">${top8Html}</td>
+        <td class="c lb-col-num">${ptsHtml}</td>
       </tr>`;
     });
     html+='</tbody></table>';
@@ -2606,13 +2590,9 @@ function gvizCallback(response){
     const now=new Date();
     document.getElementById('sync-time').textContent='Actualizado: '+now.toLocaleDateString('es-AR')+' '+now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     setTimeout(setTbHeight,50);
-    // Recompute sticky offsets en 3 momentos: inmediato, 300ms y 1200ms.
-    // Los primeros dos catches el caso más común; el de 1200ms cubre el
-    // cold-start de Apps Script donde Win%/Bonuses llegan muy tarde.
     requestAnimationFrame(recomputeStickyOffsets);
     setTimeout(recomputeStickyOffsets, 300);
     setTimeout(recomputeStickyOffsets, 1200);
-    // Si los datos ya estaban cargados cuando llegó el render, actualizar las celdas
     if(WIN_PROBS_LOADED) refreshWinPctCells();
     if(PLAYER_BONUSES_LOADED) refreshBonusCells();
   }catch(e){document.getElementById('lb-body').innerHTML='<div class="lb-error">Error: '+e.message+'</div>';console.error(e);}
@@ -2696,21 +2676,7 @@ function recomputeStickyOffsets(){
 // Re-recompute on resize
 window.addEventListener('resize', () => { setTimeout(recomputeStickyOffsets, 100); });
 function refreshWinPctCells(){
-  const rows = document.querySelectorAll('#lb-body table.pga tbody tr');
-  rows.forEach(tr => {
-    const nameSpan = tr.querySelector('.lb-clickable-name');
-    if(!nameSpan) return;
-    const attr = nameSpan.getAttribute('onclick') || '';
-    const m = attr.match(/showPlayerFechaModal\('(.+?)'\)/);
-    if(!m) return;
-    const nombre = m[1].replace(/\\'/g, "'");
-    const tdWin = tr.querySelector('td.lb-td-win');
-    if(tdWin) tdWin.innerHTML = winCell(nombre);
-    const tdTop8 = tr.querySelector('td.lb-td-top8');
-    if(tdTop8) tdTop8.innerHTML = top8Cell(nombre);
-  });
-  // Las celdas Win%/Top8% cambian de "…" a números → el layout de la tabla
-  // se redistribuye → hay que recalcular los offsets de las columnas sticky.
+  // Win%/Top8% now shown in player modal — no table cells to update.
   requestAnimationFrame(recomputeStickyOffsets);
 }
 
@@ -7623,86 +7589,49 @@ function closeRondaModal(){
 
 // Navigate from leaderboard click to player profile.
 let LB_JUG_2026 = null;  // cached players from 2026 NGT
-// ── showPlayerFechaModal — LB name click → floating table of scores per fecha ──
+// ── showPlayerFechaModal — LB name click → stats modal (all data from LB_PLAYER_DATA) ──
 function showPlayerFechaModal(lbName) {
-  const target = String(lbName || '').toUpperCase().trim();
+  const key = String(lbName || '').toUpperCase().trim();
+  const d = LB_PLAYER_DATA[key];
+  if (!d) {
+    openFloatingModal('<div class="pf-modal-hdr">' + lbName + '</div><div class="s dim" style="padding:12px 0;">Sin datos en el LB</div>');
+    return;
+  }
+  const b = PLAYER_BONUSES[key] || {};
+  const baCount = b.ba || 0;
+  const ldCount = b.ld || 0;
+  const wp = WIN_PROBS[key] || {};
 
-  function resolveMatricula() {
-    if (!LB_JUG_2026) return null;
-    let m = LB_JUG_2026.find(j => (j.apodo || '').toUpperCase().trim() === target);
-    if (!m) m = LB_JUG_2026.find(j => (j.nombre || '').toUpperCase().trim() === target);
-    if (!m) m = LB_JUG_2026.find(j => {
-      const ap = (j.apodo || '').toUpperCase().trim();
-      return ap && (target === ap || target.indexOf(ap + ' ') === 0 || target.indexOf(' ' + ap) >= 0);
-    });
-    return m ? m.matricula : null;
+  function pmRow(label, valueHtml) {
+    return '<div class="pm-row"><span class="pm-label">' + label + '</span><span class="pm-value">' + valueHtml + '</span></div>';
   }
 
-  function fetchAndShow(matricula) {
-    const displayName = lbName;
-    openFloatingModal(
-      '<div class="pf-modal-hdr">' + displayName + '</div>' +
-      '<div class="lb-status"><div class="spinner"></div>Cargando fechas...</div>'
-    );
-    if (!matricula) {
-      openFloatingModal('<div class="pf-modal-hdr">' + displayName + '</div><div class="s dim" style="padding:12px 0;">Jugador no encontrado</div>');
-      return;
-    }
-    ngtApiGet('jugadorFechas', { matricula: matricula }).then(function(r) {
-      const rows = (r && r.ok && r.data) || [];
-      if (!rows.length) {
-        openFloatingModal('<div class="pf-modal-hdr">' + displayName + '</div><div class="s dim" style="padding:12px 0;">Sin fechas registradas</div>');
-        return;
-      }
-      // Build table
-      let tbl = '<table class="pf-table"><thead><tr>' +
-        '<th>Fecha</th><th>STB</th><th>Match</th><th>Bonus</th><th>Total</th>' +
-        '</tr></thead><tbody>';
-      rows.forEach(function(f) {
-        const sub = f.cancha ? '<div style="font-size:10px;color:var(--g4);font-weight:400;">' + f.cancha + (f.fechaReal ? ' · ' + f.fechaReal : '') + '</div>' : '';
-        tbl += '<tr>' +
-          '<td>F' + f.fecha + sub + '</td>' +
-          '<td>' + f.st + '</td>' +
-          '<td>' + f.ma + '</td>' +
-          '<td>' + f.pb + '</td>' +
-          '<td class="pf-total">' + f.total + '</td>' +
-        '</tr>';
-      });
-      tbl += '</tbody></table>';
-      // Build sparkline of total per fecha
-      const totals = rows.map(function(f) { return f.total; });
-      const W = 200, H = 36;
-      const mn = Math.min.apply(null, totals), mx = Math.max.apply(null, totals);
-      const rng = mx - mn || 1;
-      const pts = totals.map(function(v, i) {
-        const x = totals.length === 1 ? W / 2 : (i / (totals.length - 1)) * (W - 8) + 4;
-        const y = H - 4 - ((v - mn) / rng) * (H - 8);
-        return x + ',' + y;
-      }).join(' ');
-      const dots = totals.map(function(v, i) {
-        const x = totals.length === 1 ? W / 2 : (i / (totals.length - 1)) * (W - 8) + 4;
-        const y = H - 4 - ((v - mn) / rng) * (H - 8);
-        return '<circle cx="' + x + '" cy="' + y + '" r="3" fill="var(--red)"/>';
-      }).join('');
-      const spark = '<div class="pf-sparkline"><div class="pf-sparkline-lbl">Total por fecha</div>' +
-        '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" preserveAspectRatio="none" style="display:block;">' +
-          '<polyline points="' + pts + '" fill="none" stroke="var(--red)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
-          dots +
-        '</svg></div>';
-      openFloatingModal('<div class="pf-modal-hdr">' + displayName + '</div>' + tbl + spark);
-    }).catch(function(e) {
-      openFloatingModal('<div class="pf-modal-hdr">' + displayName + '</div><div class="lb-error">Error: ' + e.message + '</div>');
-    });
-  }
+  const ptsHtml = d.pts && d.pts !== '-' ? '<span style="color:var(--red);font-weight:800;font-size:17px;">' + d.pts + '</span>' : '–';
+  const champHtml = d.champ ? '<span class="trophy">' + d.champ + '</span>' : '<span class="s dim">–</span>';
+  const baHtml = baCount > 0 ? '🎯 × ' + baCount : '<span class="s dim">–</span>';
+  const ldHtml = ldCount > 0 ? '💪 × ' + ldCount : '<span class="s dim">–</span>';
+  const winHtml = wp.winPct !== undefined ? winCell(d.nombre) : (WIN_PROBS_LOADED ? '<span class="s dim">–</span>' : '<span class="s dim">…</span>');
+  const top8Html = wp.top8Pct !== undefined ? top8Cell(d.nombre) : (WIN_PROBS_LOADED ? '<span class="s dim">–</span>' : '<span class="s dim">…</span>');
 
-  if (!LB_JUG_2026) {
-    ngtApiGet('jugadores').then(function(r) {
-      LB_JUG_2026 = (r && r.data) || [];
-      fetchAndShow(resolveMatricula());
-    }).catch(function() { fetchAndShow(null); });
-  } else {
-    fetchAndShow(resolveMatricula());
-  }
+  const html = '<div class="pf-modal-hdr">' + lbName + '</div>' +
+    '<div class="pm-stats">' +
+    pmRow('Puntos totales', ptsHtml) +
+    pmRow('Fechas jugadas', cell(d.fjug)) +
+    pmRow('Fechas ganadas', cell(d.fgan)) +
+    pmRow('STB', cell(d.stb)) +
+    pmRow('Match', cell(d.mch)) +
+    pmRow('Doble', dobleCell(d.doble, d.pd)) +
+    pmRow('Golpes vs par', golpesCell(d.golpes)) +
+    pmRow('Campeón', champHtml) +
+    '<div class="pm-divider"></div>' +
+    pmRow('Win %', winHtml) +
+    pmRow('Top 8 %', top8Html) +
+    '<div class="pm-divider"></div>' +
+    pmRow('Best Approach', baHtml) +
+    pmRow('Long Drive', ldHtml) +
+    '</div>';
+
+  openFloatingModal(html);
 }
 
 // ══════════ end PERFILES ══════════
