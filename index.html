@@ -1514,8 +1514,8 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .bnav-item.on .bnav-icon{opacity:1;}
 .bnav-icon{width:22px;height:22px;opacity:.5;transition:.12s;flex-shrink:0;}
 .bnav-item.on .bnav-icon{opacity:1;}
-/* Page bottom padding so content isn't hidden behind bottom nav */
-.pg.with-bnav{padding-bottom:66px;}
+/* Page bottom padding so content isn't hidden behind bottom nav + fecha activa strip */
+.pg.with-bnav{padding-bottom:var(--footer-h,66px);}
 /* Fechas panel — fixed above bottom nav, shown via .open class on #fechas-menu */
 #fechas-panel-wrap{position:fixed;bottom:66px;left:0;right:0;z-index:300;}
 #fechas-panel-wrap .snb-drop-menu{position:static;border-radius:6px 6px 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.15);}
@@ -3323,6 +3323,7 @@ function pg(id,btn){
       strip.style.display = 'flex';
     }
   }
+  setFooterHeight();
 }
 
 function setTbHeight(){
@@ -3336,6 +3337,19 @@ setTbHeight();
 window.addEventListener('resize', setTbHeight);
 window.addEventListener('load', function(){ setTbHeight(); setTimeout(setTbHeight,300); setTimeout(setTbHeight,800); });
 document.addEventListener('DOMContentLoaded', setTbHeight);
+
+function setFooterHeight(){
+  var bnav = document.getElementById('bnav-main');
+  var strip = document.getElementById('fecha-activa-strip');
+  var bh = bnav ? bnav.getBoundingClientRect().height : 66;
+  if(!bh) bh = 66;
+  var sh = (strip && strip.style.display !== 'none' && strip.dataset.active === '1')
+    ? (strip.getBoundingClientRect().height || 40) : 0;
+  document.documentElement.style.setProperty('--footer-h', (bh + sh) + 'px');
+}
+setFooterHeight();
+window.addEventListener('resize', setFooterHeight);
+window.addEventListener('load', function(){ setFooterHeight(); setTimeout(setFooterHeight,300); setTimeout(setFooterHeight,800); });
 
 
 // ══════════ ADMIN ══════════
