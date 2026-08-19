@@ -1494,7 +1494,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .fas-info{display:flex;align-items:center;gap:7px;overflow:hidden;}
 .fas-icon{width:14px;height:14px;flex-shrink:0;stroke:var(--red);}
 #fas-label{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.9);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.fas-cta{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.06em;color:var(--red);white-space:nowrap;flex-shrink:0;}
+.fas-cta{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.06em;color:#fff;white-space:nowrap;flex-shrink:0;}
 /* ══ BOTTOM NAV (Epic 8) ══════════════════════════════════════════════════════ */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--navy);display:flex;align-items:stretch;z-index:200;border-top:1px solid rgba(255,255,255,.1);padding-bottom:env(safe-area-inset-bottom);}
 .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:9px 4px;border:none;background:none;color:rgba(255,255,255,.5);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;-webkit-tap-highlight-color:transparent;touch-action:manipulation;transition:.12s;}
@@ -1654,28 +1654,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <!-- ════ LEADER BOARD ════ -->
 <div class="pg" id="pg-lb">
 <div class="wrap" style="padding:0 16px 16px 16px;">
-  <!-- Fecha activa: pastilla tipo card, visible solo cuando HOME_FECHA_ACTIVA -->
-  <button class="home-fecha-card" id="home-fecha-btn" style="display:none;cursor:pointer;border:none;text-align:left;width:100%;margin-bottom:12px;"
-          onclick="pg('mit',null)">
-    <div class="hfc-num" id="hfi-num">Fecha —</div>
-    <div class="hfc-rows">
-      <div class="hfc-row">
-        <div class="hfc-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4a2 2 0 0 1 2-2h11l-2 5h7l-2 5H6"/><path d="M4 22h6"/></svg>
-        </div>
-        <div class="hfc-label">Cancha</div>
-        <div class="hfc-value cancha" id="hfi-cancha">—</div>
-      </div>
-      <div class="hfc-row" id="hfi-fecha-row" style="display:none;">
-        <div class="hfc-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        </div>
-        <div class="hfc-label">Fecha</div>
-        <div class="hfc-value" id="hfi-fecha">—</div>
-      </div>
-    </div>
-    <div class="hfi-ver-btn" style="border-radius:0 0 4px 0;">Cargar Score →</div>
-  </button>
   <div class="lb-topbar">
     <div class="sync-time" id="sync-time"></div>
     <button class="lb-refresh" onclick="loadLB()">↻ Actualizar</button>
@@ -2412,7 +2390,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <svg class="fas-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     <span id="fas-label">NGT Fecha — · En juego</span>
   </div>
-  <div class="fas-cta">Continuar →</div>
+  <div class="fas-cta">Cargar Score →</div>
 </div>
 
 <!-- ════ BOTTOM NAV ════ -->
@@ -7645,21 +7623,6 @@ let HOME_FECHA_ACTIVA = 5; // número de fecha — default 5, se actualiza desde
 function applyFechaActiva(fa){
   if(!fa || !fa.fechaNum) return;
   HOME_FECHA_ACTIVA = parseInt(fa.fechaNum) || HOME_FECHA_ACTIVA;
-  const btn = document.getElementById('home-fecha-btn');
-  if (btn) {
-    btn.style.display = 'block';
-    const numEl = document.getElementById('hfi-num');
-    const canchaEl = document.getElementById('hfi-cancha');
-    if (numEl) numEl.textContent = 'NGT FECHA ' + HOME_FECHA_ACTIVA + ' · EN JUEGO';
-    if (canchaEl && fa.cancha) canchaEl.textContent = fa.cancha;
-    // Fecha/hora on the card (populated if backend provides it)
-    var dateEl = document.getElementById('hfi-fecha');
-    var dateRow = document.getElementById('hfi-fecha-row');
-    if (dateEl && fa.fechaStr) {
-      dateEl.textContent = fa.fechaStr;
-      if (dateRow) dateRow.style.display = '';
-    }
-  }
   // Franja persistente — visible everywhere except inside Live Scoring
   var strip = document.getElementById('fecha-activa-strip');
   if (strip) {
