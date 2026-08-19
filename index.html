@@ -706,6 +706,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .live-linea-pill.active{background:var(--navy);color:#fff;}
 @keyframes live-saving-pulse{0%,100%{opacity:.6}50%{opacity:1}}
 .hole-circle.saving{box-shadow:0 0 0 3px var(--gold);animation:live-saving-pulse .9s ease-in-out infinite;}
+.live-saving-label{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--gold);letter-spacing:.05em;text-transform:uppercase;animation:live-saving-pulse .9s ease-in-out infinite;}
 
 /* ══════════ HOME ══════════ */
 
@@ -1814,18 +1815,10 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
     <!-- Section tabs (inline, above content) -->
     <nav class="live-bottom-nav" style="margin-bottom:12px;">
-      <button id="live-ntab-tarjeta" class="live-nav-tab active" onclick="liveSetTab('tarjeta')">
-        <span class="lnt-icon">📋</span>Tarjeta
-      </button>
-      <button id="live-ntab-stableford" class="live-nav-tab" onclick="liveSetTab('stableford')">
-        <span class="lnt-icon">📊</span>Stableford
-      </button>
-      <button id="live-ntab-match" class="live-nav-tab" onclick="liveSetTab('match')">
-        <span class="lnt-icon">⚔️</span>Match
-      </button>
-      <button id="live-ntab-bonus" class="live-nav-tab" onclick="liveSetTab('bonus')">
-        <span class="lnt-icon">🎯</span>Bonus
-      </button>
+      <button id="live-ntab-tarjeta" class="live-nav-tab active" onclick="liveSetTab('tarjeta')">Tarjeta</button>
+      <button id="live-ntab-stableford" class="live-nav-tab" onclick="liveSetTab('stableford')">Stableford</button>
+      <button id="live-ntab-match" class="live-nav-tab" onclick="liveSetTab('match')">Match</button>
+      <button id="live-ntab-bonus" class="live-nav-tab" onclick="liveSetTab('bonus')">Bonus</button>
     </nav>
 
     <!-- Loading state -->
@@ -2588,7 +2581,10 @@ let WIN_PROBS_META = null; // { fechasJugadas, fechasRestantes, simulations, ...
 function loadWinProbabilities(){
   return ngtApiGet('winProbabilities').then(r => {
     const d = (r && r.data) || null;
-    if(!d || !d.players){ WIN_PROBS_LOADED = false; return; }
+    if(!d || !d.players){
+      if(r && !r.ok && r.error) console.error('loadWinProbabilities:', r.error);
+      WIN_PROBS_LOADED = false; return;
+    }
     WIN_PROBS = {};
     WIN_PROBS_META = {
       fechasJugadas: d.fechasJugadas,
@@ -3177,6 +3173,59 @@ function populateMatchPlayerFilter(){
   if(prev && juegaSet.has(prev)) jsel.value = prev;
 }
 
+// Shared match card renderer — used by renderMatchTable, fechaMatchRender, and liveRenderMatchBody.
+// nameA/nameB: already-formatted display names. hcpA/hcpB: string or null.
+// scA/scB: score arrays. resA/resB: stored result strings. label: optional sub-header text.
+function buildMatchCard(nameA, hcpA, nameB, hcpB, scA, scB, resA, resB, label){
+  var C1 = '#2563eb', C2 = '#dc2626';
+  var res = calcMatchResultFromData(scA, scB, resA, resB);
+  var j1Wins = res.winner === 'A';
+  var j2Wins = res.winner === 'B';
+  var as     = res.winner === 'draw';
+  var l1Bg  = j1Wins ? C1 : (as ? 'var(--g2)' : 'transparent');
+  var l2Bg  = j2Wins ? C2 : (as ? 'var(--g2)' : 'transparent');
+  var l1Txt = j1Wins ? '#fff' : 'var(--text)';
+  var l2Txt = j2Wins ? '#fff' : 'var(--text)';
+  var cBg   = j1Wins ? C1 : j2Wins ? C2 : (as ? 'var(--g3)' : 'var(--g2)');
+  var dA = hcpA ? ' HCP ' + hcpA : '';
+  var dB = hcpB ? ' HCP ' + hcpB : '';
+  var scoreHtml = res.winner !== 'pending'
+    ? '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:16px;font-weight:800;color:#fff;line-height:1;">' + res.resultStr + '</span>'
+    : '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,.5);">' + (res.resultStr || '–') + '</span>';
+  var out = '<div class="adm-card" style="margin-bottom:10px;overflow:hidden;">';
+  if(label){
+    out += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--g4);text-transform:uppercase;padding:4px 12px;">' + label + '</div>';
+  }
+  out += '<div style="display:flex;gap:16px;padding:4px 12px;background:var(--off);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">' +
+    '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;color:' + C1 + ';">● ' + nameA + dA + '</span>' +
+    '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:11px;font-weight:700;color:' + C2 + ';">● ' + nameB + dB + '</span>' +
+  '</div>';
+  out += '<div style="display:flex;height:48px;">' +
+    '<div style="flex:1;background:' + l1Bg + ';display:flex;align-items:center;padding:0 12px;">' +
+      '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (j1Wins?'700':'400') + ';color:' + l1Txt + ';">' + nameA + '</span>' +
+    '</div>' +
+    '<div style="width:80px;flex-shrink:0;background:' + cBg + ';display:flex;flex-direction:column;align-items:center;justify-content:center;">' +
+      scoreHtml +
+    '</div>' +
+    '<div style="flex:1;background:' + l2Bg + ';display:flex;align-items:center;justify-content:flex-end;padding:0 12px;">' +
+      '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (j2Wins?'700':'400') + ';color:' + l2Txt + ';">' + nameB + '</span>' +
+    '</div>' +
+  '</div>';
+  out += '<div style="display:flex;gap:3px;padding:8px 12px;overflow-x:auto;">';
+  for(var h = 0; h < 18; h++){
+    var vA = parseInt(scA[h]), vB = parseInt(scB[h]);
+    var hr = (isNaN(vA)||isNaN(vB)) ? null : vA < vB ? 'A' : vB < vA ? 'B' : 'tie';
+    var sym = String(h+1), bg, border, txtColor;
+    if(hr === 'A')        { bg = C1;          border = C1;          txtColor = '#fff'; }
+    else if(hr === 'B')   { bg = C2;          border = C2;          txtColor = '#fff'; }
+    else if(hr === 'tie') { bg = '#6b7280';   border = '#6b7280';   txtColor = '#fff'; sym = '='; }
+    else                  { bg = 'transparent'; border = 'var(--g2)'; txtColor = 'var(--g3)'; }
+    out += '<div title="Hoyo '+(h+1)+'" style="width:24px;height:24px;border-radius:50%;border:1.5px solid '+border+';background:'+bg+';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:\'Barlow Condensed\',sans-serif;font-size:9px;font-weight:700;color:'+txtColor+';">'+sym+'</div>';
+  }
+  out += '</div></div>';
+  return out;
+}
+
 function renderMatchTable(){
   const jsel = document.getElementById('match-jugador').value;
   const filtered = MATCH_CUR_DATA.filter(function(m){
@@ -3193,73 +3242,18 @@ function renderMatchTable(){
 
   const fechaNum = String(MATCH_CUR_FECHA || '').trim();
   const cancha   = FECHA_CANCHA[fechaNum] || '';
-  const hdrText  = fechaNum ? ('FECHA ' + fechaNum + (cancha ? ' · ' + cancha : '')) : 'Match';
+  const label    = fechaNum ? ('Fecha ' + fechaNum + (cancha ? ' · ' + cancha : '')) : '';
 
-  let out = '<div class="match-cards">';
+  let out = '';
   filtered.forEach(function(m){
-    const nameA = m.j1Name || '';
-    const nameB = m.j2Name || '';
-    const hcpA  = m.j1Hcp  != null ? String(m.j1Hcp) : '–';
-    const hcpB  = m.j2Hcp  != null ? String(m.j2Hcp) : '–';
-    const scA   = m.j1Scores || [];
-    const scB   = m.j2Scores || [];
-
-    const res = calcMatchResultFromData(scA, scB, m.j1Result, m.j2Result);
-    let resColor = 'var(--g4)';
-    if(res.winner === 'A') resColor = '#1a3a6e';
-    else if(res.winner === 'B') resColor = 'var(--red)';
-
-    const holeResults = [];
-    for(let h = 0; h < 18; h++){
-      const vA = parseInt(scA[h]);
-      const vB = parseInt(scB[h]);
-      if(isNaN(vA) || isNaN(vB)) holeResults.push(null);
-      else if(vA < vB) holeResults.push('A');
-      else if(vB < vA) holeResults.push('B');
-      else holeResults.push('tie');
-    }
-
-    out += '<div class="match-card">';
-    out += '<div class="match-card-hdr"><span class="match-fecha">' + hdrText + '</span></div>';
-    out += '<div class="mc-grid">';
-
-    out += '<table class="mc-left-tbl">';
-    out += '<thead><tr><th class="mc-th-name">Jugador</th><th class="mc-th-hcp">HCP</th></tr></thead>';
-    out += '<tbody>';
-    out += '<tr><td class="mc-td-name">' + fmtHistName(nameA) + '</td><td class="mc-td-hcp">' + hcpA + '</td></tr>';
-    out += '<tr><td class="mc-td-name">' + fmtHistName(nameB) + '</td><td class="mc-td-hcp">' + hcpB + '</td></tr>';
-    out += '</tbody></table>';
-
-    out += '<div class="mc-holes-scroll"><table class="mc-holes-tbl"><thead><tr>';
-    for(let h = 1; h <= 18; h++) out += '<th class="c">' + h + '</th>';
-    out += '</tr></thead><tbody>';
-
-    out += '<tr>';
-    for(let h = 0; h < 18; h++){
-      const v = (scA[h] !== '' && scA[h] != null) ? String(scA[h]) : '';
-      const wr = holeResults[h];
-      const afterEnd = (res.endedAtHole > 0 && h >= res.endedAtHole);
-      if(!v) out += '<td class="c"><span class="mh-empty">–</span></td>';
-      else if(wr === 'A' && !afterEnd) out += '<td class="c"><span class="mh mh-won-a">' + v + '</span></td>';
-      else out += '<td class="c"><span class="mh mh-normal' + (afterEnd ? ' mh-after' : '') + '">' + v + '</span></td>';
-    }
-    out += '</tr><tr>';
-    for(let h = 0; h < 18; h++){
-      const v = (scB[h] !== '' && scB[h] != null) ? String(scB[h]) : '';
-      const wr = holeResults[h];
-      const afterEnd = (res.endedAtHole > 0 && h >= res.endedAtHole);
-      if(!v) out += '<td class="c"><span class="mh-empty">–</span></td>';
-      else if(wr === 'B' && !afterEnd) out += '<td class="c"><span class="mh mh-won-b">' + v + '</span></td>';
-      else out += '<td class="c"><span class="mh mh-normal' + (afterEnd ? ' mh-after' : '') + '">' + v + '</span></td>';
-    }
-    out += '</tr></tbody></table></div>';
-
-    out += '<table class="mc-right-tbl"><thead><tr><th>Rdo</th></tr></thead><tbody>';
-    out += '<tr><td rowspan="2" style="color:' + resColor + ';" class="mc-td-res">' + res.resultStr + '</td></tr>';
-    out += '<tr></tr></tbody></table>';
-    out += '</div></div>';
+    const nameA = fmtHistName(m.j1Name || '');
+    const nameB = fmtHistName(m.j2Name || '');
+    const hcpA  = m.j1Hcp != null ? String(m.j1Hcp) : null;
+    const hcpB  = m.j2Hcp != null ? String(m.j2Hcp) : null;
+    out += buildMatchCard(nameA, hcpA, nameB, hcpB,
+                          m.j1Scores || [], m.j2Scores || [],
+                          m.j1Result, m.j2Result, label);
   });
-  out += '</div>';
   document.getElementById('match-body').innerHTML = out;
 }
 
@@ -6192,11 +6186,13 @@ function liveRenderHoyoActual(){
   var html = '';
   d.jugadores.forEach(function(jug){
     var score = jug.scores[h];
+    var isSaving = LIVE_SAVING_MAT === jug.matricula && LIVE_SAVING_HOYO === LIVE_HOYO;
     var cls = 'hole-circle' + (score !== null ? ' filled' : '');
-    if(LIVE_SAVING_MAT === jug.matricula && LIVE_SAVING_HOYO === LIVE_HOYO) cls += ' saving';
+    if(isSaving) cls += ' saving';
     var uc = jug.ultimoCargadoPor;
     var cargStr = (uc && uc.hoyo === LIVE_HOYO && uc.matricula !== jug.matricula)
       ? '<div class="live-cargado-por">↑ ' + (uc.apodo || uc.matricula) + '</div>' : '';
+    var savingLabel = isSaving ? '<div class="live-saving-label">Guardando...</div>' : '';
 
     html += '<div class="live-player-row" onclick="liveOpenScoreModal(' + LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
       '<div class="live-player-info">' +
@@ -6209,6 +6205,7 @@ function liveRenderHoyoActual(){
           (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
           (score !== null ? '<span class="hole-score" style="font-size:22px;">' + score + '</span>' : '') +
         '</div>' +
+        savingLabel +
       '</div>' +
     '</div>';
   });
@@ -6366,24 +6363,30 @@ function liveLoadStableford(){
         return;
       }
       LIVE_STB_DATA = r;
+      var pares   = r.pares   || [];
+      var indices = r.indices || [];
       var html = '<table style="width:100%;border-collapse:collapse;font-family:\'Barlow Condensed\',sans-serif;">' +
         '<thead><tr style="border-bottom:2px solid var(--border);font-size:11px;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;">' +
         '<th style="padding:6px 8px;text-align:left;width:30px;">#</th>' +
         '<th style="padding:6px 8px;text-align:left;">Jugador</th>' +
-        '<th style="padding:6px 8px;text-align:center;">H.</th>' +
-        '<th style="padding:6px 8px;text-align:right;">STB</th>' +
+        '<th style="padding:6px 8px;text-align:right;">Puntos</th>' +
+        '<th style="padding:6px 8px;text-align:right;min-width:40px;">Hoyo</th>' +
         '</tr></thead><tbody>';
       r.data.forEach(function(p, i){
         var isMe = MIT_PLAYER && String(p.matricula) === String(MIT_PLAYER.matricula);
-        var rowStyle = isMe ? 'background:rgba(var(--navy-rgb,30,58,138),.08);font-weight:700;' : '';
-        html += '<tr style="border-bottom:1px solid var(--border);cursor:pointer;' + rowStyle + '"' +
-          ' onclick="showPlayerScorecardModal(\'' + p.matricula + '\')">' +
+        var rowBg = isMe ? 'background:rgba(var(--navy-rgb,30,58,138),.08);font-weight:700;' : '';
+        var mat = p.matricula;
+        var scorecard = renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || []);
+        html += '<tr style="border-bottom:1px solid var(--border);cursor:pointer;' + rowBg + '"' +
+          ' onclick="liveStbToggle(\'' + mat + '\')">' +
           '<td style="padding:8px 8px;font-size:13px;color:var(--g4);">' + (i+1) + '</td>' +
           '<td style="padding:8px 8px;font-size:15px;">' + p.apodo + '</td>' +
-          '<td style="padding:8px 8px;text-align:center;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
-          '<td style="padding:8px 8px;text-align:right;font-size:18px;color:var(--navy);">' +
-            (p.stbTotal !== null ? p.stbTotal : '–') +
-          '</td></tr>';
+          '<td style="padding:8px 8px;text-align:right;font-size:18px;color:var(--navy);">' + (p.stbTotal !== null ? p.stbTotal : '–') + '</td>' +
+          '<td style="padding:8px 8px;text-align:right;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
+        '</tr>' +
+        '<tr id="stb-acc-' + mat + '" style="display:none;border-bottom:1px solid var(--border);">' +
+          '<td colspan="4" style="padding:12px 8px;">' + scorecard + '</td>' +
+        '</tr>';
       });
       html += '</tbody></table>';
       el.innerHTML = html;
@@ -6391,6 +6394,12 @@ function liveLoadStableford(){
     .catch(function(){
       el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Error al cargar</div>';
     });
+}
+
+function liveStbToggle(mat){
+  var row = document.getElementById('stb-acc-' + mat);
+  if(!row) return;
+  row.style.display = row.style.display === 'none' ? '' : 'none';
 }
 
 function showPlayerScorecardModal(matricula) {
@@ -6578,40 +6587,44 @@ function liveSmConfirm(v){
       matriculaCargador: MIT_PLAYER.matricula,
       hoyo: hoyo,
       score: score,
+    }).then(function(r){
+      // Treat server-side errors ({ok:false}) as rejections so the retry .catch() fires.
+      // Previously r.ok===false was silently ignored, blocking auto-advance on lock timeouts.
+      if(!r || !r.ok) throw new Error((r && r.error) || 'Error del servidor');
+      return r;
     });
   }
 
   function handleOk(r){
     LIVE_SAVING_MAT = null;
     LIVE_SAVING_HOYO = null;
-    if(r && r.ok){
-      LIVE_LOCAL_SEQ++;
-      LIVE_LINEA_DATA = r;
-      liveRender();
-      var allComplete = r.jugadores && r.jugadores.every(function(j){ return j.holesCargados === 18; });
-      if(allComplete) livePollStop();
-      if(score !== null && r.bonusPendiente){
-        liveBonusModalAbrir(r.bonusPendiente);
-      } else if(score !== null){
-        liveAutoAdvancePlayer(hoyo, mat);
-      }
+    LIVE_LOCAL_SEQ++;
+    LIVE_LINEA_DATA = r;
+    liveRender();
+    var allComplete = r.jugadores && r.jugadores.every(function(j){ return j.holesCargados === 18; });
+    if(allComplete) livePollStop();
+    if(score !== null && r.bonusPendiente){
+      liveBonusModalAbrir(r.bonusPendiente);
+    } else if(score !== null){
+      liveAutoAdvancePlayer(hoyo, mat);
     }
   }
 
+  function onFinalFailure(){
+    LIVE_SAVING_MAT = null;
+    LIVE_SAVING_HOYO = null;
+    if(LIVE_LINEA_DATA){
+      var j2 = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === mat; });
+      if(j2 && j2.scores[hoyo - 1] === score){ j2.scores[hoyo - 1] = null; }
+    }
+    liveRender();
+    liveShowToast('Error al guardar — verificá tu conexión');
+  }
+
   doPost().then(handleOk).catch(function(){
-    // Retry once after 2 s
+    // Retry once after 2 s (covers both network failures AND server-side {ok:false} errors)
     setTimeout(function(){
-      doPost().then(handleOk).catch(function(){
-        // Two failures: clear saving state, revert optimistic update, show error
-        LIVE_SAVING_MAT = null;
-        LIVE_SAVING_HOYO = null;
-        if(LIVE_LINEA_DATA){
-          var j2 = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === mat; });
-          if(j2 && j2.scores[hoyo - 1] === score){ j2.scores[hoyo - 1] = null; }
-        }
-        liveRender();
-        liveShowToast('Error al guardar — verificá tu conexión');
-      });
+      doPost().then(handleOk).catch(onFinalFailure);
     }, 2000);
   });
 }
@@ -7101,13 +7114,8 @@ function renderFechaDinamica(data){
       let holesPlaceholder = '';
       for(let h = 1; h <= 18; h++) holesPlaceholder += '<div class="fd-hb empty" style="color:transparent;">'+h+'</div>';
       html +=
-        '<div class="fd-match-wrap">' +
-          '<div class="rc-match" data-match-idx="' + i + '">' +
-            '<div class="rc-left pending"><span class="rc-name pending">' + fmtHistName(m.j1Name) + '</span></div>' +
-            '<div class="rc-center cdraw"><span class="rc-score draw">–</span><span class="rc-mnum-c draw">Match ' + (i+1) + '</span></div>' +
-            '<div class="rc-right pending"><span class="rc-name pending">' + fmtHistName(m.j2Name) + '</span></div>' +
-          '</div>' +
-          '<div class="fd-holes-row" id="fd-holes-' + i + '">' + holesPlaceholder + '</div>' +
+        '<div class="fd-match-wrap" data-idx="' + i + '">' +
+          '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);padding:10px 12px;">Cargando match...</div>' +
         '</div>';
     });
   }
@@ -7132,90 +7140,20 @@ function loadMatchResultsForFecha(fecha, matches){
 }
 
 function fechaMatchRender(pendingMatches, fullData){
-  // Build lookup by j1Name|j2Name
   const byPair = {};
   fullData.forEach(function(m){ byPair[m.j1Name + '|' + m.j2Name] = m; });
 
   pendingMatches.forEach(function(m, idx){
+    const wrap = document.querySelector('.fd-match-wrap[data-idx="' + idx + '"]');
+    if(!wrap) return;
     const found = byPair[m.j1Name + '|' + m.j2Name];
-    if(!found) return;
-    const res = calcMatchResultFromData(found.j1Scores || [], found.j2Scores || [], found.j1Result, found.j2Result);
-
-      const matchEl = document.querySelector('[data-match-idx="' + idx + '"]');
-      if(!matchEl) return;
-      const leftEl = matchEl.querySelector('.rc-left');
-      const rightEl = matchEl.querySelector('.rc-right');
-      const leftName = matchEl.querySelector('.rc-left .rc-name');
-      const rightName = matchEl.querySelector('.rc-right .rc-name');
-      const centerEl = matchEl.querySelector('.rc-center');
-      const scoreEl = matchEl.querySelector('.rc-score');
-      const mnumEl = matchEl.querySelector('.rc-mnum-c');
-
-      // Reset classes
-      leftEl.className = 'rc-left';
-      rightEl.className = 'rc-right';
-      leftName.className = 'rc-name';
-      rightName.className = 'rc-name';
-      centerEl.className = 'rc-center';
-      scoreEl.className = 'rc-score';
-      mnumEl.className = 'rc-mnum-c';
-
-      let leftState, rightState, centerClass, scoreClass, mnumClass;
-      if(res.winner === 'draw'){
-        leftState = 'draw'; rightState = 'draw';
-        centerClass = 'cdraw'; scoreClass = 'rc-score draw'; mnumClass = 'rc-mnum-c draw';
-      } else if(res.winner === 'A'){
-        leftState = 'win'; rightState = 'lose';
-        centerClass = 'cleft'; scoreClass = 'rc-score'; mnumClass = 'rc-mnum-c';
-      } else if(res.winner === 'B'){
-        leftState = 'lose'; rightState = 'win';
-        centerClass = 'cright'; scoreClass = 'rc-score'; mnumClass = 'rc-mnum-c';
-      } else {
-        leftState = 'pending'; rightState = 'pending';
-        centerClass = 'cdraw'; scoreClass = 'rc-score draw'; mnumClass = 'rc-mnum-c draw';
-      }
-
-      leftEl.classList.add(leftState);
-      rightEl.classList.add(rightState);
-      leftName.classList.add(leftState);
-      rightName.classList.add(rightState);
-      centerEl.classList.add(centerClass);
-      scoreEl.className = scoreClass;
-      mnumEl.className = mnumClass;
-      scoreEl.textContent = res.resultStr;
-
-      // Render hole-by-hole colored bubbles
-      // won-w = navy (ganador del match), won-l = red (perdedor), tie = gray, empty = unplayed
-      const holeResults = [];
-      const scA = found.j1Scores || [];
-      const scB = found.j2Scores || [];
-      for(let h = 0; h < 18; h++){
-        const sA = parseInt(scA[h]);
-        const sB = parseInt(scB[h]);
-        if(isNaN(sA) || isNaN(sB)) holeResults.push(null);
-        else if(sA < sB) holeResults.push('A');
-        else if(sB < sA) holeResults.push('B');
-        else holeResults.push('tie');
-      }
-      const holesEl = document.getElementById('fd-holes-' + idx);
-      if(holesEl){
-        const mWinner = res.winner;
-        let holesHtml = '';
-        for(let h = 0; h < 18; h++){
-          const hr = holeResults[h];
-          let cls;
-          if(hr === null) cls = 'empty';
-          else if(hr === 'tie') cls = 'tie';
-          else {
-            const isWinnerHole = (mWinner === 'A' && hr === 'A') || (mWinner === 'B' && hr === 'B')
-                               || (mWinner !== 'A' && mWinner !== 'B' && hr === 'A');
-            cls = isWinnerHole ? 'won-w' : 'won-l';
-          }
-          holesHtml += '<div class="fd-hb ' + cls + '">' + (h + 1) + '</div>';
-        }
-        holesEl.innerHTML = holesHtml;
-      }
-    });
+    if(!found){ wrap.innerHTML = ''; return; }
+    const nameA = fmtHistName(found.j1Name || '');
+    const nameB = fmtHistName(found.j2Name || '');
+    wrap.innerHTML = buildMatchCard(nameA, null, nameB, null,
+                                    found.j1Scores || [], found.j2Scores || [],
+                                    found.j1Result, found.j2Result, null);
+  });
 }
 
 // Nota: el menú de fechas se alimenta desde ngtInitData() al boot.
@@ -7724,40 +7662,43 @@ function showPlayerFechaModal(lbName) {
     openFloatingModal('<div class="pf-modal-hdr">' + lbName + '</div><div class="s dim" style="padding:12px 0;">Sin datos en el LB</div>');
     return;
   }
-  const b = PLAYER_BONUSES[key] || {};
-  const baCount = b.ba || 0;
-  const ldCount = b.ld || 0;
   const wp = WIN_PROBS[key] || {};
-
-  function pmRow(label, valueHtml) {
-    return '<div class="pm-row"><span class="pm-label">' + label + '</span><span class="pm-value">' + valueHtml + '</span></div>';
-  }
-
-  const ptsHtml = d.pts && d.pts !== '-' ? '<span style="color:var(--red);font-weight:800;font-size:17px;">' + d.pts + '</span>' : '–';
-  const champHtml = d.champ ? '<span class="trophy">' + d.champ + '</span>' : '<span class="s dim">–</span>';
-  const baHtml = baCount > 0 ? '🎯 × ' + baCount : '<span class="s dim">–</span>';
-  const ldHtml = ldCount > 0 ? '💪 × ' + ldCount : '<span class="s dim">–</span>';
-  const winHtml = wp.winPct !== undefined ? winCell(d.nombre) : (WIN_PROBS_LOADED ? '<span class="s dim">–</span>' : '<span class="s dim">…</span>');
+  const winHtml  = wp.winPct  !== undefined ? winCell(d.nombre)  : (WIN_PROBS_LOADED ? '<span class="s dim">–</span>' : '<span class="s dim">…</span>');
   const top8Html = wp.top8Pct !== undefined ? top8Cell(d.nombre) : (WIN_PROBS_LOADED ? '<span class="s dim">–</span>' : '<span class="s dim">…</span>');
 
-  const html = '<div class="pf-modal-hdr">' + lbName + '</div>' +
-    '<div class="pm-stats">' +
-    pmRow('Puntos totales', ptsHtml) +
-    pmRow('Fechas jugadas', cell(d.fjug)) +
-    pmRow('Fechas ganadas', cell(d.fgan)) +
-    pmRow('STB', cell(d.stb)) +
-    pmRow('Match', cell(d.mch)) +
-    pmRow('Doble', dobleCell(d.doble, d.pd)) +
-    pmRow('Golpes vs par', golpesCell(d.golpes)) +
-    pmRow('Campeón', champHtml) +
-    '<div class="pm-divider"></div>' +
-    pmRow('Win %', winHtml) +
-    pmRow('Top 8 %', top8Html) +
-    '<div class="pm-divider"></div>' +
-    pmRow('Best Approach', baHtml) +
-    pmRow('Long Drive', ldHtml) +
-    '</div>';
+  const pbPts = (d.pb !== undefined && d.pb !== null) ? d.pb : 0;
 
+  // Duo helper: two labeled stats side by side
+  function duo(lbl1, val1, lbl2, val2){
+    return '<div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--g2);font-family:\'Barlow Condensed\',sans-serif;">' +
+      '<div style="flex:1;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--g4);">' + lbl1 + '</div>' +
+      '<div style="font-size:14px;font-weight:700;color:var(--text);">' + val1 + '</div></div>' +
+      '<div style="flex:1;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--g4);">' + lbl2 + '</div>' +
+      '<div style="font-size:14px;font-weight:700;color:var(--text);">' + val2 + '</div></div>' +
+    '</div>';
+  }
+
+  // Section 1: Points total + breakdown
+  const sec1 = '<div style="background:var(--g1);border-radius:4px;padding:12px;margin-bottom:8px;">' +
+    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--g4);margin-bottom:4px;">Puntos Totales</div>' +
+    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:34px;font-weight:900;color:var(--red);line-height:1;margin-bottom:10px;">' + (d.pts || '–') + '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;">' +
+      '<div class="pm-row"><span class="pm-label">STB</span><span class="pm-value">' + (d.stb || '–') + '</span></div>' +
+      '<div class="pm-row"><span class="pm-label">Match</span><span class="pm-value">' + (d.mch || '–') + '</span></div>' +
+      '<div class="pm-row" style="border-bottom:none;"><span class="pm-label">Doble</span><span class="pm-value">' + dobleCell(d.doble, d.pd) + '</span></div>' +
+      '<div class="pm-row" style="border-bottom:none;"><span class="pm-label">Bonus</span><span class="pm-value">' + (pbPts > 0 ? pbPts : '–') + '</span></div>' +
+    '</div>' +
+  '</div>';
+
+  // Section 2: Other stats — pairs on same line
+  const champHtml2 = d.champ ? '<span class="trophy">' + d.champ + '</span>' : '–';
+  const sec2 = '<div style="background:var(--g1);border-radius:4px;padding:12px;">' +
+    duo('Fechas jugadas', d.fjug || '–', 'Fechas ganadas', d.fgan || '–') +
+    duo('Golpes Final', golpesCell(d.golpes), 'Campeón', champHtml2) +
+    duo('Win %', winHtml, 'Top 8 %', top8Html) +
+  '</div>';
+
+  const html = '<div class="pf-modal-hdr">' + lbName + '</div>' + sec1 + sec2;
   openFloatingModal(html);
 }
 
