@@ -546,7 +546,7 @@ function recalcularHcpFecha_(params) {
   return {
     ok: true,
     data: {
-      cancha: canchaName,
+      cancha: lookupCanchaName_(canchaId) || canchaId,
       colorTee: colorTee,
       slope: hcpInfo.slope,
       rating: hcpInfo.rating,
