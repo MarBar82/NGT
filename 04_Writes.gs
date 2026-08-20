@@ -1064,9 +1064,9 @@ function setDoblesFecha_(params) {
   const shT = getSheet_(SHEETS.TARJETAS);
   const todosEnFecha = [];
   if (shT) {
-    const ne = findNextEmptyRow_(shT, 2);
+    const ne = findNextEmptyRow_(shT, 1);
     if (ne > 2) {
-      shT.getRange(2, 2, ne - 2, 2).getValues().forEach(function(r) {
+      shT.getRange(2, 1, ne - 2, 2).getValues().forEach(function(r) {
         const f = String(r[0] || '').trim();
         const m = String(r[1] || '').trim();
         if (f === fStr && m && m.indexOf('INV') !== 0) todosEnFecha.push(m);
