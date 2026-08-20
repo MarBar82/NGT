@@ -1366,6 +1366,8 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   text-transform:uppercase;letter-spacing:.06em;width:50px;
 }
 .perf-ecl-table thead th:not(.lbl){background:var(--navy);}
+.perf-ecl-table thead th.lbl{background:var(--navy);color:#fff;}
+.stb-acc-box{border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--off);}
 .perf-ecl-hoyo{font-size:11px;font-weight:600;color:#fff;}
 .perf-ecl-par{font-size:13px;font-weight:600;color:var(--text);}
 .perf-par-row td{background:var(--g1);}
@@ -3092,9 +3094,10 @@ function loadF2(){
 
 
 // ══ MATCH ══
-let MATCH_DATA_CACHE = {}; // {fecha: [matchObj...]}
-let MATCH_CUR_FECHA  = '';
-let MATCH_CUR_DATA   = [];
+let MATCH_DATA_CACHE  = {}; // {fecha: [matchObj...]}
+let MATCH_CUR_FECHA   = '';
+let MATCH_CUR_DATA    = [];
+let MATCH_ALL_FECHAS  = []; // all known fechas, populated by loadMatch()
 
 const FECHA_CANCHA = {
   '1': 'Everlinks G.C.',
@@ -3143,8 +3146,9 @@ function loadMatch(){
     '<div class="lb-status"><div class="spinner"></div>Cargando matches...</div>';
   ngtApiGet('fechas').then(function(resp){
     const fechas = ((resp && resp.data) || []).map(String).sort(function(a,b){ return Number(a)-Number(b); });
+    MATCH_ALL_FECHAS = fechas;
     const fsel = document.getElementById('match-fecha');
-    fsel.innerHTML = '';
+    fsel.innerHTML = '<option value="">Todas</option>';
     fechas.forEach(function(f){ fsel.innerHTML += '<option value="'+f+'">'+f+'</option>'; });
     const latest = fechas[fechas.length-1] || '';
     if(latest){ fsel.value = latest; }
@@ -3155,7 +3159,27 @@ function loadMatch(){
 }
 
 function loadMatchForFecha(fecha){
-  if(!fecha){ MATCH_CUR_FECHA=''; MATCH_CUR_DATA=[]; renderMatchTable(); return; }
+  if(fecha === ''){
+    MATCH_CUR_FECHA = '';
+    const allFechas = MATCH_ALL_FECHAS.length ? MATCH_ALL_FECHAS : Object.keys(MATCH_DATA_CACHE);
+    const missing = allFechas.filter(function(f){ return !MATCH_DATA_CACHE[f]; });
+    const fetches = missing.map(function(f){
+      return ngtApiGet('matchesFullForFecha', { fecha: f }).then(function(resp){
+        MATCH_DATA_CACHE[f] = (resp && resp.data) || [];
+      });
+    });
+    Promise.all(fetches).then(function(){
+      var combined = [];
+      allFechas.slice().reverse().forEach(function(f){
+        (MATCH_DATA_CACHE[f] || []).forEach(function(m){
+          combined.push(Object.assign({}, m, { fecha: f }));
+        });
+      });
+      MATCH_CUR_DATA = combined;
+      populateMatchPlayerFilter(); renderMatchTable();
+    });
+    return;
+  }
   if(MATCH_DATA_CACHE[fecha]){
     MATCH_CUR_FECHA = fecha; MATCH_CUR_DATA = MATCH_DATA_CACHE[fecha];
     populateMatchPlayerFilter(); renderMatchTable(); return;
@@ -3254,9 +3278,10 @@ function renderMatchTable(){
     return;
   }
 
+  const isTodas  = (MATCH_CUR_FECHA === '');
   const fechaNum = String(MATCH_CUR_FECHA || '').trim();
   const cancha   = FECHA_CANCHA[fechaNum] || '';
-  const label    = fechaNum ? ('Fecha ' + fechaNum + (cancha ? ' · ' + cancha : '')) : '';
+  const labelAll = fechaNum ? ('Fecha ' + fechaNum + (cancha ? ' · ' + cancha : '')) : '';
 
   let out = '';
   filtered.forEach(function(m){
@@ -3264,6 +3289,14 @@ function renderMatchTable(){
     const nameB = fmtHistName(m.j2Name || '');
     const hcpA  = m.j1Hcp != null ? String(m.j1Hcp) : null;
     const hcpB  = m.j2Hcp != null ? String(m.j2Hcp) : null;
+    let label;
+    if(isTodas){
+      const mf = String(m.fecha || '').trim();
+      const mc = FECHA_CANCHA[mf] || '';
+      label = mf ? ('Fecha ' + mf + (mc ? ' · ' + mc : '')) : '';
+    } else {
+      label = labelAll;
+    }
     out += buildMatchCard(nameA, hcpA, nameB, hcpB,
                           m.j1Scores || [], m.j2Scores || [],
                           m.j1Result, m.j2Result, label);
@@ -6416,7 +6449,7 @@ function liveLoadStableford(){
           '<td style="padding:8px 8px;text-align:right;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
         '</tr>' +
         '<tr id="stb-acc-' + mat + '" style="display:none;border-bottom:1px solid var(--border);">' +
-          '<td colspan="4" style="padding:12px 8px;">' + scorecard + '</td>' +
+          '<td colspan="4" style="padding:8px;"><div class="stb-acc-box">' + scorecard + '</div></td>' +
         '</tr>';
       });
       html += '</tbody></table>';
@@ -7269,7 +7302,7 @@ function loadFechaStbAccordion(fecha){
     r.data.forEach(function(p){
       var inner = document.getElementById('stb-acc-inner-' + p.matricula);
       if(!inner) return;
-      inner.innerHTML = renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true);
+      inner.innerHTML = '<div class="stb-acc-box">' + renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true) + '</div>';
     });
   }).catch(function(){});
 }
