@@ -1193,7 +1193,7 @@ function getFechaDetalle_(fecha) {
   const nextEmpty = findNextEmptyRow_(shT, 2);
   if (nextEmpty <= 2) return null;
 
-  // Cols B=fecha (idx0), C=matricula (1), D=nombre (2), E=hcp (3), F=cancha (4) ... AG=color (32)
+  // A(0)=fecha, B(1)=mat, C(2)=hcp, D(3)=canchaId, E..V(4..21)=H1..H18, W(22)=LD, X(23)=BA, Y(24)=colorTee
   const data = shT.getRange(2, 1, nextEmpty - 2, 25).getValues();
   const jugadores = [];
   const invitados = [];
