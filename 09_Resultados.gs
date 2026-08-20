@@ -341,7 +341,7 @@ function calcStablefordHole_(score, par, indice, hcpJuego) {
   const s = parseInt(score);
   if (isNaN(s) || s <= 0) return null;
   if (hcpJuego === null || hcpJuego === undefined || hcpJuego === '') return null;
-  const hcpEff = Math.round(parseFloat(hcpJuego));
+  const hcpEff = Math.round(parseFloat(hcpJuego) * 0.85);
   const extras = Math.floor((hcpEff + 18 - indice) / 18);
   const netoDiff = s - par - extras;
   if (netoDiff <= -3) return 5;
