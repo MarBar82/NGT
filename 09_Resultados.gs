@@ -1129,9 +1129,10 @@ function sumarGanadorFecha_(fecha) {
 
   const tarjSh = getSheet_(SHEETS.TARJETAS);
   if (!tarjSh) return;
-  const tarjLast = findNextEmptyRow_(tarjSh, 2);
+  const tarjLast = findNextEmptyRow_(tarjSh, 1);
   if (tarjLast <= 2) return;
-  const allTarj = tarjSh.getRange(2, 2, tarjLast - 2, 24).getValues();
+  // Leer desde col A (1) para que r[0]=fecha, r[1]=mat, r[2]=hcp, r[3]=canchaId, r[4..21]=H1..H18
+  const allTarj = tarjSh.getRange(2, 1, tarjLast - 2, 25).getValues();
   const fechaRows = allTarj.filter(function(r) { return String(r[0] || '').trim() === fStr; });
 
   const matchSh = getSheet_(SHEETS.MATCH);
@@ -1166,9 +1167,10 @@ function calcularGanadoresFechas_(params) {
 
   const tarjSh = getSheet_(SHEETS.TARJETAS);
   if (!tarjSh) return { ok: false, error: 'Sin TARJETAS' };
-  const tarjLast = findNextEmptyRow_(tarjSh, 2);
+  const tarjLast = findNextEmptyRow_(tarjSh, 1);
   if (tarjLast <= 2) return { ok: false, error: 'Sin tarjetas' };
-  const allTarj = tarjSh.getRange(2, 2, tarjLast - 2, 24).getValues();
+  // Leer desde col A (1) para que r[0]=fecha, r[1]=mat, r[2]=hcp, r[3]=canchaId, r[4..21]=H1..H18
+  const allTarj = tarjSh.getRange(2, 1, tarjLast - 2, 25).getValues();
 
   const matchSh = getSheet_(SHEETS.MATCH);
   const allMatchRows = [];
