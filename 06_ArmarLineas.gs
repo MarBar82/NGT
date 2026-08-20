@@ -51,18 +51,18 @@ function armarLineas_(params) {
     // Modo gestionar: lee de TARJETAS para la fecha indicada
     const shT = getSheet_(SHEETS.TARJETAS);
     if (!shT) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
-    const nextEmpty = findNextEmptyRow_(shT, 2);
+    const nextEmpty = findNextEmptyRow_(shT, 1);
     if (nextEmpty <= 2) return { ok: false, error: 'No hay jugadores en TARJETAS' };
-    // B(0)=fecha, C(1)=matricula, D(2)=nombre, E(3)=hcp
-    const tData = shT.getRange(2, 2, nextEmpty - 2, 4).getValues();
+    // A(0)=fecha, B(1)=matricula, C(2)=hcp
+    const tData = shT.getRange(2, 1, nextEmpty - 2, 3).getValues();
     tData.forEach(function(row) {
       const f = String(row[0] || '').trim();
       const m = String(row[1] || '').trim();
       if (f !== String(fecha) || !m || m.indexOf('INV') === 0) return;
       if (seenMats[m]) return;
       seenMats[m] = true;
-      const h = (row[3] !== '' && row[3] !== null && row[3] !== undefined)
-                ? (parseInt(row[3]) || 0) : 0;
+      const h = (row[2] !== '' && row[2] !== null && row[2] !== undefined)
+                ? (parseInt(row[2]) || 0) : 0;
       players.push({ matricula: m, hcp: h, apodo: '' });
     });
   }
