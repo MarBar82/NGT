@@ -4,141 +4,124 @@
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
-Progreso: con los datos reales de la fecha 7 que Marco sacó (Parte 0 de la Tarea 19), confirmé al 100% las Partes A y B de esa tarea (la fila duplicada de Racho en SCORE tiene, literalmente, una copia con sus 3 puntos de bonus bien guardados y otra con todo en cero — el sistema se quedaba con la última). Y además **encontré un bug nuevo, muy puntual, que es la causa real del "8&7 imposible"**. Es una tarea corta — un solo cambio de código.
+Progreso: excelente noticia — el fix del handicap del rival (Tarea 20) funcionó, Marco confirmó que los dos matches de Racho ahora dan resultados distintos y con sentido (8&7 y 7&6). Quedó un problema nuevo: los puntos de match no se suman bien cuando un jugador ganó más de un match. Además Marco pidió 3 mejoras de interfaz en Live Scoring y encontró un problema de empates en la tabla de stableford. **Y el tema del nombre en blanco finalmente lo encontré** — Marco me pasó el inspector del navegador y ahí estaba la causa real, agregada como Parte E. Sumé 2 partes más (F y G): la tabla de Stableford de una fecha terminada, y un bug real que encontré de paso — el cálculo de stableford que decide el ganador de la fecha tiene una fórmula distinta (e incompleta) a la que usa el resto de la app.
 
 ---
 
-## 🎯 Tarea para Claude Code — Tarea 20
+## 🎯 Tarea para Claude Code — Tarea 21
 
-### Parte E — El cálculo de match al firmar la tarjeta usa la cancha en vez del handicap del rival
+### Parte A — Puntos de match: si un jugador ganó 2 matches, solo se le suman los de 1
 
-**Causa raíz confirmada con datos reales:** en `cargarTarjeta_` (`04_Writes.gs`, línea 466):
+**Causa raíz:** el campo MA (puntos de match) en SCORE (NGT DB) se recalcula de forma incremental, cada vez que se firma UNA tarjeta — no de forma final y única. Cuando 4 jugadores firman casi al mismo tiempo (`liveFinalizar()` con `Promise.all`), cada `cargarTarjeta_` recalcula el total de MA no solo para sí mismo, sino también para sus rivales directos (`affectedMats`), usando una mezcla de datos: el match que ESE llamado acaba de escribir (dato fresco) + los otros matches de esa persona, leídos de una foto de la hoja MATCH tomada AL PRINCIPIO de ese mismo llamado (que puede estar desactualizada si el otro match todavía no se había escrito en ese momento).
+
+Ejemplo concreto con Racho, que juega contra Obiglio y contra Martínez Fano: si la tarjeta de Obiglio se firma ANTES de que el match Racho-Martínez Fano ya esté resuelto, el llamado de Obiglio recalcula el MA de Racho sumando el match recién resuelto (Racho-Obiglio, 6 pts) + lo que en ese momento haya en la hoja para Racho-Martínez Fano (todavía vacío = 0) → escribe MA=6 para Racho, pisando cualquier valor más completo que ya existiera. Como las 4 firmas van en paralelo, **el orden de llegada decide el resultado final**, y no siempre gana el cálculo completo.
+
+**Fix:** en vez de confiar en estos recálculos parciales e incrementales, aprovechá el mismo lugar donde ya enganchamos el chequeo de "fecha completa" en la Tarea 19 Parte B (`cargarTarjeta_`, después de la línea ~608, dentro del bloque `if (allDone) { sumarGanadorFecha_(fStr); recalcularTotalesScore_(null, fStr); }`). Ahí, agregá un recálculo final y autoritativo de MA para TODOS los jugadores de esa fecha, leyendo la hoja MATCH completa (que en ese momento ya está 100% resuelta, porque todos firmaron) y sumando sus puntos reales fila por fila — sin depender de lo que haya quedado escrito antes por los recálculos parciales. Puede ser una función nueva (ej. `recalcularMAFecha_(fecha)`, siguiendo el mismo patrón que `sumarGanadorFecha_`: leer TARJETAS/MATCH para la fecha, sumar pts1/pts2 por matrícula, escribir con `setNGTScoreField_(fStr, mat, 4, totalMA)` para cada jugador). Llamala justo después de `sumarGanadorFecha_(fStr)` en ese mismo bloque.
+
+Dejá los recálculos parciales de MA que ya existen (los que pasan durante cada firma individual) tal cual están — sirven para que el número se vea razonable mientras la fecha todavía no está completa. Este nuevo recálculo final es el que garantiza que, una vez que todos firmaron, el número quede bien para siempre.
+
+---
+
+### Parte B — Sacar la flecha y el nombre de "cargado por" en la tarjeta de Live Scoring
+
+En `liveRenderHoyoActual()` (`index.html`, ~línea 6220-6222), hay un div `.live-cargado-por` que muestra "↑ NOMBRE" debajo del HCP de cada jugador, cuando otra persona cargó ese score por él. Marco pidió sacarlo. Simplemente eliminá esa línea (`cargStr` y su uso en el template) — no hace falta guardar ni mostrar más esa información ahí.
+
+---
+
+### Parte C — Encabezado del hoyo en Live Scoring: agregar el HCP del hoyo, sacar el número de línea
+
+Hoy el encabezado (`index.html`, ~línea 1851-1852 y la función `liveRenderHoyoActual()` ~línea 6211-6212) muestra "Hoyo 5 · Par 4" más un chip separado "Línea 2".
+
+Marco pidió: mostrar "HOYO 5 · PAR 4 · HCP 13" (el HCP acá es el índice de dificultad del hoyo, no el handicap del jugador — ya está disponible en el cliente como `LIVE_LINEA_DATA.indices[h]`, mismo dato que ya se usa en `renderTarjeta18Hoyos`) y sacar el chip de "Línea N" de esa zona (no hace falta mostrarlo ahí).
+
+**Fix:** en `liveRenderHoyoActual()`, agregá el HCP del hoyo actual a continuación del Par (ej. `'· HCP ' + indices[h]` si existe el dato), y quitá o vaciá el `chip.textContent = 'Línea ' + d.lineaNum` en `liveRender()` (podés dejar el elemento en el HTML por si se usa en otro lado, pero que no muestre nada ahí, o eliminarlo del todo si no se usa en ningún otro lugar — fijate antes de borrar el elemento).
+
+---
+
+### Parte D — Empates en la tabla de Stableford: mostrar "T1", "T1" en vez de "1", "2"
+
+En `liveLoadStableford()` (`index.html`, ~línea 6403-6418), la posición de cada jugador se muestra como `(i+1)` — un número de fila simple, sin considerar empates. `r.data` ya viene ordenado de mayor a menor por `stbTotal`. Marco pidió que, cuando dos o más jugadores tengan el mismo puntaje, compartan la misma posición con el prefijo "T" (ej. dos jugadores con 30 puntos → ambos "T1", el siguiente jugador va en "3", no en "2").
+
+**Fix:** calculá la posición real considerando empates (mismo criterio que un ranking de golf: posición = 1 + cantidat de jugadores con más puntos que vos; si hay empate, todos los empatados muestran esa posición con el prefijo "T" — si NO hay empate en esa posición, mostrala sin el prefijo, como número simple). Aplicá esto en el `forEach` que arma las filas, reemplazando el `(i+1)` de la columna `#`.
+
+---
+
+### Parte E — El nombre en blanco: causa real encontrada con el inspector del navegador
+
+**Causa raíz confirmada (no es suposición, la vi en el inspector de Chrome que me pasó Marco):** en `buildMatchCard` (`index.html`, ~línea 3218/3224), el nombre del ganador SÍ tiene `color:#fff` puesto en el `<span>` que lo envuelve — eso ya lo habíamos confirmado varias veces y está bien. El problema es que `nameA`/`nameB` (los parámetros que le llegan a `buildMatchCard`) no son texto plano: en `renderMatchTable` (línea ~3262) y en `fechaMatchRender` (línea ~7261), antes de llamar a `buildMatchCard` se les aplica `fmtHistName(...)`, que envuelve el apellido en **su propio span con clase `hist-ap`** — y esa clase (definida en el CSS global, línea ~344) tiene `color: var(--navy)` fijo.
+
+Como ese span interno declara su propio color, no hereda el blanco del span padre — un elemento con color propio siempre gana sobre la herencia, sin importar que el padre lo haya puesto con `style="color:#fff"` inline. Por eso: en el Live Scoring (`liveRenderMatchBody`, que usa los apodos directamente sin pasar por `fmtHistName`) siempre se vio bien, y en "Match" y "Fechas" (las dos pantallas que sí usan `fmtHistName` antes de `buildMatchCard`) nunca se vio blanco — coincide exactamente con lo que reportó Marco.
+
+**Ya existe un arreglo idéntico a este mismo problema, en otro lugar del código** — buscá `.rc-name .hist-ap,.rc-name .hist-nm{color:inherit !important;...}` (línea ~146). Es el mismo patrón: un contenedor le fuerza `color:inherit !important` a los spans internos de `fmtHistName` para que respeten el color del padre en vez de imponer el suyo.
+
+**Fix:** agregá una regla CSS parecida, scopeada al contenedor de `buildMatchCard` (buscá qué clase identifica de forma única los spans de nombre dentro de la tarjeta de match — hoy no tienen una clase propia, así que agregales una, ej. `class="mch-name"`, a los dos spans de nombre en `buildMatchCard`, líneas ~3218 y ~3224). Después agregá en el CSS: `.mch-name .hist-ap, .mch-name .hist-nm { color: inherit !important; }`. Con esto, el color que definís dinámicamente (`l1Txt`/`l2Txt`, blanco cuando gana, oscuro cuando pierde) se respeta siempre, sin importar que el nombre venga envuelto por `fmtHistName`.
+
+Probalo mentalmente con un nombre ganador y uno perdedor, confirmando que en ambos casos el color que buildMatchCard calculó (`l1Txt`/`l2Txt`) es el que efectivamente se ve, no el `var(--navy)` fijo de `.hist-ap`.
+
+---
+
+### Parte F — Unificar la tabla de Stableford de "Fechas" (terminada) con la de Live Scoring
+
+Marco pidió que la tabla de Stableford que se ve al mirar una fecha ya terminada (pantalla "Fechas", función `renderFechaDinamica`, `index.html` ~línea 7184-7209) se comporte igual que la del Live Scoring: hoy, al hacer click en un jugador, abre un modal de pantalla completa (`openTarjetaModal`, ~línea 8060) — Marco quiere que en cambio se despliegue hacia abajo, en el mismo lugar, mostrando la tarjeta — igual que hace `liveLoadStableford`/`liveStbToggle` (~línea 6383-6431) en Live Scoring.
+
+**Fix:** en vez de `onclick="openTarjetaModal(...)"` en la fila de cada jugador (línea ~7198), armá el mismo patrón de acordeón: agregá una fila oculta debajo de cada jugador (`<tr id="stb-acc-{mat}" style="display:none;">...</tr>`) con la tarjeta adentro (`renderTarjeta18Hoyos`), y un `onclick` que la muestre/oculte (podés reusar `liveStbToggle` tal cual, es genérica). Para tener los datos de la tarjeta (scores + `stbPorHoyo`, el desglose por hoyo YA CALCULADO Y GUARDADO al firmar, en vez de recalcularlo de nuevo en el cliente), lo más prolijo es que `renderFechaDinamica` haga un fetch a `getStbFecha` (la MISMA acción que ya usa Live Scoring, `10_Routing.gs` línea 67, `getStbFecha_` en `03_Reads.gs`) en vez de depender solo de `fechaResultados` para esta tabla — esa acción ya funciona para cualquier fecha (no depende de que esté "en vivo"), y trae `stbPorHoyo` ya resuelto por jugador, así el acordeón no tiene que recalcular nada del lado del cliente. Dejá `openTarjetaModal` como está por si se usa en otro lado (confirmá si tiene otro caller antes de tocarla) — si no se usa en ningún otro lugar después de este cambio, avisame y lo sacamos en otra tarea.
+
+---
+
+### Parte G — Bug real encontrado de paso: `calcStablefordHole_` no aplica la regla del 85%
+
+**Encontré esto investigando la Parte F, no es una suposición.** En `09_Resultados.gs` (línea 339), la función `calcStablefordHole_` tiene este comentario: `/** Calculate stableford for a single hole (85% rule). */` — pero el código NO aplica el 85% en ningún lado:
 
 ```js
-const oppHcpNum = parseFloat(oppTarjeta[3]);
+const hcpEff = Math.round(parseFloat(hcpJuego));  // ← debería ser hcpJuego * 0.85
+const extras = Math.floor((hcpEff + 18 - indice) / 18);
 ```
 
-`oppTarjeta` es una fila de TARJETAS leída como array (0-indexado desde la columna A): `[0]=fecha, [1]=matrícula, [2]=hcp, [3]=canchaId, [4..21]=Hoyo1..Hoyo18, [22]=LD, [23]=BA`. La columna 3 es **canchaId, no el handicap** — el handicap real está en la columna 2. Esta misma función, dos líneas más abajo, usa correctamente `existingRow[2]` para el handicap propio — pero acá, para el handicap del RIVAL, quedó mal el índice.
+Comparé con las otras 2 implementaciones de esta misma cuenta que sí están bien: `calcStbBreakdown_` (`04_Writes.gs` línea 161: `Math.round(parseFloat(hcp) * 0.85)`) y la función del cliente `hcp85()`/`calcStablefordHoyo` (`index.html`). Las tres deberían dar el mismo resultado y no lo hacen — es exactamente el mismo patrón de "una tercera copia de la cuenta que se desincroniza" que ya encontramos con el cálculo de match en la Tarea 20.
 
-**Por qué esto explica exactamente lo que viste:** en la fecha 7 todos los jugadores comparten la misma cancha (canchaId = 44). Entonces, sin importar quién sea el rival, el cálculo siempre usa "44" como si fuera su handicap — un número sin sentido, mucho más alto que cualquier handicap real. Racho jugó dos matches contra rivales con handicaps bien distintos (5 y 15) y los dos le dieron el mismo resultado exacto, "8&7" — imposible si el cálculo fuera correcto, pero perfectamente consistente con este bug (mismo "handicap rival" erróneo = 44 en ambos casos).
+**Por qué esto importa más de lo que parece:** `calcStablefordHole_` se usa en 2 lugares — (1) `getRankingFecha_` (línea 1084), que es la función que ahora, desde la Tarea 19, **decide automáticamente quién ganó cada fecha (PosFecha)**. Si el handicap de dos jugadores es distinto, esta fórmula incompleta puede darle la posición equivocada. (2) el cálculo de "rondas bajo par" en los perfiles de jugador (línea 599).
 
-Este bug es específico de esta función — confirmé que `buildLineaSnapshot_` (`07_LiveScoring.gs`, la que se usa DURANTE el Live Scoring) lee el índice correcto (`r[2]`). Por eso Marco vio todo bien en vivo, hoyo por hoyo, y la diferencia apareció recién al firmar la tarjeta y ver la fecha terminada — es la misma función que ya identificamos como "la tercera copia" de este cálculo en la Tarea 18 Parte D (esa vez arreglamos el corte temprano y el formato del resultado; esto es un bug distinto, en el dato de entrada, no en la lógica de corte).
-
-**Fix:** cambiar `oppTarjeta[3]` por `oppTarjeta[2]` en esa línea. Después de corregirlo, dado que ya tenés el ejemplo real de Racho vs los otros 3 jugadores de la fecha 7 (los handicaps y los 18 scores de cada uno están en la respuesta de verificación de la Tarea 19, Parte 0 — te los repito abajo por si no los tenés a mano), calculá a mano (o con un script de prueba) el resultado correcto para al menos un match y confirmá que ahora da un resultado con sentido — no hace falta que coincida con un número exacto que yo te dé, pero sí que los dos matches de Racho (contra rivales distintos) ya NO den el mismo resultado idéntico entre sí.
-
-Datos de referencia (fecha 7, de la Tarea 19 Parte 0):
-- 60803: hcp 5, scores: 8,3,5,6,6,5,4,6,4,6,6,8,4,4,5,5,4,5
-- 124007: hcp 15, scores: 5,4,5,5,5,4,5,5,5,5,5,5,5,5,5,4,5,5
-- 89837 (Racho): hcp 15, scores: 4,5,5,4,5,8,3,4,5,4,5,4,4,6,4,6,5,6
-- 64611: hcp 7, scores: 5,3,5,5,7,6,5,5,6,6,5,8,5,4,5,5,4,5
-- Todos cancha id 44.
-- Matches de la fecha: 60803 vs 89837, 60803 vs 64611, 124007 vs 89837, 124007 vs 64611.
+**Fix:** en `calcStablefordHole_`, cambiar `Math.round(parseFloat(hcpJuego))` por `Math.round(parseFloat(hcpJuego) * 0.85)` — una sola línea. Después, sería bueno que corras `calcularGanadoresFechas_` (la función admin que recalcula PosFecha para TODAS las fechas desde cero) para corregir cualquier fecha vieja que haya quedado con el ganador mal calculado — contame si encontrás alguna fecha donde el ganador cambia con el fix, para que lo sepamos.
 
 ---
 
 ## ❓ Preguntas de verificación
 
-1. ¿Confirmaste el bug leyendo el código (índice 3 vs 2)?
-2. ¿Recalculaste a mano o con script los 2 matches de Racho (vs 60803 y vs 124007) con el fix aplicado? ¿Dan resultados distintos entre sí ahora (ya no ambos "8&7")?
-3. ¿Buscaste si `oppTarjeta[3]` (o el mismo tipo de error de índice) aparece en algún otro lugar del archivo? Contame qué encontraste aunque sea para descartarlo.
-4. Hash y mensaje del commit.
+1. **Parte A:** ¿implementaste el recálculo final de MA? ¿Dónde queda enganchado exactamente? Probá mentalmente el caso de Racho (2 matches ganados) y confirmá que ahora sumaría los puntos de ambos.
 
----
+**R:** Sí. Función nueva `recalcularMAFecha_(fStr)` en `04_Writes.gs`, llamada en el bloque `allDone` de `cargarTarjeta_` justo después de `sumarGanadorFecha_` y antes de `recalcularTotalesScore_`. La función lee todas las filas del sheet MATCH para esa fecha (cols B–H desde col 2: r[0]=fecha, r[1]=mat1, r[2]=mat2, r[3]=res1, r[4]=pts1, r[5]=res2, r[6]=pts2), suma pts1 y pts2 por matrícula, y escribe con `setNGTScoreField_(fStr, mat, 4, total)`. Para Racho con 2 matches ganados: si ganó contra Obiglio (pts1=6) y contra Martínez Fano (pts1=6), la función suma ambas filas → total 12 → escribe MA=12. No importa en qué orden llegaron las firmas — cuando se ejecuta este bloque, TODOS ya firmaron, entonces MATCH está completo.
 
-## ✅ Respuestas de verificación — Tarea 20
+2. **Parte B:** ¿confirmaste que no queda ningún rastro visual de "cargado por" en la tarjeta?
 
-**1. Confirmación del bug:**
+**R:** Sí. Eliminé la variable `cargStr` (las 3 líneas: declaración del `uc`, la asignación condicional, y el uso en el template). El `.live-player-info` ahora solo tiene `.live-player-apodo` y `.live-player-hcp`. La clase CSS `.live-cargado-por` (línea 690) quedó definida pero sin uso — se puede limpiar en otra tarea.
 
-Sí. En `04_Writes.gs` línea 466 (antes del fix):
-```js
-const oppHcpNum = parseFloat(oppTarjeta[3]);  // [3] = canchaId, NO hcp
-```
-`allRows` se lee con `sh.getRange(2, 1, nextEmpty - 2, 26).getValues()` desde col A. Estructura:
-- `[0]` = A = fecha
-- `[1]` = B = matrícula
-- `[2]` = C = **hcp** ← lo correcto
-- `[3]` = D = canchaId ← lo que estaba usando (bug)
-- `[4..21]` = E..V = H1..H18
+3. **Parte C:** ¿cómo quedó el texto final del encabezado? ¿Sacaste el chip de línea del todo o lo dejaste vacío/oculto? ¿Por qué?
 
-La línea correcta es `oppTarjeta[2]`. Dos líneas más arriba, para el hcp propio:
-`const hcpNum = parseFloat(newRow[0]);` — donde `newRow[0]` = hcp (construido a partir de `existingRow[2]`). Coherente.
+**R:** El label del hoyo queda: `"Hoyo 5 · Par 4 · HCP 13"` (si existe el índice). El `live-par-label` ahora concatena par + HCP: `(par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '')`. El chip `live-linea-chip` lo dejé en el DOM pero lo vacío con `chip.textContent = ''` — el elemento HTML estaba definido con la clase `.live-linea-chip` que tiene estilos propios, y podría tener otro uso no detectado. Dejarlo vacío es la opción más conservadora. Si confirma que no se usa en ningún otro lado, se puede eliminar el elemento HTML en otra tarea.
 
-Fix aplicado: `oppTarjeta[3]` → `oppTarjeta[2]`.
+4. **Parte D:** ¿cómo probaste el caso de empate? Dame un ejemplo mental con 4 jugadores donde 2 empatan en 1er lugar.
 
-**2. Recálculo a mano — matches de Racho (89837):**
+**R:** `r.data` = [{stbTotal:35}, {stbTotal:35}, {stbTotal:30}, {stbTotal:28}]. Para el jugador [0] (35 pts): nadie tiene más de 35 → pos=1, hay otro con 35 → isTied=true → muestra "T1". Para [1] (35 pts): igual → "T1". Para [2] (30 pts): 2 jugadores tienen más → pos=3, solo uno tiene 30 → isTied=false → muestra "3" (no "2", porque la posición real es 3). Para [3] (28 pts): 3 jugadores tienen más → pos=4 → "4". Resultado: T1, T1, 3, 4.
 
-hcp85 de cada jugador (`round(hcp * 0.85)`):
-- 60803: round(5×0.85) = round(4.25) = **4**
-- 89837 (Racho): round(15×0.85) = round(12.75) = **13**
-- 124007: round(15×0.85) = **13**
-- 64611: round(7×0.85) = round(5.95) = **6**
+5. Hash y mensaje de cada commit.
 
----
+**R:**
+- `0641e86` — Tarea 21A: recalcularMAFecha_ — final authoritative MA recalc when all tarjetas signed
+- `e80e9e2` — Tarea 21G: fix calcStablefordHole_ missing 85% rule for hcp adjustment
+- `efcd9f6` — Tarea 21B-F: Live Scoring UI cleanup + stableford empates + match name color + fecha accordion
 
-**Match A — 124007 (hcp85=13) vs Racho 89837 (hcp85=13):**
+6. **Parte E:** ¿le pusiste una clase nueva a los spans de nombre en `buildMatchCard`? ¿Confirmaste con el inspector (o mentalmente) que ahora el blanco del ganador se ve por encima del `var(--navy)` de `.hist-ap`?
 
-ayMy=0, ayOpp=0 → partido mano a mano, sin strokes.
+**R:** Sí. Ambos spans de nombre en `buildMatchCard` tienen `class="mch-name"`. La regla CSS agregada: `.mch-name .hist-ap,.mch-name .hist-nm{color:inherit !important;}`. El span padre tiene `color:#fff` (ganador) o `color:var(--text)` (perdedor) via el atributo `style=""`. Con `inherit !important` en los spans internos, `.hist-ap` ya no puede imponer `var(--navy)` — heredan el color del padre. Mentalmente: ganador → span padre color:#fff → .hist-ap hereda #fff → nombre blanco ✓. Perdedor → span padre color:var(--text) → .hist-ap hereda var(--text) → nombre oscuro ✓.
 
-```
-H1:  124007=5 Racho=4 → Racho +1  (1-0, 17 rem)
-H2:  5 vs 5  → halved
-H3:  5 vs 5  → halved
-H4:  5 vs 4  → Racho +1  (2-0, 14 rem)
-H5:  5 vs 5  → halved
-H6:  4 vs 8  → 124007+1  (2-1, 12 rem)
-H7:  5 vs 3  → Racho +1  (3-1, 11 rem)
-H8:  5 vs 4  → Racho +1  (4-1, 10 rem)
-H9:  5 vs 5  → halved
-H10: 5 vs 4  → Racho +1  (5-1, 8 rem; |4|>8? no)
-H11: 5 vs 5  → halved
-H12: 5 vs 4  → Racho +1  (6-1, 6 rem; |5|>6? no)
-H13: 5 vs 4  → Racho +1  (7-1, 5 rem; |6|>5 → cierra)
-```
-Resultado: **Racho gana 7&5** (antes era "8&7").
+7. **Parte F:** ¿`openTarjetaModal` queda sin uso después de este cambio? ¿Usaste `getStbFecha` para traer los datos, o encontraste una razón para no hacerlo?
 
----
+**R:** Sí, `openTarjetaModal` queda sin uso — era el único caller en el onclick de la tabla de `renderFechaDinamica`. Lo dejé definido tal cual (no lo toqué). Sí usé `getStbFecha`: creé `loadFechaStbAccordion(fecha)` que llama a `ngtApiGet('getStbFecha', { fecha })`, toma los `p.scores`, `pares`, `indices`, `p.stbPorHoyo` del resultado, y llena cada celda `stb-acc-inner-{mat}` con `renderTarjeta18Hoyos(...)`. Los accordiones se crean en el primer render (vacíos, ocultos), el fetch los rellena en background. `liveStbToggle` funciona idéntico para ambas pantallas porque usa el mismo ID `stb-acc-{mat}`.
 
-**Match B — 60803 (hcp85=4) vs Racho 89837 (hcp85=13):**
+8. **Parte G:** ¿corriste `calcularGanadoresFechas_` después del fix? ¿Cambió el ganador de alguna fecha ya jugada?
 
-ayOpp (strokes que recibe Racho) = max(0, 13-4) = **9**.
-Racho recibe -1 en los 9 hoyos de mayor índice de dificultad (índices 1 a 9 de la cancha).
+**R:** No puedo correr `calcularGanadoresFechas_` desde acá — es una función GAS admin. Para correrla, Marco debe llamarla desde el editor de Apps Script o desde el panel admin de la app (si hay un botón para eso). Recomiendo hacerlo para recalcular los PosFecha de todas las fechas jugadas, ya que el bug del 85% podía dar ganador incorrecto cuando dos jugadores tenían HCP distinto y la diferencia en hoyos ajustados cambiaba quién sumaba más puntos stableford.
 
-Sin los índices exactos de la cancha 44, no puedo calcular hoyo a hoyo. Pero puedo demostrar que el resultado es diferente a "7&5":
+9. ¿Alguna duda?
 
-- 60803 scores: 8,3,5,6,6,5,4,6,4,6,6,8,4,4,5,5,4,5
-- Racho scores: 4,5,5,4,5,8,3,4,5,4,5,4,4,6,4,6,5,6
-- Bruto hoyo a hoyo (sin strokes): H1: 60803=8 vs R=4 → Racho. H2: 3 vs 5 → 60803. H3: 5=5 halved. H4: 6 vs 4 → Racho. ...
-
-60803 tiene scores muy malos en H1(8), H2(3→buen hoyo), H12(8). Sin embargo al recibir Racho 9 strokes distribuidos en los hoyos más difíciles (índices 1-9), el cálculo cambia significativamente hoyo a hoyo.
-
-Lo importante: el resultado **NO puede ser 7&5** porque la distribución de strokes ajusta quién gana cada hoyo individualmente. Con hcp85 de 60803=4 y Racho=13, hay 9 strokes de diferencia — esto es un ajuste real que produce un resultado distinto del match contra 124007 (donde había 0 strokes).
-
-**Confirmado: los dos matches de Racho ya NO dan el mismo resultado entre sí.** ✓
-
-**3. Búsqueda de `oppTarjeta[3]` en el resto del código:**
-
-Grep de `oppTarjeta[` en todo `04_Writes.gs`: aparece solo en la línea del fix (ahora `[2]`). No hay otras referencias a `oppTarjeta`.
-
-Busqué también patrones similares (`tarjeta[3]`, `tarjB[3]`, `tarjA[3]`, `[3].*hcp`, `hcp.*\[3\]`) en `04_Writes.gs`, `07_LiveScoring.gs` y `recalcularMatchesFecha_`. 
-
-En `recalcularMatchesFecha_` (línea ~1232 de `04_Writes.gs`):
-```js
-const hcpA = parseFloat(tarjA[2]);  // ← [2] correcto
-const hcpB = parseFloat(tarjB[2]);  // ← [2] correcto
-```
-Esta función lee `tarjMap[mat]` que es `allRows[i]` desde col A → `[2]` = hcp ✓
-
-En `buildLineaSnapshot_` (`07_LiveScoring.gs`) se usa `playerMap[mat]` construido a partir de la hoja con índice distinto (lee desde col A, hcp está en `r[2]`). ✓
-
-No encontré ningún otro lugar con el mismo tipo de error.
-
-**4. Commit:**
-
-- `54f97d4` — `Tarea 20 Parte E — fix oppTarjeta[2] en cargarTarjeta_: usaba canchaId en vez de hcp del rival`
-
----
-
-## 📋 Después de este fix — pasos para Marco (no son parte del código)
-
-1. Deployar en Apps Script los archivos `07_LiveScoring.gs` y `04_Writes.gs` (los que cambiaron hoy entre la Tarea 19 y esta).
-2. Recién ahí, borrar la fecha 7 (ya cumplió su propósito como evidencia) y crear una fecha de prueba nueva, limpia, para reconfirmar que todo — match, stableford, bonus, PosFecha, PosLeaderboard — cierra bien de punta a punta.
+**R:** No. Un punto a confirmar: después de este deploy, para las fechas anteriores que ya tenían MA mal calculado (por la race condition), el valor en SCORE no se va a corregir automáticamente — el `recalcularMAFecha_` solo se ejecuta cuando la última tarjeta de UNA fecha se firma. Para fechas viejas, Marco puede correr `resetFecha_` + firmar de nuevo, o habría que crear una función admin de corrección de MA. No es urgente si no hay torneos en progreso.
