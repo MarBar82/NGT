@@ -645,6 +645,7 @@ function cargarTarjeta_(params) {
         return r[4] !== '' && r[4] !== null && r[4] !== undefined && r[4] !== false;
       })) {
         sumarGanadorFecha_(fStr);
+        recalcularMAFecha_(fStr);
         recalcularTotalesScore_(null, fStr);
       }
     }
@@ -655,6 +656,32 @@ function cargarTarjeta_(params) {
   audit_('CARGAR_TARJETA', isAdmin ? 'admin' : matricula, { fecha, matricula, hcp, scores, ld, ba, usarDoble, dobleMsg });
   try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
   return { ok: true, dobleMsg: dobleMsg };
+}
+
+/**
+ * Final authoritative recalc of Match points (col 4 in SCORE) for all players of a fecha.
+ * Called after all tarjetas for the fecha are signed — at that point MATCH sheet is complete.
+ */
+function recalcularMAFecha_(fecha) {
+  const fStr = String(fecha);
+  const matchSh = getSheet_(SHEETS.MATCH);
+  if (!matchSh) return;
+  const ml = findNextEmptyRow_(matchSh, 4);
+  if (ml <= 2) return;
+  const allMatchRows = matchSh.getRange(2, 2, ml - 2, 7).getValues();
+  const totals = {};
+  allMatchRows.forEach(function(r) {
+    if (String(r[0] || '').trim() !== fStr) return;
+    const mat1 = String(r[1] || '').trim();
+    const mat2 = String(r[2] || '').trim();
+    const pts1 = parseFloat(r[4]) || 0;
+    const pts2 = parseFloat(r[6]) || 0;
+    if (mat1) totals[mat1] = (totals[mat1] || 0) + pts1;
+    if (mat2) totals[mat2] = (totals[mat2] || 0) + pts2;
+  });
+  Object.keys(totals).forEach(function(mat) {
+    setNGTScoreField_(fStr, mat, 4, totals[mat]);
+  });
 }
 
 /**
