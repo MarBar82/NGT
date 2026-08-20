@@ -463,7 +463,7 @@ function cargarTarjeta_(params) {
         const oppHasScores = oppScores18.some(function(s){ return s !== '' && s !== null && s !== undefined; });
         if (!oppHasScores) continue;
 
-        const oppHcpNum = parseFloat(oppTarjeta[3]);
+        const oppHcpNum = parseFloat(oppTarjeta[2]);
         if (isNaN(oppHcpNum)) continue;
         const oppHcp85 = Math.round(oppHcpNum * 0.85);
 
