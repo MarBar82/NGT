@@ -67,6 +67,17 @@ function crearFecha_(params) {
       stbShCr.getRange(stbNext, 1, newJugMats.length, 2)
         .setValues(newJugMats.map(m => [fecha, m]));
     }
+
+    // SCORE (NGT DB): pre-crear filas con ceros para cada jugador nuevo.
+    // Elimina la condición de carrera en setNGTScoreField_: cuando 4 jugadores
+    // firman al mismo tiempo, su fila ya existe y no hay dos hilos compitiendo
+    // por "próxima fila vacía" en la misma hoja.
+    const ngtScoreSh = getNGTScoreSheet_();
+    if (ngtScoreSh) {
+      const scoreNext = ngtScoreSh.getLastRow() + 1;
+      ngtScoreSh.getRange(scoreNext, 1, newJugMats.length, 8)
+        .setValues(newJugMats.map(function(m) { return [String(fecha), m, 0, 0, 0, 0, 0, 0]; }));
+    }
   }
 
   // ── Invitados: batch write (A-B-C together, then E-F and AA) ───────────────
@@ -272,10 +283,21 @@ function cargarTarjeta_(params) {
   const sh = getSheet_(SHEETS.TARJETAS);
   if (!sh) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
 
-  const wantsLD = (ld === 1 || ld === true || ld === '1');
-  const wantsBA = (ba === 1 || ba === true || ba === '1');
+  let wantsLD = (ld === 1 || ld === true || ld === '1');
+  let wantsBA = (ba === 1 || ba === true || ba === '1');
   const clearsLD = (ld === 0 || ld === false || ld === '0');
   const clearsBA = (ba === 0 || ba === false || ba === '0');
+
+  // Fuente de verdad del servidor: si bonusEstado registra a este jugador como ganador
+  // de LD o BA, lo forzamos a true independientemente de lo que mandó el cliente.
+  // Cubre la race condition donde el cliente firma antes de que el poll le entregue
+  // el bonusEstado actualizado (ej: ganó LD en el hoyo 15, firmó tarjeta en el 18).
+  try {
+    const _bonusEst = (getFechaMeta_(String(fecha)).bonusEstado) || {};
+    const _mStr = String(matricula).trim();
+    if (!wantsLD && _bonusEst.ld && String(_bonusEst.ld.matricula || '').trim() === _mStr) wantsLD = true;
+    if (!wantsBA && _bonusEst.ba && String(_bonusEst.ba.matricula || '').trim() === _mStr) wantsBA = true;
+  } catch(_be) {}
 
   // Single read of A..Z covers everything we need: validation, row lookup, and old values
   const nextEmpty = findNextEmptyRow_(sh, 1);
@@ -606,6 +628,27 @@ function cargarTarjeta_(params) {
 
   // Recalculate totals (AL:AS, C, D, LEADERBOARD) from NGT DB now that all writes are done.
   recalcularTotalesScore_(null);
+
+  // Si todos los jugadores no-INV de esta fecha ya cargaron su tarjeta (Hoyo1 ≠ vacío),
+  // calcular PosFecha y PosLeaderboard. Es seguro llamarlo múltiples veces: ambas
+  // funciones recalculan desde cero sin acumular.
+  try {
+    const neCheck = findNextEmptyRow_(sh, 1);
+    if (neCheck > 2) {
+      const checkData = sh.getRange(2, 1, neCheck - 2, 5).getValues();
+      const jugFecha  = checkData.filter(function(r) {
+        const rf = String(r[0] || '').trim();
+        const rm = String(r[1] || '').trim();
+        return rf === fStr && rm && rm.indexOf('INV') !== 0;
+      });
+      if (jugFecha.length > 0 && jugFecha.every(function(r) {
+        return r[4] !== '' && r[4] !== null && r[4] !== undefined && r[4] !== false;
+      })) {
+        sumarGanadorFecha_(fStr);
+        recalcularTotalesScore_(null, fStr);
+      }
+    }
+  } catch(ePos) {}
 
   SpreadsheetApp.flush();
 
