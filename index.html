@@ -144,6 +144,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .rc-name .rc-apellido{font-weight:700;text-transform:uppercase;}
 /* Force inherit when name is rendered via fmtHistName (uses hist-ap/hist-nm spans) */
 .rc-name .hist-ap,.rc-name .hist-nm{color:inherit !important;font-family:'Barlow Condensed',sans-serif;font-size:14px;}
+.mch-name .hist-ap,.mch-name .hist-nm{color:inherit !important;}
 .rc-name .hist-ap{font-weight:700;text-transform:uppercase;}
 .rc-name .hist-nm{font-weight:400;}
 .rc-center{width:78px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
@@ -3215,13 +3216,13 @@ function buildMatchCard(nameA, hcpA, nameB, hcpB, scA, scB, resA, resB, label){
   '</div>';
   out += '<div style="display:flex;height:48px;">' +
     '<div style="flex:1;background:' + l1Bg + ';display:flex;align-items:center;padding:0 12px;">' +
-      '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (j1Wins?'700':'400') + ';color:' + l1Txt + ';">' + nameA + '</span>' +
+      '<span class="mch-name" style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (j1Wins?'700':'400') + ';color:' + l1Txt + ';">' + nameA + '</span>' +
     '</div>' +
     '<div style="width:80px;flex-shrink:0;background:' + cBg + ';display:flex;flex-direction:column;align-items:center;justify-content:center;">' +
       scoreHtml +
     '</div>' +
     '<div style="flex:1;background:' + l2Bg + ';display:flex;align-items:center;justify-content:flex-end;padding:0 12px;">' +
-      '<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (j2Wins?'700':'400') + ';color:' + l2Txt + ';">' + nameB + '</span>' +
+      '<span class="mch-name" style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:' + (j2Wins?'700':'400') + ';color:' + l2Txt + ';">' + nameB + '</span>' +
     '</div>' +
   '</div>';
   out += '<div style="display:flex;gap:3px;padding:8px 12px;overflow-x:auto;">';
@@ -6188,7 +6189,7 @@ function liveRender(){
   if(!LIVE_LINEA_DATA) return;
   var d = LIVE_LINEA_DATA;
   var chip = document.getElementById('live-linea-chip');
-  if(chip) chip.textContent = 'Línea ' + d.lineaNum;
+  if(chip) chip.textContent = '';
 
   if(LIVE_TAB === 'tarjeta'){
     document.getElementById('live-hoyo-view').style.display = 'block';
@@ -6208,8 +6209,10 @@ function liveRenderHoyoActual(){
   var h = LIVE_HOYO - 1;
   var par = pares[h] || null;
 
+  var indices = d.indices || [];
+  var hoyoIdx = indices[h];
   document.getElementById('live-hoyo-label').textContent = 'Hoyo ' + LIVE_HOYO;
-  document.getElementById('live-par-label').textContent = par ? '· Par ' + par : '';
+  document.getElementById('live-par-label').textContent = (par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '');
 
   var html = '';
   d.jugadores.forEach(function(jug){
@@ -6217,16 +6220,12 @@ function liveRenderHoyoActual(){
     var isSaving = LIVE_SAVING_MAT === jug.matricula && LIVE_SAVING_HOYO === LIVE_HOYO;
     var cls = 'hole-circle' + (score !== null ? ' filled' : '');
     if(isSaving) cls += ' saving';
-    var uc = jug.ultimoCargadoPor;
-    var cargStr = (uc && uc.hoyo === LIVE_HOYO && uc.matricula !== jug.matricula)
-      ? '<div class="live-cargado-por">↑ ' + (uc.apodo || uc.matricula) + '</div>' : '';
     var savingLabel = isSaving ? '<div class="live-saving-label">Guardando...</div>' : '';
 
     html += '<div class="live-player-row" onclick="liveOpenScoreModal(' + LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
       '<div class="live-player-info">' +
         '<div class="live-player-apodo">' + jug.apodo + '</div>' +
         '<div class="live-player-hcp">HCP ' + jug.hcpJuego + '</div>' +
-        cargStr +
       '</div>' +
       '<div class="live-hole-wrap">' +
         '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
@@ -6405,9 +6404,13 @@ function liveLoadStableford(){
         var rowBg = isMe ? 'background:rgba(var(--navy-rgb,30,58,138),.08);font-weight:700;' : '';
         var mat = p.matricula;
         var scorecard = renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true);
+        var pos = 1;
+        for(var pi = 0; pi < r.data.length; pi++){ if(r.data[pi].stbTotal > p.stbTotal) pos++; }
+        var isTied = r.data.filter(function(x){ return x.stbTotal === p.stbTotal; }).length > 1;
+        var posStr = isTied ? 'T' + pos : String(pos);
         html += '<tr style="border-bottom:1px solid var(--border);cursor:pointer;' + rowBg + '"' +
           ' onclick="liveStbToggle(\'' + mat + '\')">' +
-          '<td style="padding:8px 8px;font-size:13px;color:var(--g4);">' + (i+1) + '</td>' +
+          '<td style="padding:8px 8px;font-size:13px;color:var(--g4);">' + posStr + '</td>' +
           '<td style="padding:8px 8px;font-size:15px;">' + p.apodo + '</td>' +
           '<td style="padding:8px 8px;text-align:right;font-size:18px;color:var(--navy);">' + (p.stbTotal !== null ? p.stbTotal : '–') + '</td>' +
           '<td style="padding:8px 8px;text-align:right;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
@@ -7195,8 +7198,7 @@ function renderFechaDinamica(data){
       const dbl = (row.db > 1) ? row.db : 0;
       const tot = row.stb + ma + pb + dbl;
 
-      html += '<tr style="cursor:pointer;" onclick="openTarjetaModal(\'' +
-        row.matricula + '\',' + row.hcp + ',\'' + data.fecha + '\',\'' + canchaId + '\',\'' + (row.nombre||'').replace(/'/g,"\\'") + '\')">' +
+      html += '<tr style="cursor:pointer;" onclick="liveStbToggle(\'' + row.matricula + '\')">' +
         '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
         '<td>' + nombreHtml + '</td>' +
         '<td class="c"><span class="s" style="color:var(--red);font-weight:700;">' + (row.puntosAntes || 0) + '</span></td>' +
@@ -7205,6 +7207,11 @@ function renderFechaDinamica(data){
         '<td class="c"><span class="s" style="color:' + (pb > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (pb > 0 ? '+'+pb : '—') + '</span></td>' +
         '<td class="c"><span class="s" style="color:' + (dbl > 0 ? 'var(--gold)' : 'var(--g4)') + ';font-weight:' + (dbl > 0 ? '800' : '400') + ';">' + (dbl > 0 ? '+'+dbl : '—') + '</span></td>' +
         '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + tot + '</span></td>' +
+      '</tr>' +
+      '<tr id="stb-acc-' + row.matricula + '" style="display:none;border-bottom:1px solid var(--border);">' +
+        '<td colspan="8" style="padding:12px 8px;" id="stb-acc-inner-' + row.matricula + '">' +
+          '<div style="color:var(--g4);font-size:13px;font-family:\'Barlow Condensed\',sans-serif;">Cargando tarjeta...</div>' +
+        '</td>' +
       '</tr>';
     });
   }
@@ -7238,6 +7245,11 @@ function renderFechaDinamica(data){
   if(matches.length){
     loadMatchResultsForFecha(data.fecha, matches);
   }
+
+  // Fetch stableford scorecard data for accordion rows
+  if(stb.length){
+    loadFechaStbAccordion(data.fecha);
+  }
 }
 
 function loadMatchResultsForFecha(fecha, matches){
@@ -7247,6 +7259,19 @@ function loadMatchResultsForFecha(fecha, matches){
   }).catch(function(e){
     console.error('loadMatchResultsForFecha error:', e);
   });
+}
+
+function loadFechaStbAccordion(fecha){
+  ngtApiGet('getStbFecha', { fecha: String(fecha) }).then(function(r){
+    if(!r || !r.ok || !r.data) return;
+    const pares   = r.pares   || [];
+    const indices = r.indices || [];
+    r.data.forEach(function(p){
+      var inner = document.getElementById('stb-acc-inner-' + p.matricula);
+      if(!inner) return;
+      inner.innerHTML = renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true);
+    });
+  }).catch(function(){});
 }
 
 function fechaMatchRender(pendingMatches, fullData){
