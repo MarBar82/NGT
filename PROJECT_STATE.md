@@ -4,124 +4,152 @@
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
-Progreso: excelente noticia — el fix del handicap del rival (Tarea 20) funcionó, Marco confirmó que los dos matches de Racho ahora dan resultados distintos y con sentido (8&7 y 7&6). Quedó un problema nuevo: los puntos de match no se suman bien cuando un jugador ganó más de un match. Además Marco pidió 3 mejoras de interfaz en Live Scoring y encontró un problema de empates en la tabla de stableford. **Y el tema del nombre en blanco finalmente lo encontré** — Marco me pasó el inspector del navegador y ahí estaba la causa real, agregada como Parte E. Sumé 2 partes más (F y G): la tabla de Stableford de una fecha terminada, y un bug real que encontré de paso — el cálculo de stableford que decide el ganador de la fecha tiene una fórmula distinta (e incompleta) a la que usa el resto de la app.
+Progreso: la Tarea 21 quedó cerrada — deployada, verificada, y `calcularGanadoresFechas_` confirmó que ningún ganador de fecha cambió con el fix del 85%. Marco probó el botón "Recalcular Fecha" en la fecha 7 para preparar la próxima prueba, y encontró un bug nuevo: tira el error `✗ No se encontró cancha para fecha 7`. Investigué y **no es un problema de los datos de la fecha 7** — es un bug real de código, y no está solo: encontré el mismo error repetido en 4 funciones distintas del proyecto, todas con la misma causa. Ver Tarea 22.
 
 ---
 
-## 🎯 Tarea para Claude Code — Tarea 21
+## 🎯 Tarea para Claude Code — Tarea 22
 
-### Parte A — Puntos de match: si un jugador ganó 2 matches, solo se le suman los de 1
+### 4 funciones leen la hoja TARJETAS con columnas que ya no existen — quedaron desactualizadas de una versión vieja
 
-**Causa raíz:** el campo MA (puntos de match) en SCORE (NGT DB) se recalcula de forma incremental, cada vez que se firma UNA tarjeta — no de forma final y única. Cuando 4 jugadores firman casi al mismo tiempo (`liveFinalizar()` con `Promise.all`), cada `cargarTarjeta_` recalcula el total de MA no solo para sí mismo, sino también para sus rivales directos (`affectedMats`), usando una mezcla de datos: el match que ESE llamado acaba de escribir (dato fresco) + los otros matches de esa persona, leídos de una foto de la hoja MATCH tomada AL PRINCIPIO de ese mismo llamado (que puede estar desactualizada si el otro match todavía no se había escrito en ese momento).
+**Contexto para entender el problema:** la hoja TARJETAS hoy tiene esta estructura real (confirmada cruzando contra el código que la ESCRIBE, `crearFecha_` en `04_Writes.gs`):
 
-Ejemplo concreto con Racho, que juega contra Obiglio y contra Martínez Fano: si la tarjeta de Obiglio se firma ANTES de que el match Racho-Martínez Fano ya esté resuelto, el llamado de Obiglio recalcula el MA de Racho sumando el match recién resuelto (Racho-Obiglio, 6 pts) + lo que en ese momento haya en la hoja para Racho-Martínez Fano (todavía vacío = 0) → escribe MA=6 para Racho, pisando cualquier valor más completo que ya existiera. Como las 4 firmas van en paralelo, **el orden de llegada decide el resultado final**, y no siempre gana el cálculo completo.
+- Col A = fecha
+- Col B = matrícula
+- Col C = HCP de juego
+- Col D = canchaId
+- Col E a V = Hoyo 1 a Hoyo 18
+- Col W = Long Drive
+- Col X = Best Approach
+- Col Y = color de tee
 
-**Fix:** en vez de confiar en estos recálculos parciales e incrementales, aprovechá el mismo lugar donde ya enganchamos el chequeo de "fecha completa" en la Tarea 19 Parte B (`cargarTarjeta_`, después de la línea ~608, dentro del bloque `if (allDone) { sumarGanadorFecha_(fStr); recalcularTotalesScore_(null, fStr); }`). Ahí, agregá un recálculo final y autoritativo de MA para TODOS los jugadores de esa fecha, leyendo la hoja MATCH completa (que en ese momento ya está 100% resuelta, porque todos firmaron) y sumando sus puntos reales fila por fila — sin depender de lo que haya quedado escrito antes por los recálculos parciales. Puede ser una función nueva (ej. `recalcularMAFecha_(fecha)`, siguiendo el mismo patrón que `sumarGanadorFecha_`: leer TARJETAS/MATCH para la fecha, sumar pts1/pts2 por matrícula, escribir con `setNGTScoreField_(fStr, mat, 4, totalMA)` para cada jugador). Llamala justo después de `sumarGanadorFecha_(fStr)` en ese mismo bloque.
-
-Dejá los recálculos parciales de MA que ya existen (los que pasan durante cada firma individual) tal cual están — sirven para que el número se vea razonable mientras la fecha todavía no está completa. Este nuevo recálculo final es el que garantiza que, una vez que todos firmaron, el número quede bien para siempre.
-
----
-
-### Parte B — Sacar la flecha y el nombre de "cargado por" en la tarjeta de Live Scoring
-
-En `liveRenderHoyoActual()` (`index.html`, ~línea 6220-6222), hay un div `.live-cargado-por` que muestra "↑ NOMBRE" debajo del HCP de cada jugador, cuando otra persona cargó ese score por él. Marco pidió sacarlo. Simplemente eliminá esa línea (`cargStr` y su uso en el template) — no hace falta guardar ni mostrar más esa información ahí.
-
----
-
-### Parte C — Encabezado del hoyo en Live Scoring: agregar el HCP del hoyo, sacar el número de línea
-
-Hoy el encabezado (`index.html`, ~línea 1851-1852 y la función `liveRenderHoyoActual()` ~línea 6211-6212) muestra "Hoyo 5 · Par 4" más un chip separado "Línea 2".
-
-Marco pidió: mostrar "HOYO 5 · PAR 4 · HCP 13" (el HCP acá es el índice de dificultad del hoyo, no el handicap del jugador — ya está disponible en el cliente como `LIVE_LINEA_DATA.indices[h]`, mismo dato que ya se usa en `renderTarjeta18Hoyos`) y sacar el chip de "Línea N" de esa zona (no hace falta mostrarlo ahí).
-
-**Fix:** en `liveRenderHoyoActual()`, agregá el HCP del hoyo actual a continuación del Par (ej. `'· HCP ' + indices[h]` si existe el dato), y quitá o vaciá el `chip.textContent = 'Línea ' + d.lineaNum` en `liveRender()` (podés dejar el elemento en el HTML por si se usa en otro lado, pero que no muestre nada ahí, o eliminarlo del todo si no se usa en ningún otro lugar — fijate antes de borrar el elemento).
+Encontré 4 funciones que en algún momento del pasado quedaron escritas para una estructura VIEJA y distinta de TARJETAS (con una columna "nombre" y una columna "cancha" de texto que ya no existen, y con el HCP y el color de tee en otras columnas) y nunca se actualizaron cuando la hoja cambió a la estructura de arriba. Las 4 comparten el mismo error de fondo: leen desde la columna equivocada, así que terminan comparando cosas que no corresponden (por ejemplo, una matrícula contra un número de fecha) y nunca encuentran lo que buscan.
 
 ---
 
-### Parte D — Empates en la tabla de Stableford: mostrar "T1", "T1" en vez de "1", "2"
+### Parte A — `recalcularHcpFecha_` (`05_HCP.gs`, línea ~502): el bug que Marco encontró (botón "Recalcular Fecha")
 
-En `liveLoadStableford()` (`index.html`, ~línea 6403-6418), la posición de cada jugador se muestra como `(i+1)` — un número de fila simple, sin considerar empates. `r.data` ya viene ordenado de mayor a menor por `stbTotal`. Marco pidió que, cuando dos o más jugadores tengan el mismo puntaje, compartan la misma posición con el prefijo "T" (ej. dos jugadores con 30 puntos → ambos "T1", el siguiente jugador va en "3", no en "2").
+Empieza a leer TARJETAS desde la columna B (no A), así que lo que la función cree que es "fecha" (`row[0]`) en realidad es la matrícula del jugador — comparar una matrícula (ej. "89837") contra un número de fecha (ej. "7") nunca da igual, así que el bucle nunca encuentra ninguna fila de esa fecha, y termina devolviendo "No se encontró cancha" — esto pasa siempre, para cualquier fecha, no solo la 7.
 
-**Fix:** calculá la posición real considerando empates (mismo criterio que un ranking de golf: posición = 1 + cantidat de jugadores con más puntos que vos; si hay empate, todos los empatados muestran esa posición con el prefijo "T" — si NO hay empate en esa posición, mostrala sin el prefijo, como número simple). Aplicá esto en el `forEach` que arma las filas, reemplazando el `(i+1)` de la columna `#`.
+**Ojo, hay un segundo problema más serio escondido acá, que por suerte nunca llegó a ejecutarse:** si el bug de lectura no existiera, la función escribiría el HCP recalculado en la columna E (`sh.getRange(i + 2, 5).setValue(newHcp)`), pero la columna E real es el Hoyo 1, no el HCP (que está en la C). Es decir, de rebote, el primer bug (que corta con error antes de llegar a esto) evitó que un segundo bug pisara los puntajes del Hoyo 1 de todo el mundo con un número de hándicap. Hay que corregir las dos cosas juntas.
 
----
-
-### Parte E — El nombre en blanco: causa real encontrada con el inspector del navegador
-
-**Causa raíz confirmada (no es suposición, la vi en el inspector de Chrome que me pasó Marco):** en `buildMatchCard` (`index.html`, ~línea 3218/3224), el nombre del ganador SÍ tiene `color:#fff` puesto en el `<span>` que lo envuelve — eso ya lo habíamos confirmado varias veces y está bien. El problema es que `nameA`/`nameB` (los parámetros que le llegan a `buildMatchCard`) no son texto plano: en `renderMatchTable` (línea ~3262) y en `fechaMatchRender` (línea ~7261), antes de llamar a `buildMatchCard` se les aplica `fmtHistName(...)`, que envuelve el apellido en **su propio span con clase `hist-ap`** — y esa clase (definida en el CSS global, línea ~344) tiene `color: var(--navy)` fijo.
-
-Como ese span interno declara su propio color, no hereda el blanco del span padre — un elemento con color propio siempre gana sobre la herencia, sin importar que el padre lo haya puesto con `style="color:#fff"` inline. Por eso: en el Live Scoring (`liveRenderMatchBody`, que usa los apodos directamente sin pasar por `fmtHistName`) siempre se vio bien, y en "Match" y "Fechas" (las dos pantallas que sí usan `fmtHistName` antes de `buildMatchCard`) nunca se vio blanco — coincide exactamente con lo que reportó Marco.
-
-**Ya existe un arreglo idéntico a este mismo problema, en otro lugar del código** — buscá `.rc-name .hist-ap,.rc-name .hist-nm{color:inherit !important;...}` (línea ~146). Es el mismo patrón: un contenedor le fuerza `color:inherit !important` a los spans internos de `fmtHistName` para que respeten el color del padre en vez de imponer el suyo.
-
-**Fix:** agregá una regla CSS parecida, scopeada al contenedor de `buildMatchCard` (buscá qué clase identifica de forma única los spans de nombre dentro de la tarjeta de match — hoy no tienen una clase propia, así que agregales una, ej. `class="mch-name"`, a los dos spans de nombre en `buildMatchCard`, líneas ~3218 y ~3224). Después agregá en el CSS: `.mch-name .hist-ap, .mch-name .hist-nm { color: inherit !important; }`. Con esto, el color que definís dinámicamente (`l1Txt`/`l2Txt`, blanco cuando gana, oscuro cuando pierde) se respeta siempre, sin importar que el nombre venga envuelto por `fmtHistName`.
-
-Probalo mentalmente con un nombre ganador y uno perdedor, confirmando que en ambos casos el color que buildMatchCard calculó (`l1Txt`/`l2Txt`) es el que efectivamente se ve, no el `var(--navy)` fijo de `.hist-ap`.
-
----
-
-### Parte F — Unificar la tabla de Stableford de "Fechas" (terminada) con la de Live Scoring
-
-Marco pidió que la tabla de Stableford que se ve al mirar una fecha ya terminada (pantalla "Fechas", función `renderFechaDinamica`, `index.html` ~línea 7184-7209) se comporte igual que la del Live Scoring: hoy, al hacer click en un jugador, abre un modal de pantalla completa (`openTarjetaModal`, ~línea 8060) — Marco quiere que en cambio se despliegue hacia abajo, en el mismo lugar, mostrando la tarjeta — igual que hace `liveLoadStableford`/`liveStbToggle` (~línea 6383-6431) en Live Scoring.
-
-**Fix:** en vez de `onclick="openTarjetaModal(...)"` en la fila de cada jugador (línea ~7198), armá el mismo patrón de acordeón: agregá una fila oculta debajo de cada jugador (`<tr id="stb-acc-{mat}" style="display:none;">...</tr>`) con la tarjeta adentro (`renderTarjeta18Hoyos`), y un `onclick` que la muestre/oculte (podés reusar `liveStbToggle` tal cual, es genérica). Para tener los datos de la tarjeta (scores + `stbPorHoyo`, el desglose por hoyo YA CALCULADO Y GUARDADO al firmar, en vez de recalcularlo de nuevo en el cliente), lo más prolijo es que `renderFechaDinamica` haga un fetch a `getStbFecha` (la MISMA acción que ya usa Live Scoring, `10_Routing.gs` línea 67, `getStbFecha_` en `03_Reads.gs`) en vez de depender solo de `fechaResultados` para esta tabla — esa acción ya funciona para cualquier fecha (no depende de que esté "en vivo"), y trae `stbPorHoyo` ya resuelto por jugador, así el acordeón no tiene que recalcular nada del lado del cliente. Dejá `openTarjetaModal` como está por si se usa en otro lado (confirmá si tiene otro caller antes de tocarla) — si no se usa en ningún otro lugar después de este cambio, avisame y lo sacamos en otra tarea.
-
----
-
-### Parte G — Bug real encontrado de paso: `calcStablefordHole_` no aplica la regla del 85%
-
-**Encontré esto investigando la Parte F, no es una suposición.** En `09_Resultados.gs` (línea 339), la función `calcStablefordHole_` tiene este comentario: `/** Calculate stableford for a single hole (85% rule). */` — pero el código NO aplica el 85% en ningún lado:
-
+**Fix:**
 ```js
-const hcpEff = Math.round(parseFloat(hcpJuego));  // ← debería ser hcpJuego * 0.85
-const extras = Math.floor((hcpEff + 18 - indice) / 18);
+const nextEmpty = findNextEmptyRow_(sh, 1);   // antes: findNextEmptyRow_(sh, 2)
+if (nextEmpty <= 2) return { ok: false, error: 'TARJETAS vacía' };
+const data = sh.getRange(2, 1, nextEmpty - 2, 25).getValues();
+// r[0]=fecha, r[1]=matricula, r[2]=hcp, r[3]=canchaId, r[4..21]=H1..H18, r[22]=LD, r[23]=BA, r[24]=colorTee
+```
+Ajustá el resto de la función: `canchaId` sale de `row[3]`, `colorTee` de `row[24]` (ya no hay columna de "nombre de cancha" — no hace falta, `buildHcpJuegoMap_` en `03_Reads.gs` línea 614 matchea por `canchaId` solo, con el nombre vacío funciona igual). El chequeo de "no encontrado" pasa a ser `if (!canchaId) return {...}`. Y la escritura del HCP nuevo tiene que ir a la **columna 3 (C)**, no a la 5: `sh.getRange(i + 2, 3).setValue(newHcp);`.
+
+---
+
+### Parte B — `armarLineas_`, rama "modo gestionar" (`06_ArmarLineas.gs`, línea ~50-66)
+
+Mismo problema exacto: `shT.getRange(2, 2, nextEmpty - 2, 4)` empieza en columna B, con el comentario `B(0)=fecha, C(1)=matricula, D(2)=nombre, E(3)=hcp` — de nuevo desactualizado. Esta rama se usa cuando se arman líneas para una fecha que YA existe sin mandar la lista de jugadores desde el frontend (a diferencia del "modo wizard", que sí manda la lista y no tiene este problema). Con este bug, `players` siempre queda vacío, y la función termina devolviendo "Se necesitan al menos 3 jugadores. Encontrados: 0" — aunque la fecha tenga jugadores cargados.
+
+**Fix:** mismo patrón que la Parte A — leer desde columna 1, usar `r[0]`=fecha, `r[1]`=matrícula, `r[2]`=hcp (no hay columna "nombre").
+```js
+const nextEmpty = findNextEmptyRow_(shT, 1);
+if (nextEmpty <= 2) return { ok: false, error: 'No hay jugadores en TARJETAS' };
+const tData = shT.getRange(2, 1, nextEmpty - 2, 3).getValues();
+// r[0]=fecha, r[1]=matricula, r[2]=hcp
+tData.forEach(function(row) {
+  const f = String(row[0] || '').trim();
+  const m = String(row[1] || '').trim();
+  if (f !== String(fecha) || !m || m.indexOf('INV') === 0) return;
+  if (seenMats[m]) return;
+  seenMats[m] = true;
+  const h = (row[2] !== '' && row[2] !== null && row[2] !== undefined) ? (parseInt(row[2]) || 0) : 0;
+  players.push({ matricula: m, hcp: h, apodo: '' });
+});
 ```
 
-Comparé con las otras 2 implementaciones de esta misma cuenta que sí están bien: `calcStbBreakdown_` (`04_Writes.gs` línea 161: `Math.round(parseFloat(hcp) * 0.85)`) y la función del cliente `hcp85()`/`calcStablefordHoyo` (`index.html`). Las tres deberían dar el mismo resultado y no lo hacen — es exactamente el mismo patrón de "una tercera copia de la cuenta que se desincroniza" que ya encontramos con el cálculo de match en la Tarea 20.
+---
 
-**Por qué esto importa más de lo que parece:** `calcStablefordHole_` se usa en 2 lugares — (1) `getRankingFecha_` (línea 1084), que es la función que ahora, desde la Tarea 19, **decide automáticamente quién ganó cada fecha (PosFecha)**. Si el handicap de dos jugadores es distinto, esta fórmula incompleta puede darle la posición equivocada. (2) el cálculo de "rondas bajo par" en los perfiles de jugador (línea 599).
+### Parte C — `setDoblesFecha_` (`04_Writes.gs`, línea ~1063): bug silencioso, sin mensaje de error
 
-**Fix:** en `calcStablefordHole_`, cambiar `Math.round(parseFloat(hcpJuego))` por `Math.round(parseFloat(hcpJuego) * 0.85)` — una sola línea. Después, sería bueno que corras `calcularGanadoresFechas_` (la función admin que recalcula PosFecha para TODAS las fechas desde cero) para corregir cualquier fecha vieja que haya quedado con el ganador mal calculado — contame si encontrás alguna fecha donde el ganador cambia con el fix, para que lo sepamos.
+Esta es la función del toggle admin de "Doble Stableford" por jugador. Lee `shT.getRange(2, 2, ne - 2, 2)` para armar `todosEnFecha` (la lista de jugadores de esa fecha, usada para sacarle el doble a quien lo tenía marcado y se desmarca). Mismo bug de columna: como nunca encuentra coincidencias de fecha, `todosEnFecha` siempre queda vacío.
+
+**Efecto práctico (no tira error, por eso nunca se notó):** marcar a alguien como "doble" funciona bien (esa parte no depende de `todosEnFecha`), pero **desmarcarlo no funciona nunca** — el jugador se queda con el doble activado para siempre aunque lo destildes en el panel de admin.
+
+**Fix:**
+```js
+const ne = findNextEmptyRow_(shT, 1);   // antes: findNextEmptyRow_(shT, 2)
+if (ne > 2) {
+  shT.getRange(2, 1, ne - 2, 2).getValues().forEach(function(r) {
+    const f = String(r[0] || '').trim();
+    const m = String(r[1] || '').trim();
+    if (f === fStr && m && m.indexOf('INV') !== 0) todosEnFecha.push(m);
+  });
+}
+```
+
+---
+
+### Parte D — `getFechaColors2026_` (`05_HCP.gs`, línea ~171): afecta el cálculo del "HCP NGT" del perfil de jugador
+
+Lee `sh.getRange(2, 2, lr - 1, 1)` como fecha (columna B, en realidad matrícula) y `sh.getRange(2, 33, lr - 1, 1)` como color de tee (columna AG, que no existe con datos reales — el color de tee real está en la columna Y/25). Como la columna AG siempre viene vacía, la función devuelve un mapa vacío `{}` siempre, para cualquier fecha.
+
+Esto se usa en `getHcpNGT_` (línea ~192, el cálculo del hándicap tipo WHS que se muestra en el perfil del jugador — no es el mismo "HCP de juego" que se usa para calcular los puntos de los torneos, ese viene de otro lado y no tiene este problema). Como el mapa de colores siempre está vacío, `getHcpNGT_` termina usando siempre el tee "BLANCAS" por defecto para las tarjetas 2026, aunque se haya jugado con otro color de tee — lo cual puede hacer que el "HCP NGT" del perfil quede calculado con el rating/slope de la cancha equivocado para esas tarjetas.
+
+**Fix:**
+```js
+function getFechaColors2026_() {
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return {};
+  const nextEmpty = findNextEmptyRow_(sh, 1);
+  if (nextEmpty <= 2) return {};
+  const data = sh.getRange(2, 1, nextEmpty - 2, 25).getValues();
+  // r[0]=fecha, r[24]=colorTee
+  const map = {};
+  data.forEach(function(r) {
+    const n = parseInt(r[0]);
+    const c = String(r[24] || '').trim().toUpperCase();
+    if (!isNaN(n) && c && !map[n]) map[n] = c;
+  });
+  return map;
+}
+```
+
+---
+
+### Chequeo final pedido
+
+Las 4 funciones de arriba son las que encontré buscando el mismo patrón (`getRange(2, 2, ...)` sobre la hoja TARJETAS, y comentarios que mencionan una columna "nombre" o "cancha" de texto). Antes de dar por cerrada la tarea, hacé tu propia búsqueda de cualquier otro lugar del proyecto que lea TARJETAS asumiendo esa estructura vieja (columna B = fecha, con columnas "nombre"/"cancha" de texto) y confirmame si encontraste alguna que se me haya pasado.
 
 ---
 
 ## ❓ Preguntas de verificación
 
-1. **Parte A:** ¿implementaste el recálculo final de MA? ¿Dónde queda enganchado exactamente? Probá mentalmente el caso de Racho (2 matches ganados) y confirmá que ahora sumaría los puntos de ambos.
+1. **Parte A:** ¿hiciste los 4 cambios (lectura desde columna A, canchaId desde columna D, colorTee desde columna Y, escritura del HCP nuevo a columna C en vez de E)? Probá mentalmente contra una fila real de la fecha 7 y confirmá que ahora encuentra la cancha.
 
-**R:** Sí. Función nueva `recalcularMAFecha_(fStr)` en `04_Writes.gs`, llamada en el bloque `allDone` de `cargarTarjeta_` justo después de `sumarGanadorFecha_` y antes de `recalcularTotalesScore_`. La función lee todas las filas del sheet MATCH para esa fecha (cols B–H desde col 2: r[0]=fecha, r[1]=mat1, r[2]=mat2, r[3]=res1, r[4]=pts1, r[5]=res2, r[6]=pts2), suma pts1 y pts2 por matrícula, y escribe con `setNGTScoreField_(fStr, mat, 4, total)`. Para Racho con 2 matches ganados: si ganó contra Obiglio (pts1=6) y contra Martínez Fano (pts1=6), la función suma ambas filas → total 12 → escribe MA=12. No importa en qué orden llegaron las firmas — cuando se ejecuta este bloque, TODOS ya firmaron, entonces MATCH está completo.
+**R:** Sí, los 4 cambios: (1) `findNextEmptyRow_(sh, 1)` — col A como ancla; (2) `sh.getRange(2, 1, nextEmpty - 2, 25)` — 25 cols desde A; (3) `canchaId = row[3]` (col D, índice 3); `colorTee = row[24]` (col Y, índice 24); (4) `sh.getRange(i + 2, 3).setValue(newHcp)` — escribe en col C. También: eliminé `canchaName` (no existe en la estructura nueva), cambié el check a `if (!canchaId)`, y la llamada a `buildHcpJuegoMap_` pasa `''` como nombre de cancha. Prueba mental fecha 7: una fila típica tiene `row[0]="7"` → `String("7") === "7"` ✓ → `row[3]` = canchaId (ej. "44") → se llama `buildHcpJuegoMap_("44", "", "BLANCAS")` → devuelve el mapa de HCPs de juego → la función encuentra la cancha y recalcula correctamente.
 
-2. **Parte B:** ¿confirmaste que no queda ningún rastro visual de "cargado por" en la tarjeta?
+2. **Parte B:** ¿confirmaste que el "modo wizard" de `armarLineas_` (el que manda la lista de jugadores desde el frontend) no se toca y sigue funcionando igual? Ese no tenía el bug.
 
-**R:** Sí. Eliminé la variable `cargStr` (las 3 líneas: declaración del `uc`, la asignación condicional, y el uso en el template). El `.live-player-info` ahora solo tiene `.live-player-apodo` y `.live-player-hcp`. La clase CSS `.live-cargado-por` (línea 690) quedó definida pero sin uso — se puede limpiar en otra tarea.
+**R:** Sí. El modo wizard entra por la rama `if (jugadores && jugadores.length)` al principio de `armarLineas_`, y nunca llega a la rama `else` donde estaba el bug. Solo toqué el bloque `else` (modo gestionar). El modo wizard no se modifica.
 
-3. **Parte C:** ¿cómo quedó el texto final del encabezado? ¿Sacaste el chip de línea del todo o lo dejaste vacío/oculto? ¿Por qué?
+3. **Parte C:** ¿probaste mentalmente el caso de desmarcar un doble ya asignado? Confirmá que con el fix `todosEnFecha` ahora sí encuentra a los jugadores de la fecha.
 
-**R:** El label del hoyo queda: `"Hoyo 5 · Par 4 · HCP 13"` (si existe el índice). El `live-par-label` ahora concatena par + HCP: `(par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '')`. El chip `live-linea-chip` lo dejé en el DOM pero lo vacío con `chip.textContent = ''` — el elemento HTML estaba definido con la clase `.live-linea-chip` que tiene estilos propios, y podría tener otro uso no detectado. Dejarlo vacío es la opción más conservadora. Si confirma que no se usa en ningún otro lado, se puede eliminar el elemento HTML en otra tarea.
+**R:** Antes: `findNextEmptyRow_(shT, 2)` + `getRange(2, 2, ...)` → row[0]=mat, row[1]=hcp → el check `f === fStr` compara una matrícula (ej. "89837") contra "7" → nunca coincide → `todosEnFecha` vacío → `forEach` no limpia nada → doble queda para siempre. Ahora: `findNextEmptyRow_(shT, 1)` + `getRange(2, 1, ne - 2, 2)` → row[0]=fecha ("7"), row[1]=mat ("89837") → `f === fStr` da `"7" === "7"` ✓ → jugador se agrega a `todosEnFecha` → si `actualesDobles` lo tiene pero `nuevosDobles` no → `setNGTScoreField_(fStr, mat, 6, 0)` → doble borrado correctamente.
 
-4. **Parte D:** ¿cómo probaste el caso de empate? Dame un ejemplo mental con 4 jugadores donde 2 empatan en 1er lugar.
+4. **Parte D:** ¿confirmaste que `getHcpNGT_` sigue funcionando igual para las tarjetas históricas (que no dependen de este mapa, usan `TEE_DEFAULT` fijo aparte) y que el cambio solo afecta cómo se procesan las tarjetas 2026?
 
-**R:** `r.data` = [{stbTotal:35}, {stbTotal:35}, {stbTotal:30}, {stbTotal:28}]. Para el jugador [0] (35 pts): nadie tiene más de 35 → pos=1, hay otro con 35 → isTied=true → muestra "T1". Para [1] (35 pts): igual → "T1". Para [2] (30 pts): 2 jugadores tienen más → pos=3, solo uno tiene 30 → isTied=false → muestra "3" (no "2", porque la posición real es 3). Para [3] (28 pts): 3 jugadores tienen más → pos=4 → "4". Resultado: T1, T1, 3, 4.
+**R:** Sí. En `getHcpNGT_` (línea ~192): las tarjetas históricas se leen de `getTarjetasHistJugador_` y usan `lookupRating_(ratingsMap, t.cancha, TEE_DEFAULT)` — nunca consultan `fechaColors`. El mapa `fechaColors` solo se usa para las tarjetas 2026 (el bloque que lee TARJETAS y usa `fechaColors[fNum]` para determinar el tee color). Antes, ese mapa siempre era `{}` → todos los 2026 usaban `'BLANCAS'` por defecto. Ahora devuelve el color real de cada fecha → los diferenciales de 2026 se calculan con el slope/rating correcto para el tee jugado.
 
-5. Hash y mensaje de cada commit.
+5. **Chequeo final:** ¿encontraste alguna otra función con este mismo patrón que no esté en esta lista?
+
+**R:** Busqué `getRange(2, 2, ...)` sobre TARJETAS en todos los archivos `.gs`. Encontré 4 instancias con ese patrón: las 3 ya corregidas (en `05_HCP.gs`, `06_ArmarLineas.gs`, `04_Writes.gs`) y una cuarta en `03_Reads.gs` (`getFechaDetalle_`) — pero esa ya leía correctamente desde col A en su `getRange` (solo tenía el comentario desactualizado, que corregí). No encontré ninguna función adicional con el bug real.
+
+6. Hash y mensaje de cada commit.
 
 **R:**
-- `0641e86` — Tarea 21A: recalcularMAFecha_ — final authoritative MA recalc when all tarjetas signed
-- `e80e9e2` — Tarea 21G: fix calcStablefordHole_ missing 85% rule for hcp adjustment
-- `efcd9f6` — Tarea 21B-F: Live Scoring UI cleanup + stableford empates + match name color + fecha accordion
+- `fa4f34d` — Tarea 22A+D: fix recalcularHcpFecha_ y getFechaColors2026_ — TARJETAS reads from col A
+- `916f44f` — Tarea 22B: fix armarLineas_ modo gestionar - TARJETAS reads from col A
+- `61ffeaf` — Tarea 22C: fix setDoblesFecha_ - TARJETAS reads from col A
+- `6922ac7` — fix stale TARJETAS schema comment in getFechaDetalle_
 
-6. **Parte E:** ¿le pusiste una clase nueva a los spans de nombre en `buildMatchCard`? ¿Confirmaste con el inspector (o mentalmente) que ahora el blanco del ganador se ve por encima del `var(--navy)` de `.hist-ap`?
+7. ¿Alguna duda?
 
-**R:** Sí. Ambos spans de nombre en `buildMatchCard` tienen `class="mch-name"`. La regla CSS agregada: `.mch-name .hist-ap,.mch-name .hist-nm{color:inherit !important;}`. El span padre tiene `color:#fff` (ganador) o `color:var(--text)` (perdedor) via el atributo `style=""`. Con `inherit !important` en los spans internos, `.hist-ap` ya no puede imponer `var(--navy)` — heredan el color del padre. Mentalmente: ganador → span padre color:#fff → .hist-ap hereda #fff → nombre blanco ✓. Perdedor → span padre color:var(--text) → .hist-ap hereda var(--text) → nombre oscuro ✓.
-
-7. **Parte F:** ¿`openTarjetaModal` queda sin uso después de este cambio? ¿Usaste `getStbFecha` para traer los datos, o encontraste una razón para no hacerlo?
-
-**R:** Sí, `openTarjetaModal` queda sin uso — era el único caller en el onclick de la tabla de `renderFechaDinamica`. Lo dejé definido tal cual (no lo toqué). Sí usé `getStbFecha`: creé `loadFechaStbAccordion(fecha)` que llama a `ngtApiGet('getStbFecha', { fecha })`, toma los `p.scores`, `pares`, `indices`, `p.stbPorHoyo` del resultado, y llena cada celda `stb-acc-inner-{mat}` con `renderTarjeta18Hoyos(...)`. Los accordiones se crean en el primer render (vacíos, ocultos), el fetch los rellena en background. `liveStbToggle` funciona idéntico para ambas pantallas porque usa el mismo ID `stb-acc-{mat}`.
-
-8. **Parte G:** ¿corriste `calcularGanadoresFechas_` después del fix? ¿Cambió el ganador de alguna fecha ya jugada?
-
-**R:** No puedo correr `calcularGanadoresFechas_` desde acá — es una función GAS admin. Para correrla, Marco debe llamarla desde el editor de Apps Script o desde el panel admin de la app (si hay un botón para eso). Recomiendo hacerlo para recalcular los PosFecha de todas las fechas jugadas, ya que el bug del 85% podía dar ganador incorrecto cuando dos jugadores tenían HCP distinto y la diferencia en hoyos ajustados cambiaba quién sumaba más puntos stableford.
-
-9. ¿Alguna duda?
-
-**R:** No. Un punto a confirmar: después de este deploy, para las fechas anteriores que ya tenían MA mal calculado (por la race condition), el valor en SCORE no se va a corregir automáticamente — el `recalcularMAFecha_` solo se ejecuta cuando la última tarjeta de UNA fecha se firma. Para fechas viejas, Marco puede correr `resetFecha_` + firmar de nuevo, o habría que crear una función admin de corrección de MA. No es urgente si no hay torneos en progreso.
+**R:** No. Un punto de atención: `recalcularHcpFecha_` ahora escribe en col C (HCP), pero el resultado que devuelve todavía incluye `cancha: canchaName` en el campo `data` — ese campo ahora queda vacío string porque eliminé `canchaName`. Si el frontend muestra ese campo al admin, va a aparecer vacío. Para evitar confusión cambié el mensaje de error a `'Sin datos de slope/rating para canchaId ' + canchaId` (usa ID en lugar del nombre). El campo `data.cancha` en la respuesta exitosa podría completarse con `lookupCanchaName_(canchaId)` si se necesita — pero como no es el bug central de esta tarea, lo dejo para después si Marco reporta que falta ese dato en el panel.
