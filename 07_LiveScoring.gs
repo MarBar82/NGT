@@ -294,10 +294,12 @@ function cargarHoyoLive_(params) {
     try { cache.remove(lockKey); } catch(e) {}
   }
 
+  // Single read of jugadores — reused for ultimoCargadoPor and buildLineaSnapshot_
+  const jugMap = {};
+  cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+
   // Guardar ultimoCargadoPor en cache (6h = duración de una ronda)
   if (scoreVal !== '') {
-    const jugMap = {};
-    cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
     const cargJug = jugMap[cargStr] || {};
     try {
       cache.put('lastCarg_' + fStr + '_' + jugStr,
@@ -306,13 +308,8 @@ function cargarHoyoLive_(params) {
     } catch(e) {}
   }
 
-  audit_('CARGAR_HOYO_LIVE', cargStr,
-    { fecha: fStr, matriculaJugador: jugStr, hoyo: hoyoNum, score: scoreVal });
-
   // Devolver snapshot fresco (req 6.2: "el mismo shape que getLineaLive")
-  const jugMap2 = {};
-  cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap2[String(j.matricula)] = j; });
-  const snap = buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap2);
+  const snap = buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap);
 
   // Detectar si el hoyo es de bonus (BA o LD) y no tiene ganador reportado aún.
   // Solo disparar cuando los 4 jugadores de la línea tengan score en ese hoyo.
