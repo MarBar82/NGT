@@ -4,83 +4,59 @@
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
-Progreso: ¡el motor de la app (Tareas 18 a 23) quedó funcionando de punta a punta! Marco ya probó todo el flujo y confirma que anda bien. Ahora pasamos a una tanda de retoques estéticos antes de la prueba en cancha real — ver Tarea 24. Ningún archivo `.gs` (backend) se toca en esta tarea, todo es `index.html` (frontend) — así que no hace falta ningún deploy en Apps Script después, solo hacer `git push` (GitHub Pages se actualiza solo).
+Progreso: hicimos un análisis de rendimiento (documento aparte, `ANALISIS_PERFORMANCE.md` en el proyecto de Claude) sobre por qué la app no se siente 100% instantánea, y encontramos 2 mejoras concretas y de bajo riesgo en el camino más transitado de toda la app: guardar el score de un hoyo (`cargarHoyoLive_`, se llama hasta 72 veces por foursome por ronda). Ver Tarea 25 — "Nivel 1" del análisis.
 
 ---
 
-## 🎯 Tarea para Claude Code — Tarea 24 (solo estética, solo `index.html`)
+## 🎯 Tarea para Claude Code — Tarea 25 (rendimiento, Nivel 1)
 
-### Parte A — La fila de encabezado "IDA"/"VUELTA" no está pintada igual que el resto
+### Contexto: por qué elegimos justo estos 2 cambios
 
-En la tarjeta que se despliega (Live Scoring, y ahora también en Fechas terminadas — la función compartida es `renderTarjeta18Hoyos`, `index.html` línea ~7640), cada tabla de 9 hoyos tiene un encabezado con "IDA" o "VUELTA" en la primera celda, y H1, H2... H9, Tot en las demás. Todas las celdas del encabezado excepto la primera ("IDA"/"VUELTA") tienen fondo azul marino y letra blanca — la primera celda se queda con el fondo gris claro por defecto, por eso se ve descolgada del resto y da la sensación de que "no está alineado".
+`cargarHoyoLive_` (`07_LiveScoring.gs`, línea ~211) es la función que se ejecuta cada vez que un jugador carga (o edita) el score de un hoyo — la acción más repetida de toda la app. El frontend ya usa "actualización optimista" para 3 de cada 4 (o 2 de cada 3, si la línea es de 3) jugadores en cada hoyo — les muestra el resultado antes de esperar al servidor. Pero el ÚLTIMO jugador de cada hoyo sí espera la respuesta real y completa, porque ahí es donde el servidor decide si corresponde un bonus (Long Drive / Best Approach). Ese es el momento que más se puede sentir "lento" hoy, y es el que vamos a acortar.
 
-**Causa exacta (CSS, línea ~1368):**
-```css
-.perf-ecl-table thead th:not(.lbl){background:var(--navy);}
-```
-Esa regla pinta de azul TODAS las celdas del encabezado excepto la que tiene la clase `.lbl` — que es justo la celda de "IDA"/"VUELTA". La exclusión fue pensada para las FILAS de abajo (donde `.lbl` también se usa para las etiquetas "Hándicap", "Par", "Score", "Puntos", esas sí tienen que quedar con fondo gris/texto oscuro, alineadas a la izquierda — esas no se tocan). El problema es que la exclusión también afectó por accidente a la celda de encabezado.
-
-**Fix:** agregá una regla más específica que pinte de azul + letra blanca SOLO la celda `.lbl` que está dentro del `<thead>` (no las de `<tbody>`):
-```css
-.perf-ecl-table thead th.lbl{background:var(--navy);color:#fff;}
-```
-
-Después de este cambio, revisá visualmente (o mentalmente con el HTML generado) que las 5 celdas del encabezado — "IDA"/"VUELTA", H1...H9, Tot — queden con el mismo fondo azul y letra blanca, todas alineadas visualmente entre sí. Si al mirarlo notás algo más desalineado entre los valores de Score/Par/Hándicap/Puntos y los números de hoyo del encabezado (por ejemplo que los círculos de score no queden centrados igual que los números de par), ajustalo también — pero el problema principal, confirmado, es el de la celda sin pintar.
+Encontramos 2 cosas concretas dentro de esa función que suman demora real sin aportarle nada al jugador — las dos son cambios chicos, acotados, y no tocan la lógica de negocio ni los candados de concurrencia (esos los dejamos como están, a propósito, por el historial de bugs de carrera que tuvimos en este proyecto — no vale la pena arriesgar ahí para ganar unas pocas milésimas).
 
 ---
 
-### Parte B — Recuadro para diferenciar la tarjeta desplegada del siguiente jugador
+### Parte A — Sacar la escritura de auditoría del camino que el jugador espera
 
-Tanto en Live Scoring (`liveLoadStableford`, `index.html` ~línea 6406-6419) como en la tabla de Stableford de una fecha terminada (`renderFechaDinamica` + `loadFechaStbAccordion`, ~línea 7212 y 7264-7275), al hacer click en un jugador se despliega su tarjeta dentro de una fila oculta (`<tr id="stb-acc-...">`) justo debajo. Marco pidió que esa tarjeta desplegada tenga algún recuadro visual para diferenciarse claramente de la fila del siguiente jugador.
-
-**Fix:** en los dos lugares donde se arma esa fila oculta, envolvé el contenido (`renderTarjeta18Hoyos(...)`) en un `<div>` con un borde y esquinas redondeadas, por ejemplo:
-```css
-.stb-acc-box{border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--off);}
+Dentro de `cargarHoyoLive_`, después de guardar el score, hay esta línea:
+```js
+audit_('CARGAR_HOYO_LIVE', cargStr,
+  { fecha: fStr, matriculaJugador: jugStr, hoyo: hoyoNum, score: scoreVal });
 ```
-Y en el HTML de ambos accordions, en vez de meter el resultado de `renderTarjeta18Hoyos(...)` directo en el `<td>`, envolvelo: `'<div class="stb-acc-box">' + renderTarjeta18Hoyos(...) + '</div>'`. Como los dos usan el mismo patrón visual (fueron unificados a propósito en la Tarea 21 Parte F), aplicá el mismo cambio en los dos lugares para que se vean consistentes entre sí.
+`audit_()` (`01_Utils.gs` línea ~66) escribe una fila en una planilla oculta de bitácora (`sh.appendRow(...)`) — es una escritura real y completa a Google Sheets, aparte de la del score. Como es SÍNCRONA (Apps Script espera a que termine antes de seguir), el jugador que carga el último score del hoyo tiene que esperar esta segunda escritura además de la del score en sí, para algo que es puramente interno (trazabilidad) y no afecta lo que ve en pantalla.
+
+**Fix:** sacá esta llamada a `audit_()` de `cargarHoyoLive_`. El resto de las funciones del proyecto (que se llaman con mucha menos frecuencia — una vez por jugador por ronda, no una vez por hoyo) siguen auditando normalmente, no las toques. Si en algún momento hace falta trazabilidad de cada hoyo cargado, se puede reconstruir después mirando el historial de la planilla TARJETAS directamente (ahí queda el dato real igual), así que no se pierde información importante.
 
 ---
 
-### Parte C — Agregar "Todas" al dropdown de fecha en la sección "Match"
+### Parte B — Sacar una lectura repetida de JUGADORES
 
-Hoy el dropdown de fecha en la sección Match (`index.html`, `<select id="match-fecha">`, poblado en `loadMatch()` ~línea 3141-3150) solo tiene las fechas individuales, y al entrar a la pantalla se auto-selecciona la última fecha jugada. Marco pidió agregar una opción "Todas" para ver los matches de todas las fechas juntos.
+Dentro de la misma función, `cachedRead_('jugadores', 300, getJugadores_)` se llama DOS veces (una para armar `ultimoCargadoPor`, otra más abajo para `buildLineaSnapshot_`). Aunque la segunda vez normalmente ya está en caché (así que no es tan grave como la Parte A), es una lectura de más sin necesidad.
 
-**Cómo está armado hoy (para que entiendas el cambio):** `loadMatchForFecha(fecha)` trae los matches de UNA fecha por vez desde el servidor (acción `matchesFullForFecha`) y los guarda en caché por fecha (`MATCH_DATA_CACHE[fecha]`). `renderMatchTable()` arma una tarjeta por cada match, todas con la misma etiqueta de fecha arriba (porque hoy siempre se está mirando una sola fecha a la vez).
-
-**Fix — todo del lado del cliente, sin tocar el backend:**
-
-1. En `loadMatch()`, agregá `<option value="">Todas</option>` como primera opción del `<select>` (antes de listar las fechas individuales). Podés dejar que por defecto se siga seleccionando la última fecha jugada (no hace falta que "Todas" sea la opción por defecto, alcanza con que exista).
-
-2. En `loadMatchForFecha(fecha)`, cuando `fecha === ''` (se eligió "Todas"): en vez de pedir una sola fecha, pedí (o traé de `MATCH_DATA_CACHE` si ya están) los matches de TODAS las fechas conocidas (la lista de fechas ya la tenés disponible desde `loadMatch()` — guardala en una variable global, ej. `MATCH_ALL_FECHAS`, la primera vez que se carga la pantalla). Usá `Promise.all` para traer las que falten, guardá cada una en `MATCH_DATA_CACHE[f]` como ya se hace, y a cada partido resultante agregale de qué fecha vino (ej. `m.fecha = f`) antes de juntarlos todos en un solo array para `MATCH_CUR_DATA`.
-
-3. En `renderMatchTable()`, cuando se está en modo "Todas" (podés detectarlo con `MATCH_CUR_FECHA === ''`), el `label` de cada tarjeta ya no puede ser uno solo para todas — tiene que armarse por partido, usando `m.fecha` (el dato que agregaste en el paso 2) y `FECHA_CANCHA[m.fecha]` para la cancha, en vez de la variable `fechaNum`/`cancha` únicas que se usan hoy. Ordená los partidos por fecha (de más reciente a más antigua) para que se vea prolijo.
-
-Probá mentalmente con 2 fechas cargadas: al elegir "Todas", debería verse la lista completa de matches de ambas fechas, cada uno con su propia etiqueta de fecha arriba de la tarjeta (no todos con la misma).
+**Fix:** llamá `cachedRead_('jugadores', 300, getJugadores_)` una sola vez al principio de la función, guardalo en una variable, y reusala en los dos lugares donde hace falta (`cargJug` y `jugMap2`).
 
 ---
 
 ## ❓ Preguntas de verificación
 
-1. **Parte A:** ¿aplicaste el fix de la celda `.lbl` dentro de `thead`? ¿Confirmaste que no afecta las etiquetas de fila (Hándicap/Par/Score/Puntos), que tienen que seguir como estaban?
+1. **Parte A:** ¿confirmaste que sacaste `audit_()` SOLO de `cargarHoyoLive_`, y que las demás funciones del proyecto que auditan (`cargarTarjeta_`, acciones de admin, etc.) siguen intactas?
 
-**R:** Sí. Agregué `.perf-ecl-table thead th.lbl{background:var(--navy);color:#fff;}` inmediatamente después de la regla existente. La regla está scoped a `thead th.lbl` — las etiquetas de fila ("Hándicap", "Par", "Score", "Puntos") están en `tbody`, no en `thead`, así que no les afecta. El resultado: las 5 celdas del encabezado ("IDA"/"VUELTA" + H1-H9 + Tot) ahora tienen todas el mismo fondo azul marino y letra blanca.
+**R:** Sí. Eliminé las dos líneas de `audit_('CARGAR_HOYO_LIVE', ...)` de `cargarHoyoLive_`. Verifiqué con grep que en `07_LiveScoring.gs` la única `audit_` que queda es la de `setBonusGanador_` (línea 447) — correcta, no la toqué. Las demás funciones que auditan están en otros archivos (`04_Writes.gs`, `09_Resultados.gs`, etc.) y no fueron modificadas.
 
-2. **Parte B:** ¿aplicaste el recuadro en los dos lugares (Live Scoring y Fechas)? ¿Cómo se ve el resultado — bordes, fondo, algo más?
+2. **Parte B:** ¿unificaste la lectura de `jugadores` en una sola variable? Confirmá que se sigue usando correctamente en los 2 lugares (`cargJug` y `jugMap2`).
 
-**R:** Sí, en los dos. CSS agregado: `.stb-acc-box{border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--off);}`. En Live Scoring (`liveLoadStableford`): el `<td>` ahora tiene `padding:8px` y adentro `<div class="stb-acc-box">tarjeta</div>`. En `loadFechaStbAccordion`: el `inner.innerHTML` ahora envuelve en `<div class="stb-acc-box">`. Visualmente: la tarjeta aparece dentro de un recuadro con borde gris sutil, esquinas redondeadas, y fondo levemente distinto al de la fila (`var(--off)` vs el blanco del resto de la tabla), separándola claramente del jugador siguiente.
+**R:** Sí. El único `cachedRead_('jugadores', ...)` ahora está al principio del bloque post-flush, construye `jugMap` (antes eran dos bloques separados con `jugMap` y `jugMap2`). El `if (scoreVal !== '')` usa `jugMap[cargStr]` para `cargJug`. `buildLineaSnapshot_` recibe `jugMap` directamente (antes recibía `jugMap2`). Un solo cache hit en lugar de dos.
 
-3. **Parte C:** ¿cómo probaste el caso de "Todas" con más de una fecha? ¿Confirmá que cada tarjeta muestra la fecha correcta y que están ordenadas de más reciente a más antigua?
+3. ¿Tocaste algo del candado (`lockKey`/`Utilities.sleep`) o de la lógica de qué jugador es "el último" del hoyo? (No debería hacer falta para esta tarea — si tocaste algo ahí, avisame explícitamente y por qué.)
 
-**R:** Prueba mental con fechas 6 y 7. `MATCH_ALL_FECHAS = ['6', '7']`. Al elegir "Todas": `missing` = las que no están en caché → `Promise.all` las trae y las guarda. Luego `allFechas.slice().reverse()` = `['7', '6']` → primero los matches de fecha 7, luego los de fecha 6. Cada match tiene `.fecha = '7'` o `.fecha = '6'` según corresponde. En `renderMatchTable()`, `isTodas=true` → cada tarjeta arma su propio `label`: fecha 7 → "Fecha 7 · Cancha X", fecha 6 → "Fecha 6 · Cancha Y". Si algunas fechas ya estaban en caché (por haber sido vistas antes), `missing` las omite y se usan directo de caché. El orden final: más reciente primero ✓.
+**R:** No. El candado (líneas 277-295), el `flush()` dentro del `try/finally`, y toda la lógica de `bonusPendiente` y detección del último jugador quedan exactamente igual.
 
-4. ¿Tocaste algún archivo `.gs`? (No debería hacer falta para esta tarea — si tocaste alguno, avisame cuál y por qué.)
+4. Hash y mensaje del commit.
 
-**R:** No, solo `index.html`.
+**R:** `9596b8e` — Tarea 25: rendimiento cargarHoyoLive_ — sacar audit y unificar lectura jugadores
 
-5. Hash y mensaje del commit.
+5. ¿Alguna duda?
 
-**R:** `c0b7cd6` — Tarea 24: retoques esteticos — header tarjeta, recuadro accordion, Match Todas las fechas
-
-6. ¿Alguna duda?
-
-**R:** No. Una observación: el filtro de jugador (`populateMatchPlayerFilter`) en modo "Todas" ahora incluye todos los jugadores de todas las fechas, por lo que el dropdown de jugador puede tener entradas duplicadas si un jugador apareció en varias fechas — esto depende de cómo esté implementado `populateMatchPlayerFilter`. Si da problemas, se puede deduplicar en otra tarea.
+**R:** No.
