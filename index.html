@@ -937,6 +937,28 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .fc-ftour{color:#c9a84c;font-weight:700;}
 @media(max-width:380px){.fc-player{grid-template-columns:1fr 60px 60px}.fc-matches{grid-template-columns:1fr}}
 
+/* ── Fecha Card ADMIN (grid 2x2 + matches colapsables) ── */
+.fca-wrap{padding:10px 10px 6px;}
+.fca-linea{border:1px solid var(--g2);margin-bottom:10px;}
+.fca-linea-hdr{background:var(--navy);color:#fff;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;}
+.fca-lnum{font-family:'Roboto Slab',serif;font-size:14px;font-weight:900;color:#c9a84c;text-transform:uppercase;}
+.fca-lmeta{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+.fca-players{padding:7px;display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.fca-pill{display:flex;align-items:center;justify-content:space-between;gap:6px;border:1px solid var(--g2);border-left:3px solid var(--red);padding:6px 8px;min-height:38px;background:#fff;}
+.fca-pill-empty{border:1px dashed var(--g2);min-height:38px;}
+.fca-pname{font-weight:800;font-size:12px;letter-spacing:.03em;color:var(--navy);text-transform:uppercase;}
+.fca-phcp{display:flex;align-items:center;gap:3px;font-size:11px;font-weight:700;white-space:nowrap;color:var(--g5);}
+.fca-phcp .fca-p85{font-weight:800;color:var(--red);}
+.fca-match-toggle{background:var(--g1);border:1px solid var(--g2);border-top:none;padding:6px 10px;font-size:9px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--navy);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;}
+.fca-match-arrow{transition:transform .15s;font-size:11px;}
+.fca-match-toggle.open .fca-match-arrow{transform:rotate(180deg);}
+.fca-matches{padding:7px;display:flex;flex-direction:column;gap:4px;}
+.fca-match{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;background:#fff;border:1px solid var(--g2);border-left:3px solid #c9a84c;padding:7px 10px;font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;}
+.fca-match .fca-m1{justify-self:start;text-align:left;}
+.fca-match .fca-m2{justify-self:end;text-align:right;}
+.fca-match .fca-mvs{color:var(--red);font-weight:900;font-size:10px;letter-spacing:.05em;}
+@media(max-width:380px){.fca-players{grid-template-columns:1fr}.fca-match{grid-template-columns:1fr;text-align:center;gap:2px;}.fca-match .fca-m1,.fca-match .fca-m2{justify-self:center;text-align:center;}}
+
 @media(max-width:480px){
   .home-fecha-card{padding:18px 16px 14px;max-width:none;}
   .hfc-num{font-size:26px;}
@@ -3771,16 +3793,8 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
         r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches' + repeatTxt + '</strong>' +
         '<button onclick="wizRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
         '</div>';
-      r.lines.forEach(l => {
-        html += '<strong>L' + l.lineNum + '</strong>: ' +
-          l.players.map(p => p.apodo + ' <span style="color:var(--g4);">(' + p.hcp + ')</span>').join(' · ') +
-          ' — ' + l.matches.map(m => {
-            const pA = l.players.find(p => p.matricula === m.j1);
-            const pB = l.players.find(p => p.matricula === m.j2);
-            return (pA ? pA.apodo : m.j1) + ' vs ' + (pB ? pB.apodo : m.j2);
-          }).join(', ') + '<br>';
-      });
-      html += '<span style="color:var(--g4);font-size:11px;">Podés modificar los matches abajo antes de crear la fecha.</span>';
+      const normalized = normalizeLineasArmado_(r.lines, data.horario, data.hoyoSalida, data.colorTee);
+      html += renderFechaCardAdmin_(normalized);
       preview.innerHTML = html;
       preview.style.display = 'block';
     }
@@ -8112,6 +8126,82 @@ function calcTeeTime_(horario, lineIdx, totalLines){
     const mm = totalMin % 60;
     return (hh < 10 ? '0' + hh : hh) + ':' + (mm < 10 ? '0' + mm : mm);
   } catch(e) { return horario; }
+}
+
+// Normaliza el resultado crudo de armarLineas_ (matches con solo matriculas j1/j2,
+// jugadores con hcp de juego sin el 85%) a la forma que consume renderFechaCardAdmin_.
+function normalizeLineasArmado_(rawLines, horarioBase, hoyoSalida, colorTee){
+  const total = rawLines.length;
+  return rawLines.map(function(l, idx){
+    const players = l.players.map(function(p){
+      const hcp = p.hcp || 0;
+      return { matricula: p.matricula, apodo: p.apodo, hcp: hcp, hcp85: Math.round(hcp * 0.85) };
+    });
+    const byMat = {};
+    players.forEach(function(p){ byMat[p.matricula] = p; });
+    const matches = l.matches.map(function(m){
+      const p1 = byMat[m.j1] || { apodo: m.j1, hcp85: 0 };
+      const p2 = byMat[m.j2] || { apodo: m.j2, hcp85: 0 };
+      return { apodo1: p1.apodo, hcp85_1: p1.hcp85, apodo2: p2.apodo, hcp85_2: p2.hcp85 };
+    });
+    return {
+      lineNum: l.lineNum || (idx + 1),
+      horario: calcTeeTime_(horarioBase, idx, total),
+      hoyo: hoyoSalida || 1,
+      colorTee: colorTee || 'BLANCAS',
+      players: players,
+      matches: matches,
+    };
+  });
+}
+
+// Card de línea para pantallas de ADMIN: grid 2x2 de jugadores + matches colapsables.
+// `lineas` ya viene normalizada (ver normalizeLineasArmado_). Si una línea tiene 3
+// jugadores, el 4to casillero queda vacío (fca-pill-empty) para mantener el grid 2x2.
+function renderFechaCardAdmin_(lineas){
+  let html = '<div class="fca-wrap">';
+  lineas.forEach(function(l, idx){
+    const bodyId = 'fca-m-' + idx;
+    html += '<div class="fca-linea">' +
+      '<div class="fca-linea-hdr"><span class="fca-lnum">Línea ' + l.lineNum + '</span>' +
+      '<span class="fca-lmeta">' + l.horario + ' · Hoyo ' + l.hoyo + ' · ' + l.colorTee + '</span></div>' +
+      '<div class="fca-players">';
+
+    for(let i = 0; i < 4; i++){
+      const p = l.players[i];
+      if(p){
+        html += '<div class="fca-pill"><span class="fca-pname">' + p.apodo + '</span>' +
+          '<span class="fca-phcp">' + p.hcp + ' → <span class="fca-p85">' + p.hcp85 + '</span></span></div>';
+      } else {
+        html += '<div class="fca-pill-empty"></div>';
+      }
+    }
+
+    html += '</div>' +
+      '<div class="fca-match-toggle open" onclick="toggleFcaMatches_(this,\'' + bodyId + '\')">' +
+      '<span>⚔ Matches (' + l.matches.length + ')</span><span class="fca-match-arrow">▾</span></div>' +
+      '<div class="fca-matches" id="' + bodyId + '">';
+
+    l.matches.forEach(function(m){
+      html += '<div class="fca-match">' +
+        '<span class="fca-m1">' + m.apodo1 + ' hcp ' + m.hcp85_1 + '</span>' +
+        '<span class="fca-mvs">VS.</span>' +
+        '<span class="fca-m2">hcp ' + m.hcp85_2 + ' ' + m.apodo2 + '</span></div>';
+    });
+
+    html += '</div></div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+// Muestra/oculta el bloque de matches de una línea (flecha rota al abrir/cerrar).
+function toggleFcaMatches_(toggleEl, bodyId){
+  const body = document.getElementById(bodyId);
+  if(!body) return;
+  const hidden = body.style.display === 'none';
+  body.style.display = hidden ? '' : 'none';
+  toggleEl.classList.toggle('open', hidden);
 }
 
 // ── TARJETA MODAL ──────────────────────────────────────────────────────────────
