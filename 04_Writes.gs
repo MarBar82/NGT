@@ -615,12 +615,7 @@ function cargarTarjeta_(params) {
     if (currentDobles_.indexOf(String(matricula)) >= 0 && stbBreak) {
       // Write actual ST value to NGT DB Doble column (replaces placeholder 1)
       setNGTScoreField_(fStr, mStr, 6, stbBreak.k);
-      const auResult = writeDobleStScore_(matricula, fecha, stbBreak.k);
-      if (auResult.ok) {
-        dobleMsg = 'doble aplicado: ST=' + auResult.st + ' escrito en AU';
-      } else {
-        dobleMsg = 'doble marcado pero AU no se pudo escribir: ' + auResult.error;
-      }
+      dobleMsg = 'doble aplicado: ST=' + stbBreak.k;
     }
   } finally {
     try { cache2.remove(lockKey); } catch(e) {}

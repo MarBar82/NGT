@@ -59,17 +59,6 @@ function lookupJugadorName_(matricula) {
 //      so DB for fecha n is at col (4*n + 4) = 8, 12, 16, 20, 24, 28, 32, 36
 // AT = col 46 = global "already used" checkbox
 
-function getScoreRowForMat_(matricula) {
-  const sh = getSheet_('SCORE');
-  if (!sh) return -1;
-  const data = sh.getRange(2, 1, 19, 1).getValues(); // A2:A20
-  for (let i = 0; i < data.length; i++) {
-    const m = String(data[i][0] || '').trim();
-    if (m === String(matricula)) return i + 2;
-  }
-  return -1;
-}
-
 // ════════ NGT DB SCORE HELPERS ════════
 // NGT DB SCORE: A=Fecha, B=Matricula, C=Stableford, D=Match, E=Bonus, F=Doble(puntos), G=PosFecha, H=PosLeaderboard
 
@@ -224,49 +213,29 @@ function getNGTScoreRow_(fechaStr, matStr) {
 
 function getJugadoresConDobleDisponible_() {
   // Returns list of matriculas that have NOT used their doble in ANY fecha.
-  // Checks: col AT (46, manual global override) AND NGT DB SCORE Doble field.
-  const sh = getSheet_('SCORE');
-  if (!sh) return [];
-  const data = sh.getRange(2, 1, 19, 46).getValues(); // A2:AT20
-
-  function isTrue_(v) {
-    return (v === true) || (v === 1) ||
-      (typeof v === 'string' && (v.toUpperCase() === 'TRUE' || v.toUpperCase() === 'VERDADERO'));
-  }
-
-  // Build set of mats who used doble in any fecha (from NGT DB)
   const ngtRows = getAllNGTScoreData_();
   const dobledMats = new Set();
   ngtRows.forEach(function(r) { if (r.db !== 0) dobledMats.add(r.mat); });
 
-  const available = [];
-  data.forEach(function(row) {
-    const mat = String(row[0] || '').trim();
-    if (!mat) return;
-    if (isTrue_(row[45])) return;  // AT global flag
-    if (dobledMats.has(mat)) return;
-    available.push(mat);
+  const todosMats = cachedRead_('jugadores', 300, getJugadores_).map(function(j) {
+    return String(j.matricula).trim();
   });
-  return available;
+  return todosMats.filter(function(m) { return !dobledMats.has(m); });
 }
 
-// Debug endpoint: see raw values of column AT
+// Debug endpoint: shows which players have used doble and which haven't
 function debugDobles_() {
-  const sh = getSheet_('SCORE');
-  if (!sh) return { error: 'SCORE no existe' };
-  const data = sh.getRange(2, 1, 19, 46).getValues();
-  const out = [];
-  data.forEach(row => {
-    const mat = String(row[0] || '').trim();
-    if (!mat) return;
-    out.push({
-      matricula: mat,
-      nombre: row[1],
-      AT_value: row[45],
-      AT_type: typeof row[45],
-    });
+  const ngtRows = getAllNGTScoreData_();
+  const dobledMats = {};
+  ngtRows.forEach(function(r) {
+    if (r.db !== 0) dobledMats[r.mat] = (dobledMats[r.mat] || []).concat(r.fecha);
   });
-  return out;
+  const todosMats = cachedRead_('jugadores', 300, getJugadores_).map(function(j) {
+    return String(j.matricula).trim();
+  });
+  return todosMats.map(function(m) {
+    return { matricula: m, usedDoble: !!dobledMats[m], fechas: dobledMats[m] || [] };
+  });
 }
 
 function setDobleForFecha_(matricula, fecha) {
@@ -279,17 +248,6 @@ function getStForPlayerInFecha_(matricula, fecha) {
   const r = getNGTScoreRow_(String(fecha), String(matricula));
   if (!r || r.st === 0) return null;
   return r.st;
-}
-
-// Write the ST score (undoubled) into SCORE!AU so LEADERBOARD formulas can display it.
-// AU = column 47. stVal is passed directly from the caller (already computed).
-function writeDobleStScore_(matricula, fecha, stVal) {
-  const sh = getSheet_('SCORE');
-  if (!sh) return { ok: false, error: 'SCORE no encontrada' };
-  const row = getScoreRowForMat_(matricula);
-  if (row < 0) return { ok: false, error: 'Matrícula no está en SCORE' };
-  sh.getRange(row, 47).setValue(stVal); // AU = col 47
-  return { ok: true, st: stVal };
 }
 
 /**
