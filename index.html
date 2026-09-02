@@ -2109,17 +2109,13 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
       <!-- PASO 2: matches -->
       <div class="adm-card" id="step-2" style="display:none;">
-        <div class="adm-card-hdr">⚔ Paso 2 · Matches de la Fecha</div>
+        <div class="adm-card-hdr">⚔ Paso 2 · Líneas y Matches</div>
         <div class="adm-card-body">
           <div class="adm-s2-summary" id="adm-s2-summary"></div>
           <div id="adm-s2-lineas-preview" style="display:none;margin:10px 0 6px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
-          <label class="adm-label" style="margin-top:6px;">Partidos (jugador A vs jugador B)</label>
-          <div id="wiz-matches-list"></div>
-          <button class="adm-btn-secondary" onclick="wizAddMatch()" style="margin-top:4px;">+ Agregar match</button>
-
           <div class="adm-btn-row">
             <button class="btn-back" onclick="wizPaso1Back()">← Volver</button>
-            <button class="adm-btn-primary" onclick="wizCrearTodo()">✓ Crear Fecha</button>
+            <button class="adm-btn-primary" onclick="wizCrearTodo()">🏌 Comenzar Partida</button>
           </div>
           <div id="adm-s2-msg" class="adm-msg" style="display:none;"></div>
         </div>
@@ -3704,7 +3700,6 @@ function wizMostrarPaso2_(jugsInFecha, canchaName){
   document.getElementById('adm-s2-summary').innerHTML =
     '<b>Fecha ' + d.fecha + '</b> · ' + canchaName + ' · ' + d.jugadores.length + ' jugadores' +
     (d.dobles.length ? ' · ' + d.dobles.length + ' con dobles' : '');
-  document.getElementById('wiz-matches-list').innerHTML = '';
   document.getElementById('adm-s2-msg').style.display = 'none';
   const preview = document.getElementById('adm-s2-lineas-preview');
   if(preview){ preview.style.display = 'none'; preview.innerHTML = ''; }
@@ -3773,13 +3768,6 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
     // Ir a Paso 2
     wizMostrarPaso2_(jugsInFecha, canchaName);
 
-    // Cargar matches propuestos en la lista
-    r.lines.forEach(l => l.matches.forEach(m => {
-      const pA = l.players.find(p => p.matricula === m.j1);
-      const pB = l.players.find(p => p.matricula === m.j2);
-      wizAddMatchRow_(m.j1, m.j2, pA && pA.apodo, pB && pB.apodo);
-    }));
-
     // Mostrar preview de líneas
     const preview = document.getElementById('adm-s2-lineas-preview');
     if(preview){
@@ -3808,27 +3796,7 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
 function wizRearmarLineas_(){
   if(!WIZ_LAST_ARMAR_PARAMS) return;
   const { jugadoresConHcp, prioridades, jugsInFecha, canchaName, data } = WIZ_LAST_ARMAR_PARAMS;
-  document.getElementById('wiz-matches-list').innerHTML = '';
   wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canchaName, data, Date.now());
-}
-
-// Agrega una fila de match con jugadores pre-seleccionados
-function wizAddMatchRow_(j1Mat, j2Mat, j1Apodo, j2Apodo){
-  const list = document.getElementById('wiz-matches-list');
-  const jugs = window.WIZ_JUGS || [];
-  const opts = jugs.map(j =>
-    '<option value="' + j.matricula + '">' + fmtNameForAdm(j.nombre) + '</option>'
-  ).join('');
-  const row = document.createElement('div');
-  row.className = 'adm-match-row';
-  row.innerHTML =
-    '<select class="wiz-m-j1"><option value="">Jugador A</option>' + opts + '</select>' +
-    '<span class="vs">VS</span>' +
-    '<select class="wiz-m-j2"><option value="">Jugador B</option>' + opts + '</select>' +
-    '<button class="adm-match-rm" onclick="this.parentElement.remove()" title="Quitar">✕</button>';
-  list.appendChild(row);
-  if(j1Mat) row.querySelector('.wiz-m-j1').value = j1Mat;
-  if(j2Mat) row.querySelector('.wiz-m-j2').value = j2Mat;
 }
 
 function wizPaso1Next(){
@@ -3848,38 +3816,16 @@ function wizPaso1Back(){
   document.getElementById('step-ind-2').classList.remove('on');
 }
 
-function wizAddMatch(){
-  const list = document.getElementById('wiz-matches-list');
-  const jugs = window.WIZ_JUGS || [];
-  if(!jugs.length){ alert('No hay jugadores en la fecha'); return; }
-
-  const opts = jugs.map(j =>
-    '<option value="' + j.matricula + '">' + fmtNameForAdm(j.nombre) + '</option>'
-  ).join('');
-  const row = document.createElement('div');
-  row.className = 'adm-match-row';
-  row.innerHTML =
-    '<select class="wiz-m-j1"><option value="">Jugador A</option>' + opts + '</select>' +
-    '<span class="vs">VS</span>' +
-    '<select class="wiz-m-j2"><option value="">Jugador B</option>' + opts + '</select>' +
-    '<button class="adm-match-rm" onclick="this.parentElement.remove()" title="Quitar">✕</button>';
-  list.appendChild(row);
-}
-
 function wizCrearTodo(){
   if(!WIZ_PASO1_DATA){ alert('Falta el paso 1'); return; }
 
   const msg = document.getElementById('adm-s2-msg');
   msg.style.display = 'none';
 
-  // Collect matches (can be 0 — matches are optional; admin can add them later in Gestionar Fecha)
-  const { matches, errors: matchErrors } = collectAndValidateMatches_('#wiz-matches-list', 'wiz-m-j1', 'wiz-m-j2');
-  if(matchErrors.length){
-    msg.className = 'adm-msg err';
-    msg.textContent = matchErrors.join(' ');
-    msg.style.display = 'block';
-    return;
-  }
+  // Los matches ya vienen armados por armarLineas_ (con "Rearmar" el admin pudo pedir otra combinación)
+  const matches = WIZ_LINEAS_RESULT
+    ? WIZ_LINEAS_RESULT.lines.reduce((acc, l) => acc.concat(l.matches), [])
+    : [];
 
   msg.className = 'adm-msg';
   msg.textContent = 'Creando fecha...';
@@ -3947,7 +3893,6 @@ function finalizarWizard(rFecha, rMatches){
   setTimeout(function(){
     document.getElementById('adm-fecha').value = '';
     document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
-    document.getElementById('wiz-matches-list').innerHTML = '';
     WIZ_PASO1_DATA = null;
     wizPaso1Back();
     // Limpiar caches y refrescar home con la nueva fecha
