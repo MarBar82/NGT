@@ -833,8 +833,21 @@ function eliminarFecha_(params) {
   // ── 2. PB — eliminar filas ───────────────────────────────────────────────
   changes.pb = deleteRowsForFecha(getSheet_('PB'), 2); // col B = fecha
 
-  // ── 3. TARJETAS — eliminar filas ─────────────────────────────────────────
-  changes.tarjetas = deleteRowsForFecha(getSheet_(SHEETS.TARJETAS), 1); // col A = fecha
+  // ── 3. TARJETAS — capturar matrículas ANTES de borrar (para limpiar su caché de fila) ──
+  const tarjSh_ = getSheet_(SHEETS.TARJETAS);
+  let matriculasDeLaFecha_ = [];
+  if (tarjSh_) {
+    const lastT_ = tarjSh_.getLastRow();
+    if (lastT_ >= 2) {
+      const abT_ = tarjSh_.getRange(2, 1, lastT_ - 1, 2).getValues();
+      matriculasDeLaFecha_ = abT_
+        .filter(function(r){ return String(r[0]).trim() === fStr; })
+        .map(function(r){ return String(r[1]).trim(); });
+    }
+  }
+
+  // ── 3b. TARJETAS — eliminar filas ─────────────────────────────────────────
+  changes.tarjetas = deleteRowsForFecha(tarjSh_, 1); // col A = fecha
 
   // ── 4. MATCH — eliminar filas ─────────────────────────────────────────────
   changes.match = deleteRowsForFecha(getSheet_(SHEETS.MATCH), 2); // col B = fecha
@@ -856,7 +869,18 @@ function eliminarFecha_(params) {
   SpreadsheetApp.flush();
   audit_('ELIMINAR_FECHA', 'admin', { fecha, changes });
   try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
-  try { CacheService.getScriptCache().removeAll(['fechas','fechasConEstado','fechaActiva','fl_' + String(fecha)]); } catch(e) {}
+  try {
+    const cache_ = CacheService.getScriptCache();
+    const keysABorrar_ = ['fechas','fechasConEstado','fechaActiva','fl_' + String(fecha)];
+    // Limpiar también la "fila recordada" y el "último que cargó" de cada jugador de esta
+    // fecha — si no se borran, quedan apuntando a filas viejas (hasta 6hs) y al recrear la
+    // fecha (con filas nuevas en otra posición), la app lee/escribe la fila equivocada.
+    matriculasDeLaFecha_.forEach(function(m){
+      keysABorrar_.push('tRow_' + fStr + '_' + m);
+      keysABorrar_.push('lastCarg_' + fStr + '_' + m);
+    });
+    cache_.removeAll(keysABorrar_);
+  } catch(e) {}
 
   // Limpiar FECHA_META para que el botón FECHA desaparezca del home
   try {
