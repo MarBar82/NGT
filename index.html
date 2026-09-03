@@ -6758,13 +6758,16 @@ function liveOpenScoreModal(hoyo, mat){
   if(bonusHoyos.ba === hoyo){ avisos.push('🎯 Best Approach en este hoyo'); hoyoEmoji += '🎯 '; }
   if(bonusHoyos.ld === hoyo){ avisos.push('💪 Long Drive en este hoyo'); hoyoEmoji += '💪 '; }
   document.getElementById('sm-hoyo').textContent = hoyoEmoji + 'Hoyo ' + hoyo;
+  // ⚠️ TEMPORAL — Tarea 38: diagnóstico visible, sacar en la Tarea 39
+  var debugTxt_ = 'DEBUG · hoyo=' + JSON.stringify(hoyo) + ' · ba=' + JSON.stringify(bonusHoyos.ba) +
+                  ' · ld=' + JSON.stringify(bonusHoyos.ld) + ' · match=' + avisos.length;
   if(smBanner){
     if(avisos.length){
-      smBanner.textContent = avisos.join(' · ');
-      smBanner.style.display = 'block';
+      smBanner.textContent = avisos.join(' · ') + '  [' + debugTxt_ + ']';
     } else {
-      smBanner.style.display = 'none';
+      smBanner.textContent = debugTxt_;
     }
+    smBanner.style.display = 'block'; // TEMPORAL: siempre visible mientras diagnosticamos
   }
   if(smHdr){ smHdr.classList.toggle('bonus', avisos.length > 0); }
 
