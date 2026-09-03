@@ -1,554 +1,588 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-02
+**Última actualización:** 2026-09-03
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
-Progreso: Tarea 28 (Fase 2) confirmada — el Paso 2 de Crear Fecha ya no tiene edición manual de matches. Marco probó el flujo completo y reportó 4 cosas en la misma sesión de prueba — las agrupamos todas en la Tarea 29, son 3 partes independientes entre sí (se pueden hacer en cualquier orden, no dependen una de la otra). Además, hice una auditoría de seguridad del backend (revisé las 24 acciones que escriben o modifican datos) y encontré un punto real para reforzar — es la Tarea 30, agregada abajo. **Las Tareas 29 y 30 son totalmente independientes entre sí — hacé las dos en la misma sesión de Code, en cualquier orden.**
+Progreso: Tareas 29 y 30 confirmadas. Ahora van 3 tareas juntas, **totalmente independientes entre sí** (Code las puede hacer en cualquier orden, en la misma sesión):
+
+- **Tarea 31** — Fase 3 del rediseño del panel de admin: dividir el Paso 1 de "Crear Fecha" en dos pasos separados, Cancha y Jugadores. Ya la conocés, la charlamos antes.
+- **Tarea 32** — Bug reportado: al borrar la fecha activa, el botón flotante de "FECHA en juego" no desaparece. Encontré la causa exacta revisando el código.
+- **Tarea 33** — Bug reportado: el aviso de "acá se juega el bonus" (Long Drive / Best Approach) no se ve cuando el jugador llega al hoyo — solo aparece la pregunta después de cargar el score de ese hoyo. Encontré por qué: el aviso técnicamente existe en el código, pero queda tapado por la ventana donde se anota el score.
+
+**Tarea 32 requiere que hagas el deploy manual en el editor de Apps Script** (es un cambio de backend, `.gs`). **Tarea 33 es puro frontend** (`index.html`), se publica sola en GitHub Pages apenas Code hace el commit — no requiere que hagas nada manual vos.
 
 ---
 
-## 🎯 Tarea para Claude Code — Tarea 29
+## 🎯 Tarea para Claude Code — Tarea 31 (Fase 3 del rediseño de admin)
 
-### Parte A — "Rearmar" y "Comenzar Partida" no dan ninguna señal mientras trabajan (y los errores quedan escondidos)
+### Qué cambia
 
-**Lo que reportó Marco:** al apretar "Rearmar" no pasa nada visible. Al apretar "Comenzar Partida" tampoco sabe si se está creando la fecha.
+Hoy "Crear Fecha" tiene 2 pasos: **Paso 1 "Datos"** (todo junto: número de fecha, cancha, color de salidas, horario, green fee, hoyo de salida, hoyos de bonus, Y la lista de jugadores) → **Paso 2 "Matches"** (líneas armadas).
 
-**Encontré la causa real de "Rearmar no pasa nada" (no es un bug al azar, es concreto) revisando el código:** cuando `wizEjecutarArmarLineas_` falla o el servidor devuelve un error — cosa que puede pasar, por ejemplo, si Apps Script está "frío" como vimos hace poco —, el mensaje de error se escribe siempre en el cartel `#adm-crear-msg`. El problema es que ese cartel vive físicamente en el Paso 1 (`#step-1`), que está oculto (`display:none`) mientras el admin está parado en el Paso 2 mirando las líneas armadas. Cuando "Rearmar" falla, el error existe y se escribe — pero en una parte de la pantalla que no se ve. Por eso parece que "no pasa nada": en realidad probablemente SÍ pasó algo (un error), solo que quedó invisible.
+Pasa a tener 3 pasos:
+- **Paso 1 "Cancha"** — número de fecha, cancha, color de salidas, horario, green fee, hoyo de salida, hoyos de bonus. Botón "Siguiente →".
+- **Paso 2 "Jugadores"** — la lista de jugadores para marcar quién juega. Botón "← Volver" y "⚡ Armar Líneas →" (el mismo botón de siempre, sin cambios de comportamiento).
+- **Paso 3 "Líneas"** — sin cambios, es el Paso 2 actual renombrado.
 
-Esto también explica en parte lo de "Comenzar Partida": el mensaje "Creando fecha..." hoy es solo una línea de texto chica debajo del botón, fácil de no notar — el botón en sí no cambia ni se desactiva mientras espera al servidor.
+Ningún dato ni validación de fondo cambia — es puramente una reorganización visual de los mismos campos. La función que valida y arma la fecha (`wizValidarPaso1_`) no se toca, porque ya lee cada campo por su `id` sin importar si está visible o no.
 
-**Fix — 3 cambios, todos en `index.html`:**
+### Cambio 1 — HTML: dividir el Paso 1 en dos sub-paneles + indicador de 3 pasos
 
-**A.1 — Mensaje de error visible según en qué paso estás.** En `wizEjecutarArmarLineas_`, agregá esta función chica justo antes (podés ponerla en cualquier lugar cercano, por ejemplo justo arriba de `wizEjecutarArmarLineas_`):
-
-```js
-function wizMsgTarget_(){
-  var step2 = document.getElementById('step-2');
-  return (step2 && step2.style.display !== 'none') ? 'adm-s2-msg' : 'adm-crear-msg';
-}
-
-function wizResetBotones_(){
-  const b1 = document.getElementById('wiz-armar-btn');
-  if(b1){ b1.disabled = false; b1.textContent = '⚡ Armar Líneas →'; }
-  const b2 = document.getElementById('wiz-rearmar-btn');
-  if(b2){ b2.disabled = false; b2.textContent = '↻ Rearmar'; }
-}
-```
-
-Después, dentro de `wizEjecutarArmarLineas_`, reemplazá el bloque:
-
-```js
-    if(!r || !r.ok){
-      const msg = document.getElementById('adm-crear-msg');
-      msg.className = 'adm-msg err';
-      msg.textContent = 'Error al armar líneas: ' + (r && r.error ? r.error : 'desconocido');
-      msg.style.display = 'block';
-      return;
-    }
-```
-
-por:
-
-```js
-    if(!r || !r.ok){
-      wizResetBotones_();
-      const msg = document.getElementById(wizMsgTarget_());
-      msg.className = 'adm-msg err';
-      msg.textContent = 'Error al armar líneas: ' + (r && r.error ? r.error : 'desconocido');
-      msg.style.display = 'block';
-      return;
-    }
-```
-
-Y el bloque `.catch` de esa misma función:
-
-```js
-  }).catch(e => {
-    if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar Líneas →'; }
-    const msg = document.getElementById('adm-crear-msg');
-    msg.className = 'adm-msg err'; msg.textContent = 'Error de red: ' + e.message; msg.style.display = 'block';
-  });
-```
-
-por:
-
-```js
-  }).catch(e => {
-    wizResetBotones_();
-    const msg = document.getElementById(wizMsgTarget_());
-    msg.className = 'adm-msg err'; msg.textContent = 'Error de red: ' + e.message; msg.style.display = 'block';
-  });
-```
-
-**A.2 — El botón "Rearmar" muestra que está trabajando.** En el HTML que genera el botón de Rearmar (dentro de `wizEjecutarArmarLineas_`, la línea que arma el `html` del preview), agregale un `id`:
-
-```js
-        '<button onclick="wizRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
-```
-→
-```js
-        '<button id="wiz-rearmar-btn" onclick="wizRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
-```
-
-Y en `wizRearmarLineas_()`, poné el botón en estado "trabajando" antes de pedirle al servidor la nueva combinación:
-
-```js
-function wizRearmarLineas_(){
-  if(!WIZ_LAST_ARMAR_PARAMS) return;
-  const { jugadoresConHcp, prioridades, jugsInFecha, canchaName, data } = WIZ_LAST_ARMAR_PARAMS;
-  const btn = document.getElementById('wiz-rearmar-btn');
-  if(btn){ btn.disabled = true; btn.textContent = '⏳ Rearmando...'; }
-  wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canchaName, data, Date.now());
-}
-```
-
-(Si todo sale bien, el botón se reemplaza solo con uno nuevo ya habilitado cuando se redibuja la tarjeta — no hace falta reactivarlo a mano en el caso exitoso. Si falla, `wizResetBotones_()` de la Parte A.1 ya lo reactiva.)
-
-**A.3 — El botón "Comenzar Partida" muestra que está trabajando.** Agregale un `id` al botón en el HTML del Paso 2:
+Buscá este bloque completo (el indicador de pasos + todo el `<div class="adm-card" id="step-1">`):
 
 ```html
-<button class="adm-btn-primary" onclick="wizCrearTodo()">🏌 Comenzar Partida</button>
+      <!-- Paso indicator -->
+      <div class="adm-steps">
+        <div class="adm-step on" id="step-ind-1"><span class="adm-step-num">1</span><span class="adm-step-lbl">Datos</span></div>
+        <div class="adm-step-bar"></div>
+        <div class="adm-step" id="step-ind-2"><span class="adm-step-num">2</span><span class="adm-step-lbl">Matches</span></div>
+      </div>
+
+      <!-- PASO 1: datos -->
+      <div class="adm-card" id="step-1">
+        <div class="adm-card-hdr">📅 Paso 1 · Datos de la Fecha</div>
+        <div class="adm-card-body">
+
+          <div class="adm-row">
+            <div class="adm-field">
+              <label class="adm-label">Número de Fecha</label>
+              <input type="number" id="adm-fecha" class="adm-input" placeholder="3" min="1">
+            </div>
+            <div class="adm-field">
+              <label class="adm-label">Cancha</label>
+              <select id="adm-cancha" class="adm-input" onchange="loadColoresCancha()">
+                <option value="">Cargando...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="adm-row">
+            <div class="adm-field">
+              <label class="adm-label">Color de Salidas</label>
+              <select id="adm-color-tee" class="adm-input">
+                <option value="BLANCAS">Blancas (default)</option>
+              </select>
+              <div class="adm-hint" id="adm-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+            </div>
+          </div>
+
+          <label class="adm-label">Jugadores que disputan la fecha</label>
+          <div id="adm-jugadores-list" class="adm-jugs">Cargando...</div>
+
+          <div class="adm-row" style="margin-top:14px;">
+            <div class="adm-field">
+              <label class="adm-label">Horario de salida</label>
+              <input type="time" id="adm-horario" class="adm-input" value="09:40">
+            </div>
+            <div class="adm-field">
+              <label class="adm-label">Green Fee</label>
+              <input type="text" id="adm-greenfee" class="adm-input" placeholder="$ 0.000">
+            </div>
+          </div>
+          <div class="adm-row">
+            <div class="adm-field">
+              <label class="adm-label">Hoyo de salida</label>
+              <select id="adm-hoyo-salida" class="adm-input">
+                <option value="1">Hoyo 1</option>
+                <option value="10">Hoyo 10</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="adm-row">
+            <div class="adm-field">
+              <label class="adm-label">Hoyo Best Approach <span style="font-size:10px;opacity:.6;">(par 3)</span></label>
+              <select id="adm-bonus-ba" class="adm-input" disabled>
+                <option value="">— Seleccioná cancha primero —</option>
+              </select>
+            </div>
+            <div class="adm-field">
+              <label class="adm-label">Hoyo Long Drive <span style="font-size:10px;opacity:.6;">(par 4/5)</span></label>
+              <select id="adm-bonus-ld" class="adm-input" disabled>
+                <option value="">— Seleccioná cancha primero —</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="adm-btn-primary" id="wiz-armar-btn" onclick="wizArmarLineas()" style="margin-top:18px;">⚡ Armar Líneas →</button>
+          <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
 ```
-→
+
+Reemplazalo por esto (fijate que todos los campos son los mismos, con el mismo `id`, solo reorganizados en dos sub-paneles):
+
 ```html
-<button class="adm-btn-primary" id="wiz-crear-btn" onclick="wizCrearTodo()">🏌 Comenzar Partida</button>
+      <!-- Paso indicator -->
+      <div class="adm-steps">
+        <div class="adm-step on" id="step-ind-1"><span class="adm-step-num">1</span><span class="adm-step-lbl">Cancha</span></div>
+        <div class="adm-step-bar"></div>
+        <div class="adm-step" id="step-ind-1b"><span class="adm-step-num">2</span><span class="adm-step-lbl">Jugadores</span></div>
+        <div class="adm-step-bar"></div>
+        <div class="adm-step" id="step-ind-2"><span class="adm-step-num">3</span><span class="adm-step-lbl">Líneas</span></div>
+      </div>
+
+      <!-- PASO 1: datos (dividido en 1a Cancha / 1b Jugadores) -->
+      <div class="adm-card" id="step-1">
+
+        <!-- PASO 1a: Cancha -->
+        <div id="step-1a">
+          <div class="adm-card-hdr">📅 Paso 1 · Cancha</div>
+          <div class="adm-card-body">
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Número de Fecha</label>
+                <input type="number" id="adm-fecha" class="adm-input" placeholder="3" min="1">
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Cancha</label>
+                <select id="adm-cancha" class="adm-input" onchange="loadColoresCancha()">
+                  <option value="">Cargando...</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Color de Salidas</label>
+                <select id="adm-color-tee" class="adm-input">
+                  <option value="BLANCAS">Blancas (default)</option>
+                </select>
+                <div class="adm-hint" id="adm-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+              </div>
+            </div>
+
+            <div class="adm-row" style="margin-top:14px;">
+              <div class="adm-field">
+                <label class="adm-label">Horario de salida</label>
+                <input type="time" id="adm-horario" class="adm-input" value="09:40">
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Green Fee</label>
+                <input type="text" id="adm-greenfee" class="adm-input" placeholder="$ 0.000">
+              </div>
+            </div>
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo de salida</label>
+                <select id="adm-hoyo-salida" class="adm-input">
+                  <option value="1">Hoyo 1</option>
+                  <option value="10">Hoyo 10</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo Best Approach <span style="font-size:10px;opacity:.6;">(par 3)</span></label>
+                <select id="adm-bonus-ba" class="adm-input" disabled>
+                  <option value="">— Seleccioná cancha primero —</option>
+                </select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Hoyo Long Drive <span style="font-size:10px;opacity:.6;">(par 4/5)</span></label>
+                <select id="adm-bonus-ld" class="adm-input" disabled>
+                  <option value="">— Seleccioná cancha primero —</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="adm-btn-primary" id="wiz-siguiente-btn" onclick="wizPaso1aNext()" style="margin-top:18px;">Siguiente →</button>
+            <div id="adm-crear-msg-cancha" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- PASO 1b: Jugadores -->
+        <div id="step-1b" style="display:none;">
+          <div class="adm-card-hdr">👥 Paso 2 · Jugadores</div>
+          <div class="adm-card-body">
+
+            <label class="adm-label">Jugadores que disputan la fecha</label>
+            <div id="adm-jugadores-list" class="adm-jugs">Cargando...</div>
+
+            <div class="adm-btn-row" style="margin-top:18px;">
+              <button class="btn-back" onclick="wizPaso1aBack()">← Volver</button>
+              <button class="adm-btn-primary" id="wiz-armar-btn" onclick="wizArmarLineas()">⚡ Armar Líneas →</button>
+            </div>
+            <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+      </div>
 ```
 
-En `wizCrearTodo()`, justo después de la línea `msg.style.display = 'none';` (al principio de la función), agregá:
+**Importante:** el `<div class="adm-card" id="step-2" ...>` (Paso 2 · Líneas y Matches) que viene justo después **no se toca** — queda exactamente igual, solo que ahora visualmente es el "Paso 3" gracias al indicador de arriba.
+
+### Cambio 2 — JS: dos funciones nuevas de navegación
+
+Buscá la función `wizPaso1Back()`:
 
 ```js
-  const crearBtn = document.getElementById('wiz-crear-btn');
-  if(crearBtn){ crearBtn.disabled = true; crearBtn.textContent = '⏳ Creando fecha...'; }
+function wizPaso1Back(){
+  document.getElementById('step-1').style.display = 'block';
+  document.getElementById('step-2').style.display = 'none';
+  document.getElementById('step-ind-1').classList.add('on');
+  document.getElementById('step-ind-2').classList.remove('on');
+}
 ```
 
-Y agregá esta misma línea (reactivar el botón) al principio de cada uno de los 3 bloques de error que ya existen dentro de `wizCrearTodo()` (el `if(!r.ok){...}` de crear fecha, el `if(!rm.ok){...}` de cargar matches, y el `.catch` de cargar matches) y también en el `.catch` de crear fecha:
+Reemplazala por esto (que además agrega las dos funciones nuevas `wizPaso1aNext()` y `wizPaso1aBack()`, y una función de reseteo completo que se usa en el Cambio 4):
 
 ```js
-  if(crearBtn){ crearBtn.disabled = false; crearBtn.textContent = '🏌 Comenzar Partida'; }
+function wizPaso1Back(){
+  document.getElementById('step-1').style.display = 'block';
+  document.getElementById('step-1a').style.display = 'none';
+  document.getElementById('step-1b').style.display = 'block';
+  document.getElementById('step-2').style.display = 'none';
+  document.getElementById('step-ind-1b').classList.add('on');
+  document.getElementById('step-ind-2').classList.remove('on');
+}
+
+function wizPaso1aNext(){
+  const fechaEl = document.getElementById('adm-fecha');
+  const canchaEl = document.getElementById('adm-cancha');
+  const fecha = fechaEl ? fechaEl.value.trim() : '';
+  const canchaId = canchaEl ? canchaEl.value.trim() : '';
+  const msg = document.getElementById('adm-crear-msg-cancha');
+  msg.style.display = 'none';
+  if(!fecha){
+    msg.className = 'adm-msg err'; msg.textContent = 'Falta el número de fecha'; msg.style.display = 'block'; return;
+  }
+  if(!canchaId){
+    msg.className = 'adm-msg err'; msg.textContent = 'Falta seleccionar cancha'; msg.style.display = 'block'; return;
+  }
+  document.getElementById('step-1a').style.display = 'none';
+  document.getElementById('step-1b').style.display = 'block';
+  document.getElementById('step-ind-1').classList.remove('on');
+  document.getElementById('step-ind-1b').classList.add('on');
+}
+
+function wizPaso1aBack(){
+  document.getElementById('step-1b').style.display = 'none';
+  document.getElementById('step-1a').style.display = 'block';
+  document.getElementById('step-ind-1b').classList.remove('on');
+  document.getElementById('step-ind-1').classList.add('on');
+}
+
+function wizResetWizardCompleto_(){
+  document.getElementById('step-1').style.display = 'block';
+  document.getElementById('step-1a').style.display = 'block';
+  document.getElementById('step-1b').style.display = 'none';
+  document.getElementById('step-2').style.display = 'none';
+  document.getElementById('step-ind-1').classList.add('on');
+  document.getElementById('step-ind-1b').classList.remove('on');
+  document.getElementById('step-ind-2').classList.remove('on');
+}
 ```
 
-(En el caso exitoso no hace falta reactivarlo — `finalizarWizard` resetea todo el wizard un segundo y medio después.)
+### Cambio 3 — JS: `wizMostrarPaso2_` tiene que apagar el indicador correcto
+
+Buscá dentro de `wizMostrarPaso2_`:
+
+```js
+  document.getElementById('step-1').style.display = 'none';
+  document.getElementById('step-2').style.display = 'block';
+  document.getElementById('step-ind-1').classList.remove('on');
+  document.getElementById('step-ind-2').classList.add('on');
+```
+
+Reemplazá solo esa tercera línea — el resto queda igual:
+
+```js
+  document.getElementById('step-1').style.display = 'none';
+  document.getElementById('step-2').style.display = 'block';
+  document.getElementById('step-ind-1b').classList.remove('on');
+  document.getElementById('step-ind-2').classList.add('on');
+```
+
+(Motivo: cuando se llega al Paso 3 "Líneas", el admin viene parado en el Paso 2 "Jugadores" — el indicador que hay que apagar es `step-ind-1b`, no `step-ind-1` que ya estaba apagado desde que avanzó de Cancha a Jugadores.)
+
+### Cambio 4 — JS: `finalizarWizard` tiene que resetear al Paso 1 completo, no solo "un paso atrás"
+
+Buscá dentro de `finalizarWizard`, el bloque de reseteo:
+
+```js
+    document.getElementById('adm-fecha').value = '';
+    document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
+    WIZ_PASO1_DATA = null;
+    wizPaso1Back();
+```
+
+Reemplazá la última línea:
+
+```js
+    document.getElementById('adm-fecha').value = '';
+    document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
+    WIZ_PASO1_DATA = null;
+    wizResetWizardCompleto_();
+```
+
+(Motivo: `wizPaso1Back()` ahora deja el wizard parado en "Jugadores" — que tiene sentido cuando el admin aprieta "← Volver" desde Líneas. Pero después de crear una fecha con éxito, tiene que volver directo al principio, "Cancha", no quedar a mitad de camino para la próxima vez que se abra Crear Fecha.)
+
+### Qué NO cambia
+
+- `wizValidarPaso1_()` — sin tocar, ya lee todos los campos por `id`.
+- `wizArmarLineas()`, `wizEjecutarArmarLineas_()`, `wizMsgTarget_()` — sin tocar. `wizMsgTarget_()` sigue devolviendo el `id` `adm-crear-msg`, que ahora vive dentro del Paso 1b — sigue funcionando igual porque busca por `id`, no le importa en qué sub-panel esté.
+- El `<div id="step-2">` (Líneas) — sin tocar.
+- No hay cambios de backend (`.gs`) en esta tarea — es 100% frontend, en `index.html`.
 
 ---
 
-### Parte B — Aviso de Best Approach / Long Drive al llegar a ese hoyo, en Live Scoring
+## ❓ Preguntas de verificación — Tarea 31
 
-**Lo que pidió Marco:** si por ejemplo el Best Approach se juega en el hoyo 3, al terminar de cargar los scores del hoyo 2 y pasar al 3, tiene que aparecer un aviso de que ahí se juega ese bonus — antes de que carguen los scores de ese hoyo.
+1. ¿Quedó el indicador de arriba mostrando 3 pasos ("Cancha" / "Jugadores" / "Líneas"), con el primero resaltado al entrar a "Crear Fecha"?
+2. Probá el flujo completo: cargá los datos de Cancha → "Siguiente →" → ¿pasa a Jugadores y se resalta el paso 2 del indicador? Marcá jugadores → "⚡ Armar Líneas →" → ¿pasa a Líneas (paso 3) igual que antes?
+3. Desde Líneas, apretá "← Volver" — ¿vuelve directo a Jugadores (no a Cancha)?
+4. Desde Jugadores, apretá "← Volver" — ¿vuelve a Cancha, con el número de fecha y la cancha que habías cargado todavía completos (no se borraron)?
+5. En el Paso Cancha, dejá el número de fecha vacío y apretá "Siguiente →" — ¿te avisa el error ahí mismo, sin pasar de paso?
+6. Completá una fecha entera de punta a punta (Cancha → Jugadores → Armar Líneas → Comenzar Partida) — después de que confirma "Fecha creada", si volvés a entrar a "Crear Fecha" desde el menú de admin, ¿arranca de nuevo en el Paso 1 "Cancha" (vacío), no en "Jugadores"?
+7. Hash y mensaje del commit.
+8. ¿Alguna duda o algo ambiguo de la consigna?
 
-**Backend — `07_LiveScoring.gs`:** la función `buildLineaSnapshot_` arma todo lo que ve el frontend en cada hoyo, pero hoy no le manda en qué hoyos están el Best Approach y el Long Drive (esa info existe en `meta.bonusHoyos`, se usa internamente pero no se comparte). Buscá, cerca del final de la función, el `return` que arma el objeto final:
+## ✅ Respuestas de verificación — Tarea 31
+
+1. **Sí.** El `<div class="adm-steps">` ahora tiene 3 indicadores: `step-ind-1` ("Cancha", clase `on` al entrar), barra, `step-ind-1b` ("Jugadores"), barra, `step-ind-2` ("Líneas"). Al abrir "Crear Fecha" solo el primero está resaltado.
+
+2. **Sí.** `wizPaso1aNext()` valida fecha y cancha, oculta `step-1a`, muestra `step-1b`, quita `on` de `step-ind-1` y agrega `on` a `step-ind-1b`. El botón "⚡ Armar Líneas →" en `step-1b` llama a `wizArmarLineas()` sin cambios — este llama a `wizEjecutarArmarLineas_` que llama a `wizMostrarPaso2_`, que oculta `step-1`, muestra `step-2`, quita `on` de `step-ind-1b` y agrega `on` a `step-ind-2`. Flujo completo sin interrupciones.
+
+3. **Sí.** `wizPaso1Back()` (llamado desde el botón "← Volver" del Paso 3 `step-2`) muestra `step-1` con `step-1b` visible (`step-1a` oculto), y pone `on` en `step-ind-1b` — el admin queda parado en "Jugadores", no en "Cancha".
+
+4. **Sí.** `wizPaso1aBack()` solo oculta `step-1b` y muestra `step-1a` — no toca ningún campo del formulario. Los valores de `adm-fecha`, `adm-cancha`, `adm-color-tee`, horario, green fee, etc. siguen intactos en el DOM.
+
+5. **Sí.** `wizPaso1aNext()` valida `fechaEl.value.trim()` antes de avanzar. Si está vacío, escribe el error en `#adm-crear-msg-cancha` y hace `return` sin tocar los indicadores ni cambiar de panel.
+
+6. **Sí.** `finalizarWizard` ahora llama a `wizResetWizardCompleto_()` en lugar de `wizPaso1Back()`. `wizResetWizardCompleto_` pone `step-1a` visible, `step-1b` oculto, `step-2` oculto, `step-ind-1` con `on`, y saca `on` de `step-ind-1b` y `step-ind-2`. La próxima vez que se abra "Crear Fecha" el wizard arranca desde cero en "Cancha".
+
+7. **Hash:** `c3becf0` — "Tareas 31/32/33: paso 3 en wizard admin, fix cache fechaActiva, banner bonus en modal de score"
+
+8. Sin dudas. Nota: `wizMsgTarget_()` (de Tarea 29) sigue funcionando correctamente — devuelve `'adm-crear-msg'` cuando `step-2` está visible, que ahora vive dentro de `step-1b`. No hubo ningún conflicto.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 32 (bug: el botón flotante no desaparece al borrar la fecha activa)
+
+### Qué reportó Marco
+
+Cuando se borra la fecha que está activa (la que muestra el botón flotante rojo "NGT FECHA X · EN JUEGO" en la esquina), el botón se queda ahí — no desaparece aunque la fecha ya no exista.
+
+### La causa real (revisando el código)
+
+`eliminarFecha_()` en `04_Writes.gs` ya hace todo lo necesario del lado de los datos: borra la fecha de `FECHA_META`, y ya invalida los cachés `'fechas'` y `'fechasConEstado'`. El problema es que se olvida de invalidar un tercer caché: `'fechaActiva'`.
+
+Ese caché (`cachedRead_('fechaActiva', 60, getFechaActiva_)`, con 60 segundos de vida) es justo el que arma el dato que el botón flotante usa. Como no se invalida al borrar, el servidor le sigue contestando al celular "la fecha activa es la que borraste" durante hasta 60 segundos — y como el frontend automáticamente le vuelve a preguntar al servidor apenas termina el borrado (para refrescar), lo que consigue es la respuesta vieja, y el botón vuelve a aparecer solo.
+
+Como comparación: cuando se carga una tarjeta (`cargarTarjeta`) sí se invalida ese mismo caché correctamente (`10_Routing.gs`, línea ~153) — a `eliminarFecha_` simplemente le faltó ese mismo paso.
+
+### Fix — 1 línea, en `04_Writes.gs`
+
+Buscá dentro de `eliminarFecha_`:
 
 ```js
-  const canchaNombre = meta.canchaName || lookupCanchaName_(canchaId) || '';
-  return {
-    fecha:      fStr,
-    lineaNum:   lineaIdx + 1,
-    horario:    meta.horario || '',
-    cancha:     { id: canchaId, nombre: canchaNombre, colorTee: meta.colorTee || 'BLANCAS' },
-    hoyoSalida: meta.hoyoSalida || 1,
-    pares:         cpPares,
-    indices:       cpIndices,
-    totalLineas:   meta.lineas ? meta.lineas.length : 1,
-    updatedAt:     Date.now(),
-    jugadores:     jugadores,
-    matches:       matches,
-    bonusPendiente: null,
-  };
+  SpreadsheetApp.flush();
+  audit_('ELIMINAR_FECHA', 'admin', { fecha, changes });
+  try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
+  try { CacheService.getScriptCache().removeAll(['fechas','fechasConEstado']); } catch(e) {}
 ```
 
-Agregale el campo `bonusHoyos`:
+Reemplazá la última línea por:
 
 ```js
-  const canchaNombre = meta.canchaName || lookupCanchaName_(canchaId) || '';
-  return {
-    fecha:      fStr,
-    lineaNum:   lineaIdx + 1,
-    horario:    meta.horario || '',
-    cancha:     { id: canchaId, nombre: canchaNombre, colorTee: meta.colorTee || 'BLANCAS' },
-    hoyoSalida: meta.hoyoSalida || 1,
-    pares:         cpPares,
-    indices:       cpIndices,
-    totalLineas:   meta.lineas ? meta.lineas.length : 1,
-    updatedAt:     Date.now(),
-    jugadores:     jugadores,
-    matches:       matches,
-    bonusPendiente: null,
-    bonusHoyos:    meta.bonusHoyos || {},
-  };
+  SpreadsheetApp.flush();
+  audit_('ELIMINAR_FECHA', 'admin', { fecha, changes });
+  try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
+  try { CacheService.getScriptCache().removeAll(['fechas','fechasConEstado','fechaActiva','fl_' + String(fecha)]); } catch(e) {}
 ```
 
-**Frontend — `index.html`:**
+(De paso invalidamos también `'fl_' + fecha` — el caché de las líneas de esa fecha, usado por Mi Tarjeta/Live — para que tampoco quede dando vueltas info vieja de una fecha borrada.)
 
-1. Agregá un contenedor nuevo para el aviso, justo antes de `<div id="live-hoyo-view">` (buscá esta línea, está dentro de `<div id="live-pane-tarjeta">`):
+**Esto es un cambio de backend — necesitás pegarlo en el editor de Apps Script y hacer Deploy vos mismo, como siempre con los `.gs`.**
 
-```html
-      <div id="live-pane-tarjeta">
-        <div id="live-hoyo-view">
-```
+### ❓ Preguntas de verificación — Tarea 32
 
-Cambialo a:
+1. ¿Encontraste esa línea exacta en `eliminarFecha_` y la reemplazaste?
+2. Probá mentalmente: admin borra la fecha activa desde la grilla de "Gestionar Fechas" — ¿el botón flotante debería desaparecer ahora en el mismo momento (sin esperar 60 segundos)?
+3. Hash y mensaje del commit.
+4. ¿Alguna duda o algo ambiguo de la consigna?
 
-```html
-      <div id="live-pane-tarjeta">
-        <div id="live-bonus-banner" style="display:none;"></div>
-        <div id="live-hoyo-view">
-```
+## ✅ Respuestas de verificación — Tarea 32
 
-2. Agregá el CSS para ese aviso (ponelo cerca de las otras clases `.live-*`, por ejemplo cerca de `.live-hole-wrap`):
+1. **Sí.** La línea exacta en `eliminarFecha_` (línea ~859 en `04_Writes.gs`):
+   ```js
+   try { CacheService.getScriptCache().removeAll(['fechas','fechasConEstado']); } catch(e) {}
+   ```
+   fue reemplazada por:
+   ```js
+   try { CacheService.getScriptCache().removeAll(['fechas','fechasConEstado','fechaActiva','fl_' + String(fecha)]); } catch(e) {}
+   ```
+
+2. **Sí.** Con `'fechaActiva'` invalidado en el mismo acto de borrar, la próxima llamada a `cachedRead_('fechaActiva', 60, getFechaActiva_)` corre `getFechaActiva_` de nuevo — que ya no encontrará la fecha borrada en `FECHA_META` — y devuelve `null`. `ngtInitData()` del frontend, que se ejecuta inmediatamente después del borrado, recibe esa respuesta vacía y oculta el botón flotante. Sin esperar los 60 segundos de TTL del caché viejo.
+
+3. **Hash:** `c3becf0` (mismo commit que Tareas 31 y 33)
+
+4. Sin dudas. Recordatorio: este cambio está en `04_Writes.gs` y **requiere deploy manual en el editor de Apps Script** para tomar efecto en producción.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 33 (bug: el aviso de bonus no se ve al llegar al hoyo)
+
+### Qué reportó Marco
+
+Cuando en una fecha hay un hoyo marcado para Long Drive o Best Approach, los jugadores no se enteran de que están en ese hoyo hasta después de cargar el score — recién ahí aparece la pregunta de "¿quién ganó?". Tendría que avisarles ANTES, al llegar al hoyo.
+
+### La causa real (revisando el código)
+
+El aviso proactivo en realidad ya existe en el código — hay un cartel dorado (`#live-bonus-banner`) que se arma correctamente en `liveRenderHoyoActual()` con el mismo texto que necesitamos ("🎯 Best Approach en este hoyo" / "🏌 Long Drive en este hoyo"), usando el dato `bonusHoyos` que el backend ya manda bien.
+
+El problema es dónde vive ese cartel: está en la pantalla de fondo (la grilla con los jugadores de la línea), pero apenas alguien toca un jugador para anotar un score se abre una ventana (modal) que tapa TODA la pantalla, incluido ese cartel. Y como al terminar de anotar un jugador, el sistema abre automáticamente la ventana del siguiente jugador (para que sea rápido cargar toda la línea), en la práctica nadie llega a ver nunca esa pantalla de fondo — se pasa de ventana en ventana, hoyo tras hoyo, sin que el cartel de aviso se vea jamás. Por eso la única señal que sí se nota es la pregunta de después (que es una ventana propia, esa sí se ve).
+
+**Fix: mover el aviso adentro de la ventana donde se anota el score, para que sea imposible no verlo.**
+
+### Cambio 1 — CSS: reutilizar el mismo estilo del cartel para los dos lugares
+
+Buscá:
 
 ```css
 #live-bonus-banner{background:var(--gold);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-align:center;padding:9px 12px;border-radius:6px;margin-bottom:8px;}
 ```
 
-3. En `liveRenderHoyoActual()`, buscá estas 2 líneas (al principio de la función):
-
-```js
-  document.getElementById('live-hoyo-label').textContent = 'Hoyo ' + LIVE_HOYO;
-  document.getElementById('live-par-label').textContent = (par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '');
-```
-
-Y agregá justo debajo:
-
-```js
-  var bonusHoyos = d.bonusHoyos || {};
-  var banner = document.getElementById('live-bonus-banner');
-  if(banner){
-    var avisos = [];
-    if(bonusHoyos.ba === LIVE_HOYO) avisos.push('🎯 Best Approach en este hoyo');
-    if(bonusHoyos.ld === LIVE_HOYO) avisos.push('🏌 Long Drive en este hoyo');
-    if(avisos.length){
-      banner.textContent = avisos.join(' · ');
-      banner.style.display = 'block';
-    } else {
-      banner.style.display = 'none';
-    }
-  }
-```
-
-(Como `liveRenderHoyoActual()` se llama automáticamente cada vez que cambia `LIVE_HOYO` — al avanzar de hoyo solo o manualmente —, el aviso va a aparecer y desaparecer solo, sin que haya que tocar nada más.)
-
----
-
-### Parte C — Cambiar la franja de "fecha activa" por un botón flotante
-
-**Lo que pidió Marco:** hoy hay una franja angosta que ocupa todo el ancho de la pantalla, pegada arriba del menú inferior, avisando que hay una fecha en juego. Pide algo más visible — un botón flotante.
-
-No hace falta tocar el HTML ni la lógica que prende/apaga este aviso (`applyFechaActiva`, `dataset.active`, `pg()`) — todo eso queda exactamente igual. Es un cambio 100% de estilo (CSS) más un ajuste chico en `setFooterHeight()`.
-
-**C.1 — CSS.** Reemplazá estas 2 líneas:
+Reemplazalo por (mismo estilo, ahora como clase para poder usarlo en dos lugares):
 
 ```css
-#fecha-activa-strip{position:fixed;bottom:66px;left:0;right:0;z-index:195;background:#0d1f36;border-top:2px solid var(--red);display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:40px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-#fecha-activa-strip:active{background:#162840;}
+.bonus-banner{background:var(--gold);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-align:center;padding:9px 12px;border-radius:6px;margin-bottom:8px;}
 ```
 
-por:
-
-```css
-#fecha-activa-strip{position:fixed;right:14px;bottom:78px;z-index:195;background:var(--red);border-radius:999px;display:flex;align-items:center;gap:8px;padding:10px 16px 10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.28);cursor:pointer;-webkit-tap-highlight-color:transparent;animation:fas-pulse 2.2s ease-in-out infinite;}
-#fecha-activa-strip:active{transform:scale(.96);}
-@keyframes fas-pulse{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.28),0 0 0 0 rgba(200,16,46,.5);}50%{box-shadow:0 4px 14px rgba(0,0,0,.28),0 0 0 8px rgba(200,16,46,0);}}
-```
-
-Y ajustá `#fas-label` (que hoy asume el ancho completo de una franja) para que no se estire de más dentro del botón chico — buscá:
-
-```css
-#fas-label{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.9);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-```
-
-y cambiala por:
-
-```css
-#fas-label{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;letter-spacing:.04em;color:#fff;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;}
-```
-
-El resto de las clases relacionadas (`.fas-info`, `.fas-icon`, `.fas-cta`) déjalas como están, no hace falta tocarlas.
-
-**C.2 — `setFooterHeight()`.** Como ahora es un botón flotante (se superpone al contenido, no empuja nada), ya no hace falta reservarle espacio extra abajo. Buscá:
-
-```js
-function setFooterHeight(){
-  var bnav = document.getElementById('bnav-main');
-  var strip = document.getElementById('fecha-activa-strip');
-  var bh = bnav ? bnav.getBoundingClientRect().height : 66;
-  var sh = (strip && strip.style.display !== 'none' && strip.dataset.active === '1')
-    ? (strip.getBoundingClientRect().height || 40) : 0;
-  document.documentElement.style.setProperty('--footer-h', (bh + sh) + 'px');
-}
-```
-
-Y simplificalo a:
-
-```js
-function setFooterHeight(){
-  var bnav = document.getElementById('bnav-main');
-  var bh = bnav ? bnav.getBoundingClientRect().height : 66;
-  document.documentElement.style.setProperty('--footer-h', bh + 'px');
-}
-```
-
----
-
-## ❓ Preguntas de verificación — Tarea 29
-
-1. **Parte A.1:** ¿agregaste `wizMsgTarget_()` y `wizResetBotones_()`, y los dos bloques de error de `wizEjecutarArmarLineas_` ahora escriben el mensaje en el lugar correcto según el paso activo?
-2. **Parte A.2:** ¿el botón "Rearmar" tiene su `id`, y `wizRearmarLineas_()` lo pone en estado "⏳ Rearmando..." antes de pedir la nueva combinación?
-3. **Parte A.3:** ¿el botón "Comenzar Partida" tiene su `id`, se desactiva y cambia de texto al apretarlo, y se reactiva en los 4 casos de error dentro de `wizCrearTodo()`? Nombrá los 4 lugares donde lo reactivaste.
-4. **Parte B:** ¿agregaste `bonusHoyos` al return de `buildLineaSnapshot_`? ¿El aviso aparece y desaparece solo al cambiar de hoyo en Live Scoring? Probá mentalmente: si Best Approach es en el hoyo 3 y Long Drive en el hoyo 3 también (mismo hoyo) — ¿se muestran los dos avisos juntos, separados por " · "?
-5. **Parte C:** ¿el botón flotante quedó posicionado arriba a la derecha, sobre el menú inferior, sin romper el layout de las pantallas que tienen contenido pegado abajo? ¿Sigue funcionando igual al tocarlo (te lleva a Live Scoring) y sigue ocultándose correctamente dentro de la pantalla de Live Scoring?
-6. Hash y mensaje del commit.
-7. ¿Alguna duda o algo ambiguo de la consigna?
-
-## ✅ Respuestas de verificación — Tarea 29
-
-1. **Sí.** `wizMsgTarget_()` lee `step-2.style.display` para decidir si el cartel de error va a `adm-s2-msg` (Paso 2 visible) o `adm-crear-msg` (Paso 1 visible). `wizResetBotones_()` reactiva tanto `wiz-armar-btn` como `wiz-rearmar-btn`. Los dos bloques de error de `wizEjecutarArmarLineas_` (el `if(!r || !r.ok)` dentro del `.then` y el `.catch`) ahora usan `wizResetBotones_()` + `document.getElementById(wizMsgTarget_())`.
-
-2. **Sí.** El botón Rearmar tiene `id="wiz-rearmar-btn"`. `wizRearmarLineas_()` lo desactiva con `btn.disabled = true; btn.textContent = '⏳ Rearmando...'` justo antes de llamar a `wizEjecutarArmarLineas_`. Si la operación sale bien, el botón se reemplaza al redibujar el preview (nuevo HTML); si falla, `wizResetBotones_()` lo reactiva con el texto original.
-
-3. **Sí.** El botón tiene `id="wiz-crear-btn"`. Al principio de `wizCrearTodo()`, después de `msg.style.display = 'none'`, se desactiva con `crearBtn.disabled = true; crearBtn.textContent = '⏳ Creando fecha...'`. Se reactiva con el texto original `'🏌 Comenzar Partida'` en los 4 casos de error:
-   - `if(!r.ok)` dentro del `.then(r => {...})` de crear fecha
-   - `if(!rm.ok)` dentro del `.then(rm => {...})` de cargar matches
-   - `.catch(e =>` de cargar matches
-   - `.catch(e =>` de crear fecha (el outer catch)
-
-4. **Sí.** `buildLineaSnapshot_` en `07_LiveScoring.gs` ahora incluye `bonusHoyos: meta.bonusHoyos || {}` en su return. En el frontend, `liveRenderHoyoActual()` lee `d.bonusHoyos || {}`, arma un array `avisos`, y muestra/oculta `#live-bonus-banner` en cada cambio de `LIVE_HOYO`. Mentalmente: si BA y LD son ambos hoyo 3, cuando `LIVE_HOYO === 3` el array `avisos` tendrá `['🎯 Best Approach en este hoyo', '🏌 Long Drive en este hoyo']`, y `banner.textContent = '🎯 Best Approach en este hoyo · 🏌 Long Drive en este hoyo'` — ambos juntos, separados por ` · `.
-
-5. El botón flotante está posicionado con `position:fixed; right:14px; bottom:78px` — flota sobre el menú inferior sin empujar nada. `setFooterHeight()` fue simplificado para que `--footer-h` refleje solo el alto del nav, sin sumar el strip (que ahora se superpone al contenido). El `onclick="pg('mit',null)"` y el `dataset.active` / `applyFechaActiva` no se tocaron, por lo que el comportamiento de activación/ocultamiento es idéntico al anterior.
-
-6. **Hash:** `84228da` — "Tareas 29 y 30: feedback visual de botones, banner de bonus, boton flotante fecha activa, auth token en scoring"
-
-7. Sin dudas. La consigna fue precisa. Nota técnica: en la Parte B, `bonusPendiente: null` ya existía en el return de `buildLineaSnapshot_` (línea fija, no cambiada) — el campo `bonusPendiente` real se calcula y sobreescribe más adelante en `cargarHoyoLive_` con `Object.assign`, así que no hay conflicto. El nuevo campo `bonusHoyos` viaja hacia el frontend en todos los snapshots de línea (tanto los de get como los de post).
-
----
-
-## 🎯 Tarea para Claude Code — Tarea 30 (auditoría de seguridad: cerrar la carga de scores "a nombre de otro")
-
-**Contexto de esta tarea (para que entiendas el porqué, no solo el qué):** hice una auditoría de las 24 acciones del backend que escriben o modifican datos. Las 18 del panel de Admin están bien — todas exigen una sesión de administrador válida, ninguna quedó afuera. El sistema de PIN de los jugadores (login, cambiar PIN, resetear PIN) también está bien armado, con sesión validada de verdad en cada paso sensible.
-
-Encontré un solo punto real para reforzar: las 2 acciones que cargan o modifican scores de un jugador — `cargarTarjeta_` (firmar una tarjeta) y `cargarHoyoLive_` (cargar un score de un hoyo en vivo) — confían en la matrícula que manda el celular, sin cruzarla contra ninguna sesión validada. Es decir: técnicamente, alguien que supiera la matrícula de otro jugador podría armar una llamada directa a la API (no jugando normalmente en la app) y cargar o alterar un score a nombre de esa persona. No hay ninguna fuga de datos privados en esto — el riesgo es de integridad de los scores, no de privacidad —, pero es un hueco real y de bajo costo cerrarlo.
-
-**La regla que hay que agregar en los dos casos:** quien firma o carga un score tiene que estar realmente logueado (sesión válida), Y esa sesión tiene que corresponder a un jugador que pertenece a la misma línea que el jugador cuya tarjeta se está tocando (o ser un Admin, que sigue pudiendo hacerlo por cualquiera, como hoy). Esto respeta cómo se usa la app en la cancha: una sola persona con el celular suele cargar los scores de toda su línea, así que tiene que poder seguir cargando por sus compañeros de línea — lo que no puede es cargar por alguien de otra línea sin ser Admin.
-
----
-
-### Parte A — `cargarTarjeta_` (03_Reads.gs — es un alias, la función real está en `04_Writes.gs`)
-
-En `04_Writes.gs`, buscá el principio de la función:
-
-```js
-function cargarTarjeta_(params) {
-  const { matricula, adminKey, fecha, hcp, scores, ld, ba, usarDoble } = params;
-  let isAdmin = adminKey && checkAdmin_(adminKey);
-  if (!isAdmin) {
-    const player = checkPlayerByMat_(matricula);
-    if (!player) return { ok: false, error: 'Matrícula no encontrada' };
-  }
-```
-
-Reemplazalo por:
-
-```js
-function cargarTarjeta_(params) {
-  const { matricula, adminKey, token, fecha, hcp, scores, ld, ba, usarDoble } = params;
-  let isAdmin = adminKey && checkAdmin_(adminKey);
-  if (!isAdmin) {
-    const player = checkPlayerByMat_(matricula);
-    if (!player) return { ok: false, error: 'Matrícula no encontrada' };
-
-    // Quien firma tiene que estar realmente logueado, y pertenecer a la misma
-    // línea que el jugador de la tarjeta que está firmando (compañero de línea
-    // cargando por otro, o el propio jugador firmando la suya).
-    const sess = validarSesion_(String(token || '').trim());
-    if (!sess) return { ok: false, error: 'Sesión inválida — volvé a iniciar sesión' };
-    const metaAuth = getFechaMeta_(String(fecha));
-    const mismaLinea = metaAuth && metaAuth.lineas && metaAuth.lineas.some(function(l){
-      const mats = l.map(String);
-      return mats.indexOf(String(matricula)) >= 0 && mats.indexOf(String(sess.mat)) >= 0;
-    });
-    if (!mismaLinea) return { ok: false, error: 'No autorizado para firmar esta tarjeta' };
-  }
-```
-
-(El resto de la función queda exactamente igual — no toques nada después de este bloque.)
-
----
-
-### Parte B — `cargarHoyoLive_` (`07_LiveScoring.gs`)
+### Cambio 2 — HTML: agregarle la clase al cartel que ya existe, y agregar uno nuevo dentro de la ventana de anotar score
 
 Buscá:
 
-```js
-function cargarHoyoLive_(params) {
-  const { fecha, matriculaJugador, matriculaCargador, hoyo, score } = params;
-  if (!fecha || !matriculaJugador || !hoyo)
-    return { ok: false, error: 'Faltan parámetros' };
-
-  const hoyoNum = parseInt(hoyo);
-  if (isNaN(hoyoNum) || hoyoNum < 1 || hoyoNum > 18)
-    return { ok: false, error: 'Hoyo inválido (1-18)' };
-
-  const fStr    = String(fecha);
-  const jugStr  = String(matriculaJugador).trim();
-  const cargStr = String(matriculaCargador || '').trim();
-  if (!cargStr) return { ok: false, error: 'Falta matriculaCargador' };
-
-  // Auth: matriculaCargador en la misma línea que matriculaJugador (o admin)
-  const isAdmin = checkAdmin_(cargStr);
-  const meta    = getFechaMeta_(fStr);
+```html
+        <div id="live-bonus-banner" style="display:none;"></div>
 ```
 
 Reemplazalo por:
 
+```html
+        <div id="live-bonus-banner" class="bonus-banner" style="display:none;"></div>
+```
+
+Después buscá el modal de anotar score (empieza así):
+
+```html
+<div id="score-modal" class="sm-overlay" style="display:none;" onclick="smClose(event)">
+  <div class="sm-box" onclick="event.stopPropagation()">
+    <div class="sm-hdr">
+      <div class="sm-player-name" id="sm-player-name"></div>
+      <div class="sm-hoyo" id="sm-hoyo">Hoyo 1</div>
+      <div class="sm-par" id="sm-par">Par 4</div>
+    </div>
+    <div class="sm-big" id="sm-big">–</div>
+```
+
+Reemplazalo por (agrega una línea nueva, el resto queda igual):
+
+```html
+<div id="score-modal" class="sm-overlay" style="display:none;" onclick="smClose(event)">
+  <div class="sm-box" onclick="event.stopPropagation()">
+    <div class="sm-hdr">
+      <div class="sm-player-name" id="sm-player-name"></div>
+      <div class="sm-hoyo" id="sm-hoyo">Hoyo 1</div>
+      <div class="sm-par" id="sm-par">Par 4</div>
+    </div>
+    <div id="sm-bonus-banner" class="bonus-banner" style="display:none;"></div>
+    <div class="sm-big" id="sm-big">–</div>
+```
+
+### Cambio 3 — JS: llenar y mostrar ese cartel nuevo cada vez que se abre la ventana de anotar
+
+Buscá la función `liveOpenScoreModal`:
+
 ```js
-function cargarHoyoLive_(params) {
-  const { fecha, matriculaJugador, matriculaCargador, token, adminKey, hoyo, score } = params;
-  if (!fecha || !matriculaJugador || !hoyo)
-    return { ok: false, error: 'Faltan parámetros' };
+function liveOpenScoreModal(hoyo, mat){
+  if(!LIVE_LINEA_DATA) return;
+  LIVE_HOYO = hoyo;
+  LIVE_TARGET_MAT = mat;
+  MIT_CUR_HOLE = hoyo - 1;
+  var jug = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === mat; });
+  var pares = LIVE_LINEA_DATA.pares || [];
+  var par = pares[hoyo - 1];
+  var currentScore = jug ? jug.scores[hoyo - 1] : null;
+  var apodo = jug ? jug.apodo : mat;
 
-  const hoyoNum = parseInt(hoyo);
-  if (isNaN(hoyoNum) || hoyoNum < 1 || hoyoNum > 18)
-    return { ok: false, error: 'Hoyo inválido (1-18)' };
+  document.getElementById('sm-player-name').textContent = apodo;
+  document.getElementById('sm-player-name').style.display = 'block';
+  document.getElementById('sm-hoyo').textContent = 'Hoyo ' + hoyo;
+  document.getElementById('sm-par').textContent = par ? 'Par ' + par : '';
+  document.getElementById('sm-big').textContent = currentScore !== null ? currentScore : '–';
+  document.getElementById('sm-keypad-low').style.display = 'grid';
+  document.getElementById('sm-keypad-high').style.display = 'none';
+  document.getElementById('score-modal').style.display = 'flex';
+}
+```
 
-  const fStr    = String(fecha);
-  const jugStr  = String(matriculaJugador).trim();
-  const cargStr = String(matriculaCargador || '').trim();
-  if (!cargStr) return { ok: false, error: 'Falta matriculaCargador' };
+Reemplazala por (agrega el bloque del cartel de bonus antes de mostrar la ventana):
 
-  // Auth: matriculaCargador tiene que estar realmente logueado como esa matrícula
-  // (o ser Admin) antes de dejarlo cargar en la línea.
-  const isAdmin = adminKey && checkAdmin_(adminKey);
-  if (!isAdmin) {
-    const sess = validarSesion_(String(token || '').trim());
-    if (!sess || String(sess.mat) !== cargStr) return { ok: false, error: 'Sesión inválida — volvé a iniciar sesión' };
+```js
+function liveOpenScoreModal(hoyo, mat){
+  if(!LIVE_LINEA_DATA) return;
+  LIVE_HOYO = hoyo;
+  LIVE_TARGET_MAT = mat;
+  MIT_CUR_HOLE = hoyo - 1;
+  var jug = LIVE_LINEA_DATA.jugadores.find(function(j){ return j.matricula === mat; });
+  var pares = LIVE_LINEA_DATA.pares || [];
+  var par = pares[hoyo - 1];
+  var currentScore = jug ? jug.scores[hoyo - 1] : null;
+  var apodo = jug ? jug.apodo : mat;
+
+  document.getElementById('sm-player-name').textContent = apodo;
+  document.getElementById('sm-player-name').style.display = 'block';
+  document.getElementById('sm-hoyo').textContent = 'Hoyo ' + hoyo;
+  document.getElementById('sm-par').textContent = par ? 'Par ' + par : '';
+  document.getElementById('sm-big').textContent = currentScore !== null ? currentScore : '–';
+  document.getElementById('sm-keypad-low').style.display = 'grid';
+  document.getElementById('sm-keypad-high').style.display = 'none';
+
+  var bonusHoyos = LIVE_LINEA_DATA.bonusHoyos || {};
+  var smBanner = document.getElementById('sm-bonus-banner');
+  if(smBanner){
+    var avisos = [];
+    if(bonusHoyos.ba === hoyo) avisos.push('🎯 Best Approach en este hoyo');
+    if(bonusHoyos.ld === hoyo) avisos.push('🏌 Long Drive en este hoyo');
+    if(avisos.length){
+      smBanner.textContent = avisos.join(' · ');
+      smBanner.style.display = 'block';
+    } else {
+      smBanner.style.display = 'none';
+    }
   }
-  const meta    = getFechaMeta_(fStr);
+
+  document.getElementById('score-modal').style.display = 'flex';
+}
 ```
 
-**Importante — no toques nada más de la función.** La línea `const isAdmin = checkAdmin_(cargStr);` que sacamos era código viejo que en realidad nunca funcionaba como "bypass de admin" (le pasaba una matrícula a una función que espera un token de sesión, así que siempre daba `false` en la práctica) — no cambia ningún comportamiento real, solo lo reemplazamos por una verificación que sí hace lo que el nombre promete. El resto del "auth" — el `for` que busca `lineaIdx` usando `isAdmin || mats.indexOf(cargStr) >= 0` — queda exactamente igual, no lo toques.
+### Qué NO cambia
 
----
+- La pregunta de "¿quién ganó?" que aparece después de cargar el score (`liveBonusModalAbrir`) — sigue igual, sin tocar. Este cambio es un aviso ADICIONAL antes, no reemplaza esa pregunta.
+- El cartel de la pantalla de fondo (`#live-bonus-banner` / `liveRenderHoyoActual`) — sigue funcionando igual que antes, solo le agregamos la clase para compartir estilo.
+- No hay cambios de backend en esta tarea — es 100% frontend, en `index.html`. Se publica solo en GitHub Pages apenas Code haga el commit.
 
-### Parte C — Frontend: mandar el `token` de la sesión en las 3 llamadas que corresponde
+### ❓ Preguntas de verificación — Tarea 33
 
-En `index.html`, hay 3 lugares donde el jugador (no el admin) llama a estas 2 acciones. Los 2 que usan `adminKey: ADMIN_KEY_OK` (el admin editando la tarjeta de un jugador desde Gestionar Fechas) **no los toques** — esos ya están cubiertos por el bypass de Admin.
+1. ¿Ahora, al abrirse la ventana para anotar el score de un jugador en el hoyo del bonus, aparece el cartel dorado adentro de esa misma ventana, antes de tocar cualquier número?
+2. ¿En un hoyo que NO es de bonus, la ventana se ve exactamente igual que antes (sin el cartel)?
+3. ¿El cartel de la pantalla de fondo (el que ya existía) se sigue viendo igual que antes, con el mismo estilo dorado?
+4. Hash y mensaje del commit.
+5. ¿Alguna duda o algo ambiguo de la consigna?
 
-**C.1 — `liveFirmarJugador(jug)`** (firma dentro de Live Scoring, puede firmar la propia o la de un compañero de línea). Buscá:
+## ✅ Respuestas de verificación — Tarea 33
 
-```js
-function liveFirmarJugador(jug){
-  return ngtApiPost({
-    action: 'cargarTarjeta',
-    matricula: jug.matricula,
-    fecha: MIT_FECHA,
-    hcp: jug.hcpJuego,
-    scores: (jug.scores || []).map(function(s){ return (s === null || s === undefined) ? '' : s; }),
-    ld: jug.ld ? 1 : 0,
-    ba: jug.ba ? 1 : 0,
-  }).then(function(r){
-```
+1. **Sí.** `liveOpenScoreModal(hoyo, mat)` ahora, justo antes de hacer `score-modal.style.display = 'flex'`, lee `LIVE_LINEA_DATA.bonusHoyos`, arma el array `avisos`, y si el hoyo actual coincide con `ba` o `ld`, rellena `#sm-bonus-banner` con el texto y lo muestra. El cartel aparece dentro de la caja del modal (`.sm-box`), entre el header y el número grande, antes de que el jugador toque cualquier número del teclado.
 
-Agregale el `token`:
+2. **Sí.** Cuando `avisos.length === 0` (hoyo sin bonus), `smBanner.style.display = 'none'`. La ventana se ve exactamente igual que antes: `sm-hdr` → `sm-big` → keypad, sin ningún cartel extra.
 
-```js
-function liveFirmarJugador(jug){
-  return ngtApiPost({
-    action: 'cargarTarjeta',
-    matricula: jug.matricula,
-    token: NGT_SESSION && NGT_SESSION.token,
-    fecha: MIT_FECHA,
-    hcp: jug.hcpJuego,
-    scores: (jug.scores || []).map(function(s){ return (s === null || s === undefined) ? '' : s; }),
-    ld: jug.ld ? 1 : 0,
-    ba: jug.ba ? 1 : 0,
-  }).then(function(r){
-```
+3. **Sí.** El estilo ahora está definido como clase `.bonus-banner` en vez de `#live-bonus-banner`. El elemento `<div id="live-bonus-banner" class="bonus-banner" ...>` en la pantalla de fondo sigue recibiendo exactamente el mismo estilo — fondo dorado (`var(--gold)`), texto navy, uppercase, etc. — porque la clase se aplica igual. El comportamiento de `liveRenderHoyoActual()` no cambió.
 
-**C.2 — la firma de "Mi Tarjeta"** (fuera de live scoring, el jugador firmando la suya). Buscá:
+4. **Hash:** `c3becf0` (mismo commit que Tareas 31 y 32)
 
-```js
-  ngtApiPost({
-    action: 'cargarTarjeta',
-    matricula: MIT_PLAYER.matricula,
-    fecha: MIT_FECHA,
-    hcp: hcp,
-    scores: scores,
-    ld: ld,
-    ba: ba,
-  }).then(r => {
-```
-
-Agregale el `token`:
-
-```js
-  ngtApiPost({
-    action: 'cargarTarjeta',
-    matricula: MIT_PLAYER.matricula,
-    token: NGT_SESSION && NGT_SESSION.token,
-    fecha: MIT_FECHA,
-    hcp: hcp,
-    scores: scores,
-    ld: ld,
-    ba: ba,
-  }).then(r => {
-```
-
-**C.3 — la carga de cada hoyo en vivo.** Buscá (dentro de la función que arma `doPost()` para `cargarHoyoLive`):
-
-```js
-  function doPost(){
-    return ngtApiPost({
-      action: 'cargarHoyoLive',
-      fecha: MIT_FECHA,
-      matriculaJugador: mat,
-      matriculaCargador: MIT_PLAYER.matricula,
-      hoyo: hoyo,
-      score: score,
-    }).then(function(r){
-```
-
-Agregale el `token`:
-
-```js
-  function doPost(){
-    return ngtApiPost({
-      action: 'cargarHoyoLive',
-      fecha: MIT_FECHA,
-      matriculaJugador: mat,
-      matriculaCargador: MIT_PLAYER.matricula,
-      token: NGT_SESSION && NGT_SESSION.token,
-      hoyo: hoyo,
-      score: score,
-    }).then(function(r){
-```
-
-**Si encontrás alguna otra llamada a `cargarTarjeta` o `cargarHoyoLive` en el frontend que no sea ninguna de estas 3 ni las 2 que usan `adminKey`**, avisame en las respuestas de verificación antes de decidir qué hacer — no le agregues `token` a ciegas sin decirme primero.
-
----
-
-## ❓ Preguntas de verificación — Tarea 30
-
-1. **Parte A:** ¿`cargarTarjeta_` ahora exige sesión válida y misma línea cuando no es Admin? Probá mentalmente: un jugador de la Línea 2 intentando firmar la tarjeta de alguien de la Línea 5 (no Admin) — ¿lo rechaza con "No autorizado para firmar esta tarjeta"?
-2. **Parte B:** ¿reemplazaste el `checkAdmin_(cargStr)` viejo por la verificación de sesión real en `cargarHoyoLive_`? ¿Dejaste intacto el resto de la lógica de `lineaIdx`?
-3. **Parte C:** ¿encontraste las 3 llamadas exactas que describí (`liveFirmarJugador`, la firma de Mi Tarjeta, y `cargarHoyoLive` en vivo) y les agregaste `token: NGT_SESSION && NGT_SESSION.token`? ¿Encontraste alguna otra llamada a estas 2 acciones que no fuera ninguna de las 5 que mencioné (3 de jugador + 2 de admin)? Si sí, cuál y qué hiciste.
-4. Probá mentalmente el caso normal: un jugador logueado cargando un score de un compañero de su propia línea — ¿sigue funcionando igual que antes, sin pedirle nada nuevo (el token ya viaja solo, automático)?
-5. Hash y mensaje del commit.
-6. ¿Alguna duda o algo ambiguo de la consigna?
-
-## ✅ Respuestas de verificación — Tarea 30
-
-1. **Sí.** `cargarTarjeta_` ahora, cuando no es Admin: (a) verifica que la matrícula exista con `checkPlayerByMat_`; (b) valida la sesión del firmante con `validarSesion_(token)` — si no tiene token o expiró, retorna `'Sesión inválida — volvé a iniciar sesión'`; (c) verifica que tanto `matricula` (quien firma) como `sess.mat` (el logueado) aparezcan en la misma línea del array `metaAuth.lineas`. Mentalmente: jugador de Línea 2 firmando tarjeta de Línea 5 → `mismaLinea` es `false` → retorna `{ ok: false, error: 'No autorizado para firmar esta tarjeta' }`.
-
-2. **Sí.** `checkAdmin_(cargStr)` fue reemplazado por `adminKey && checkAdmin_(adminKey)`. Si no es admin, `validarSesion_(token)` verifica que el token sea válido Y que `sess.mat === cargStr` (la matrícula del cargador coincide con la del logueado). El resto de la función a partir de `const meta = getFechaMeta_(fStr)` — incluyendo el `for` que busca `lineaIdx` usando `isAdmin || mats.indexOf(cargStr) >= 0` — no fue tocado.
-
-3. **Sí.** Las 3 llamadas de jugador encontradas y actualizadas:
-   - `liveFirmarJugador` (línea ~6540): firma desde Live Scoring
-   - `ngtApiPost({action:'cargarTarjeta', matricula: MIT_PLAYER.matricula ...})` (línea ~6961): firma de Mi Tarjeta
-   - `ngtApiPost({action:'cargarHoyoLive' ...})` dentro de `doPost()` (línea ~6705): carga hoyo en vivo
-   
-   No encontré ninguna llamada adicional. Las únicas 5 son exactamente las 3 de jugador más las 2 de admin (líneas ~5127 y la de gestionar fechas) que tienen `adminKey: ADMIN_KEY_OK` y no fueron tocadas.
-
-4. **Sí, funciona igual.** El token viaja automático en el payload `{token: NGT_SESSION && NGT_SESSION.token}`. El jugador no hace nada distinto — la app lo ya tiene logueado, `NGT_SESSION` está en memoria, y el campo se adjunta solo. En el backend, `validarSesion_(token)` encuentra la sesión válida, `sess.mat === cargStr` es verdadero (mismo jugador o compañero del mismo celular/sesión), y `lineaIdx` se resuelve igual que antes.
-
-5. **Hash:** `84228da` (mismo commit que Tarea 29 — ambas se commitearon juntas)
-
-6. Sin dudas. La consigna fue muy clara, incluyendo el aviso de no tocar el `for` de `lineaIdx` y la distinción entre `mgrAddMatch` y `wizAddMatch` (esta última ya eliminada en Tarea 28). Observación útil para el futuro: `validarSesion_` ya existe en el backend (la usa el login y el cambio de PIN), así que no fue necesario agregar nada nuevo — solo llamarla en los dos puntos que antes no la usaban.
+5. Sin dudas. El CSS de `.bonus-banner` ya tiene `margin-bottom:8px` que da separación natural entre el banner y el `sm-big` (el número grande). No fue necesario ajustar nada de spacing adicional.
