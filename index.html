@@ -3489,33 +3489,45 @@ function applyAdminResults_(jugadores, canchas, fechas, doblesDisponibles){
     // Save available dobles globally for access when editing
     window.ADM_DOBLES_DISP = doblesDisponibles;
 
-    // Cancha select (crear)
+    // Cancha select (crear) — preserva la selección actual del admin (si ya eligió algo),
+    // porque este refresh puede llegar en segundo plano mientras el admin ya está
+    // completando el formulario con los datos que se pintaron desde la caché.
     const cs = document.getElementById('adm-cancha');
     if(cs){
+      const prevCs = cs.value;
       cs.innerHTML = '<option value="">Seleccionar cancha...</option>';
       ADM_CANCHAS.forEach(c => {
         cs.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>';
       });
+      if(prevCs) cs.value = prevCs;
     }
 
-    // Cancha select (editar)
+    // Cancha select (editar) — mismo cuidado
     const csE = document.getElementById('adm-edit-cancha');
     if(csE){
+      const prevCsE = csE.value;
       csE.innerHTML = '<option value="">Seleccionar...</option>';
       ADM_CANCHAS.forEach(c => {
         csE.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>';
       });
+      if(prevCsE) csE.value = prevCsE;
     }
 
-    // Jugadores checkboxes — ALL players available to select for the fecha
+    // Jugadores checkboxes — ALL players available to select for the fecha.
+    // Preserva cuáles estaban tildados antes de reconstruir la lista, por el mismo motivo.
     const jl = document.getElementById('adm-jugadores-list');
     if(jl){
+      const prevChecked = new Set([...jl.querySelectorAll('input:checked')].map(i => i.value));
       let jugHtml = '';
       ADM_JUGADORES.forEach(j => {
         const lbl = formatPlayerLabel(j.nombre);
         jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
       });
       jl.innerHTML = jugHtml;
+      prevChecked.forEach(mat => {
+        const el = document.getElementById('jug-' + mat);
+        if(el) el.checked = true;
+      });
     }
 
     // Dobles checkboxes — ONLY players who still have doble available
@@ -5735,6 +5747,7 @@ let LIVE_POLL_TIMER = null;
 let LIVE_MATCH_LINEA = null;
 let LIVE_MATCH_DATA = {};
 let LIVE_LOCAL_SEQ = 0;   // increments on every local write; poll ignores stale responses
+let LIVE_POLL_SEQ = 0;    // increments on every background poll; a poll only applies its response if it's still the most recent one issued
 let LIVE_SAVING_MAT = null;  // matricula of player whose score is in-flight (visual feedback)
 let LIVE_SAVING_HOYO = null; // hoyo of the in-flight save
 let LIVE_REVIEW_MAT = null;  // set when editing from "Revisar Tarjetas" — triggers re-firma after save
@@ -6210,19 +6223,25 @@ function livePollStop(){
 function livePoll(){
   if(!MIT_PLAYER || !MIT_FECHA || !LIVE_MODE) return;
   var seqAtPollTime = LIVE_LOCAL_SEQ;
+  var myPollId = ++LIVE_POLL_SEQ; // identifica a este pedido de fondo en particular
   ngtApiGet('getLineaLive', { fecha: MIT_FECHA, matricula: MIT_PLAYER.matricula })
     .then(function(r){
       const offEl = document.getElementById('live-offline-msg');
       if(r && r.ok){
+        // Esta respuesta solo es válida si: (a) no hubo una carga local de score mientras
+        // viajaba, Y (b) no se disparó un pedido de fondo más nuevo que este — evita que una
+        // respuesta vieja que tarda más en llegar pise datos más frescos que ya llegaron.
+        var esRespuestaVigente = (LIVE_LOCAL_SEQ === seqAtPollTime) && (myPollId === LIVE_POLL_SEQ);
         if(!LIVE_LINEA_DATA) liveInitHoyo(r);
-        // Only overwrite local data if no local write happened while this poll was in flight
-        if(LIVE_LOCAL_SEQ === seqAtPollTime) LIVE_LINEA_DATA = r;
+        if(esRespuestaVigente) LIVE_LINEA_DATA = r;
         document.getElementById('live-loading').style.display = 'none';
         document.getElementById('live-content').style.display = 'block';
         if(offEl) offEl.style.display = 'none';
         liveRender();
-        const allComplete = r.jugadores.every(function(j){ return j.holesCargados === 18; });
-        if(allComplete) livePollStop();
+        if(esRespuestaVigente){
+          const allComplete = r.jugadores.every(function(j){ return j.holesCargados === 18; });
+          if(allComplete) livePollStop();
+        }
       } else {
         if(!LIVE_LINEA_DATA){
           document.getElementById('live-loading').innerHTML =
