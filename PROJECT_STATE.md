@@ -4,9 +4,17 @@
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
-Progreso: Tareas 31, 32 y 33 confirmadas por Code y verificadas contra el repo — coinciden exactamente con lo pedido. Marco probó Tarea 33 (el aviso de bonus) y no vio el cartel dorado. Verifiqué de forma independiente contra el sitio publicado (`https://marbar82.github.io/NGT/`) que la Tarea 33 SÍ está desplegada — no es un problema de despliegue. La explicación más probable es que el navegador/celular de Marco mostró una copia vieja de la página en caché (algo común, no es un bug de código). Aun así, sumamos la Tarea 34: un refuerzo visual adicional que pidió Marco — que el encabezado de la ventana de anotar score cambie de color en el hoyo del bonus, además del cartel. Es puro frontend, se publica solo.
+Progreso: Tareas 31 a 34 confirmadas por Code y verificadas contra el repo — coinciden exactamente con lo pedido. Pero Marco seguía sin ver el cartel/color/emoji del bonus, incluso en la compu (no solo el celular) — así que no era caché. Marco dio una pista clave: "elijo la cancha, me carga los hoyos de bonus, los elijo, y después es como que la cancha no queda seleccionada — el usuario va más rápido que la app."
 
-**Antes de nada — pedile a Marco que haga un refresh forzado (o cierre y vuelva a abrir la app desde cero) antes de probar la Tarea 34, para asegurarnos de que esta vez sí está viendo la versión más nueva.**
+**Encontré la causa real revisando `applyAdminResults_` / `loadAdminData()` en `index.html`.** Es un bug de fondo, no de caché ni de despliegue:
+
+Cuando el admin entra a "Crear Fecha", `loadAdminData()` hace dos cosas: (1) pinta INSTANTÁNEAMENTE los datos guardados de la sesión anterior (cancha, jugadores) para que la pantalla no aparezca vacía, y (2) en paralelo, sin que se note, pide los datos frescos al servidor (jugadores, canchas, fechas, dobles, colores — 5 pedidos juntos). Cuando esos datos frescos llegan (puede tardar unos segundos, más si Apps Script está "frío"), el código **reconstruye desde cero** el desplegable de Cancha y la lista de Jugadores — sin fijarse si el admin ya había elegido algo mientras tanto. Si Marco elige la cancha y los jugadores ANTES de que ese pedido de fondo termine, cuando termina le borra la selección sin avisar — coincide exactamente con lo que describió.
+
+Esto probablemente también explica por qué no veíamos el cartel del bonus: si esto le pasó al crear la fecha de prueba, es muy probable que se haya guardado con datos incompletos o corridos, sin que el error fuera obvio en el momento.
+
+**Fix real, ya no el diagnóstico temporal** — pasa a ser la Tarea 35 (reemplaza a la versión anterior, que era solo un cartelito de diagnóstico y ya no hace falta).
+
+**Antes de que Code haga la Tarea 35, Marco probó de nuevo (con URL fresca, sin caché) y encontró OTRO problema — esta vez cargando scores en vivo, no creando la fecha:** arma la fecha, entra a cargar scores, y a veces (2 de las últimas 3 pruebas) se queda pidiendo el score del último hoyo aunque ya lo cargó, como si no tomara el dato. Es intermitente. Encontré una causa real y coherente con el mismo patrón de fondo (carga de datos en segundo plano pisando datos más nuevos) en `livePoll()` — es la Tarea 36, independiente de la 35, las puede hacer en cualquier orden.
 
 ---
 
@@ -732,3 +740,254 @@ Reemplazalo por:
 5. **Hash:** `111b607` — "Tarea 34: encabezado dorado y emoji en modal de score para hoyo de bonus"
 
 6. Sin dudas. Nota técnica: la línea `document.getElementById('sm-hoyo').textContent = 'Hoyo ' + hoyo;` que ya existía antes en la función queda sin tocar — la línea nueva `document.getElementById('sm-hoyo').textContent = hoyoEmoji + 'Hoyo ' + hoyo;` la sobreescribe inmediatamente después, como indica la consigna.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 35 (bug real: se pierde la selección de Cancha/Jugadores al crear una fecha)
+
+### Qué reportó Marco y la causa real
+
+Marco reportó: "elijo la cancha, me carga los hoyos de bonus, los elijo, y después es como que la cancha no queda seleccionada — el usuario va más rápido que la app."
+
+Es exactamente eso. `loadAdminData()` (en `index.html`) pinta primero los datos guardados de la sesión anterior para que la pantalla de "Crear Fecha" no aparezca vacía, y en paralelo pide los datos frescos al servidor (jugadores, canchas, fechas, dobles, colores). Cuando esos datos frescos llegan — puede tardar unos segundos —, `applyAdminResults_()` **reconstruye desde cero** el desplegable de Cancha y la lista de Jugadores tildados, sin fijarse si el admin ya eligió algo mientras tanto. Si heurísticamente Marco completa el Paso 1 antes de que ese pedido de fondo termine, cuando termina le borra la cancha (y podría borrarle jugadores ya tildados) sin ningún aviso.
+
+**Fix: antes de reconstruir esos campos, guardar lo que el admin ya tenía elegido, y volver a aplicarlo después de reconstruir.**
+
+### Cambio — JS: preservar selección de Cancha, Cancha (editar) y Jugadores en `applyAdminResults_`
+
+Buscá esta función completa en `index.html`:
+
+```js
+function applyAdminResults_(jugadores, canchas, fechas, doblesDisponibles){
+    ADM_JUGADORES = jugadores;
+    ADM_CANCHAS = canchas;
+
+    // Save available dobles globally for access when editing
+    window.ADM_DOBLES_DISP = doblesDisponibles;
+
+    // Cancha select (crear)
+    const cs = document.getElementById('adm-cancha');
+    if(cs){
+      cs.innerHTML = '<option value="">Seleccionar cancha...</option>';
+      ADM_CANCHAS.forEach(c => {
+        cs.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>';
+      });
+    }
+
+    // Cancha select (editar)
+    const csE = document.getElementById('adm-edit-cancha');
+    if(csE){
+      csE.innerHTML = '<option value="">Seleccionar...</option>';
+      ADM_CANCHAS.forEach(c => {
+        csE.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>';
+      });
+    }
+
+    // Jugadores checkboxes — ALL players available to select for the fecha
+    const jl = document.getElementById('adm-jugadores-list');
+    if(jl){
+      let jugHtml = '';
+      ADM_JUGADORES.forEach(j => {
+        const lbl = formatPlayerLabel(j.nombre);
+        jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
+      });
+      jl.innerHTML = jugHtml;
+    }
+```
+
+Reemplazala por (mismo comportamiento, pero guardando y restaurando lo que el admin ya había elegido):
+
+```js
+function applyAdminResults_(jugadores, canchas, fechas, doblesDisponibles){
+    ADM_JUGADORES = jugadores;
+    ADM_CANCHAS = canchas;
+
+    // Save available dobles globally for access when editing
+    window.ADM_DOBLES_DISP = doblesDisponibles;
+
+    // Cancha select (crear) — preserva la selección actual del admin (si ya eligió algo),
+    // porque este refresh puede llegar en segundo plano mientras el admin ya está
+    // completando el formulario con los datos que se pintaron desde la caché.
+    const cs = document.getElementById('adm-cancha');
+    if(cs){
+      const prevCs = cs.value;
+      cs.innerHTML = '<option value="">Seleccionar cancha...</option>';
+      ADM_CANCHAS.forEach(c => {
+        cs.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>';
+      });
+      if(prevCs) cs.value = prevCs;
+    }
+
+    // Cancha select (editar) — mismo cuidado
+    const csE = document.getElementById('adm-edit-cancha');
+    if(csE){
+      const prevCsE = csE.value;
+      csE.innerHTML = '<option value="">Seleccionar...</option>';
+      ADM_CANCHAS.forEach(c => {
+        csE.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>';
+      });
+      if(prevCsE) csE.value = prevCsE;
+    }
+
+    // Jugadores checkboxes — ALL players available to select for the fecha.
+    // Preserva cuáles estaban tildados antes de reconstruir la lista, por el mismo motivo.
+    const jl = document.getElementById('adm-jugadores-list');
+    if(jl){
+      const prevChecked = new Set([...jl.querySelectorAll('input:checked')].map(i => i.value));
+      let jugHtml = '';
+      ADM_JUGADORES.forEach(j => {
+        const lbl = formatPlayerLabel(j.nombre);
+        jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
+      });
+      jl.innerHTML = jugHtml;
+      prevChecked.forEach(mat => {
+        const el = document.getElementById('jug-' + mat);
+        if(el) el.checked = true;
+      });
+    }
+```
+
+(El resto de la función — el bloque de checkboxes de Dobles que viene después — queda exactamente igual, no lo toques.)
+
+### Qué NO cambia
+
+- El resto de `applyAdminResults_` (Dobles) — sin tocar.
+- No hay cambios de backend — 100% frontend, se publica solo en GitHub Pages.
+- El cartelito de diagnóstico del bonus que habíamos planeado (Tarea 35 anterior) — ya no hace falta, no lo agregues. Si después de este fix el cartel del bonus sigue sin aparecer en una fecha creada de cero, avisame y lo retomamos.
+
+### ❓ Preguntas de verificación — Tarea 35
+
+1. ¿Encontraste `applyAdminResults_` y la reemplazaste completa como se indica?
+2. Probá mentalmente: admin entra a "Crear Fecha", elige cancha y jugadores MUY rápido (antes de que termine de cargar todo en segundo plano) — cuando esa carga de fondo termina, ¿la cancha elegida y los jugadores tildados se mantienen, en vez de volver a "Seleccionar cancha..." y sin nadie tildado?
+3. Caso normal (sin apuro): ¿todo sigue funcionando exactamente igual que antes?
+4. Hash y mensaje del commit.
+5. ¿Alguna duda o algo ambiguo de la consigna?
+
+## ✅ Respuestas de verificación — Tarea 35
+
+1. **Sí.** La función `applyAdminResults_` fue encontrada en línea 3485 de `index.html` y reemplazada exactamente como se indica. Los tres bloques clave cambiaron:
+   - `adm-cancha`: se guarda `prevCs = cs.value` antes de reconstruir el `innerHTML`, y después se restaura con `if(prevCs) cs.value = prevCs`.
+   - `adm-edit-cancha`: ídem con `prevCsE`.
+   - `adm-jugadores-list`: se guarda un `Set` de las matriculas ya tildadas (`prevChecked`) antes de reconstruir el HTML, y después se itera el Set para volver a tildar las que correspondan.
+
+2. **Sí.** Con el fix: cuando `applyAdminResults_` corre en segundo plano (puede ser segundos después de que el admin ya eligió cancha y jugadores), primero guarda los valores actuales del DOM, luego reconstruye, y finalmente restaura. La cancha que el admin había seleccionado queda restituida en el `<select>` (mismo `value`), y los jugadores que ya estaban tildados quedan tildados de nuevo. El admin no nota nada — todo se mantiene.
+
+3. **Sí.** En el caso normal (el admin espera a que cargue antes de tocar algo), `prevCs` es `''` (el placeholder "Seleccionar cancha...") y `prevChecked` es un `Set` vacío. Las líneas de restauración hacen `if(prevCs) cs.value = prevCs` → no entra (string vacío es falsy), y `prevChecked.forEach(...)` → no itera nada. Comportamiento idéntico al anterior.
+
+4. **Hash:** `266f0b1` — "Tareas 35/36: preservar seleccion admin al recargar datos en segundo plano; descartar polls viejos en livePoll"
+
+5. Sin dudas. El resto de `applyAdminResults_` (bloque de Dobles) no fue tocado, tal como se pedía.
+
+### 📋 Para Marco — después de este fix
+
+Probá de nuevo el flujo completo de "Crear Fecha" (cancha, hoyos de bonus, jugadores, armar líneas, comenzar partida) con una fecha NUEVA. Si llega a andar bien de punta a punta, probá también si ahora sí ves el cartel/color/emoji del bonus al cargar el score de ese hoyo — es muy probable que ese problema se resuelva solo, porque puede que la fecha vieja que usabas para probar se haya guardado con datos incompletos por este mismo bug.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 36 (bug real, intermitente: se queda pidiendo el score del último hoyo)
+
+### Qué reportó Marco y la causa real
+
+Marco: "armo la fecha, entro a cargar los scores y se me queda en el hoyo 1, cargo todos los scores y me sigue pidiendo el del último, como que no se cargan los datos, y se queda ahí pidiendo los scores y no los toma. No me pasa siempre, de las últimas 3 pruebas me pasó 2 veces."
+
+Es el mismo tipo de bug que la Tarea 35 (datos en segundo plano pisando datos más nuevos), pero en otro lugar: la pantalla de "cargar scores en vivo" (`livePoll()` en `index.html`).
+
+Esta pantalla pide los datos frescos al servidor cada 8 segundos en segundo plano (para que si otro jugador de tu línea carga un score, vos lo veas actualizado sin hacer nada). El código YA tiene una protección (`LIVE_LOCAL_SEQ`) para que ese refresco de fondo no te pise un score que vos acabás de cargar — pero le falta una segunda protección: si ese pedido de fondo tarda más de 8 segundos en responder (pasa seguido si Apps Script está "frío"), se puede disparar OTRO pedido de fondo antes de que el primero termine. Si el primero (más viejo) responde DESPUÉS que el segundo (más nuevo) — cosa común con la red del celular en la cancha —, sus datos viejos pisan a los nuevos, y ahí es donde un hoyo que ya estaba cargado vuelve a aparecer como sin cargar. Como pasa cerca del final de la ronda (cuando ya hubo más tiempo para que se acumulen pedidos de fondo), coincide con "se queda pidiendo el del último hoyo". Y como depende de la velocidad de la red en el momento, es lógico que sea intermitente.
+
+**Fix: que cada pedido de fondo sepa "soy el más nuevo o no", y que solo se le permita actualizar la pantalla al que realmente sea el más nuevo — no al que responda último.**
+
+### Cambio 1 — JS: agregar un contador de pedidos de fondo
+
+Buscá esta línea (junto a las otras variables de estado de "Live Scoring"):
+
+```js
+let LIVE_LOCAL_SEQ = 0;   // increments on every local write; poll ignores stale responses
+```
+
+Agregá esta línea justo después (sin tocar la de arriba):
+
+```js
+let LIVE_POLL_SEQ = 0;    // increments on every background poll; a poll only applies its response if it's still the most recent one issued
+```
+
+### Cambio 2 — JS: usar ese contador en `livePoll()` para descartar respuestas viejas que llegan tarde
+
+Buscá la función `livePoll()` completa:
+
+```js
+function livePoll(){
+  if(!MIT_PLAYER || !MIT_FECHA || !LIVE_MODE) return;
+  var seqAtPollTime = LIVE_LOCAL_SEQ;
+  ngtApiGet('getLineaLive', { fecha: MIT_FECHA, matricula: MIT_PLAYER.matricula })
+    .then(function(r){
+      const offEl = document.getElementById('live-offline-msg');
+      if(r && r.ok){
+        if(!LIVE_LINEA_DATA) liveInitHoyo(r);
+        // Only overwrite local data if no local write happened while this poll was in flight
+        if(LIVE_LOCAL_SEQ === seqAtPollTime) LIVE_LINEA_DATA = r;
+        document.getElementById('live-loading').style.display = 'none';
+        document.getElementById('live-content').style.display = 'block';
+        if(offEl) offEl.style.display = 'none';
+        liveRender();
+        const allComplete = r.jugadores.every(function(j){ return j.holesCargados === 18; });
+        if(allComplete) livePollStop();
+      } else {
+```
+
+Reemplazá desde el inicio de la función hasta esa misma altura (el resto de la función, el `else` con el manejo de error y el `.catch()` de más abajo, queda igual — no lo toques):
+
+```js
+function livePoll(){
+  if(!MIT_PLAYER || !MIT_FECHA || !LIVE_MODE) return;
+  var seqAtPollTime = LIVE_LOCAL_SEQ;
+  var myPollId = ++LIVE_POLL_SEQ; // identifica a este pedido de fondo en particular
+  ngtApiGet('getLineaLive', { fecha: MIT_FECHA, matricula: MIT_PLAYER.matricula })
+    .then(function(r){
+      const offEl = document.getElementById('live-offline-msg');
+      if(r && r.ok){
+        // Esta respuesta solo es válida si: (a) no hubo una carga local de score mientras
+        // viajaba, Y (b) no se disparó un pedido de fondo más nuevo que este — evita que una
+        // respuesta vieja que tarda más en llegar pise datos más frescos que ya llegaron.
+        var esRespuestaVigente = (LIVE_LOCAL_SEQ === seqAtPollTime) && (myPollId === LIVE_POLL_SEQ);
+        if(!LIVE_LINEA_DATA) liveInitHoyo(r);
+        if(esRespuestaVigente) LIVE_LINEA_DATA = r;
+        document.getElementById('live-loading').style.display = 'none';
+        document.getElementById('live-content').style.display = 'block';
+        if(offEl) offEl.style.display = 'none';
+        liveRender();
+        if(esRespuestaVigente){
+          const allComplete = r.jugadores.every(function(j){ return j.holesCargados === 18; });
+          if(allComplete) livePollStop();
+        }
+      } else {
+```
+
+### Qué NO cambia
+
+- El resto de `livePoll()` (manejo de error/offline, `.catch()`) — sin tocar.
+- La protección que ya existía contra pisar una carga local reciente (`LIVE_LOCAL_SEQ`) — sigue ahí, se suma a la nueva, no se reemplaza.
+- No hay cambios de backend — 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 36
+
+1. ¿Agregaste `LIVE_POLL_SEQ` y lo usás en `livePoll()` como se indica?
+2. Probá mentalmente: dos pedidos de fondo se superponen (el primero tarda más de 8 segundos), y el más viejo responde DESPUÉS que el más nuevo — ¿la respuesta vieja queda descartada (no pisa la pantalla ni para los datos ni para el chequeo de "ronda completa")?
+3. Caso normal (red rápida, sin superposición): ¿todo sigue funcionando exactamente igual que antes?
+4. Hash y mensaje del commit.
+5. ¿Alguna duda o algo ambiguo de la consigna?
+
+## ✅ Respuestas de verificación — Tarea 36
+
+1. **Sí.** Se agregó `let LIVE_POLL_SEQ = 0;` justo después de `LIVE_LOCAL_SEQ`. En `livePoll()`, al inicio se hace `var myPollId = ++LIVE_POLL_SEQ;` (incrementa el contador global y guarda el valor en la closure de esta llamada particular). Dentro del `.then()`, se evalúa `var esRespuestaVigente = (LIVE_LOCAL_SEQ === seqAtPollTime) && (myPollId === LIVE_POLL_SEQ);` — ambas condiciones deben cumplirse para que la respuesta se considere válida.
+
+2. **Sí.** Escenario: poll #1 arranca con `myPollId=1`, `LIVE_POLL_SEQ=1`. Poll #2 arranca 8 segundos después con `myPollId=2`, `LIVE_POLL_SEQ=2`. Poll #2 responde primero: `myPollId(2) === LIVE_POLL_SEQ(2)` → `esRespuestaVigente=true` → actualiza datos y UI normalmente. Luego llega poll #1 (el viejo): `myPollId(1) !== LIVE_POLL_SEQ(2)` → `esRespuestaVigente=false` → `LIVE_LINEA_DATA` NO se pisa, y el chequeo `allComplete`/`livePollStop()` NO se ejecuta. Los datos más nuevos que ya llegaron quedan intactos. La pantalla no "da marcha atrás".
+
+3. **Sí.** En el caso normal, cada poll responde antes de que salga el siguiente: poll #1 responde cuando `LIVE_POLL_SEQ=1` y `myPollId=1` → `esRespuestaVigente=true`. Exactamente igual que antes del fix. Y la protección contra carga local (`LIVE_LOCAL_SEQ === seqAtPollTime`) sigue funcionando igual — no fue tocada.
+
+4. **Hash:** `266f0b1` — (mismo commit que Tarea 35)
+
+5. Sin dudas. El `liveRender()` sigue siendo llamado siempre (incluso cuando `esRespuestaVigente=false`), porque eso asegura que la UI muestre el estado correcto aunque no se actualice `LIVE_LINEA_DATA` — no hay regresión en el renderizado.
+
+### 📋 Para Marco — después de este fix
+
+Esto es harder de reprobar a propósito porque depende de la velocidad de la red en el momento — no hay una forma 100% segura de "forzarlo" para confirmar. Lo mejor es simplemente seguir usando la carga de scores en vivo unas cuantas veces más (sobre todo con mala señal, que es cuando más chances tiene de pasar) y avisarme si se te vuelve a quedar pidiendo un hoyo que ya cargaste.
