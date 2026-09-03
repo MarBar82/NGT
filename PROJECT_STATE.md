@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-03 (Tarea 37 agregada)
+**Última actualización:** 2026-09-03 (Tarea 38 agregada)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -1080,5 +1080,113 @@ Una vez desplegado, probá así (en ese orden, para que la prueba sea limpia):
 2. Volvé a crearla.
 3. Cargá los scores del hoyo 1 con los 4 jugadores — fijate si ahora avanza bien después del 4to jugador.
 4. Seguí jugando hasta llegar al hoyo de bonus — fijate si ahora sí aparece el cartel dorado.
+
+---
+
+## 📣 Resultado de la Tarea 37 — Marco probó y hay buenas y malas noticias
+
+**Buena noticia — el bug principal (quedarse pidiendo el score del último jugador) parece resuelto:** todos los hoyos cargaron bien, incluso hoyos con bonus preguntaron correctamente "¿quién lo ganó?" al completarse — eso NUNCA había pasado antes de la Tarea 37, es una señal fuerte de que la causa raíz (la "memoria de filas" vieja) era real y el fix funciona. También confirma algo importante: el servidor SÍ está detectando bien qué hoyo es bonus — antes pensábamos que era un problema de diseño del cartel, pero en realidad el servidor nunca avisaba nada porque estaba leyendo la fila equivocada. Ahora si avisa (al menos la pregunta de "quién ganó" después de cargar el hoyo).
+
+**Pero quedan 3 cosas nuevas para investigar:**
+
+1. **El cartel dorado (el aviso ANTES de cargar el score, con cambio de color del encabezado) sigue sin aparecer** — a pesar de que la pregunta de "quién ganó" (que se dispara DESPUÉS, cuando ya cargaste el score de los 4) sí funciona ahora. Son dos avisos distintos en dos momentos distintos, y until ahora solo el segundo funciona. Repasé el código de nuevo línea por línea y no encuentro el error mirándolo — así que esta vez, en lugar de adivinar un cuarto arreglo a ciegas, prefiero agregar un dato de diagnóstico visible en pantalla para ver los valores reales en el momento exacto que falla. Es la Tarea 38 (ver abajo).
+
+2. **Al cargar el hoyo 1, apareció "Sin conexión · reintentando..." y tardó varios segundos en cargar.** Esto es muy probablemente normal: es la primera carga después de que vos hiciste un Deploy nuevo en Apps Script, y la primera vez que Apps Script atiende un pedido después de un deploy nuevo suele tardar bastante más (tiene que "arrancar en frío"). Si te vuelve a pasar en pruebas MÁS ADELANTE (no la primera vez después de un deploy), avisame porque ahí sí sería otra cosa.
+
+3. **Al hoyo 4, volvió a preguntar "quién ganó" el bonus del hoyo 3, que ya habías respondido.** Sospecho que está relacionado con el punto 2 (la app reintenta un pedido que en realidad ya se había guardado bien del lado del servidor, y al reintentar vuelve a preguntar). Si el punto 2 no se repite en pruebas futuras, es muy probable que este tampoco. Lo dejo anotado para seguir de cerca — si vuelve a pasar SIN el "sin conexión, reintentando" de por medio, avisame porque ahí sería un bug distinto y lo investigo a fondo.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 38 (diagnóstico temporal: ver por qué no aparece el cartel de bonus)
+
+### Qué es esto
+
+Esto NO es un arreglo — es un cartelito de diagnóstico temporal, como el que usamos en un problema anterior de este mismo proyecto. Vamos a hacer que el cartel de bonus, en vez de aparecer solo cuando corresponde, aparezca SIEMPRE (en todos los hoyos) mostrando los datos internos que la app está comparando para decidir si hay que avisar. Así, cuando Marco llegue al hoyo con bonus, va a poder LEER en pantalla (celular o compu, sin herramientas técnicas) qué valores está viendo la app en ese momento — y con eso vamos a poder identificar el problema exacto en vez de seguir adivinando.
+
+**Después de que Marco me pase esos valores, vamos a sacar este diagnóstico y dejar el cartel andando bien (Tarea 39, con el arreglo real).**
+
+### Dónde está el código
+
+Archivo `index.html`, función `liveOpenScoreModal(hoyo, mat)`.
+
+### Cambio — mostrar SIEMPRE el cartel con los valores reales (temporal)
+
+Buscá este bloque (ya existente):
+
+```js
+  var bonusHoyos = LIVE_LINEA_DATA.bonusHoyos || {};
+  var smBanner = document.getElementById('sm-bonus-banner');
+  var smHdr = document.getElementById('sm-hdr');
+  var avisos = [];
+  var hoyoEmoji = '';
+  if(bonusHoyos.ba === hoyo){ avisos.push('🎯 Best Approach en este hoyo'); hoyoEmoji += '🎯 '; }
+  if(bonusHoyos.ld === hoyo){ avisos.push('💪 Long Drive en este hoyo'); hoyoEmoji += '💪 '; }
+  document.getElementById('sm-hoyo').textContent = hoyoEmoji + 'Hoyo ' + hoyo;
+  if(smBanner){
+    if(avisos.length){
+      smBanner.textContent = avisos.join(' · ');
+      smBanner.style.display = 'block';
+    } else {
+      smBanner.style.display = 'none';
+    }
+  }
+  if(smHdr){ smHdr.classList.toggle('bonus', avisos.length > 0); }
+```
+
+Reemplazalo por:
+
+```js
+  var bonusHoyos = LIVE_LINEA_DATA.bonusHoyos || {};
+  var smBanner = document.getElementById('sm-bonus-banner');
+  var smHdr = document.getElementById('sm-hdr');
+  var avisos = [];
+  var hoyoEmoji = '';
+  if(bonusHoyos.ba === hoyo){ avisos.push('🎯 Best Approach en este hoyo'); hoyoEmoji += '🎯 '; }
+  if(bonusHoyos.ld === hoyo){ avisos.push('💪 Long Drive en este hoyo'); hoyoEmoji += '💪 '; }
+  document.getElementById('sm-hoyo').textContent = hoyoEmoji + 'Hoyo ' + hoyo;
+  // ⚠️ TEMPORAL — Tarea 38: diagnóstico visible, sacar en la Tarea 39
+  var debugTxt_ = 'DEBUG · hoyo=' + JSON.stringify(hoyo) + ' · ba=' + JSON.stringify(bonusHoyos.ba) +
+                  ' · ld=' + JSON.stringify(bonusHoyos.ld) + ' · match=' + avisos.length;
+  if(smBanner){
+    if(avisos.length){
+      smBanner.textContent = avisos.join(' · ') + '  [' + debugTxt_ + ']';
+    } else {
+      smBanner.textContent = debugTxt_;
+    }
+    smBanner.style.display = 'block'; // TEMPORAL: siempre visible mientras diagnosticamos
+  }
+  if(smHdr){ smHdr.classList.toggle('bonus', avisos.length > 0); }
+```
+
+### Qué NO cambia
+
+- No se toca nada más de la función ni de ningún otro archivo.
+- Es 100% frontend, se publica solo en GitHub Pages (no requiere deploy de Apps Script).
+- Es temporal — lo vamos a sacar en la próxima tarea una vez que tengamos el diagnóstico.
+
+### ❓ Preguntas de verificación — Tarea 38
+
+1. ¿El cartel `#sm-bonus-banner` ahora se muestra SIEMPRE (en todos los hoyos, no solo en los de bonus)?
+2. ¿El texto muestra el valor de `hoyo`, `bonusHoyos.ba`, `bonusHoyos.ld` y cuántos avisos coincidieron (`match`)?
+3. Hash y mensaje del commit.
+4. ¿Alguna duda o algo ambiguo de la consigna?
+
+## ✅ Respuestas de verificación — Tarea 38
+
+1. **Sí.** La línea `smBanner.style.display = 'block';` ahora está fuera del `if(avisos.length)` — se ejecuta siempre que `smBanner` exista, sin importar si hay avisos o no. En hoyos sin bonus: `debugTxt_` se asigna como texto del banner y se muestra. En hoyos con bonus: el texto del aviso se muestra con el debug entre corchetes al final, y también se muestra.
+
+2. **Sí.** `debugTxt_` se arma como: `'DEBUG · hoyo=' + JSON.stringify(hoyo) + ' · ba=' + JSON.stringify(bonusHoyos.ba) + ' · ld=' + JSON.stringify(bonusHoyos.ld) + ' · match=' + avisos.length`. Ejemplo en hoyo 2 sin bonus: `DEBUG · hoyo=2 · ba=null · ld=8 · match=0`. Ejemplo en hoyo 8 con LD: `💪 Long Drive en este hoyo  [DEBUG · hoyo=8 · ba=null · ld=8 · match=1]`. El `JSON.stringify` muestra `null` cuando el campo no está definido, lo que ayuda a ver si `bonusHoyos` llegó vacío.
+
+3. **Hash:** `3a1980f` — "Tarea 38: diagnostico temporal en modal de score para ver valores de bonusHoyos"
+
+4. Sin dudas. El cartel `#sm-bonus-banner` tiene clase `.bonus-banner` (fondo dorado) en todo momento — Marco lo verá con fondo dorado en todos los hoyos, incluyendo los que no son de bonus. Eso es lo esperado para el diagnóstico.
+
+### 📋 Para Marco — después de este fix
+
+Este cambio se publica solo (GitHub Pages, sin deploy en Apps Script). Una vez que Code lo confirme:
+1. Entrá a cargar scores en vivo de la fecha de prueba (podés usar la misma, no hace falta borrar y recrear esta vez).
+2. En CUALQUIER hoyo vas a ver un cartelito gris/dorado arriba del número que dice algo como `DEBUG · hoyo=2 · ba=2 · ld=8 · match=1`.
+3. Fijate especialmente en el hoyo que vos sabés que es de bonus (BA o LD) — anotá o mandame captura de pantalla de exactamente qué dice ese cartelito en ese hoyo específico.
+4. Con esos valores reales voy a poder ver exactamente qué está comparando mal la app, y en la próxima tarea lo arreglamos de una vez y sacamos el diagnóstico.
 
 Si el cartel de bonus sigue sin aparecer después de esto, avisame — ahí sí tendría que ser otra causa distinta, y lo investigo de nuevo desde cero con esa información.
