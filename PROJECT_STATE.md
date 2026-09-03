@@ -4,13 +4,9 @@
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
-Progreso: Tareas 29 y 30 confirmadas. Ahora van 3 tareas juntas, **totalmente independientes entre sí** (Code las puede hacer en cualquier orden, en la misma sesión):
+Progreso: Tareas 31, 32 y 33 confirmadas por Code y verificadas contra el repo — coinciden exactamente con lo pedido. Marco probó Tarea 33 (el aviso de bonus) y no vio el cartel dorado. Verifiqué de forma independiente contra el sitio publicado (`https://marbar82.github.io/NGT/`) que la Tarea 33 SÍ está desplegada — no es un problema de despliegue. La explicación más probable es que el navegador/celular de Marco mostró una copia vieja de la página en caché (algo común, no es un bug de código). Aun así, sumamos la Tarea 34: un refuerzo visual adicional que pidió Marco — que el encabezado de la ventana de anotar score cambie de color en el hoyo del bonus, además del cartel. Es puro frontend, se publica solo.
 
-- **Tarea 31** — Fase 3 del rediseño del panel de admin: dividir el Paso 1 de "Crear Fecha" en dos pasos separados, Cancha y Jugadores. Ya la conocés, la charlamos antes.
-- **Tarea 32** — Bug reportado: al borrar la fecha activa, el botón flotante de "FECHA en juego" no desaparece. Encontré la causa exacta revisando el código.
-- **Tarea 33** — Bug reportado: el aviso de "acá se juega el bonus" (Long Drive / Best Approach) no se ve cuando el jugador llega al hoyo — solo aparece la pregunta después de cargar el score de ese hoyo. Encontré por qué: el aviso técnicamente existe en el código, pero queda tapado por la ventana donde se anota el score.
-
-**Tarea 32 requiere que hagas el deploy manual en el editor de Apps Script** (es un cambio de backend, `.gs`). **Tarea 33 es puro frontend** (`index.html`), se publica sola en GitHub Pages apenas Code hace el commit — no requiere que hagas nada manual vos.
+**Antes de nada — pedile a Marco que haga un refresh forzado (o cierre y vuelva a abrir la app desde cero) antes de probar la Tarea 34, para asegurarnos de que esta vez sí está viendo la versión más nueva.**
 
 ---
 
@@ -586,3 +582,153 @@ function liveOpenScoreModal(hoyo, mat){
 4. **Hash:** `c3becf0` (mismo commit que Tareas 31 y 32)
 
 5. Sin dudas. El CSS de `.bonus-banner` ya tiene `margin-bottom:8px` que da separación natural entre el banner y el `sm-big` (el número grande). No fue necesario ajustar nada de spacing adicional.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 34 (refuerzo visual del aviso de bonus: encabezado dorado + emojis)
+
+### Contexto — no es un bug de código, es un refuerzo pedido por Marco
+
+Marco probó la Tarea 33 (el cartel dorado dentro de la ventana de anotar score) y no lo vio. Antes de tocar nada, verifiqué el sitio publicado directamente y confirmé que la Tarea 33 sí está desplegada correctamente — el código está bien y en producción. Lo más probable es que el navegador de Marco haya mostrado una copia vieja de la página guardada en caché (algo común en celulares, no un bug real).
+
+**Dile a Marco que antes de probar esta tarea haga un refresh forzado o cierre y vuelva a abrir la app desde cero**, para asegurarnos de que esta vez ve la versión más nueva.
+
+Aun así, Marco pidió dos refuerzos adicionales: que además del cartel, el encabezado de la ventana (donde dice "Hoyo X") cambie de color en el hoyo del bonus, y que se le sume el emoji correspondiente — 🎯 (diana) para Best Approach, 💪 (fuerza) para Long Drive — directamente al lado de "Hoyo X". Tiene sentido — un cambio de color en el encabezado (lo primero que se lee al abrir la ventana) más el emoji es un refuerzo mucho más fuerte que el cartel solo, sobre todo afuera en la cancha con sol. Hacemos todo junto.
+
+De paso, aprovechamos para unificar: el cartel de Long Drive (tanto el de esta ventana como el de la pantalla de fondo) hoy usa el emoji de golfista 🏌 — lo cambiamos a 💪 para que sea el mismo emoji en todos lados (coincide con el que ya usás en el checkbox de "Mi Tarjeta": "💪 Gané el Long Drive").
+
+### Cambio 1 — CSS: agregar el estilo del encabezado en modo bonus
+
+Buscá:
+
+```css
+.sm-par{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-top:2px;}
+```
+
+Agregá estas dos líneas justo después (sin tocar la línea de arriba):
+
+```css
+.sm-hdr.bonus{background:var(--gold);color:var(--navy);border-bottom-color:var(--navy);}
+.sm-hdr.bonus .sm-par{color:var(--navy);}
+```
+
+### Cambio 2 — HTML: agregarle un `id` al encabezado para poder engancharle la clase desde JS
+
+Buscá (dentro del modal de anotar score):
+
+```html
+    <div class="sm-hdr">
+      <div class="sm-player-name" id="sm-player-name"></div>
+      <div class="sm-hoyo" id="sm-hoyo">Hoyo 1</div>
+      <div class="sm-par" id="sm-par">Par 4</div>
+    </div>
+    <div id="sm-bonus-banner" class="bonus-banner" style="display:none;"></div>
+```
+
+Reemplazalo por (la única diferencia es el `id="sm-hdr"` agregado):
+
+```html
+    <div class="sm-hdr" id="sm-hdr">
+      <div class="sm-player-name" id="sm-player-name"></div>
+      <div class="sm-hoyo" id="sm-hoyo">Hoyo 1</div>
+      <div class="sm-par" id="sm-par">Par 4</div>
+    </div>
+    <div id="sm-bonus-banner" class="bonus-banner" style="display:none;"></div>
+```
+
+### Cambio 3 — JS: prender/apagar la clase `bonus` del encabezado, agregar el emoji a "Hoyo X", y sumar el cartel
+
+Buscá dentro de `liveOpenScoreModal`:
+
+```js
+  var bonusHoyos = LIVE_LINEA_DATA.bonusHoyos || {};
+  var smBanner = document.getElementById('sm-bonus-banner');
+  if(smBanner){
+    var avisos = [];
+    if(bonusHoyos.ba === hoyo) avisos.push('🎯 Best Approach en este hoyo');
+    if(bonusHoyos.ld === hoyo) avisos.push('🏌 Long Drive en este hoyo');
+    if(avisos.length){
+      smBanner.textContent = avisos.join(' · ');
+      smBanner.style.display = 'block';
+    } else {
+      smBanner.style.display = 'none';
+    }
+  }
+```
+
+Reemplazalo por (agrega el toggle del encabezado, el emoji al lado de "Hoyo X", y cambia el emoji de Long Drive de 🏌 a 💪):
+
+```js
+  var bonusHoyos = LIVE_LINEA_DATA.bonusHoyos || {};
+  var smBanner = document.getElementById('sm-bonus-banner');
+  var smHdr = document.getElementById('sm-hdr');
+  var avisos = [];
+  var hoyoEmoji = '';
+  if(bonusHoyos.ba === hoyo){ avisos.push('🎯 Best Approach en este hoyo'); hoyoEmoji += '🎯 '; }
+  if(bonusHoyos.ld === hoyo){ avisos.push('💪 Long Drive en este hoyo'); hoyoEmoji += '💪 '; }
+  document.getElementById('sm-hoyo').textContent = hoyoEmoji + 'Hoyo ' + hoyo;
+  if(smBanner){
+    if(avisos.length){
+      smBanner.textContent = avisos.join(' · ');
+      smBanner.style.display = 'block';
+    } else {
+      smBanner.style.display = 'none';
+    }
+  }
+  if(smHdr){ smHdr.classList.toggle('bonus', avisos.length > 0); }
+```
+
+(La línea `document.getElementById('sm-hoyo').textContent = hoyoEmoji + 'Hoyo ' + hoyo;` pisa a propósito el valor que ya se había puesto más arriba en la función — `document.getElementById('sm-hoyo').textContent = 'Hoyo ' + hoyo;` —, no hace falta tocar esa línea de arriba, solo dejar que esta la sobreescriba.)
+
+### Cambio 4 — JS: mismo emoji de Long Drive en el cartel de la pantalla de fondo
+
+Para que sea el mismo emoji en todos lados, buscá en `liveRenderHoyoActual()`:
+
+```js
+    if(bonusHoyos.ba === LIVE_HOYO) avisos.push('🎯 Best Approach en este hoyo');
+    if(bonusHoyos.ld === LIVE_HOYO) avisos.push('🏌 Long Drive en este hoyo');
+```
+
+Reemplazalo por:
+
+```js
+    if(bonusHoyos.ba === LIVE_HOYO) avisos.push('🎯 Best Approach en este hoyo');
+    if(bonusHoyos.ld === LIVE_HOYO) avisos.push('💪 Long Drive en este hoyo');
+```
+
+### Qué NO cambia
+
+- El cartel dorado (`#sm-bonus-banner`) de la Tarea 33 — sigue igual, solo le agregamos el encabezado y el emoji como refuerzo extra.
+- El texto "Best Approach en este hoyo" / "Long Drive en este hoyo" del cartel — sin cambios, solo el emoji de Long Drive.
+- No hay cambios de backend — 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 34
+
+1. ¿En el hoyo del bonus, el encabezado de la ventana ahora se ve con fondo dorado, letras azul marino, y el emoji correspondiente (🎯 o 💪) al lado de "Hoyo X", además del cartel de abajo?
+2. ¿En un hoyo que NO es de bonus, el encabezado se ve igual que siempre (azul marino con letras blancas, sin emoji, "Hoyo X" solo)?
+3. ¿El nombre del jugador arriba del todo (el rectángulo navy con el apodo) se sigue viendo igual, sin verse afectado por el cambio de color del encabezado?
+4. ¿El cartel de la pantalla de fondo (`#live-bonus-banner`) también muestra ahora 💪 para Long Drive en vez de 🏌?
+5. Hash y mensaje del commit.
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+## ✅ Respuestas de verificación — Tarea 34
+
+1. **Sí.** En `liveOpenScoreModal`, cuando el hoyo es de bonus: `hoyoEmoji` se arma con `'🎯 '` y/o `'💪 '`, y se asigna `sm-hoyo.textContent = hoyoEmoji + 'Hoyo ' + hoyo` (por ejemplo `'🎯 Hoyo 3'`). Luego `smHdr.classList.toggle('bonus', true)` agrega la clase `.bonus` al div `#sm-hdr`, que por CSS recibe `background:var(--gold); color:var(--navy); border-bottom-color:var(--navy)`. El cartel dorado (`#sm-bonus-banner`) también se muestra debajo del header.
+
+2. **Sí.** Cuando el hoyo no es de bonus, `avisos` queda vacío: `hoyoEmoji` es `''`, `sm-hoyo` dice solo `'Hoyo X'`, y `classList.toggle('bonus', false)` remueve (o nunca agrega) la clase. El header queda con su CSS original: `background:var(--navy); color:#fff; border-bottom:3px solid var(--red)`. El cartel se oculta. Idéntico a antes.
+
+3. **Sí.** `sm-player-name` es un elemento hijo dentro de `sm-hdr`, pero tiene su propio estilo definido por `.sm-player-name` (fondo y color propios, no hereda el del padre cuando tiene estilos explícitos). La clase `.bonus` solo cambia el fondo y color del `sm-hdr` como bloque — los hijos con estilos propios no se ven afectados porque sus reglas tienen mayor especificidad. El apodo del jugador se sigue viendo igual.
+
+4. **Sí.** En `liveRenderHoyoActual()`, la línea:
+   ```js
+   if(bonusHoyos.ld === LIVE_HOYO) avisos.push('🏌 Long Drive en este hoyo');
+   ```
+   fue reemplazada por:
+   ```js
+   if(bonusHoyos.ld === LIVE_HOYO) avisos.push('💪 Long Drive en este hoyo');
+   ```
+   El cartel de la pantalla de fondo ahora usa 💪 en todos lados.
+
+5. **Hash:** `111b607` — "Tarea 34: encabezado dorado y emoji en modal de score para hoyo de bonus"
+
+6. Sin dudas. Nota técnica: la línea `document.getElementById('sm-hoyo').textContent = 'Hoyo ' + hoyo;` que ya existía antes en la función queda sin tocar — la línea nueva `document.getElementById('sm-hoyo').textContent = hoyoEmoji + 'Hoyo ' + hoyo;` la sobreescribe inmediatamente después, como indica la consigna.
