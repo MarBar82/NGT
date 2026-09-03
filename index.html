@@ -664,6 +664,8 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .sm-hdr{background:var(--navy);color:#fff;padding:14px 18px;text-align:center;border-bottom:3px solid var(--red);}
 .sm-hoyo{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;letter-spacing:.06em;}
 .sm-par{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-top:2px;}
+.sm-hdr.bonus{background:var(--gold);color:var(--navy);border-bottom-color:var(--navy);}
+.sm-hdr.bonus .sm-par{color:var(--navy);}
 .sm-big{text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:56px;font-weight:800;color:var(--navy);padding:14px 0;}
 .sm-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:12px;}
 .sm-keypad button{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--navy);background:var(--off);border:1px solid var(--g2);border-radius:6px;padding:16px 8px;cursor:pointer;transition:.1s;min-height:54px;}
@@ -1922,7 +1924,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <!-- Score picker modal -->
 <div id="score-modal" class="sm-overlay" style="display:none;" onclick="smClose(event)">
   <div class="sm-box" onclick="event.stopPropagation()">
-    <div class="sm-hdr">
+    <div class="sm-hdr" id="sm-hdr">
       <div class="sm-player-name" id="sm-player-name"></div>
       <div class="sm-hoyo" id="sm-hoyo">Hoyo 1</div>
       <div class="sm-par" id="sm-par">Par 4</div>
@@ -6292,7 +6294,7 @@ function liveRenderHoyoActual(){
   if(banner){
     var avisos = [];
     if(bonusHoyos.ba === LIVE_HOYO) avisos.push('🎯 Best Approach en este hoyo');
-    if(bonusHoyos.ld === LIVE_HOYO) avisos.push('🏌 Long Drive en este hoyo');
+    if(bonusHoyos.ld === LIVE_HOYO) avisos.push('💪 Long Drive en este hoyo');
     if(avisos.length){
       banner.textContent = avisos.join(' · ');
       banner.style.display = 'block';
@@ -6731,10 +6733,13 @@ function liveOpenScoreModal(hoyo, mat){
 
   var bonusHoyos = LIVE_LINEA_DATA.bonusHoyos || {};
   var smBanner = document.getElementById('sm-bonus-banner');
+  var smHdr = document.getElementById('sm-hdr');
+  var avisos = [];
+  var hoyoEmoji = '';
+  if(bonusHoyos.ba === hoyo){ avisos.push('🎯 Best Approach en este hoyo'); hoyoEmoji += '🎯 '; }
+  if(bonusHoyos.ld === hoyo){ avisos.push('💪 Long Drive en este hoyo'); hoyoEmoji += '💪 '; }
+  document.getElementById('sm-hoyo').textContent = hoyoEmoji + 'Hoyo ' + hoyo;
   if(smBanner){
-    var avisos = [];
-    if(bonusHoyos.ba === hoyo) avisos.push('🎯 Best Approach en este hoyo');
-    if(bonusHoyos.ld === hoyo) avisos.push('🏌 Long Drive en este hoyo');
     if(avisos.length){
       smBanner.textContent = avisos.join(' · ');
       smBanner.style.display = 'block';
@@ -6742,6 +6747,7 @@ function liveOpenScoreModal(hoyo, mat){
       smBanner.style.display = 'none';
     }
   }
+  if(smHdr){ smHdr.classList.toggle('bonus', avisos.length > 0); }
 
   document.getElementById('score-modal').style.display = 'flex';
 }
