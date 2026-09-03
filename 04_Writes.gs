@@ -856,7 +856,7 @@ function eliminarFecha_(params) {
   SpreadsheetApp.flush();
   audit_('ELIMINAR_FECHA', 'admin', { fecha, changes });
   try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
-  try { CacheService.getScriptCache().removeAll(['fechas','fechasConEstado']); } catch(e) {}
+  try { CacheService.getScriptCache().removeAll(['fechas','fechasConEstado','fechaActiva','fl_' + String(fecha)]); } catch(e) {}
 
   // Limpiar FECHA_META para que el botón FECHA desaparezca del home
   try {

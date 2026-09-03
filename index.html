@@ -690,7 +690,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .live-player-hcp{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
 .live-cargado-por{font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--g4);margin-top:2px;letter-spacing:.02em;}
 .live-hole-wrap{display:flex;align-items:center;gap:8px;}
-#live-bonus-banner{background:var(--gold);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-align:center;padding:9px 12px;border-radius:6px;margin-bottom:8px;}
+.bonus-banner{background:var(--gold);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-align:center;padding:9px 12px;border-radius:6px;margin-bottom:8px;}
 .live-stb-badge{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);min-width:28px;text-align:center;line-height:1;}
 .live-stb-pts{font-size:9px;font-weight:400;display:block;}
 .live-offline{background:#fee;border-radius:3px;padding:8px 12px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--red);margin-top:8px;text-align:center;}
@@ -1869,7 +1869,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
       <!-- Pane: Tarjeta -->
       <div id="live-pane-tarjeta">
-        <div id="live-bonus-banner" style="display:none;"></div>
+        <div id="live-bonus-banner" class="bonus-banner" style="display:none;"></div>
         <div id="live-hoyo-view">
           <div class="adm-card">
             <div class="adm-card-hdr">
@@ -1927,6 +1927,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       <div class="sm-hoyo" id="sm-hoyo">Hoyo 1</div>
       <div class="sm-par" id="sm-par">Par 4</div>
     </div>
+    <div id="sm-bonus-banner" class="bonus-banner" style="display:none;"></div>
     <div class="sm-big" id="sm-big">–</div>
     <div class="sm-keypad" id="sm-keypad-low">
       <button onclick="smSetAndClose(1)">1</button>
@@ -2034,80 +2035,100 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
       <!-- Paso indicator -->
       <div class="adm-steps">
-        <div class="adm-step on" id="step-ind-1"><span class="adm-step-num">1</span><span class="adm-step-lbl">Datos</span></div>
+        <div class="adm-step on" id="step-ind-1"><span class="adm-step-num">1</span><span class="adm-step-lbl">Cancha</span></div>
         <div class="adm-step-bar"></div>
-        <div class="adm-step" id="step-ind-2"><span class="adm-step-num">2</span><span class="adm-step-lbl">Matches</span></div>
+        <div class="adm-step" id="step-ind-1b"><span class="adm-step-num">2</span><span class="adm-step-lbl">Jugadores</span></div>
+        <div class="adm-step-bar"></div>
+        <div class="adm-step" id="step-ind-2"><span class="adm-step-num">3</span><span class="adm-step-lbl">Líneas</span></div>
       </div>
 
-      <!-- PASO 1: datos -->
+      <!-- PASO 1: datos (dividido en 1a Cancha / 1b Jugadores) -->
       <div class="adm-card" id="step-1">
-        <div class="adm-card-hdr">📅 Paso 1 · Datos de la Fecha</div>
-        <div class="adm-card-body">
 
-          <div class="adm-row">
-            <div class="adm-field">
-              <label class="adm-label">Número de Fecha</label>
-              <input type="number" id="adm-fecha" class="adm-input" placeholder="3" min="1">
+        <!-- PASO 1a: Cancha -->
+        <div id="step-1a">
+          <div class="adm-card-hdr">📅 Paso 1 · Cancha</div>
+          <div class="adm-card-body">
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Número de Fecha</label>
+                <input type="number" id="adm-fecha" class="adm-input" placeholder="3" min="1">
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Cancha</label>
+                <select id="adm-cancha" class="adm-input" onchange="loadColoresCancha()">
+                  <option value="">Cargando...</option>
+                </select>
+              </div>
             </div>
-            <div class="adm-field">
-              <label class="adm-label">Cancha</label>
-              <select id="adm-cancha" class="adm-input" onchange="loadColoresCancha()">
-                <option value="">Cargando...</option>
-              </select>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Color de Salidas</label>
+                <select id="adm-color-tee" class="adm-input">
+                  <option value="BLANCAS">Blancas (default)</option>
+                </select>
+                <div class="adm-hint" id="adm-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+              </div>
             </div>
+
+            <div class="adm-row" style="margin-top:14px;">
+              <div class="adm-field">
+                <label class="adm-label">Horario de salida</label>
+                <input type="time" id="adm-horario" class="adm-input" value="09:40">
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Green Fee</label>
+                <input type="text" id="adm-greenfee" class="adm-input" placeholder="$ 0.000">
+              </div>
+            </div>
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo de salida</label>
+                <select id="adm-hoyo-salida" class="adm-input">
+                  <option value="1">Hoyo 1</option>
+                  <option value="10">Hoyo 10</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo Best Approach <span style="font-size:10px;opacity:.6;">(par 3)</span></label>
+                <select id="adm-bonus-ba" class="adm-input" disabled>
+                  <option value="">— Seleccioná cancha primero —</option>
+                </select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Hoyo Long Drive <span style="font-size:10px;opacity:.6;">(par 4/5)</span></label>
+                <select id="adm-bonus-ld" class="adm-input" disabled>
+                  <option value="">— Seleccioná cancha primero —</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="adm-btn-primary" id="wiz-siguiente-btn" onclick="wizPaso1aNext()" style="margin-top:18px;">Siguiente →</button>
+            <div id="adm-crear-msg-cancha" class="adm-msg" style="display:none;"></div>
           </div>
-
-          <div class="adm-row">
-            <div class="adm-field">
-              <label class="adm-label">Color de Salidas</label>
-              <select id="adm-color-tee" class="adm-input">
-                <option value="BLANCAS">Blancas (default)</option>
-              </select>
-              <div class="adm-hint" id="adm-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
-            </div>
-          </div>
-
-          <label class="adm-label">Jugadores que disputan la fecha</label>
-          <div id="adm-jugadores-list" class="adm-jugs">Cargando...</div>
-
-          <div class="adm-row" style="margin-top:14px;">
-            <div class="adm-field">
-              <label class="adm-label">Horario de salida</label>
-              <input type="time" id="adm-horario" class="adm-input" value="09:40">
-            </div>
-            <div class="adm-field">
-              <label class="adm-label">Green Fee</label>
-              <input type="text" id="adm-greenfee" class="adm-input" placeholder="$ 0.000">
-            </div>
-          </div>
-          <div class="adm-row">
-            <div class="adm-field">
-              <label class="adm-label">Hoyo de salida</label>
-              <select id="adm-hoyo-salida" class="adm-input">
-                <option value="1">Hoyo 1</option>
-                <option value="10">Hoyo 10</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="adm-row">
-            <div class="adm-field">
-              <label class="adm-label">Hoyo Best Approach <span style="font-size:10px;opacity:.6;">(par 3)</span></label>
-              <select id="adm-bonus-ba" class="adm-input" disabled>
-                <option value="">— Seleccioná cancha primero —</option>
-              </select>
-            </div>
-            <div class="adm-field">
-              <label class="adm-label">Hoyo Long Drive <span style="font-size:10px;opacity:.6;">(par 4/5)</span></label>
-              <select id="adm-bonus-ld" class="adm-input" disabled>
-                <option value="">— Seleccioná cancha primero —</option>
-              </select>
-            </div>
-          </div>
-
-          <button class="adm-btn-primary" id="wiz-armar-btn" onclick="wizArmarLineas()" style="margin-top:18px;">⚡ Armar Líneas →</button>
-          <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
         </div>
+
+        <!-- PASO 1b: Jugadores -->
+        <div id="step-1b" style="display:none;">
+          <div class="adm-card-hdr">👥 Paso 2 · Jugadores</div>
+          <div class="adm-card-body">
+
+            <label class="adm-label">Jugadores que disputan la fecha</label>
+            <div id="adm-jugadores-list" class="adm-jugs">Cargando...</div>
+
+            <div class="adm-btn-row" style="margin-top:18px;">
+              <button class="btn-back" onclick="wizPaso1aBack()">← Volver</button>
+              <button class="adm-btn-primary" id="wiz-armar-btn" onclick="wizArmarLineas()">⚡ Armar Líneas →</button>
+            </div>
+            <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
       </div>
 
       <!-- PASO 2: matches -->
@@ -3695,7 +3716,7 @@ function wizMostrarPaso2_(jugsInFecha, canchaName){
   const d = WIZ_PASO1_DATA;
   document.getElementById('step-1').style.display = 'none';
   document.getElementById('step-2').style.display = 'block';
-  document.getElementById('step-ind-1').classList.remove('on');
+  document.getElementById('step-ind-1b').classList.remove('on');
   document.getElementById('step-ind-2').classList.add('on');
   document.getElementById('adm-s2-summary').innerHTML =
     '<b>Fecha ' + d.fecha + '</b> · ' + canchaName + ' · ' + d.jugadores.length + ' jugadores' +
@@ -3826,8 +3847,46 @@ function wizPaso1Next(){
 
 function wizPaso1Back(){
   document.getElementById('step-1').style.display = 'block';
+  document.getElementById('step-1a').style.display = 'none';
+  document.getElementById('step-1b').style.display = 'block';
+  document.getElementById('step-2').style.display = 'none';
+  document.getElementById('step-ind-1b').classList.add('on');
+  document.getElementById('step-ind-2').classList.remove('on');
+}
+
+function wizPaso1aNext(){
+  const fechaEl = document.getElementById('adm-fecha');
+  const canchaEl = document.getElementById('adm-cancha');
+  const fecha = fechaEl ? fechaEl.value.trim() : '';
+  const canchaId = canchaEl ? canchaEl.value.trim() : '';
+  const msg = document.getElementById('adm-crear-msg-cancha');
+  msg.style.display = 'none';
+  if(!fecha){
+    msg.className = 'adm-msg err'; msg.textContent = 'Falta el número de fecha'; msg.style.display = 'block'; return;
+  }
+  if(!canchaId){
+    msg.className = 'adm-msg err'; msg.textContent = 'Falta seleccionar cancha'; msg.style.display = 'block'; return;
+  }
+  document.getElementById('step-1a').style.display = 'none';
+  document.getElementById('step-1b').style.display = 'block';
+  document.getElementById('step-ind-1').classList.remove('on');
+  document.getElementById('step-ind-1b').classList.add('on');
+}
+
+function wizPaso1aBack(){
+  document.getElementById('step-1b').style.display = 'none';
+  document.getElementById('step-1a').style.display = 'block';
+  document.getElementById('step-ind-1b').classList.remove('on');
+  document.getElementById('step-ind-1').classList.add('on');
+}
+
+function wizResetWizardCompleto_(){
+  document.getElementById('step-1').style.display = 'block';
+  document.getElementById('step-1a').style.display = 'block';
+  document.getElementById('step-1b').style.display = 'none';
   document.getElementById('step-2').style.display = 'none';
   document.getElementById('step-ind-1').classList.add('on');
+  document.getElementById('step-ind-1b').classList.remove('on');
   document.getElementById('step-ind-2').classList.remove('on');
 }
 
@@ -3916,7 +3975,7 @@ function finalizarWizard(rFecha, rMatches){
     document.getElementById('adm-fecha').value = '';
     document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
     WIZ_PASO1_DATA = null;
-    wizPaso1Back();
+    wizResetWizardCompleto_();
     // Limpiar caches y refrescar home con la nueva fecha
     try { localStorage.removeItem('ngt_fechaActiva'); } catch(e){}
     ngtInitData(); // recarga home con el nuevo botón FECHA
@@ -6669,6 +6728,21 @@ function liveOpenScoreModal(hoyo, mat){
   document.getElementById('sm-big').textContent = currentScore !== null ? currentScore : '–';
   document.getElementById('sm-keypad-low').style.display = 'grid';
   document.getElementById('sm-keypad-high').style.display = 'none';
+
+  var bonusHoyos = LIVE_LINEA_DATA.bonusHoyos || {};
+  var smBanner = document.getElementById('sm-bonus-banner');
+  if(smBanner){
+    var avisos = [];
+    if(bonusHoyos.ba === hoyo) avisos.push('🎯 Best Approach en este hoyo');
+    if(bonusHoyos.ld === hoyo) avisos.push('🏌 Long Drive en este hoyo');
+    if(avisos.length){
+      smBanner.textContent = avisos.join(' · ');
+      smBanner.style.display = 'block';
+    } else {
+      smBanner.style.display = 'none';
+    }
+  }
+
   document.getElementById('score-modal').style.display = 'flex';
 }
 
