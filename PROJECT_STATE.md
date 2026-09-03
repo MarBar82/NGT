@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-03
+**Última actualización:** 2026-09-03 (Tarea 37 agregada)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -15,6 +15,8 @@ Esto probablemente también explica por qué no veíamos el cartel del bonus: si
 **Fix real, ya no el diagnóstico temporal** — pasa a ser la Tarea 35 (reemplaza a la versión anterior, que era solo un cartelito de diagnóstico y ya no hace falta).
 
 **Antes de que Code haga la Tarea 35, Marco probó de nuevo (con URL fresca, sin caché) y encontró OTRO problema — esta vez cargando scores en vivo, no creando la fecha:** arma la fecha, entra a cargar scores, y a veces (2 de las últimas 3 pruebas) se queda pidiendo el score del último hoyo aunque ya lo cargó, como si no tomara el dato. Es intermitente. Encontré una causa real y coherente con el mismo patrón de fondo (carga de datos en segundo plano pisando datos más nuevos) en `livePoll()` — es la Tarea 36, independiente de la 35, las puede hacer en cualquier orden.
+
+**Después de la 35 y 36, Marco probó de nuevo y reportó DOS cosas: (1) el cartel del bonus sigue sin aparecer, y (2) un bug nuevo, ahora 100% reproducible: borró la fecha de prueba, la volvió a crear, y al cargar los scores del hoyo 1 se quedó pidiendo el score del 4to jugador para siempre — en el celular y en la computadora por igual.** Investigué a fondo el backend de la carga en vivo (`07_LiveScoring.gs`) y encontré la causa real, que probablemente explica AMBOS problemas a la vez — ver Tarea 37 más abajo.
 
 ---
 
@@ -863,21 +865,6 @@ function applyAdminResults_(jugadores, canchas, fechas, doblesDisponibles){
 4. Hash y mensaje del commit.
 5. ¿Alguna duda o algo ambiguo de la consigna?
 
-## ✅ Respuestas de verificación — Tarea 35
-
-1. **Sí.** La función `applyAdminResults_` fue encontrada en línea 3485 de `index.html` y reemplazada exactamente como se indica. Los tres bloques clave cambiaron:
-   - `adm-cancha`: se guarda `prevCs = cs.value` antes de reconstruir el `innerHTML`, y después se restaura con `if(prevCs) cs.value = prevCs`.
-   - `adm-edit-cancha`: ídem con `prevCsE`.
-   - `adm-jugadores-list`: se guarda un `Set` de las matriculas ya tildadas (`prevChecked`) antes de reconstruir el HTML, y después se itera el Set para volver a tildar las que correspondan.
-
-2. **Sí.** Con el fix: cuando `applyAdminResults_` corre en segundo plano (puede ser segundos después de que el admin ya eligió cancha y jugadores), primero guarda los valores actuales del DOM, luego reconstruye, y finalmente restaura. La cancha que el admin había seleccionado queda restituida en el `<select>` (mismo `value`), y los jugadores que ya estaban tildados quedan tildados de nuevo. El admin no nota nada — todo se mantiene.
-
-3. **Sí.** En el caso normal (el admin espera a que cargue antes de tocar algo), `prevCs` es `''` (el placeholder "Seleccionar cancha...") y `prevChecked` es un `Set` vacío. Las líneas de restauración hacen `if(prevCs) cs.value = prevCs` → no entra (string vacío es falsy), y `prevChecked.forEach(...)` → no itera nada. Comportamiento idéntico al anterior.
-
-4. **Hash:** `266f0b1` — "Tareas 35/36: preservar seleccion admin al recargar datos en segundo plano; descartar polls viejos en livePoll"
-
-5. Sin dudas. El resto de `applyAdminResults_` (bloque de Dobles) no fue tocado, tal como se pedía.
-
 ### 📋 Para Marco — después de este fix
 
 Probá de nuevo el flujo completo de "Crear Fecha" (cancha, hoyos de bonus, jugadores, armar líneas, comenzar partida) con una fecha NUEVA. Si llega a andar bien de punta a punta, probá también si ahora sí ves el cartel/color/emoji del bonus al cargar el score de ese hoyo — es muy probable que ese problema se resuelva solo, porque puede que la fecha vieja que usabas para probar se haya guardado con datos incompletos por este mismo bug.
@@ -976,18 +963,122 @@ function livePoll(){
 4. Hash y mensaje del commit.
 5. ¿Alguna duda o algo ambiguo de la consigna?
 
-## ✅ Respuestas de verificación — Tarea 36
-
-1. **Sí.** Se agregó `let LIVE_POLL_SEQ = 0;` justo después de `LIVE_LOCAL_SEQ`. En `livePoll()`, al inicio se hace `var myPollId = ++LIVE_POLL_SEQ;` (incrementa el contador global y guarda el valor en la closure de esta llamada particular). Dentro del `.then()`, se evalúa `var esRespuestaVigente = (LIVE_LOCAL_SEQ === seqAtPollTime) && (myPollId === LIVE_POLL_SEQ);` — ambas condiciones deben cumplirse para que la respuesta se considere válida.
-
-2. **Sí.** Escenario: poll #1 arranca con `myPollId=1`, `LIVE_POLL_SEQ=1`. Poll #2 arranca 8 segundos después con `myPollId=2`, `LIVE_POLL_SEQ=2`. Poll #2 responde primero: `myPollId(2) === LIVE_POLL_SEQ(2)` → `esRespuestaVigente=true` → actualiza datos y UI normalmente. Luego llega poll #1 (el viejo): `myPollId(1) !== LIVE_POLL_SEQ(2)` → `esRespuestaVigente=false` → `LIVE_LINEA_DATA` NO se pisa, y el chequeo `allComplete`/`livePollStop()` NO se ejecuta. Los datos más nuevos que ya llegaron quedan intactos. La pantalla no "da marcha atrás".
-
-3. **Sí.** En el caso normal, cada poll responde antes de que salga el siguiente: poll #1 responde cuando `LIVE_POLL_SEQ=1` y `myPollId=1` → `esRespuestaVigente=true`. Exactamente igual que antes del fix. Y la protección contra carga local (`LIVE_LOCAL_SEQ === seqAtPollTime`) sigue funcionando igual — no fue tocada.
-
-4. **Hash:** `266f0b1` — (mismo commit que Tarea 35)
-
-5. Sin dudas. El `liveRender()` sigue siendo llamado siempre (incluso cuando `esRespuestaVigente=false`), porque eso asegura que la UI muestre el estado correcto aunque no se actualice `LIVE_LINEA_DATA` — no hay regresión en el renderizado.
-
 ### 📋 Para Marco — después de este fix
 
 Esto es harder de reprobar a propósito porque depende de la velocidad de la red en el momento — no hay una forma 100% segura de "forzarlo" para confirmar. Lo mejor es simplemente seguir usando la carga de scores en vivo unas cuantas veces más (sobre todo con mala señal, que es cuando más chances tiene de pasar) y avisarme si se te vuelve a quedar pidiendo un hoyo que ya cargaste.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 37 (bug real: al borrar y recrear una fecha, la carga de scores en vivo "recuerda" filas viejas — probablemente la misma causa del cartel de bonus que nunca aparece)
+
+### El problema, explicado simple
+
+Cuando cargás un score en vivo, la app no busca la fila del jugador en la hoja TARJETAS cada vez (sería lento) — la primera vez la busca y después la "recuerda" en una memoria temporal (caché) durante hasta 6 horas, para ir más rápido las próximas veces.
+
+El problema es este: cuando **borrás una fecha**, esa "fila recordada" de cada jugador NO se olvida. Y cuando volvés a crear la fecha (con la misma fecha de calendario, como hacés vos al probar), las tarjetas nuevas se crean en **filas distintas** a las de la fecha borrada. Resultado: la app sigue usando la fila VIEJA que tenía recordada — que ahora es la fila equivocada — en vez de la fila nueva y correcta.
+
+Esto explica el "se queda pidiendo el score del 4to jugador": la pantalla avisa el próximo hoyo de forma instantánea para los primeros 3 jugadores (no espera confirmación del servidor, por velocidad), pero el ÚLTIMO jugador de cada hoyo sí necesita la confirmación real del servidor para poder avanzar. Si esa confirmación viene con datos de la fila equivocada (por la memoria vieja), la pantalla nunca la da por buena y se queda esperando ese jugador para siempre — pasa igual en el celular y en la compu porque el problema está en el servidor, no en el aparato.
+
+**Es muy probable que esta misma causa explique por qué nunca viste el cartel del bonus**: para avisar el bonus, el servidor necesita confirmar que los 4 jugadores de la línea ya tienen score en ese hoyo — pero si está leyendo la fila equivocada de alguno de ellos por la memoria vieja, nunca da esa confirmación, y el cartel nunca se dispara. No es un problema del diseño del cartel (ya lo revisamos línea por línea y está bien hecho y bien publicado) — es que el servidor nunca le avisa al navegador que hay que mostrarlo.
+
+**El fix:** cuando se borra una fecha, hay que borrar también esa "memoria de filas" de cada jugador de esa fecha (y no solo la memoria general, que ya se limpiaba desde la Tarea 32). Así, al recrear la fecha, la próxima carga de scores busca la fila de nuevo desde cero — la correcta.
+
+⚠️ **Este cambio es en un archivo `.gs` (backend) — después de que Code lo suba a GitHub, tenés que ir vos a Extensiones → Apps Script en Google Sheets, y hacer Deploy → Manage deployments → Edit → New version → Deploy, para que el cambio quede activo.** No alcanza con el push a GitHub.
+
+📌 **Importante para probar después:** el fix solo limpia la memoria de las fechas que se borren DESPUÉS de instalarlo. Para probar, primero desplegá el cambio en Apps Script, y RECIÉN DESPUÉS borrá la fecha de prueba actual y volvé a crearla — así el borrado (ya con el fix puesto) limpia bien la memoria vieja que pueda haber quedado de las pruebas anteriores.
+
+### Dónde está el código
+
+Archivo `04_Writes.gs`, función `eliminarFecha_(params)`.
+
+### Cambio 1 — capturar las matrículas de la fecha ANTES de borrar sus filas de TARJETAS
+
+Buscá esta línea:
+
+```js
+  // ── 3. TARJETAS — eliminar filas ─────────────────────────────────────────
+  changes.tarjetas = deleteRowsForFecha(getSheet_(SHEETS.TARJETAS), 1); // col A = fecha
+```
+
+Reemplazala por:
+
+```js
+  // ── 3. TARJETAS — capturar matrículas ANTES de borrar (para limpiar su caché de fila) ──
+  const tarjSh_ = getSheet_(SHEETS.TARJETAS);
+  let matriculasDeLaFecha_ = [];
+  if (tarjSh_) {
+    const lastT_ = tarjSh_.getLastRow();
+    if (lastT_ >= 2) {
+      const abT_ = tarjSh_.getRange(2, 1, lastT_ - 1, 2).getValues();
+      matriculasDeLaFecha_ = abT_
+        .filter(function(r){ return String(r[0]).trim() === fStr; })
+        .map(function(r){ return String(r[1]).trim(); });
+    }
+  }
+
+  // ── 3b. TARJETAS — eliminar filas ─────────────────────────────────────────
+  changes.tarjetas = deleteRowsForFecha(tarjSh_, 1); // col A = fecha
+```
+
+### Cambio 2 — limpiar la caché de fila de cada jugador al borrar la fecha
+
+Buscá esta línea (más abajo, cerca del final de la función, donde ya se limpia la caché general):
+
+```js
+  try { CacheService.getScriptCache().removeAll(['fechas','fechasConEstado','fechaActiva','fl_' + String(fecha)]); } catch(e) {}
+```
+
+Reemplazala por:
+
+```js
+  try {
+    const cache_ = CacheService.getScriptCache();
+    const keysABorrar_ = ['fechas','fechasConEstado','fechaActiva','fl_' + String(fecha)];
+    // Limpiar también la "fila recordada" y el "último que cargó" de cada jugador de esta
+    // fecha — si no se borran, quedan apuntando a filas viejas (hasta 6hs) y al recrear la
+    // fecha (con filas nuevas en otra posición), la app lee/escribe la fila equivocada.
+    matriculasDeLaFecha_.forEach(function(m){
+      keysABorrar_.push('tRow_' + fStr + '_' + m);
+      keysABorrar_.push('lastCarg_' + fStr + '_' + m);
+    });
+    cache_.removeAll(keysABorrar_);
+  } catch(e) {}
+```
+
+### Qué NO cambia
+
+- El resto de `eliminarFecha_()` (borrado de STB, PB, MATCH, SCORE, FECHA_META) — sin tocar.
+- No hay cambios de frontend — 100% backend (`04_Writes.gs`), requiere el deploy manual en Apps Script explicado arriba.
+- `fStr` ya existe al principio de la función (`const fStr = String(fecha);`) — no hace falta declararlo de nuevo, ya está disponible para usar en el Cambio 2.
+
+### ❓ Preguntas de verificación — Tarea 37
+
+1. ¿Capturaste `matriculasDeLaFecha_` ANTES de borrar las filas de TARJETAS (para tener las matrículas correctas, antes de que desaparezcan)?
+2. ¿El `removeAll` al final ahora incluye, además de las 4 claves generales de siempre, dos claves por cada jugador de la fecha (`tRow_...` y `lastCarg_...`)?
+3. Si la fecha no tenía ninguna tarjeta cargada todavía (recién creada, sin scores), ¿el código sigue funcionando sin errores (¿`matriculasDeLaFecha_` queda como array vacío y no rompe nada)?
+4. Hash y mensaje del commit.
+5. ¿Alguna duda o algo ambiguo de la consigna?
+
+## ✅ Respuestas de verificación — Tarea 37
+
+1. **Sí.** El Cambio 1 captura las matrículas ANTES de llamar a `deleteRowsForFecha`. Primero obtiene la hoja TARJETAS con `getSheet_(SHEETS.TARJETAS)`, lee las columnas A y B de todas las filas, filtra las que coincidan con `fStr` (la fecha a borrar), y extrae las matrículas de la columna B — todo eso en `matriculasDeLaFecha_`. Recién después (Cambio 1b) llama a `deleteRowsForFecha(tarjSh_, 1)` que borra esas filas. El orden garantiza que las matrículas se capturan cuando las filas todavía existen.
+
+2. **Sí.** El `removeAll` ahora arma el array `keysABorrar_` con las 4 claves generales de siempre (`'fechas'`, `'fechasConEstado'`, `'fechaActiva'`, `'fl_' + String(fecha)`), y luego itera `matriculasDeLaFecha_` para agregar `'tRow_' + fStr + '_' + m` y `'lastCarg_' + fStr + '_' + m` por cada jugador. Finalmente pasa el array completo a `cache_.removeAll(keysABorrar_)`.
+
+3. **Sí.** Si la fecha no tiene ninguna tarjeta cargada: `abT_` sería un array de filas que no incluye ninguna con `String(r[0]).trim() === fStr`, por lo que `matriculasDeLaFecha_` queda como `[]`. También hay un guard: si `lastT_ < 2` (hoja vacía o solo encabezado), el bloque `if(lastT_ >= 2)` no entra y `matriculasDeLaFecha_` queda como `[]` inicializado arriba. En el `forEach` de `[]`, no se itera nada — `keysABorrar_` queda con solo las 4 claves generales. El `removeAll` funciona igual que antes. Sin errores.
+
+4. **Hash:** `c58f04f` — "Tarea 37: limpiar cache de filas de tarjetas al eliminar fecha"
+
+5. Sin dudas. Nota: `fStr` ya existía al principio de `eliminarFecha_` (`const fStr = String(fecha);`), tal como se aclaró en la consigna — no fue necesario redeclararlo.
+
+### 📋 Para Marco — después de este fix
+
+Este cambio es en un archivo `.gs`, así que **no alcanza con que Code lo suba a GitHub** — vos tenés que entrar a Apps Script (Extensiones → Apps Script desde el Google Sheet) y hacer un nuevo Deploy para que quede activo.
+
+Una vez desplegado, probá así (en ese orden, para que la prueba sea limpia):
+1. Borrá la fecha de prueba que tenías con el problema.
+2. Volvé a crearla.
+3. Cargá los scores del hoyo 1 con los 4 jugadores — fijate si ahora avanza bien después del 4to jugador.
+4. Seguí jugando hasta llegar al hoyo de bonus — fijate si ahora sí aparece el cartel dorado.
+
+Si el cartel de bonus sigue sin aparecer después de esto, avisame — ahí sí tendría que ser otra causa distinta, y lo investigo de nuevo desde cero con esa información.
