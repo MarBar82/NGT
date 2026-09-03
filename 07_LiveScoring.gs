@@ -200,6 +200,7 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
     jugadores:     jugadores,
     matches:       matches,
     bonusPendiente: null,
+    bonusHoyos:    meta.bonusHoyos || {},
   };
 }
 
@@ -209,7 +210,7 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
  * Devuelve el snapshot fresco de toda la línea (req 6.2 — mismo shape que getLineaLive).
  */
 function cargarHoyoLive_(params) {
-  const { fecha, matriculaJugador, matriculaCargador, hoyo, score } = params;
+  const { fecha, matriculaJugador, matriculaCargador, token, adminKey, hoyo, score } = params;
   if (!fecha || !matriculaJugador || !hoyo)
     return { ok: false, error: 'Faltan parámetros' };
 
@@ -222,8 +223,13 @@ function cargarHoyoLive_(params) {
   const cargStr = String(matriculaCargador || '').trim();
   if (!cargStr) return { ok: false, error: 'Falta matriculaCargador' };
 
-  // Auth: matriculaCargador en la misma línea que matriculaJugador (o admin)
-  const isAdmin = checkAdmin_(cargStr);
+  // Auth: matriculaCargador tiene que estar realmente logueado como esa matrícula
+  // (o ser Admin) antes de dejarlo cargar en la línea.
+  const isAdmin = adminKey && checkAdmin_(adminKey);
+  if (!isAdmin) {
+    const sess = validarSesion_(String(token || '').trim());
+    if (!sess || String(sess.mat) !== cargStr) return { ok: false, error: 'Sesión inválida — volvé a iniciar sesión' };
+  }
   const meta    = getFechaMeta_(fStr);
   if (!meta || !meta.lineas) return { ok: false, error: 'Fecha no encontrada' };
 

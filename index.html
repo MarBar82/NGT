@@ -690,6 +690,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .live-player-hcp{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
 .live-cargado-por{font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--g4);margin-top:2px;letter-spacing:.02em;}
 .live-hole-wrap{display:flex;align-items:center;gap:8px;}
+#live-bonus-banner{background:var(--gold);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-align:center;padding:9px 12px;border-radius:6px;margin-bottom:8px;}
 .live-stb-badge{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);min-width:28px;text-align:center;line-height:1;}
 .live-stb-pts{font-size:9px;font-weight:400;display:block;}
 .live-offline{background:#fee;border-radius:3px;padding:8px 12px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--red);margin-top:8px;text-align:center;}
@@ -1532,11 +1533,12 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .tb-player-avatar img,.ham-avatar img{width:100%;height:100%;object-fit:cover;display:block;}
 .tb-player-apodo{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:rgba(255,255,255,.9);text-transform:uppercase;}
 /* ══ FECHA ACTIVA STRIP ══════════════════════════════════════════════════════ */
-#fecha-activa-strip{position:fixed;bottom:66px;left:0;right:0;z-index:195;background:#0d1f36;border-top:2px solid var(--red);display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:40px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-#fecha-activa-strip:active{background:#162840;}
+#fecha-activa-strip{position:fixed;right:14px;bottom:78px;z-index:195;background:var(--red);border-radius:999px;display:flex;align-items:center;gap:8px;padding:10px 16px 10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.28);cursor:pointer;-webkit-tap-highlight-color:transparent;animation:fas-pulse 2.2s ease-in-out infinite;}
+#fecha-activa-strip:active{transform:scale(.96);}
+@keyframes fas-pulse{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.28),0 0 0 0 rgba(200,16,46,.5);}50%{box-shadow:0 4px 14px rgba(0,0,0,.28),0 0 0 8px rgba(200,16,46,0);}}
 .fas-info{display:flex;align-items:center;gap:7px;overflow:hidden;}
 .fas-icon{width:14px;height:14px;flex-shrink:0;stroke:var(--red);}
-#fas-label{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;color:rgba(255,255,255,.9);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#fas-label{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;letter-spacing:.04em;color:#fff;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;}
 .fas-cta{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.06em;color:#fff;white-space:nowrap;flex-shrink:0;}
 /* ══ BOTTOM NAV (Epic 8) ══════════════════════════════════════════════════════ */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--navy);display:flex;align-items:stretch;z-index:200;border-top:1px solid rgba(255,255,255,.1);padding-bottom:env(safe-area-inset-bottom);}
@@ -1867,6 +1869,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
       <!-- Pane: Tarjeta -->
       <div id="live-pane-tarjeta">
+        <div id="live-bonus-banner" style="display:none;"></div>
         <div id="live-hoyo-view">
           <div class="adm-card">
             <div class="adm-card-hdr">
@@ -2115,7 +2118,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           <div id="adm-s2-lineas-preview" style="display:none;margin:10px 0 6px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
           <div class="adm-btn-row">
             <button class="btn-back" onclick="wizPaso1Back()">← Volver</button>
-            <button class="adm-btn-primary" onclick="wizCrearTodo()">🏌 Comenzar Partida</button>
+            <button class="adm-btn-primary" id="wiz-crear-btn" onclick="wizCrearTodo()">🏌 Comenzar Partida</button>
           </div>
           <div id="adm-s2-msg" class="adm-msg" style="display:none;"></div>
         </div>
@@ -3399,11 +3402,8 @@ document.addEventListener('DOMContentLoaded', setTbHeight);
 
 function setFooterHeight(){
   var bnav = document.getElementById('bnav-main');
-  var strip = document.getElementById('fecha-activa-strip');
   var bh = bnav ? bnav.getBoundingClientRect().height : 66;
-  var sh = (strip && strip.style.display !== 'none' && strip.dataset.active === '1')
-    ? (strip.getBoundingClientRect().height || 40) : 0;
-  document.documentElement.style.setProperty('--footer-h', (bh + sh) + 'px');
+  document.documentElement.style.setProperty('--footer-h', bh + 'px');
 }
 setFooterHeight();
 window.addEventListener('resize', setFooterHeight);
@@ -3735,6 +3735,18 @@ function wizArmarLineas(){
   });
 }
 
+function wizMsgTarget_(){
+  var step2 = document.getElementById('step-2');
+  return (step2 && step2.style.display !== 'none') ? 'adm-s2-msg' : 'adm-crear-msg';
+}
+
+function wizResetBotones_(){
+  const b1 = document.getElementById('wiz-armar-btn');
+  if(b1){ b1.disabled = false; b1.textContent = '⚡ Armar Líneas →'; }
+  const b2 = document.getElementById('wiz-rearmar-btn');
+  if(b2){ b2.disabled = false; b2.textContent = '↻ Rearmar'; }
+}
+
 function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canchaName, data, seed){
   const btn = document.getElementById('wiz-armar-btn');
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Armando líneas...'; }
@@ -3755,7 +3767,8 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
   }).then(r => {
     if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar Líneas →'; }
     if(!r || !r.ok){
-      const msg = document.getElementById('adm-crear-msg');
+      wizResetBotones_();
+      const msg = document.getElementById(wizMsgTarget_());
       msg.className = 'adm-msg err';
       msg.textContent = 'Error al armar líneas: ' + (r && r.error ? r.error : 'desconocido');
       msg.style.display = 'block';
@@ -3779,7 +3792,7 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
       let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
         '<strong style="color:' + repeatColor + ';">⚡ ' + r.lines.length + ' líneas · ' +
         r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches' + repeatTxt + '</strong>' +
-        '<button onclick="wizRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
+        '<button id="wiz-rearmar-btn" onclick="wizRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
         '</div>';
       const normalized = normalizeLineasArmado_(r.lines, data.horario, data.hoyoSalida, data.colorTee);
       html += renderFechaCardAdmin_(normalized);
@@ -3787,8 +3800,8 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
       preview.style.display = 'block';
     }
   }).catch(e => {
-    if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar Líneas →'; }
-    const msg = document.getElementById('adm-crear-msg');
+    wizResetBotones_();
+    const msg = document.getElementById(wizMsgTarget_());
     msg.className = 'adm-msg err'; msg.textContent = 'Error de red: ' + e.message; msg.style.display = 'block';
   });
 }
@@ -3796,6 +3809,8 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
 function wizRearmarLineas_(){
   if(!WIZ_LAST_ARMAR_PARAMS) return;
   const { jugadoresConHcp, prioridades, jugsInFecha, canchaName, data } = WIZ_LAST_ARMAR_PARAMS;
+  const btn = document.getElementById('wiz-rearmar-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Rearmando...'; }
   wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canchaName, data, Date.now());
 }
 
@@ -3821,6 +3836,9 @@ function wizCrearTodo(){
 
   const msg = document.getElementById('adm-s2-msg');
   msg.style.display = 'none';
+
+  const crearBtn = document.getElementById('wiz-crear-btn');
+  if(crearBtn){ crearBtn.disabled = true; crearBtn.textContent = '⏳ Creando fecha...'; }
 
   // Los matches ya vienen armados por armarLineas_ (con "Rearmar" el admin pudo pedir otra combinación)
   const matches = WIZ_LINEAS_RESULT
@@ -3850,6 +3868,7 @@ function wizCrearTodo(){
     lineas:      lineasParam,
   }).then(r => {
     if(!r.ok){
+      if(crearBtn){ crearBtn.disabled = false; crearBtn.textContent = '🏌 Comenzar Partida'; }
       msg.className = 'adm-msg err';
       msg.textContent = '✗ Error creando fecha: ' + (r.error || 'desconocido');
       return;
@@ -3867,16 +3886,19 @@ function wizCrearTodo(){
       matches: matches,
     }).then(rm => {
       if(!rm.ok){
+        if(crearBtn){ crearBtn.disabled = false; crearBtn.textContent = '🏌 Comenzar Partida'; }
         msg.className = 'adm-msg err';
         msg.textContent = 'Fecha creada, pero error en matches: ' + (rm.error || '');
         return;
       }
       finalizarWizard(r, rm);
     }).catch(e => {
+      if(crearBtn){ crearBtn.disabled = false; crearBtn.textContent = '🏌 Comenzar Partida'; }
       msg.className = 'adm-msg err';
       msg.textContent = 'Fecha creada, error en matches: ' + e.message;
     });
   }).catch(e => {
+    if(crearBtn){ crearBtn.disabled = false; crearBtn.textContent = '🏌 Comenzar Partida'; }
     msg.className = 'adm-msg err';
     msg.textContent = '✗ Error: ' + e.message;
   });
@@ -6206,6 +6228,20 @@ function liveRenderHoyoActual(){
   document.getElementById('live-hoyo-label').textContent = 'Hoyo ' + LIVE_HOYO;
   document.getElementById('live-par-label').textContent = (par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '');
 
+  var bonusHoyos = d.bonusHoyos || {};
+  var banner = document.getElementById('live-bonus-banner');
+  if(banner){
+    var avisos = [];
+    if(bonusHoyos.ba === LIVE_HOYO) avisos.push('🎯 Best Approach en este hoyo');
+    if(bonusHoyos.ld === LIVE_HOYO) avisos.push('🏌 Long Drive en este hoyo');
+    if(avisos.length){
+      banner.textContent = avisos.join(' · ');
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
   var html = '';
   d.jugadores.forEach(function(jug){
     var score = jug.scores[h];
@@ -6503,6 +6539,7 @@ function liveFirmarJugador(jug){
   return ngtApiPost({
     action: 'cargarTarjeta',
     matricula: jug.matricula,
+    token: NGT_SESSION && NGT_SESSION.token,
     fecha: MIT_FECHA,
     hcp: jug.hcpJuego,
     scores: (jug.scores || []).map(function(s){ return (s === null || s === undefined) ? '' : s; }),
@@ -6669,6 +6706,7 @@ function liveSmConfirm(v){
       fecha: MIT_FECHA,
       matriculaJugador: mat,
       matriculaCargador: MIT_PLAYER.matricula,
+      token: NGT_SESSION && NGT_SESSION.token,
       hoyo: hoyo,
       score: score,
     }).then(function(r){
@@ -6922,6 +6960,7 @@ function mitGuardar(){
   ngtApiPost({
     action: 'cargarTarjeta',
     matricula: MIT_PLAYER.matricula,
+    token: NGT_SESSION && NGT_SESSION.token,
     fecha: MIT_FECHA,
     hcp: hcp,
     scores: scores,

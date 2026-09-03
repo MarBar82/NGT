@@ -273,11 +273,23 @@ function setBonusWinners_(params) {
 }
 
 function cargarTarjeta_(params) {
-  const { matricula, adminKey, fecha, hcp, scores, ld, ba, usarDoble } = params;
+  const { matricula, adminKey, token, fecha, hcp, scores, ld, ba, usarDoble } = params;
   let isAdmin = adminKey && checkAdmin_(adminKey);
   if (!isAdmin) {
     const player = checkPlayerByMat_(matricula);
     if (!player) return { ok: false, error: 'Matrícula no encontrada' };
+
+    // Quien firma tiene que estar realmente logueado, y pertenecer a la misma
+    // línea que el jugador de la tarjeta que está firmando (compañero de línea
+    // cargando por otro, o el propio jugador firmando la suya).
+    const sess = validarSesion_(String(token || '').trim());
+    if (!sess) return { ok: false, error: 'Sesión inválida — volvé a iniciar sesión' };
+    const metaAuth = getFechaMeta_(String(fecha));
+    const mismaLinea = metaAuth && metaAuth.lineas && metaAuth.lineas.some(function(l){
+      const mats = l.map(String);
+      return mats.indexOf(String(matricula)) >= 0 && mats.indexOf(String(sess.mat)) >= 0;
+    });
+    if (!mismaLinea) return { ok: false, error: 'No autorizado para firmar esta tarjeta' };
   }
 
   const sh = getSheet_(SHEETS.TARJETAS);
