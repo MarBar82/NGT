@@ -2817,3 +2817,111 @@ Reemplazala por (se le agrega la clase `c`, junto a las que ya tenía):
 ### 📋 Para Marco — sobre esta tarea
 
 Con esto la tabla de Campeones queda prolija: nombre a la izquierda, todo lo demás centrado y alineado con su propio encabezado. Se publica solo en GitHub Pages.
+
+---
+
+## Tarea 51 — Fase 5, paso 5: terminar Historia — el perfil de jugador
+
+Cabo suelto que había quedado de la Tarea 47: cuando abrís el perfil de un jugador (dentro de la pestaña "Perfiles" de Historia — la foto, las cifras clave, el gráfico de distribución de golpes, etc.), esas tarjetas todavía tienen el radio de esquinas viejo (4-6px) en vez del nuevo (12-20px). Ya confirmé que todas tienen fondo blanco propio, así que no hay riesgo de que se vea mal con el fondo gris de la pantalla. **100% CSS, cero cambios de JavaScript.**
+
+### 1. La tarjeta grande de arriba (foto + nombre + stats — "hero")
+
+Buscá:
+```css
+.perf-hero{
+  background:linear-gradient(135deg, var(--navy) 0%, #001a37 100%);
+  color:#fff;
+  border-radius:6px;
+  padding:18px 20px;
+  margin-bottom:14px;
+  position:relative;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  gap:18px;
+}
+```
+Reemplazala por (cambia el radio y se agrega una sombra más marcada, para que se sienta como la tarjeta principal/protagonista):
+```css
+.perf-hero{
+  background:linear-gradient(135deg, var(--navy) 0%, #001a37 100%);
+  color:#fff;
+  border-radius:20px;
+  padding:18px 20px;
+  margin-bottom:14px;
+  position:relative;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  gap:18px;
+  box-shadow:0 4px 20px rgba(0,35,75,.18);
+}
+```
+
+### 2. Las tarjetitas de "Cifras clave" (Mejor Stableford, Mejor Gross, HCP, etc.)
+
+Buscá:
+```css
+.perf-cifra{
+  background:var(--white);border:var(--border);border-radius:4px;
+  padding:14px 14px;position:relative;overflow:hidden;
+}
+```
+Reemplazala por:
+```css
+.perf-cifra{
+  background:var(--white);border:var(--border);border-radius:12px;
+  padding:14px 14px;position:relative;overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);
+}
+```
+
+### 3. Los bloques grandes (Podios, Bonus Ganados, Distribución de Golpes, Rondas Bajo Par, Eclectic)
+
+Buscá:
+```css
+.perf-block{
+  background:var(--white);border:var(--border);border-radius:4px;
+  padding:14px 16px;margin-bottom:14px;
+}
+```
+Reemplazala por:
+```css
+.perf-block{
+  background:var(--white);border:var(--border);border-radius:16px;
+  padding:14px 16px;margin-bottom:14px;
+  box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);
+}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca.
+- El contenido, los números, los textos de cada tarjeta no cambian — solo la forma (esquinas más redondeadas + sombra suave).
+- El acento rojo/dorado a la izquierda de cada "cifra" (`.perf-cifra::before`) sigue igual, solo que ahora su esquina queda recortada prolijamente por el nuevo radio.
+- Ninguna otra pantalla se ve afectada — `.perf-hero`, `.perf-cifra`, `.perf-block` son exclusivas del perfil de jugador dentro de Historia.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 51
+
+1. Abrí el perfil de cualquier jugador en Historia → Perfiles. ¿La tarjeta grande de arriba (foto + nombre) tiene esquinas bien redondeadas y una sombra más marcada que el resto?
+   **Sí.** `.perf-hero` pasó de `border-radius:6px` a `border-radius:20px` y se agregó `box-shadow:0 4px 20px rgba(0,35,75,.18)` — más pronunciada que la sombra estándar del resto de las tarjetas para que se destaque como protagonista.
+
+2. ¿Las tarjetitas de cifras (Mejor Stableford, Mejor Gross, etc.) tienen esquinas redondeadas y sombra suave?
+   **Sí.** `.perf-cifra` pasó de `border-radius:4px` a `border-radius:12px` + sombra suave estándar. El acento rojo (`.perf-cifra::before`) sigue intacto.
+
+3. ¿Los bloques grandes (Podios, Distribución de Golpes, Rondas Bajo Par, etc.) también?
+   **Sí.** `.perf-block` pasó de `border-radius:4px` a `border-radius:16px` + sombra suave estándar.
+
+4. ¿Todo el contenido y los números se ven igual que antes, sin nada roto ni cortado?
+   **Sí.** Los tres selectores tienen `overflow:hidden` (ya lo tenían o lo heredan), así que el contenido interno queda bien recortado por las esquinas nuevas.
+
+5. Hash y mensaje del commit.
+   **`4384120`** — `feat: Tarea 51 - redondear tarjetas perfil jugador en Historia`
+
+6. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Tres reemplazos directos con búsqueda literal — cada bloque era único en el archivo.
+
+### 📋 Para Marco — sobre esta tarea
+
+Con esto queda terminada del todo la pantalla de Historia (las 3 pestañas). Se publica solo en GitHub Pages. Después de esto, lo que queda de la Fase 5 son: la pantalla de una fecha ya jugada (tu tarjeta de 18 hoyos), el cuadro de Match Play, y los paneles de administración que todavía no tocamos (Admin Home, Gestionar Canchas, Crear Fecha). Decime si preferís que siga con alguna en particular o seguimos en el orden que te vaya mostrando.
