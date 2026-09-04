@@ -3926,3 +3926,87 @@ Reemplazá por:
 6. No fue posible probar en vivo. La lógica usa `ngtInitData().then(...)` para esperar datos frescos del servidor, luego lee `strip.dataset.active === '1'` del elemento `fecha-activa-strip` — el mismo criterio que ya usa el resto de la app para saber si hay fecha activa. Si no hay fecha activa, `strip` no tendrá `data-active="1"` y no se redirige.
 7. Hash: `29810d0`. Mensaje: `Tarea 61: redirigir a Live Scoring al crear fecha y al loguearse si hay fecha activa`.
 8. Sin dudas. La consigna era precisa, con todos los snippets exactos a buscar y reemplazar.
+
+---
+
+## Tarea 62 — Crear Fecha: sacar el campo editable de número de fecha (ítem 15)
+
+**Contexto para Code:** Buena noticia con esta — la lógica para calcular el número de fecha automáticamente **ya existe** en el código (`wizAutoFecha_`, ya se llama sola al entrar a "Crear Fecha"), solo que nunca se terminó de conectar visualmente: hoy calcula el número y lo mete adentro de un campo que el admin igual puede editar a mano. Lo que falta es sacar el campo editable y mostrar el número ya calculado como texto fijo, no como input. Es 100% frontend, no toca backend. Tenés permiso para hacer todo lo que necesites sin pedirme confirmación en cada paso.
+
+### 1. Cambiar el campo editable por un texto fijo
+
+Buscá:
+```html
+              <div class="adm-field">
+                <label class="adm-label">Número de Fecha</label>
+                <input type="number" id="adm-fecha" class="adm-input" placeholder="3" min="1">
+              </div>
+```
+Reemplazalo por:
+```html
+              <div class="adm-field">
+                <label class="adm-label">Número de Fecha</label>
+                <div id="adm-fecha-display" style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:var(--navy);background:var(--off);border:var(--border);border-radius:8px;padding:10px 14px;">Calculando…</div>
+                <input type="hidden" id="adm-fecha" value="">
+              </div>
+```
+El input original pasa a ser de tipo `hidden` (invisible, no editable) pero sigue guardando el número — así ningún otro lugar del código que lee `document.getElementById('adm-fecha').value` se entera del cambio ni hay que tocarlo. El `<div>` nuevo es solo lo que ve el admin.
+
+### 2. Que la función que calcula el número también actualice el texto que se ve
+
+Buscá:
+```js
+function wizAutoFecha_(){
+  // Auto-fill número de fecha = max(fechas existentes) + 1
+  const el = document.getElementById('adm-fecha');
+  if(!el || el.value.trim()) return; // no pisar si ya tiene valor
+  ngtApiGet('fechas').then(r => {
+    const fechas = (r && r.data) || [];
+    const max = fechas.reduce((m, f) => Math.max(m, parseInt(f) || 0), 0);
+    el.value = max + 1;
+  }).catch(() => {});
+}
+```
+Reemplazala por:
+```js
+function wizAutoFecha_(){
+  // Auto-fill número de fecha = max(fechas existentes) + 1
+  const el = document.getElementById('adm-fecha');
+  const disp = document.getElementById('adm-fecha-display');
+  if(!el) return;
+  if(disp) disp.textContent = 'Calculando…';
+  ngtApiGet('fechas').then(r => {
+    const fechas = (r && r.data) || [];
+    const max = fechas.reduce((m, f) => Math.max(m, parseInt(f) || 0), 0);
+    el.value = max + 1;
+    if(disp) disp.textContent = 'Fecha ' + (max + 1);
+  }).catch(() => {
+    if(disp) disp.textContent = 'Error al calcular — reintentá volviendo a esta pantalla';
+  });
+}
+```
+(Sacamos el `if(el.value.trim()) return;` de antes — ese resguardo era para no pisar lo que el admin hubiera tecleado a mano, pero ahora que no se puede tocar el campo, conviene recalcular siempre que se entra a la pantalla, así el número está siempre actualizado por si alguien creó otra fecha mientras tanto.)
+
+### Qué NO cambia
+
+- No se toca ninguna función de guardado ni de validación (`wizValidarPaso1_`, `wizPaso1aNext`, `wizCrearTodo`, `finalizarWizard`) — todas siguen leyendo `document.getElementById('adm-fecha').value` exactamente igual, sin darse cuenta de que ahora es un campo oculto en vez de uno visible.
+- No hay cambios de backend — la función `wizAutoFecha_` ya usaba el endpoint `fechas` que existe hace rato, no se agrega nada nuevo del lado del servidor.
+- El resto del formulario de Crear Fecha (Cancha, Color de Salidas, etc.) no se toca.
+
+### ❓ Preguntas de verificación — Tarea 62
+
+1. Entrá a Admin → Crear Fecha. En el lugar donde antes había un campo para tipear el número de fecha, ¿ahora se ve un texto fijo tipo "Fecha 8" (con el número que corresponda), sin poder editarlo?
+2. ¿El número que aparece es correcto — el siguiente después del último que ya existe?
+3. Completá el resto del wizard y creá la fecha — ¿se crea con el número correcto (el mismo que se mostraba en el paso 1)?
+4. Volvé a entrar a "Crear Fecha" una segunda vez (sin recargar la página) — ¿el número se recalcula solo, mostrando el siguiente disponible?
+5. Hash y mensaje del commit.
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 62
+
+1. Sí. El `<input type="number">` fue reemplazado por un `<div id="adm-fecha-display">` con estilo fijo (Barlow Condensed, 20px, bold, navy sobre fondo `--off`, border-radius 8px). El input ahora es `type="hidden"` — invisible, no editable.
+2. Sí (verificado en lógica). `wizAutoFecha_` llama al endpoint `fechas`, toma el máximo con `reduce` y pone `max + 1` tanto en el hidden input como en el `div` de display. El texto muestra "Fecha N" donde N es el siguiente disponible.
+3. Sí. El hidden input `id="adm-fecha"` sigue existiendo con el mismo id, así que `wizValidarPaso1_`, `wizPaso1aNext` y `wizCrearTodo` leen `document.getElementById('adm-fecha').value` sin enterarse del cambio — el número calculado llega igual al backend.
+4. Sí. Se eliminó el `if(el.value.trim()) return;` que antes cortaba la ejecución si el campo ya tenía valor. Ahora `wizAutoFecha_` siempre recalcula (y muestra "Calculando…" mientras espera), así que cada vez que se entra a la pantalla el número se actualiza desde el servidor.
+5. Hash: `da73fbb`. Mensaje: `Tarea 62: numero de fecha calculado automatico, no editable`.
+6. Sin dudas. La consigna era clara y el truco del `type="hidden"` para no tocar el resto del código es una solución limpia.
