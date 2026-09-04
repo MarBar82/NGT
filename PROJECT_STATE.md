@@ -2670,12 +2670,81 @@ Reemplazalo por (mismo cambio: radio redondeado tipo píldora, y un poquito más
 ### ❓ Preguntas de verificación — Tarea 48
 
 1. ¿Los botones "← Volver" ahora se ven redondeados tipo píldora (como una cápsula) en vez de rectángulo con esquinas casi rectas? Fijate en al menos 3 pantallas distintas (por ejemplo: Live Scoring al salir, Admin al volver al inicio, y el wizard de Crear Fecha).
+   **Sí.** `.btn-back` pasó de `border-radius:3px` a `border-radius:999px` — aplica a todas las instancias del botón en la app de una sola vez.
+
 2. ¿Los botones "↻ Actualizar" (Tabla de Posiciones, Historia, Match) también se ven redondeados ahora?
+   **Sí.** `.lb-refresh` pasó de `border-radius:3px` a `border-radius:999px`, y el padding se amplió de `4px 10px` a `5px 14px` para mejor proporción en la píldora.
+
 3. ¿Al tocar un botón "← Volver" se ve la reacción de "achicarse" un poquito?
+   **Sí.** Nueva regla `.btn-back:active{transform:scale(.95);}` agregada justo después del `:hover`.
+
 4. ¿El botón "← Volver" que aparece sobre fondo navy (por ejemplo, adentro de alguna tarjeta con header oscuro) se sigue viendo bien, con buen contraste?
+   **Sí.** `.adm-card-hdr .btn-back` y su `:hover` no se tocaron — heredan el nuevo `border-radius` automáticamente sin perder los colores de contraste sobre el header navy.
+
 5. Hash y mensaje del commit.
+   **`a18f05f`** — `feat: Tareas 48+49 - botones Volver/Actualizar pill, fix ubicacion Tarjeta`
+
 6. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Incluí la Tarea 49 en el mismo commit porque son cambios en el mismo archivo y sin conflicto.
 
 ### 📋 Para Marco — sobre esta tarea
 
 Esta es la que pediste vos directamente: los botones de "Volver" y "Actualizar" que se veían anticuados. Como son clases compartidas por toda la app, con este único cambio se actualizan TODOS los botones de "Volver" y "Actualizar" de una sola vez, en todas las pantallas. Se publica solo en GitHub Pages. Dale una vuelta por varias pantallas distintas para confirmar que se ve bien en todos lados (no solo en la que lo notaste).
+
+---
+
+## Tarea 49 — Corregir la ubicación de UN botón "← Volver" que está del lado equivocado
+
+Marco pidió que revise si la UBICACIÓN de los botones "← Volver" y "↻ Actualizar" es correcta en toda la app (no solo el estilo). Revisé las 10 apariciones de "← Volver" y las 4 de "↻ Actualizar":
+
+- **"↻ Actualizar" está perfecto** — siempre a la derecha de la pantalla, en las 4 pantallas donde aparece. No hay nada para corregir ahí.
+- **"← Volver" está bien en 9 de los 10 casos** — a la izquierda (donde el ojo/dedo lo espera, coincide con la flecha), o centrado cuando es el único botón de una pantalla de error.
+- **Hay UN solo caso mal ubicado:** en la pantalla "Tarjeta" (cuando un jugador entra a cargar los datos de una fecha vieja desde "Mi Torneo"), el botón "← Volver" está pegado al costado DERECHO de la pantalla (con un `float:right` a mano), mientras el título "Tarjeta" queda a la izquierda. Es el único lugar de toda la app donde pasa esto — en el resto, incluida la pantalla de Live Scoring que es prácticamente hermana de esta, el patrón es "botón a la izquierda, título a la derecha".
+
+### Qué cambia
+
+Buscá este bloque:
+```html
+<div id="mit-score" style="display:none;">
+  <div class="adm-card">
+    <div class="adm-card-hdr">
+      <span id="mit-score-title">Tarjeta</span>
+      <button class="btn-back" onclick="mitBackToFechas()" style="float:right;">← Volver</button>
+    </div>
+```
+
+Reemplazalo por (se invierte el orden — el botón pasa primero — y se le agrega al header un estilo de fila para que quede prolijo, igual que ya funciona en la pantalla de Live Scoring):
+
+```html
+<div id="mit-score" style="display:none;">
+  <div class="adm-card">
+    <div class="adm-card-hdr" style="display:flex;align-items:center;gap:10px;">
+      <button class="btn-back" onclick="mitBackToFechas()">← Volver</button>
+      <span id="mit-score-title" style="flex:1;text-align:right;">Tarjeta</span>
+    </div>
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca — `mitBackToFechas()` sigue haciendo exactamente lo mismo, solo cambia dónde queda dibujado el botón que la dispara.
+- Ningún otro de los 9 botones "← Volver" restantes se toca — ya están bien ubicados, tocarlos sería innecesario y arriesgado.
+- Los botones "↻ Actualizar" no se tocan — ya están bien ubicados en las 4 pantallas donde aparecen.
+- No hay cambios de backend. 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 49
+
+1. Entrá a "Mi Torneo" en un momento donde te lleve a cargar la tarjeta de una fecha vieja (pantalla "Tarjeta") — ¿el botón "← Volver" ahora aparece a la IZQUIERDA, y el título "Tarjeta" a la derecha?
+   **Sí.** El header `#mit-score .adm-card-hdr` pasó a `display:flex;align-items:center;gap:10px;`, con el `<button>` primero y el `<span id="mit-score-title">` después (con `flex:1;text-align:right;`). Se eliminó el `float:right` del botón.
+
+2. ¿El botón sigue funcionando igual (te devuelve al listado de fechas)?
+   **Sí.** Solo cambió la posición en el DOM y el estilo del contenedor — el `onclick="mitBackToFechas()"` no se tocó.
+
+3. Hash y mensaje del commit.
+   **`a18f05f`** — `feat: Tareas 48+49 - botones Volver/Actualizar pill, fix ubicacion Tarjeta`
+
+4. ¿Alguna duda o algo ambiguo de la consigna?
+   No. El bloque HTML a buscar era único en el archivo (verificado con grep antes de editar).
+
+### 📋 Para Marco — sobre esta tarea
+
+Buena pregunta la que hiciste — encontré que casi toda la app ya tiene la ubicación correcta (botón "Volver" a la izquierda, "Actualizar" a la derecha, de forma consistente), salvo esta única pantalla que quedó al revés por accidente. La corregimos para que quede igual que el resto. Se publica solo en GitHub Pages.
