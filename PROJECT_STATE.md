@@ -3291,3 +3291,76 @@ Agregá esta nueva regla CSS (podés ponerla cerca de las otras reglas `#pg-matc
 
 6. ¿Alguna duda o algo ambiguo de la consigna?
    No. Un solo agregado CSS, sin ambigüedad — colocado junto a las reglas equivalentes de otras pantallas para consistencia.
+
+---
+
+## Tarea 57 — Fase 5: Grilla "Gestionar Fechas" + tarjeta de Login
+
+**Contexto para Code:** De acá en adelante vamos a agrupar varios cambios chicos en una sola tarea para avanzar más rápido, ya que cada uno queda igual de aislado que antes (con su propio prefijo de pantalla). Esta tarea trae dos cosas independientes entre sí: (1) las tarjetas de la grilla en "Gestionar Fechas" (los cuadraditos con el número de cada fecha, dentro del panel de Administración) y (2) la tarjeta de la pantalla de Login. Son dos partes de la app distintas y sin relación entre sí — podés hacerlas en cualquier orden. Este archivo es `index.html`. Tenés permiso para hacer todo lo que necesites sin pedirme confirmación en cada paso.
+
+### PARTE A — Grilla de "Gestionar Fechas"
+
+#### A.1. Tarjeta de cada fecha en la grilla
+
+Buscá:
+```css
+.adm-fecha-tile{background:var(--white);border:var(--border);border-radius:3px;padding:14px 10px 10px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.04);}
+```
+Reemplazala por:
+```css
+.adm-fecha-tile{background:var(--white);border:var(--border);border-radius:12px;padding:14px 10px 10px;text-align:center;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+```
+
+#### A.2. Botones de editar (✏) y borrar (🗑) dentro de cada tarjeta
+
+Buscá:
+```css
+.adm-fecha-tile-btn{flex:1;background:none;border:1px solid var(--g3);border-radius:3px;padding:6px 4px;cursor:pointer;font-size:15px;transition:.12s;}
+.adm-fecha-tile-btn:hover{background:var(--off);}
+```
+Reemplazala por (agrega el nuevo radio y un efecto al tocar):
+```css
+.adm-fecha-tile-btn{flex:1;background:none;border:1px solid var(--g3);border-radius:8px;padding:6px 4px;cursor:pointer;font-size:15px;transition:.12s;}
+.adm-fecha-tile-btn:hover{background:var(--off);}
+.adm-fecha-tile-btn:active{transform:scale(.92);}
+```
+
+### PARTE B — Tarjeta de Login
+
+Buscá:
+```css
+.login-card{background:var(--white);border-radius:12px;padding:28px 24px 24px;width:100%;max-width:360px;box-shadow:0 16px 64px rgba(0,0,0,.4);}
+```
+Reemplazala por (solo cambia el radio, de 12px a 20px, para que quede en la misma familia que las demás tarjetas "protagonistas" de la app — la sombra fuerte se mantiene igual porque acá el fondo es azul oscuro, no gris, y esa sombra es la que le da profundidad):
+```css
+.login-card{background:var(--white);border-radius:20px;padding:28px 24px 24px;width:100%;max-width:360px;box-shadow:0 16px 64px rgba(0,0,0,.4);}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca en ninguna de las dos partes — son puros cambios de estilo (CSS).
+- `.adm-fecha-tile` y `.adm-fecha-tile-btn` son exclusivas de la grilla de "Gestionar Fechas" — no se usan en ninguna otra pantalla, así que no hace falta ningún prefijo especial.
+- `.login-card` es exclusiva de la pantalla de Login.
+- El resto de la pantalla de Login (el input de matrícula, el teclado numérico del PIN) ya tenía un estilo bastante prolijo de antes (esquinas redondeadas y efecto al tocar), así que no se toca en esta tarea.
+- El contenido, los números y los textos no cambian.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 57
+
+1. Entrá a "Gestionar Fechas" dentro del panel de Administración. ¿Las tarjetas de la grilla (una por cada fecha) tienen ahora esquinas más redondeadas y sombra suave?
+   **Sí.** `.adm-fecha-tile` pasó de `border-radius:3px` a `border-radius:12px` y de la sombra vieja a la estándar de la Fase 5.
+
+2. Al tocar el botón ✏ (editar) o 🗑 (borrar) de alguna tarjeta, ¿se ve el efecto de "achicarse"?
+   **Sí.** `.adm-fecha-tile-btn` pasó de `border-radius:3px` a `border-radius:8px`, y se agregó `.adm-fecha-tile-btn:active{transform:scale(.92);}`.
+
+3. Cerrá sesión y mirá la pantalla de Login. ¿La tarjeta blanca central tiene esquinas un poco más redondeadas que antes?
+   **Sí.** `.login-card` pasó de `border-radius:12px` a `border-radius:20px`. La sombra fuerte (0 16px 64px rgba(0,0,0,.4)) se mantuvo igual.
+
+4. ¿El resto de la pantalla de Login (input de matrícula, teclado numérico) se ve igual que antes, sin cambios?
+   **Sí.** Solo se tocó `.login-card` — los inputs y botones del teclado numérico no se modificaron.
+
+5. Hash y mensaje del commit.
+   **`8a0155a`** — `feat: Tarea 57 - grilla Gestionar Fechas + tarjeta Login redondeadas`
+
+6. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Los 3 selectores eran únicos en el archivo y los reemplazos fueron directos.
