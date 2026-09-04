@@ -483,7 +483,10 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-fecha-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-bottom:16px;}
 .adm-fecha-tile{background:var(--white);border:var(--border);border-radius:3px;padding:14px 10px 10px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.04);}
 .adm-fecha-tile-num{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:800;color:var(--navy);line-height:1;}
-.adm-fecha-tile-lbl{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);margin:2px 0 10px;}
+.adm-fecha-tile-lbl{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);margin:2px 0 6px;}
+.adm-fecha-tile-badge{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:10px;margin-bottom:8px;}
+.adm-fecha-tile-badge.completa{background:rgba(31,122,61,.12);color:var(--green);}
+.adm-fecha-tile-badge.pendiente{background:rgba(0,35,75,.08);color:var(--navy);}
 .adm-fecha-tile-btns{display:flex;gap:6px;justify-content:center;}
 .adm-fecha-tile-btn{flex:1;background:none;border:1px solid var(--g3);border-radius:3px;padding:6px 4px;cursor:pointer;font-size:15px;transition:.12s;}
 .adm-fecha-tile-btn:hover{background:var(--off);}
@@ -4850,21 +4853,28 @@ function renderFechasGrid(){
   const grid = document.getElementById('adm-fechas-grid');
   grid.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:4px;">Cargando...</div>';
   cerrarEditPanel();
-  ngtApiGet('fechas').then(r => {
+  ngtApiGet('fechasConEstado').then(r => {
     const fechas = (r && r.data) || [];
     if(!fechas.length){
       grid.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:4px;">No hay fechas creadas</div>';
       return;
     }
-    grid.innerHTML = fechas.map(f => `
+    grid.innerHTML = fechas.map(item => {
+      const f = item.fecha;
+      const badge = item.completa
+        ? '<div class="adm-fecha-tile-badge completa">✓ Completa</div>'
+        : '<div class="adm-fecha-tile-badge pendiente">' + item.firmados + '/' + item.totalJugadores + ' firmados</div>';
+      return `
       <div class="adm-fecha-tile">
         <div class="adm-fecha-tile-num">${f}</div>
         <div class="adm-fecha-tile-lbl">Fecha</div>
+        ${badge}
         <div class="adm-fecha-tile-btns">
           <button class="adm-fecha-tile-btn" title="Editar" onclick="abrirEditPanel('${f}')">✏</button>
           <button class="adm-fecha-tile-btn danger" title="Borrar" onclick="adminEliminarFechaDesdeGrid('${f}')">🗑</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }).catch(() => {
     grid.innerHTML = '<div style="color:#c8102e;font-size:13px;">Error al cargar fechas</div>';
   });
