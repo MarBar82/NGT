@@ -3675,7 +3675,6 @@ function loadColoresCanchaEdit(){
   applyColoresCancha_(sel.value.trim(), colorSel, hint);
 }
 
-// Old adminCrearFecha replaced by wizard flow — see wizPaso1Next / wizCrearTodo below
 // ══ CREAR FECHA WIZARD ══
 let WIZ_PASO1_DATA = null;
 
@@ -3882,16 +3881,6 @@ function wizRearmarLineas_(){
   const btn = document.getElementById('wiz-rearmar-btn');
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Rearmando...'; }
   wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canchaName, data, Date.now());
-}
-
-function wizPaso1Next(){
-  // Kept for backward compat — same as wizArmarLineas but without auto-generate
-  const data = wizValidarPaso1_();
-  if(!data) return;
-  WIZ_PASO1_DATA = data;
-  const jugsInFecha = ADM_JUGADORES.filter(j => data.jugadores.indexOf(String(j.matricula)) >= 0);
-  const canchaName  = (ADM_CANCHAS.find(c => String(c.id) === data.canchaId) || {}).nombre || '';
-  wizMostrarPaso2_(jugsInFecha, canchaName);
 }
 
 function wizPaso1Back(){
@@ -4323,42 +4312,6 @@ function admGuardarDobles(){
   }).catch(e => {
     msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
   });
-}
-
-function admRecalcularHcp(){
-  const fecha = MGR_FECHA;
-  const msg = document.getElementById('adm-recalc-hcp-msg');
-  if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
-  msg.className='adm-msg'; msg.textContent='Recalculando...'; msg.style.display='block';
-  ngtApiPost({ action:'recalcularHcpFecha', adminKey:ADMIN_KEY_OK, fecha:fecha }).then(r => {
-    if(r && r.ok){
-      const d = r.data || {};
-      msg.className='adm-msg ok';
-      msg.textContent='✓ ' + d.updated + ' jugadores actualizados · ' + d.cancha + ' ' + d.colorTee +
-        ' · slope ' + d.slope + ' / rating ' + d.rating + ' / par ' + d.par +
-        ' · ajuste ' + (d.ajuste >= 0 ? '+' : '') + d.ajuste;
-    } else {
-      msg.className='adm-msg err';
-      msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
-    }
-  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
-}
-
-function admRecalcularStb(){
-  const fecha = MGR_FECHA;
-  const msg = document.getElementById('adm-recalc-stb-msg');
-  if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
-  msg.className='adm-msg'; msg.textContent='Recalculando...'; msg.style.display='block';
-  ngtApiPost({ action:'recalcularStbFecha', adminKey:ADMIN_KEY_OK, fecha:fecha }).then(r => {
-    if(r && r.ok){
-      const rows = (r.details || []).map(d => d.nombre + ': ' + d.stb + ' pts (HCP ' + d.hcp + ')').join(' · ');
-      msg.className='adm-msg ok';
-      msg.textContent='✓ ' + r.updated + ' jugadores actualizados · ' + rows;
-    } else {
-      msg.className='adm-msg err';
-      msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
-    }
-  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
 }
 
 function admRecalcularMatches(){
@@ -4922,8 +4875,6 @@ function abrirEditPanel(fecha){
   document.getElementById('adm-edit-jugs').innerHTML = 'Cargando...';
   const _searchEl = document.getElementById('adm-edit-jugs-search');
   if(_searchEl) _searchEl.value = '';
-  const _doblesEl = document.getElementById('adm-edit-dobles');
-  if(_doblesEl) _doblesEl.innerHTML = 'Cargando...';
 
   // Load matches for this fecha
   loadMatchesForGestion(fecha);
@@ -5001,24 +4952,6 @@ function abrirEditPanel(fecha){
     });
     jl.innerHTML = jugHtml;
     admUpdateJugCount_();
-
-    // Render dobles (solo si el elemento todavía existe — fue movido a card separada)
-    const dl = document.getElementById('adm-edit-dobles');
-    if(dl) {
-      let dobHtml = '';
-      const eligibleForDoble = new Set([...disponibles.map(String), ...curDobles]);
-      if(!eligibleForDoble.size){
-        dobHtml = '<div class="s dim" style="padding:10px;">No hay jugadores disponibles para doble</div>';
-      } else {
-        jugadores.forEach(j => {
-          if(!eligibleForDoble.has(String(j.matricula))) return;
-          const checked = curDobles.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
-          const lbl = formatPlayerLabel(j.nombre);
-          dobHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-dob" value="' + j.matricula + '" id="edob-' + j.matricula + '" ' + checked + '><label for="edob-' + j.matricula + '">' + lbl + '</label></div>';
-        });
-      }
-      dl.innerHTML = dobHtml;
-    }
 
     document.getElementById('adm-edit-msg').style.display = 'none';
   }).catch(e => {
