@@ -1604,6 +1604,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .hist-rank-table{width:100%;border-collapse:collapse;margin-top:8px;}
 .hist-rank-table th{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--g4);padding:8px 10px;border-bottom:1.5px solid var(--g2);text-align:left;}
 .hist-rank-table td{padding:10px 10px;border-bottom:1px solid var(--g1);font-size:13px;vertical-align:middle;}
+.hist-rank-table th.c,.hist-rank-table td.c{text-align:center;}
 .hist-rank-table tr:first-child td{font-weight:700;color:var(--navy);}
 .hist-rank-pos{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:var(--g3);width:32px;}
 .hist-rank-pos.p1{color:var(--gold);}
@@ -5687,13 +5688,13 @@ function loadHistoria() {
     if (!r.ok || !r.data) { body.innerHTML = '<div class="lb-status">Error al cargar ranking</div>'; return; }
     const data = r.data;
     if (sync) sync.textContent = 'Act. ' + new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'});
-    let html = '<table class="hist-rank-table"><thead><tr><th>#</th><th>Jugador</th><th title="1er puesto">🥇</th><th title="2do puesto">🥈</th><th title="3er puesto">🥉</th><th>Participaciones</th></tr></thead><tbody>';
+    let html = '<table class="hist-rank-table"><thead><tr><th class="c">#</th><th>Jugador</th><th class="c" title="1er puesto">🥇</th><th class="c" title="2do puesto">🥈</th><th class="c" title="3er puesto">🥉</th><th class="c">Participaciones</th></tr></thead><tbody>';
     if (!data.length) { html += '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--g4);">Sin datos</td></tr>'; }
     data.forEach(function(p, i) {
       const posClass = i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : '';
       const nombre = (p.apodo || p.nombre || p.matricula || '—').toUpperCase();
       html += '<tr>';
-      html += '<td class="hist-rank-pos ' + posClass + '">' + (i+1) + '</td>';
+      html += '<td class="hist-rank-pos c ' + posClass + '">' + (i+1) + '</td>';
       html += '<td><span style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:14px;">' + nombre + '</span></td>';
       html += '<td style="text-align:center;font-weight:700;">' + (p.p1 || 0) + '</td>';
       html += '<td style="text-align:center;">' + (p.p2 || 0) + '</td>';
