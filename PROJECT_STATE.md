@@ -3251,3 +3251,43 @@ Reemplazalo por (agrega el nuevo radio, la sombra suave estándar, y un efecto a
 
 7. ¿Alguna duda o algo ambiguo de la consigna?
    No. `.adm-big-btn` es exclusiva del Home admin (confirmado con grep — no aparece en ninguna otra pantalla), así que se editó directamente sin prefijo.
+
+---
+
+## Tarea 56 — Fase 5: Panel de Administración (tarjetas internas)
+
+**Contexto para Code:** Seguimos con el Panel de Administración. En la tarea anterior le dimos el fondo gris a las 4 secciones (Home, Crear Fecha, Gestionar Fechas, Gestionar Canchas) y redondeamos los 4 botones de Home. Ahora le toca a las tarjetas de adentro de "Crear Fecha", "Gestionar Fechas" y "Gestionar Canchas" — son todas la misma clase compartida (`.adm-card`), así que con un solo cambio se prolijan las 3 pantallas a la vez. Ojo: esta clase también se usa en Match, Historia y Live Scoring (ya se ajustó ahí en tareas anteriores con su propio prefijo), así que la vamos a tocar de la misma manera segura: con el prefijo `#pg-admin` para que el cambio quede aislado a estas 3 pantallas. Este archivo es `index.html`. Tenés permiso para hacer todo lo que necesites sin pedirme confirmación en cada paso.
+
+### Tarjetas del panel de Administración
+
+Agregá esta nueva regla CSS (podés ponerla cerca de las otras reglas `#pg-match .adm-card{...}`, `#pg-historia-hub .adm-card{...}` o `#pg-mit .adm-card{...}`, que ya existen en el archivo, o en cualquier otro lugar dentro de `<style>`):
+```css
+#pg-admin .adm-card{border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca — es un solo agregado de estilo (CSS), no modifica ninguna regla existente.
+- La regla usa el prefijo `#pg-admin`, así que solo afecta las tarjetas dentro del panel de Administración. La regla base de `.adm-card` (compartida con Match, Historia y Live Scoring) no se toca, y las reglas ya existentes `#pg-match .adm-card`, `#pg-historia-hub .adm-card` y `#pg-mit .adm-card` tampoco se tocan.
+- El contenido de las tarjetas (formularios, grillas de par/HCP, listas de jugadores, etc.) no cambia.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 56
+
+1. Entrá a "Crear Fecha" dentro del panel de Administración. ¿La tarjeta grande del formulario (Paso 1, Cancha) tiene ahora esquinas redondeadas y sombra suave?
+   **Sí.** `#pg-admin .adm-card{border-radius:16px;box-shadow:...}` aplica a todas las `.adm-card` dentro de `#pg-admin`, incluyendo las tarjetas del wizard de Crear Fecha.
+
+2. Entrá a "Gestionar Fechas", tocá el lápiz de edición de alguna fecha para abrir el panel de edición. ¿Las tarjetas de "Datos de la Fecha", "Puntos Dobles" y "Matches de la Fecha" tienen esquinas redondeadas y sombra suave?
+   **Sí.** Misma regla — todas las `.adm-card` dentro de `#pg-admin` reciben el tratamiento.
+
+3. Entrá a "Gestionar Canchas", elegí una cancha existente. ¿Las tarjetas de "Par por Hoyo", "HCP por Hoyo" y "Rating y Slope" también?
+   **Sí.** Ídem.
+
+4. ¿Revisaste que Match, Historia y Live Scoring se sigan viendo exactamente igual que antes?
+   **Sí.** La regla usa el prefijo `#pg-admin`, por lo que es completamente aislada. Las reglas existentes `#pg-match .adm-card`, `#pg-historia-hub .adm-card` y `#pg-mit .adm-card` no fueron tocadas.
+
+5. Hash y mensaje del commit.
+   **`c001686`** — `feat: Tarea 56 - tarjetas admin redondeadas con sombra suave`
+
+6. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Un solo agregado CSS, sin ambigüedad — colocado junto a las reglas equivalentes de otras pantallas para consistencia.
