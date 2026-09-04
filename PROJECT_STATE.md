@@ -2046,3 +2046,154 @@ function admUpdateJugCount_(){
 ### 📋 Para Marco — después de este fix
 
 Se publica solo (GitHub Pages, sin deploy en Apps Script). Entrá a "Gestionar Fechas", abrí una fecha, y en "Datos de la Fecha" probá escribir un nombre en el buscador nuevo y tildar/destildar algún jugador para ver el contador.
+
+---
+
+## 🧹 Tarea 43 — Limpieza de código muerto (Fase 4d, cierre de la Fase 4)
+
+Contexto: mientras trabajábamos en "Gestionar Fechas" (Tareas 40-42) encontramos restos de código viejo que no se usan para nada — quedaron de versiones anteriores de la pantalla. No rompen nada, pero conviene sacarlos para que el archivo sea más fácil de mantener a futuro. Confirmé cada uno con grep sobre el archivo completo (busqué todos los lugares donde se los llama o se los referencia) antes de listarlos: ninguno tiene ningún punto de llamada real.
+
+Todo esto es 100% frontend (`index.html`), no toca el backend, no requiere deploy en Apps Script.
+
+### 1. Bloque muerto en `abrirEditPanel()` — parte 1 (sección "Reset mensajes")
+
+Buscá este bloque y borralo entero:
+
+```js
+      const _doblesEl = document.getElementById('adm-edit-dobles');
+      if(_doblesEl) _doblesEl.innerHTML = 'Cargando...';
+```
+
+(Puede tener variaciones menores de indentación — es el bloque que apunta al elemento `adm-edit-dobles`, que ya no existe en el HTML.)
+
+### 2. Bloque muerto en `abrirEditPanel()` — parte 2 (justo después de renderizar la lista de jugadores)
+
+Buscá y borrá este bloque entero, incluido el comentario:
+
+```js
+      // Render dobles (solo si el elemento todavía existe — fue movido a card separada)
+      const dl = document.getElementById('adm-edit-dobles');
+      if(dl) {
+        let dobHtml = '';
+        const eligibleForDoble = new Set([...disponibles.map(String), ...curDobles]);
+        if(!eligibleForDoble.size){
+          dobHtml = '<div class="s dim" style="padding:10px;">No hay jugadores disponibles para doble</div>';
+        } else {
+          jugadores.forEach(j => {
+            if(!eligibleForDoble.has(String(j.matricula))) return;
+            const checked = curDobles.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
+            const lbl = formatPlayerLabel(j.nombre);
+            dobHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-dob" value="' + j.matricula + '" id="edob-' + j.matricula + '" ' + checked + '><label for="edob-' + j.matricula + '">' + lbl + '</label></div>';
+          });
+        }
+        dl.innerHTML = dobHtml;
+      }
+```
+
+**Por qué es seguro:** el elemento HTML `id="adm-edit-dobles"` ya no existe en el archivo (lo confirmé con una búsqueda completa) — así que `document.getElementById('adm-edit-dobles')` siempre devuelve `null`, y el `if(dl)` / `if(_doblesEl)` nunca es verdadero. Estos dos bloques nunca se ejecutan hoy. El manejo real de "dobles" en Gestionar Fecha es la card aparte "Puntos Dobles" (`admGuardarDobles()`), que no se toca.
+
+### 3. Dos funciones completas sin usar: `admRecalcularHcp()` y `admRecalcularStb()`
+
+Buscá estas dos funciones completas y borralas enteras (son consecutivas en el archivo):
+
+```js
+function admRecalcularHcp(){
+  const fecha = MGR_FECHA;
+  const msg = document.getElementById('adm-recalc-hcp-msg');
+  if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
+  msg.className='adm-msg'; msg.textContent='Recalculando...'; msg.style.display='block';
+  ngtApiPost({ action:'recalcularHcpFecha', adminKey:ADMIN_KEY_OK, fecha:fecha }).then(r => {
+    if(r && r.ok){
+      const d = r.data || {};
+      msg.className='adm-msg ok';
+      msg.textContent='✓ ' + d.updated + ' jugadores actualizados · ' + d.cancha + ' ' + d.colorTee +
+        ' · slope ' + d.slope + ' / rating ' + d.rating + ' / par ' + d.par +
+        ' · ajuste ' + (d.ajuste >= 0 ? '+' : '') + d.ajuste;
+    } else {
+      msg.className='adm-msg err';
+      msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
+}
+
+function admRecalcularStb(){
+  const fecha = MGR_FECHA;
+  const msg = document.getElementById('adm-recalc-stb-msg');
+  if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
+  msg.className='adm-msg'; msg.textContent='Recalculando...'; msg.style.display='block';
+  ngtApiPost({ action:'recalcularStbFecha', adminKey:ADMIN_KEY_OK, fecha:fecha }).then(r => {
+    if(r && r.ok){
+      const rows = (r.details || []).map(d => d.nombre + ': ' + d.stb + ' pts (HCP ' + d.hcp + ')').join(' · ');
+      msg.className='adm-msg ok';
+      msg.textContent='✓ ' + r.updated + ' jugadores actualizados · ' + rows;
+    } else {
+      msg.className='adm-msg err';
+      msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
+}
+```
+
+**Por qué es seguro:** busqué en todo el archivo cualquier lugar que llame a `admRecalcularHcp()` o `admRecalcularStb()` (botones `onclick`, u otras funciones que las invoquen) y no aparece ninguno — solo existen sus propias definiciones. Además, los elementos que usan por dentro (`adm-recalc-hcp-msg`, `adm-recalc-stb-msg`) tampoco existen en el HTML, así que ni siquiera podrían ejecutarse sin romperse. El botón real "🔄 Recalcular Fecha" que ve el admin llama a otra función, `admRecalcularFecha()` — esa NO se toca, sigue funcionando exactamente igual (hace los 4 pasos: HCP, Stableford, Matches y Score/leaderboard).
+
+### 4. Una función completa sin usar: `wizPaso1Next()`, y el comentario viejo que la menciona
+
+Primero, buscá y borrá este comentario (una sola línea, justo antes de "CREAR FECHA WIZARD"):
+
+```js
+// Old adminCrearFecha replaced by wizard flow — see wizPaso1Next / wizCrearTodo below
+```
+
+Después, buscá y borrá esta función completa:
+
+```js
+function wizPaso1Next(){
+  // Kept for backward compat — same as wizArmarLineas but without auto-generate
+  const data = wizValidarPaso1_();
+  if(!data) return;
+  WIZ_PASO1_DATA = data;
+  const jugsInFecha = ADM_JUGADORES.filter(j => data.jugadores.indexOf(String(j.matricula)) >= 0);
+  const canchaName  = (ADM_CANCHAS.find(c => String(c.id) === data.canchaId) || {}).nombre || '';
+  wizMostrarPaso2_(jugsInFecha, canchaName);
+}
+```
+
+**Por qué es seguro:** busqué `wizPaso1Next` en todo el archivo y solo aparece su propia definición (ningún botón ni otra función la llama). El asistente de "Crear Fecha" (wizard) que usás hoy funciona con otras funciones (`wizPaso1aNext`, `wizArmarLineas`, `wizCrearTodo`, etc.) que no se tocan.
+
+### Qué NO cambia
+
+- "Puntos Dobles" (`admGuardarDobles`) — la forma real de asignar dobles — no se toca.
+- El botón "🔄 Recalcular Fecha" (`admRecalcularFecha`) — no se toca, sigue haciendo sus 4 pasos igual que siempre.
+- El asistente "Crear Fecha" completo (todos los pasos del wizard) — no se toca.
+- Ninguna otra pantalla ("Gestionar Fecha", live scoring, leaderboard, etc.) — no se toca.
+- No hay cambios de backend. 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 43
+
+1. Después de borrar, ¿el archivo sigue sin errores de sintaxis (llaves/paréntesis balanceados)? Si tenés forma de chequearlo, hacelo.
+2. ¿"Gestionar Fecha" sigue abriendo y guardando datos de una fecha existente sin problemas?
+3. ¿El botón "🔄 Recalcular Fecha" sigue funcionando igual que antes?
+4. ¿El asistente "Crear Fecha" (wizard completo, todos los pasos) sigue funcionando igual que antes?
+5. ¿Cuántas líneas en total se borraron?
+6. Hash y mensaje del commit.
+7. ¿Alguna duda o algo ambiguo de la consigna?
+
+## ✅ Respuestas de verificación — Tarea 43
+
+1. **Sí.** Después de cada eliminación verifiqué con grep que no quedaran referencias sueltas (`admRecalcularHcp|admRecalcularStb|wizPaso1Next\b|adm-edit-dobles|adm-recalc-hcp-msg|adm-recalc-stb-msg`) — cero coincidencias. Los 4 bloques se cortaron en sus límites exactos (abriendo y cerrando llave/paréntesis completos), sin tocar el código adyacente. No se introdujeron llaves desbalanceadas.
+
+2. **Sí.** Lo único que se sacó de `abrirEditPanel` fueron los dos bloques del `adm-edit-dobles` (que ya devolvían `null` y nunca ejecutaban nada). El flujo real de carga y guardado de la fecha (`MGR_FECHA_DETALLE`, jugadores, canchas, dobles reales, botón "Guardar Datos") quedó intacto.
+
+3. **Sí.** `admRecalcularFecha()` (el botón "🔄 Recalcular Fecha") no fue tocada — sigue llamando a `admRecalcularHcp_`, `admRecalcularStb_`, `admRecalcularMatches` y `admRecalcularScore` internamente como siempre. Lo que se borró fueron `admRecalcularHcp()` y `admRecalcularStb()` (sin guión bajo) — funciones distintas, huérfanas, que nunca tenían botón que las llamara.
+
+4. **Sí.** `wizPaso1Next()` (sin `a`) fue borrada; el wizard usa `wizPaso1aNext()`, `wizPaso1aBack()`, `wizArmarLineas()`, `wizCrearTodo()`, `wizPaso1Back()` y `wizResetWizardCompleto_()` — ninguna de esas fue tocada. El comentario viejo que mencionaba `wizPaso1Next` también fue sacado.
+
+5. **67 líneas** eliminadas en `index.html` (reportado por `git diff --stat`).
+
+6. **Hash:** `7a902ea` — "Tarea 43: limpieza codigo muerto (adm-edit-dobles, admRecalcularHcp/Stb, wizPaso1Next)"
+
+7. Sin dudas. Fase 4 cerrada.
+
+### 📋 Para Marco — sobre esta tarea
+
+Esto es pura limpieza — no cambia nada de lo que ves en pantalla ni de cómo funciona la app. Es la última parte de la Fase 4 (la que le dio la cara nueva a "Gestionar Fechas"). Con esto la Fase 4 queda cerrada. Se publica solo en GitHub Pages, no hace falta tocar Apps Script. Igual, después de que Code confirme, dale una pasada rápida a "Gestionar Fecha" y al botón de recalcular para quedarnos tranquilos, aunque en teoría no debería notarse ningún cambio.
