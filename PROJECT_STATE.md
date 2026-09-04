@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-04 (Tarea 64 agregada — Fase 6, item 20: reconstrucción de la navegación del panel de Administrador)
+**Última actualización:** 2026-09-04 (Tarea 65 agregada — Fase 6, item 18: restyle de todos los desplegables)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -5635,3 +5635,100 @@ Mensaje: `feat: admin panel usa pantallas reales (pg) en vez de show/hide divs`
 
 13. ¿Alguna duda o algo ambiguo de la consigna?
 No. La consigna era clara en cuanto a qué HTML reemplazar, qué funciones borrar/modificar, y que todos los `id` de campos debían quedar igual. El único punto que requirió atención fue que el "← Volver" del `pg-admin-editar-detalle` llama tanto `cerrarEditPanel()` como `pg('admin-editar', null)` (en ese orden), para limpiar el estado antes de navegar.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 65 (Fase 6, item 18: modernizar todos los desplegables)
+
+Esta tarea es **solo CSS** — no toca ningún `.gs`, ni cambia ninguna función de JavaScript, ni ningún `id`. No hace falta deploy manual.
+
+### Contexto (para entender el "por qué")
+
+Marco preguntó si había alguna forma de reemplazar los desplegables (`<select>`) por algo más moderno. Investigué los 24 desplegables que tiene la app — filtros (Historia, Match), formularios del admin (cancha, colores, hoyos, LD/BA, etc.), y los que se arman dinámicamente al emparejar jugadores para un match — y le pregunté a Marco si prefería reconstruirlos desde cero con un menú a medida, o solo mejorarles el aspecto manteniendo el selector nativo del celular/compu (más rápido, sin riesgo, y el selector nativo en el celular ya es una buena experiencia). Marco eligió la segunda opción.
+
+Buena noticia: aunque hay 24 desplegables, TODOS caen dentro de solo 3 reglas de CSS que ya existen (`.adm-input` para los del admin, `.filter-group select` para los filtros de Historia y Match, y `.adm-match-row select` para los que se arman al emparejar jugadores). Actualizando esas 3 reglas, quedan los 24 modernizados de una sola vez, sin tocar nada de JavaScript.
+
+El cambio visual: le sacamos la flechita nativa del navegador (que se ve distinta en cada sistema operativo) y le ponemos una flechita propia, prolija y consistente, más bordes redondeados (acorde al resto del rediseño de Fase 5) y un estilo apagado para cuando el desplegable está deshabilitado (como "Hoyo Best Approach" antes de elegir la cancha).
+
+### Cambio 1 — CSS: desplegables del admin (`.adm-input`)
+
+Buscá:
+
+```css
+.adm-input{width:100%;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;color:var(--navy);padding:8px 12px;border:1px solid var(--g3);border-radius:3px;background:var(--white);box-sizing:border-box;}
+.adm-input:focus{outline:none;border-color:var(--navy);}
+```
+
+Reemplazalo por:
+
+```css
+.adm-input{width:100%;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;color:var(--navy);padding:8px 12px;border:1px solid var(--g3);border-radius:3px;background:var(--white);box-sizing:border-box;}
+.adm-input:focus{outline:none;border-color:var(--navy);}
+select.adm-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;border-radius:8px;padding-right:32px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a8780' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:12px 8px;}
+select.adm-input:disabled{opacity:.55;cursor:not-allowed;background-color:var(--off);}
+```
+
+(Nota: `select.adm-input` solo aplica a los `<select class="adm-input">` — los `<input class="adm-input">` de texto/número/hora no se ven afectados, porque el selector CSS `select.adm-input` exige que el elemento sea un `<select>`.)
+
+### Cambio 2 — CSS: desplegables de los filtros (Historia, Match)
+
+Buscá:
+
+```css
+.filter-group select{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--navy);padding:6px 10px;border:1px solid var(--g3);border-radius:3px;background:var(--white);cursor:pointer;min-width:140px;}
+.filter-group select:focus{outline:none;border-color:var(--navy);}
+```
+
+Reemplazalo por:
+
+```css
+.filter-group select{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--navy);padding:6px 30px 6px 10px;border:1px solid var(--g3);border-radius:8px;background:var(--white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a8780' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;background-size:12px 8px;cursor:pointer;min-width:140px;appearance:none;-webkit-appearance:none;-moz-appearance:none;}
+.filter-group select:focus{outline:none;border-color:var(--navy);}
+```
+
+### Cambio 3 — CSS: desplegables al emparejar jugadores de un match
+
+Buscá:
+
+```css
+.adm-match-row select{font-family:'Barlow Condensed',sans-serif;font-size:12px;padding:6px 8px;border:1px solid var(--g3);border-radius:3px;}
+```
+
+Reemplazalo por:
+
+```css
+.adm-match-row select{font-family:'Barlow Condensed',sans-serif;font-size:12px;padding:6px 26px 6px 8px;border:1px solid var(--g3);border-radius:8px;cursor:pointer;appearance:none;-webkit-appearance:none;-moz-appearance:none;background:var(--white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a8780' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center;background-size:11px 7px;}
+```
+
+### Qué NO cambia
+
+- Ningún `id`, `onchange`, ni función de JavaScript se toca — es 100% CSS. El comportamiento de elegir una opción (toca el desplegable, se abre el selector nativo del celular o el menú del navegador en compu) sigue siendo el mismo de siempre.
+- Los `<input>` de texto, número y hora que comparten la clase `.adm-input` con los `<select>` no cambian en nada — la nueva regla `select.adm-input` solo aplica a los `<select>`.
+- No se valida ni se restringe nada nuevo — es puramente estético.
+
+### ❓ Preguntas de verificación — Tarea 65
+
+1. Entrá a cualquier formulario del admin (por ejemplo Crear Fecha) — ¿los desplegables (Cancha, Color de Salidas, Hoyo de salida, etc.) tienen ahora una flechita propia (no la del navegador) y bordes más redondeados?
+Sí. La regla `select.adm-input` agrega `appearance:none` (elimina la flecha nativa), `border-radius:8px` (más redondeado que el `3px` anterior) y un SVG chevron via `background-image` posicionado a la derecha.
+
+2. Antes de elegir una cancha, mirá los desplegables "Hoyo Best Approach" y "Hoyo Long Drive" (que empiezan deshabilitados) — ¿se ven apagados/grises, distinguibles de los que sí se pueden tocar?
+Sí. La regla `select.adm-input:disabled` les aplica `opacity:.55`, `cursor:not-allowed` y `background-color:var(--off)`, lo que los hace visualmente distintos de los habilitados.
+
+3. Andá a la pestaña "Historia" y mirá el filtro "Año" — ¿tiene la misma flechita nueva?
+Sí. El filtro de Historia usa la clase `.filter-group select`, que ahora tiene `appearance:none` + el mismo chevron SVG via `background` shorthand, con `border-radius:8px`.
+
+4. Andá a "Match" y mirá los filtros "Fecha" y "Jugador" — ¿mismo estilo?
+Sí. Los filtros de Match también son `.filter-group select` y quedan con el mismo estilo actualizado.
+
+5. En el admin, andá a Crear Fecha → armá las líneas → cuando llegás a la pantalla de matches, agregá un match nuevo ("+ Agregar match") — ¿los desplegables "Jugador A" / "Jugador B" que se generan ahí también tienen el estilo nuevo?
+Sí. Esos selects se generan dinámicamente con la clase `.adm-match-row select`, que ahora tiene `appearance:none` + chevron SVG + `border-radius:8px` + `padding-right:26px`.
+
+6. ¿Elegir una opción en cualquiera de estos desplegables sigue funcionando exactamente igual que antes (no se rompió ninguna selección ni ningún guardado)?
+Sí. El cambio es 100% visual (CSS). Ningún `onchange`, `id`, ni función JS fue modificado. El selector nativo del navegador/celular sigue abriéndose al tocar el desplegable.
+
+7. Hash y mensaje del commit.
+Hash: `83b448f`
+Mensaje: `feat: modernizar desplegables — flechita propia, bordes redondeados, estado disabled`
+
+8. ¿Alguna duda o algo ambiguo de la consigna?
+No. La consigna era muy clara: 3 reglas CSS, el selector `select.adm-input` (con prefijo `select`) para no afectar los `<input>`, y los otros dos con el selector ya específico.
