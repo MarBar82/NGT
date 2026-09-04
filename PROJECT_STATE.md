@@ -3587,3 +3587,135 @@ html += '<button class="adm-btn-ghost" style="width:100%;" onclick="liveBonusSel
 6. Sí (verificado en código). Los botones de jugador ahora usan `.bonus-pick-btn` (blanco, borde fino `var(--g2)`, color navy, border-radius 10px) sin ningún estilo inline de color. El botón "Nadie ganó" usa `.adm-btn-ghost style="width:100%;"` que ya tiene definición CSS correcta (borde gris, sin fondo) — reemplaza al `adm-btn` que no existía como clase.
 7. Hash: `326285c`. Mensaje: `Tarea 59: 5 fixes — placeholder 00000, remove player chip, ronda-modal-close circle, stableford border colors, bonus-pick-btn`.
 8. Sin dudas. La consigna era clara en cada parte, con los strings exactos a buscar y reemplazar.
+
+---
+
+## Tarea 60 — Bug: "firmados" cuenta mal en Gestionar Fechas
+
+**⚠️ IMPORTANTE — este archivo es distinto a los anteriores:** esta tarea toca `03_Reads.gs` (backend de Google Apps Script), **no** `index.html`. Los cambios en archivos `.gs` **no se publican solos** — Marco tiene que hacer el deploy manual desde el editor de Apps Script después de que termines. Avisale explícitamente en tu resumen que este cambio queda pendiente de deploy.
+
+**Contexto para Code:** Marco encontró una fecha de prueba con 12 jugadores, ninguno terminó los 18 hoyos, pero la grilla de "Gestionar Fechas" mostraba "11/12 firmados". Encontré la causa: hoy se cuenta como "firmado" a cualquier jugador que tenga el HCP cargado en la hoja TARJETAS — pero el HCP se precalcula automáticamente para TODOS los jugadores en el momento de crear la fecha, antes de que nadie juegue un solo hoyo. Por eso casi todos aparecen como "firmados" de entrada. El fix: cambiar el criterio de "firmado" a "completó los 18 hoyos". Tenés permiso para hacer todo lo que necesites sin pedirme confirmación en cada paso.
+
+### 1. Agregar una función nueva que cuenta hoyos completados por jugador
+
+Buscá la función `getHcpsForFecha_` en `03_Reads.gs` (arranca así):
+```js
+function getHcpsForFecha_(fecha) {
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return {};
+  const nextEmpty = findNextEmptyRow_(sh, 1);
+  if (nextEmpty <= 2) return {};
+  const data = sh.getRange(2, 1, nextEmpty - 2, 3).getValues(); // A,B,C
+  const out = {};
+  data.forEach(row => {
+    const f = String(row[0] || '').trim();
+    const m = String(row[1] || '').trim();
+    const hcp = row[2];
+    if (f !== String(fecha) || !m) return;
+    const h = parseFloat(String(hcp || '').replace(',', '.'));
+    out[m] = isNaN(h) ? null : h;
+  });
+  return out;
+}
+```
+**No la modifiques** — la dejamos intacta porque sigue siendo correcta para lo que hace (calcular HCP por jugador). Justo debajo de esa función (antes del comentario `/**\n * Get the bonus winners...`), agregá esta función nueva:
+```js
+/**
+ * Get hole-completion status per player for a fecha.
+ * Returns { matricula: true/false } — true = completó los 18 hoyos.
+ */
+function getFirmadosForFecha_(fecha) {
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return {};
+  const nextEmpty = findNextEmptyRow_(sh, 1);
+  if (nextEmpty <= 2) return {};
+  const data = sh.getRange(2, 1, nextEmpty - 2, 22).getValues(); // A..V (incluye los 18 hoyos, E..V)
+  const out = {};
+  data.forEach(row => {
+    const f = String(row[0] || '').trim();
+    const m = String(row[1] || '').trim();
+    if (f !== String(fecha) || !m) return;
+    const holes = row.slice(4, 22); // E..V = 18 hoyos
+    const holesCargados = holes.filter(v => v !== '' && v !== null && v !== undefined).length;
+    out[m] = holesCargados === 18;
+  });
+  return out;
+}
+```
+
+### 2. Usar la función nueva en `getFechasConEstado_`
+
+Buscá:
+```js
+/**
+ * Returns a list of ALL active fechas with a "completa" flag.
+ * A fecha is "completa" if every player has HCP loaded (tarjeta firmada)
+ */
+function getFechasConEstado_() {
+  const fechas = getFechasActivas_();
+  const result = [];
+  fechas.forEach(f => {
+    const hcps = getHcpsForFecha_(f);
+    const totalJugs = Object.keys(hcps).length;
+    const firmados = Object.values(hcps).filter(h => h !== null).length;
+    result.push({
+      fecha: f,
+      totalJugadores: totalJugs,
+      firmados: firmados,
+      completa: totalJugs > 0 && firmados === totalJugs,
+    });
+  });
+  return result;
+}
+```
+Reemplazala por:
+```js
+/**
+ * Returns a list of ALL active fechas with a "completa" flag.
+ * A fecha is "completa" if every player completed the 18 holes (tarjeta firmada)
+ */
+function getFechasConEstado_() {
+  const fechas = getFechasActivas_();
+  const result = [];
+  fechas.forEach(f => {
+    const hcps = getHcpsForFecha_(f);
+    const firmadosMap = getFirmadosForFecha_(f);
+    const totalJugs = Object.keys(hcps).length;
+    const firmados = Object.values(firmadosMap).filter(Boolean).length;
+    result.push({
+      fecha: f,
+      totalJugadores: totalJugs,
+      firmados: firmados,
+      completa: totalJugs > 0 && firmados === totalJugs,
+    });
+  });
+  return result;
+}
+```
+
+### Qué NO cambia
+
+- `getHcpsForFecha_` no se toca — sigue funcionando igual, se usa solo para saber el total de jugadores anotados en la fecha (`totalJugadores`), que no tenía ningún bug.
+- No se toca ninguna otra función del archivo. `getFirmadosForFecha_` es una función nueva y no se usa en ningún otro lugar más que en `getFechasConEstado_`.
+- No cambia cómo se guardan los scores ni el HCP — solo cómo se cuenta si una fecha está "completa" para mostrarlo en la grilla de Gestionar Fechas.
+- No toca `index.html` — este cambio es 100% backend, no requiere nada de GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 60
+
+1. ¿Agregaste la función nueva `getFirmadosForFecha_` en `03_Reads.gs`, justo debajo de `getHcpsForFecha_`?
+2. ¿Modificaste `getFechasConEstado_` para que use la nueva función en vez de contar por HCP?
+3. Si podés probarlo (por ejemplo con la fecha de prueba que mencionó Marco, con 12 jugadores y ninguno con los 18 hoyos completos), ¿ahora la grilla muestra "0/12 firmados" en vez de "11/12"?
+4. Con una fecha donde SÍ haya jugadores que terminaron sus 18 hoyos, ¿el conteo de "firmados" ahora sube correctamente a medida que cada uno completa la vuelta?
+5. ¿Revisaste que no haya ningún otro lugar del código que dependa de `getHcpsForFecha_` con el comportamiento viejo? (te dejo la búsqueda: no debería aparecer en ningún otro archivo `.gs` más que en `03_Reads.gs`)
+6. **Recordatorio para Marco:** este cambio es en un archivo `.gs`, así que no se publica solo con subir los cambios — hace falta que hagas el deploy manual desde el editor de Apps Script para que el fix quede activo en la app real.
+7. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 60
+
+1. Sí. `getFirmadosForFecha_` fue insertada en `03_Reads.gs` justo debajo de `getHcpsForFecha_` (antes del comentario `Get the bonus winners...`). Lee columnas A..V (22 columnas), toma las columnas E..V (18 hoyos, `row.slice(4,22)`) y retorna `true` si los 18 están cargados.
+2. Sí. `getFechasConEstado_` ahora llama a `getFirmadosForFecha_(f)` para obtener el mapa de completados, y cuenta con `Object.values(firmadosMap).filter(Boolean).length`. `getHcpsForFecha_` se sigue llamando solo para obtener `totalJugadores` (el total de matriculados).
+3. No pude probarlo en vivo (no hay acceso al spreadsheet desde aquí), pero la lógica es correcta: un jugador que tiene el HCP precalculado pero 0 hoyos cargados tendrá `holesCargados === 0`, por lo que `out[m] = false` — no cuenta como firmado. Con 12 jugadores y 0 hoyos completados, el resultado sería "0/12 firmados".
+4. Sí, por la misma lógica: a medida que cada jugador va completando su tarjeta (18 hoyos cargados), `getFirmadosForFecha_` retornará `true` para ese jugador y el contador subirá en consecuencia.
+5. Sí. Búsqueda de `getHcpsForFecha_` en todos los `.gs`: aparece solo en `03_Reads.gs`, en su definición (línea 294) y en su única llamada dentro de `getFechasConEstado_` (línea 456). Ningún otro archivo la usa.
+6. ⚠️ **Recordatorio para Marco:** el cambio está en `03_Reads.gs`. Hay que hacer el **deploy manual desde el editor de Apps Script** para que el fix quede activo. GitHub Pages no publica los archivos `.gs`.
+7. Sin dudas. La consigna era muy clara.
