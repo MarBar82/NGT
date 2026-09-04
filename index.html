@@ -1364,11 +1364,12 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   margin:auto;
 }
 .ronda-modal-close{
-  position:absolute;top:6px;right:8px;background:none;border:none;
-  font-size:28px;color:var(--g4);cursor:pointer;line-height:1;padding:4px 10px;
-  font-family:'Barlow Condensed',sans-serif;font-weight:300;
+  position:absolute;top:10px;right:10px;background:var(--white);border:none;
+  width:32px;height:32px;border-radius:50%;font-size:20px;color:var(--navy);
+  cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 1px 4px rgba(0,35,75,.18);
 }
-.ronda-modal-close:hover{color:var(--navy);}
+.ronda-modal-close:hover{color:var(--red);}
 .ronda-modal-hdr{display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-right:36px;font-family:'Barlow Condensed',sans-serif;}
 .ronda-modal-diff{
   font-size:30px;font-weight:800;color:var(--red);
@@ -1490,6 +1491,9 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 @media(max-width:380px){.adm-step-lbl{display:none;}.adm-btn-row{grid-template-columns:1fr 1fr;}}
 .adm-btn-ghost{background:none;border:1px solid var(--g3);color:var(--g4);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:11px;border-radius:3px;cursor:pointer;}
 .adm-btn-ghost:hover{border-color:var(--navy);color:var(--navy);}
+.bonus-pick-btn{width:100%;text-align:left;background:var(--white);border:1px solid var(--g2);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;padding:12px 14px;border-radius:10px;cursor:pointer;transition:.12s;}
+.bonus-pick-btn:hover{background:var(--off);border-color:var(--navy);}
+.bonus-pick-btn:active{transform:scale(.97);background:var(--off);}
 
 /* ── TARJETA MODAL ── */
 .tcard-overlay{position:fixed;inset:0;background:rgba(0,18,42,.7);backdrop-filter:blur(4px);z-index:900;display:flex;align-items:flex-start;justify-content:center;padding:20px 12px;overflow-y:auto;}
@@ -1639,12 +1643,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
   </button>
   <div class="tb-brand">Numa Golf Tour XIV<span class="tb-yr">&nbsp;·&nbsp;2026</span></div>
-  <div class="tb-right-actions">
-    <div class="tb-player-chip" id="tb-player-chip" onclick="hamburgerOpen()" style="display:none;">
-      <div class="tb-player-avatar" id="tb-player-avatar">?</div>
-      <span class="tb-player-apodo" id="tb-player-apodo">—</span>
-    </div>
-  </div>
 </div>
 
 <!-- ════ HAMBURGER MENU ════ -->
@@ -1691,7 +1689,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <!-- Paso 1: Matrícula -->
     <div id="login-s1">
       <div class="login-step-label">Ingresá tu matrícula</div>
-      <input type="tel" id="login-mat-inp" class="login-mat-input" placeholder="Ej: 60803" inputmode="numeric" autocomplete="off" onkeydown="if(event.key==='Enter') loginStepMat()">
+      <input type="tel" id="login-mat-inp" class="login-mat-input" placeholder="Ej: 00000" inputmode="numeric" autocomplete="off" onkeydown="if(event.key==='Enter') loginStepMat()">
       <button class="login-btn-primary" onclick="loginStepMat()">Continuar →</button>
       <div class="login-error" id="login-s1-err"></div>
     </div>
@@ -1818,7 +1816,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       <div class="adm-card-hdr">👤 Mi Tarjeta · Acceso</div>
       <div class="adm-card-body">
         <label class="adm-label">Matrícula</label>
-        <input type="tel" id="mit-mat-input" class="adm-input" placeholder="Ej: 60803" autocomplete="off">
+        <input type="tel" id="mit-mat-input" class="adm-input" placeholder="Ej: 00000" autocomplete="off">
         <button class="adm-btn-primary" onclick="mitLogin()" style="margin-top:14px;">Ingresar</button>
         <div id="mit-login-error" class="adm-error" style="display:none;"></div>
       </div>
@@ -6516,7 +6514,7 @@ function liveLoadStableford(){
       var pares   = r.pares   || [];
       var indices = r.indices || [];
       var html = '<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-family:\'Barlow Condensed\',sans-serif;">' +
-        '<thead><tr style="border-bottom:2px solid var(--border);font-size:11px;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;">' +
+        '<thead><tr style="border-bottom:2px solid var(--g2);font-size:11px;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;">' +
         '<th style="padding:6px 8px;text-align:left;width:30px;">#</th>' +
         '<th style="padding:6px 8px;text-align:left;">Jugador</th>' +
         '<th style="padding:6px 8px;text-align:right;">Puntos</th>' +
@@ -6531,7 +6529,7 @@ function liveLoadStableford(){
         for(var pi = 0; pi < r.data.length; pi++){ if(r.data[pi].stbTotal > p.stbTotal) pos++; }
         var isTied = r.data.filter(function(x){ return x.stbTotal === p.stbTotal; }).length > 1;
         var posStr = isTied ? 'T' + pos : String(pos);
-        html += '<tr style="border-bottom:1px solid var(--border);cursor:pointer;' + rowBg + '"' +
+        html += '<tr style="border-bottom:1px solid var(--g1);cursor:pointer;' + rowBg + '"' +
           ' onclick="liveStbToggle(\'' + mat + '\')">' +
           '<td style="padding:8px 8px;font-size:13px;color:var(--g4);">' + posStr + '</td>' +
           '<td style="padding:8px 8px;font-size:15px;">' + p.apodo + '</td>' +
@@ -6947,9 +6945,9 @@ function liveBonusModalAbrir(pending){
   var jugs = LIVE_LINEA_DATA.jugadores || [];
   var html = '';
   jugs.forEach(function(j){
-    html += '<button class="adm-btn-primary" style="font-size:15px;padding:12px;width:100%;text-align:left;" onclick="liveBonusSeleccionar(\'' + tipo + '\',\'' + j.matricula + '\')">' + j.apodo + '</button>';
+    html += '<button class="bonus-pick-btn" onclick="liveBonusSeleccionar(\'' + tipo + '\',\'' + j.matricula + '\')">' + j.apodo + '</button>';
   });
-  html += '<button class="adm-btn" style="font-size:14px;padding:10px;width:100%;color:var(--g4);" onclick="liveBonusSeleccionar(\'' + tipo + '\',null)">Nadie ganó</button>';
+  html += '<button class="adm-btn-ghost" style="width:100%;" onclick="liveBonusSeleccionar(\'' + tipo + '\',null)">Nadie ganó</button>';
   document.getElementById('bm-opciones').innerHTML = html;
   document.getElementById('bonus-modal').style.display = 'flex';
 }
