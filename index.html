@@ -46,6 +46,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 #pg-fecha .wrap{background:#eef0f3;}
 #pg-match .wrap{background:#eef0f3;}
 #pg-admin .wrap{background:#eef0f3;}
+#pg-fechas .wrap{background:#eef0f3;}
 #pg-match .adm-card{border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
 #pg-admin .adm-card{border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
 #pg-match .lb-wrap{background:transparent;box-shadow:none;}
@@ -1129,8 +1130,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .perf-pick-debut{font-size:10px;color:var(--g4);font-weight:500;letter-spacing:.06em;}
 
 /* ── FECHAS screen (13.3) ── */
-.fechas-pill{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;background:var(--white);border:1px solid var(--g1);border-radius:8px;margin-bottom:8px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;}
-.fechas-pill:hover,.fechas-pill:active{background:var(--off);}
+.fechas-pill{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;background:var(--white);border:1px solid var(--g1);border-radius:12px;margin-bottom:8px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+.fechas-pill:hover{background:var(--off);}
+.fechas-pill:active{background:var(--off);transform:scale(.98);}
 .fechas-pill-info{flex:1;min-width:0;}
 .fechas-pill-num{font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);margin-bottom:2px;}
 .fechas-pill-cancha{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
