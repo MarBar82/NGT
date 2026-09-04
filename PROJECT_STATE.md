@@ -2748,3 +2748,72 @@ Reemplazalo por (se invierte el orden — el botón pasa primero — y se le agr
 ### 📋 Para Marco — sobre esta tarea
 
 Buena pregunta la que hiciste — encontré que casi toda la app ya tiene la ubicación correcta (botón "Volver" a la izquierda, "Actualizar" a la derecha, de forma consistente), salvo esta única pantalla que quedó al revés por accidente. La corregimos para que quede igual que el resto. Se publica solo en GitHub Pages.
+
+---
+
+## Tarea 50 — Historia (Campeones): alinear al centro todo menos el nombre del jugador
+
+Marco confirmó cómo quiere la alineación de la tabla de "Campeones" (pestaña Ranking Histórico de Historia): el nombre del jugador queda a la izquierda, todo lo demás (#, medallas, participaciones) centrado — encabezados y datos por igual.
+
+Hoy hay una mezcla: los encabezados están TODOS a la izquierda, pero los datos de las columnas de medallas y participaciones ya están centrados a mano — y falta centrar el encabezado de esas columnas más la columna "#" (posición) entera.
+
+**100% frontend. Esta vez sí toca un poquito de JavaScript** (el texto que arma la tabla), además de una línea de CSS nueva.
+
+### 1. CSS — agregá esta regla nueva (por ejemplo, cerca de las otras reglas `.hist-rank-table`)
+
+```css
+.hist-rank-table th.c,.hist-rank-table td.c{text-align:center;}
+```
+
+(Es el mismo patrón que ya usa la pestaña "Años" de esta misma pantalla — una clase `c` que centra tanto el encabezado como el dato de esa columna.)
+
+### 2. JavaScript — encabezados de la tabla
+
+Buscá esta línea (dentro de `function loadHistoria()`):
+```js
+    let html = '<table class="hist-rank-table"><thead><tr><th>#</th><th>Jugador</th><th title="1er puesto">🥇</th><th title="2do puesto">🥈</th><th title="3er puesto">🥉</th><th>Participaciones</th></tr></thead><tbody>';
+```
+Reemplazala por (se le agrega `class="c"` a cada encabezado que tiene que quedar centrado — "Jugador" queda igual, sin tocar):
+```js
+    let html = '<table class="hist-rank-table"><thead><tr><th class="c">#</th><th>Jugador</th><th class="c" title="1er puesto">🥇</th><th class="c" title="2do puesto">🥈</th><th class="c" title="3er puesto">🥉</th><th class="c">Participaciones</th></tr></thead><tbody>';
+```
+
+### 3. JavaScript — columna "#" de cada fila (es la única columna de datos que todavía falta centrar)
+
+Buscá:
+```js
+      html += '<td class="hist-rank-pos ' + posClass + '">' + (i+1) + '</td>';
+```
+Reemplazala por (se le agrega la clase `c`, junto a las que ya tenía):
+```js
+      html += '<td class="hist-rank-pos c ' + posClass + '">' + (i+1) + '</td>';
+```
+
+### Qué NO cambia
+
+- Las columnas de medallas (🥇🥈🥉) y "Participaciones" YA estaban centradas en los datos (tienen `style="text-align:center;"` puesto a mano) — no hace falta tocarlas, ya están bien. Solo faltaban sus encabezados.
+- La columna "Jugador" no se toca — ni encabezado ni dato, queda a la izquierda como pediste.
+- La pestaña "Años" de Historia no se toca — ya estaba consistente desde antes (confirmé esto en la investigación previa).
+- Ninguna otra pantalla se ve afectada — `.hist-rank-table` es exclusiva de este tab, confirmado por búsqueda en todo el archivo.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 50
+
+1. En la pestaña "Campeones" de Historia, ¿los encabezados #, 🥇, 🥈, 🥉 y Participaciones ahora se ven centrados, alineados con los números/símbolos de abajo?
+   **Sí.** Nueva regla `.hist-rank-table th.c,.hist-rank-table td.c{text-align:center;}` + `class="c"` en los 5 `<th>` correspondientes (todos salvo "Jugador").
+
+2. ¿El encabezado "Jugador" y los nombres siguen alineados a la izquierda?
+   **Sí.** El `<th>Jugador</th>` no tiene clase `c`, y los `<td>` de nombre tampoco — heredan `text-align:left` por defecto.
+
+3. ¿La columna "#" (posición en el ranking) ahora se ve centrada, tanto el número del encabezado como los datos?
+   **Sí.** El `<th class="c">#</th>` ya cubierto en el paso 2, y en JS: `'<td class="hist-rank-pos c ' + posClass + '">'` agrega la clase `c` a cada celda de posición.
+
+4. Hash y mensaje del commit.
+   **`e5fa3a0`** — `feat: Tarea 50 - centrar columnas tabla Campeones en Historia`
+
+5. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Todos los puntos de anclaje eran únicos en el archivo.
+
+### 📋 Para Marco — sobre esta tarea
+
+Con esto la tabla de Campeones queda prolija: nombre a la izquierda, todo lo demás centrado y alineado con su propio encabezado. Se publica solo en GitHub Pages.
