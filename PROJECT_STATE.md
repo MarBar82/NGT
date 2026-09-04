@@ -3028,3 +3028,83 @@ Reemplazala por:
 
 9. ¿Alguna duda o algo ambiguo de la consigna?
    No. Los 5 selectores eran únicos como definición CSS — todos los reemplazos fueron directos.
+
+---
+
+## Tarea 53 — Fase 5: pantalla "Fecha jugada" (detalles finos)
+
+**Contexto para Code:** Terminamos las tarjetas grandes de la pantalla "Fecha jugada" en la tarea anterior. Ahora quedan dos detalles chicos: el botón "↻ Actualizar" de la tabla de resultados (hoy tiene esquinas cuadradas de estilo viejo) y las filas de esa misma tabla (son clickeables — al tocar una fila se despliega el detalle del jugador — pero hoy no dan ninguna señal visual cuando las tocás). Este archivo es `index.html`. Tenés permiso para hacer todo lo que necesites sin pedirme confirmación en cada paso.
+
+### 1. Botón "↻ Actualizar" — esquinas redondeadas + efecto al tocar
+
+Este botón es distinto a los botones "↻ Actualizar" de otras pantallas (esos usan la clase `.lb-refresh`, pero ese estilo es para fondo claro, y este botón está sobre un encabezado azul oscuro, así que no le queda bien reutilizar esa misma clase). Vamos a darle su propio estilo, coherente con el resto.
+
+Buscá este bloque (son varias líneas dentro de un `html +=`):
+```
+      '<button onclick="refreshFecha(' + fechaNum + ')" style="' +
+        'background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:3px;' +
+        'padding:3px 10px;font-size:11px;font-weight:700;' +
+        'font-family:\'Barlow Condensed\',sans-serif;' +
+        'color:#fff;cursor:pointer;letter-spacing:.06em;' +
+      '">↻ Actualizar</button>' +
+```
+Reemplazalo por (le agregamos la clase `fecha-refresh-btn` y cambiamos el `border-radius:3px` por `999px`, además de agregarle un poco más de padding horizontal para que la píldora se vea bien):
+```
+      '<button class="fecha-refresh-btn" onclick="refreshFecha(' + fechaNum + ')" style="' +
+        'background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:999px;' +
+        'padding:3px 14px;font-size:11px;font-weight:700;' +
+        'font-family:\'Barlow Condensed\',sans-serif;' +
+        'color:#fff;cursor:pointer;letter-spacing:.06em;' +
+      '">↻ Actualizar</button>' +
+```
+
+Ahora agregá esta nueva regla CSS (podés ponerla cerca de `.lb-refresh:active{transform:scale(.95);}`, que está en la línea 52, o en cualquier otro lugar dentro de `<style>`):
+```css
+.fecha-refresh-btn:active{transform:scale(.93);}
+```
+
+### 2. Filas de la tabla de resultados — efecto al tocar
+
+Buscá:
+```
+      html += '<tr style="cursor:pointer;" onclick="liveStbToggle(\'' + row.matricula + '\')">' +
+```
+Reemplazalo por (le agregamos una clase nueva `fecha-row-click` sin sacar el estilo inline que ya tenía):
+```
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="liveStbToggle(\'' + row.matricula + '\')">' +
+```
+
+Y agregá esta regla CSS nueva (junto a la anterior, o donde prefieras dentro de `<style>`):
+```css
+.fecha-row-click:active td{background:var(--g1);}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript cambia de comportamiento — el botón sigue llamando a `refreshFecha(...)` y la fila sigue llamando a `liveStbToggle(...)` exactamente igual que antes, solo que ahora ambos dan una señal visual (efecto "presionado") al tocarlos, igual que ya pasa en el resto de la app (por ejemplo las filas del ranking en Historia).
+- No tocamos `.lb-refresh` ni ninguna otra clase compartida — `fecha-refresh-btn` y `fecha-row-click` son clases nuevas, exclusivas de esta pantalla, así que no hay riesgo de afectar Live Scoring, Historia ni ninguna otra parte de la app.
+- El resto de la fila (los números, colores según el resultado) no cambia.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 53
+
+1. ¿El botón "↻ Actualizar" de la tabla de resultados ahora tiene forma de píldora (esquinas totalmente redondeadas) en vez de esquinas cuadradas?
+   **Sí.** El `border-radius:3px` en el style inline del botón pasó a `border-radius:999px`, y el padding de `3px 10px` a `3px 14px` para mejor proporción. Se agregó además la clase `fecha-refresh-btn`.
+
+2. Al tocar/hacer clic en ese botón, ¿se ve un pequeño efecto de "achicarse" antes de soltarlo?
+   **Sí.** Nueva regla CSS `.fecha-refresh-btn:active{transform:scale(.93);}`.
+
+3. Al tocar una fila de la tabla de resultados, ¿se ve un cambio de color de fondo mientras la mantenés presionada?
+   **Sí.** Nueva regla `.fecha-row-click:active td{background:var(--g1);}` — aplica el gris claro estándar a todas las celdas de la fila mientras se mantiene presionada.
+
+4. ¿La tabla se sigue desplegando igual que antes al tocar una fila (mismo comportamiento, solo con el agregado visual)?
+   **Sí.** El `onclick="liveStbToggle(...)"` no se tocó — solo se agregó `class="fecha-row-click"` al `<tr>`.
+
+5. ¿Confirmaste que las clases `fecha-refresh-btn` y `fecha-row-click` no existían antes en el archivo?
+   **Sí.** La búsqueda de ambas clases en `index.html` devolvió 0 resultados antes de este cambio — son clases nuevas, sin colisión.
+
+6. Hash y mensaje del commit.
+   **`02220fd`** — `feat: Tarea 53 - detalles finos pantalla Fecha jugada`
+
+7. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Los dos puntos de anclaje en JS eran únicos y el código a reemplazar era exacto.
