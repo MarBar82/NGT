@@ -2107,7 +2107,8 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div class="adm-row">
               <div class="adm-field">
                 <label class="adm-label">Número de Fecha</label>
-                <input type="number" id="adm-fecha" class="adm-input" placeholder="3" min="1">
+                <div id="adm-fecha-display" style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:var(--navy);background:var(--off);border:var(--border);border-radius:8px;padding:10px 14px;">Calculando…</div>
+                <input type="hidden" id="adm-fecha" value="">
               </div>
               <div class="adm-field">
                 <label class="adm-label">Cancha</label>
@@ -4085,12 +4086,17 @@ function admGoTo(section) {
 function wizAutoFecha_(){
   // Auto-fill número de fecha = max(fechas existentes) + 1
   const el = document.getElementById('adm-fecha');
-  if(!el || el.value.trim()) return; // no pisar si ya tiene valor
+  const disp = document.getElementById('adm-fecha-display');
+  if(!el) return;
+  if(disp) disp.textContent = 'Calculando…';
   ngtApiGet('fechas').then(r => {
     const fechas = (r && r.data) || [];
     const max = fechas.reduce((m, f) => Math.max(m, parseInt(f) || 0), 0);
     el.value = max + 1;
-  }).catch(() => {});
+    if(disp) disp.textContent = 'Fecha ' + (max + 1);
+  }).catch(() => {
+    if(disp) disp.textContent = 'Error al calcular — reintentá volviendo a esta pantalla';
+  });
 }
 
 function admGoHome() {
