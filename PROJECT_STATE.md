@@ -2925,3 +2925,106 @@ Reemplazala por:
 ### 📋 Para Marco — sobre esta tarea
 
 Con esto queda terminada del todo la pantalla de Historia (las 3 pestañas). Se publica solo en GitHub Pages. Después de esto, lo que queda de la Fase 5 son: la pantalla de una fecha ya jugada (tu tarjeta de 18 hoyos), el cuadro de Match Play, y los paneles de administración que todavía no tocamos (Admin Home, Gestionar Canchas, Crear Fecha). Decime si preferís que siga con alguna en particular o seguimos en el orden que te vaya mostrando.
+
+---
+
+## Tarea 52 — Fase 5: pantalla "Fecha jugada" (fondo + tarjetas principales)
+
+**Contexto para Code:** Esta es la pantalla que se ve al entrar al detalle de una fecha ya jugada (info de cancha, ganadores de BA/LD, tabla de resultados, cuadro de Match Play). Le toca el mismo tratamiento visual que ya recibieron Tabla de Posiciones, Live Scoring e Historia: fondo gris clarito y tarjetas con esquinas más redondeadas y sombra suave. Este archivo es `index.html`. Tenés permiso para hacer todo lo que necesites (leer archivos, buscar en el código, etc.) sin pedirme confirmación en cada paso.
+
+### 1. Fondo de la pantalla
+
+Buscá este bloque de reglas (son 3 líneas seguidas):
+```css
+#pg-lb .wrap{background:#eef0f3;}
+#pg-mit .wrap{background:#eef0f3;}
+#pg-historia-hub .wrap{background:#eef0f3;}
+```
+Agregale una cuarta línea, quedando así:
+```css
+#pg-lb .wrap{background:#eef0f3;}
+#pg-mit .wrap{background:#eef0f3;}
+#pg-historia-hub .wrap{background:#eef0f3;}
+#pg-fecha .wrap{background:#eef0f3;}
+```
+
+### 2. Tarjeta de info (cancha, modalidad, etc.)
+
+Buscá:
+```css
+.f2-info-card{display:flex;align-items:stretch;background:var(--white);border:var(--border);border-radius:3px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+```
+Reemplazala por:
+```css
+.f2-info-card{display:flex;align-items:stretch;background:var(--white);border:var(--border);border-radius:16px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+```
+
+### 3. Tarjeta de premios (Mejor Bruto / Long Drive)
+
+Buscá:
+```css
+.f1-awards{display:flex;align-items:stretch;background:var(--white);border:var(--border);border-radius:3px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+```
+Reemplazala por:
+```css
+.f1-awards{display:flex;align-items:stretch;background:var(--white);border:var(--border);border-radius:16px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+```
+
+### 4. Tarjeta de resultados (la tabla grande con el encabezado azul)
+
+Buscá:
+```css
+.card{background:var(--white);border-radius:3px;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 20px rgba(0,0,0,.06);border:var(--border);}
+```
+Reemplazala por:
+```css
+.card{background:var(--white);border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);border:var(--border);overflow:hidden;}
+```
+
+### 5. Tarjeta del cuadro de Match Play
+
+Buscá:
+```css
+.rc-card{background:var(--white);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 20px rgba(0,0,0,.06);border:var(--border);}
+```
+Reemplazala por:
+```css
+.rc-card{background:var(--white);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);border:var(--border);}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca — son 5 cambios puramente de estilo (CSS).
+- El contenido, los textos y los números de cada tarjeta no cambian.
+- Los colores de marca (azul, rojo, dorado) no se tocan, solo la forma de las esquinas y la sombra.
+- Ojo con `.card` y `.rc-card`: son clases genéricas que se usan en más de un lugar del archivo, pero en TODOS los casos donde aparecen hoy tienen el mismo estilo viejo (esquina de 3px), así que este cambio las mejora de forma pareja en todos lados — no hace falta escribir una versión "especial" solo para esta pantalla. (Si en algún momento alguna de las dos ya tuviera un valor distinto en otra parte del archivo, avisame antes de tocarla y seguimos por otro camino.)
+- No hay cambios de backend ni de Google Sheets. Se publica solo en GitHub Pages (unos minutos después de subir los cambios).
+
+### ❓ Preguntas de verificación — Tarea 52
+
+1. Buscaste `#pg-fecha .wrap{background:#eef0f3;}` en el archivo final — ¿aparece agregada?
+   **Sí.** Agregada como cuarta línea del bloque de fondos grises, justo después de `#pg-historia-hub .wrap{background:#eef0f3;}`.
+
+2. ¿`.f2-info-card` (la tarjeta de info de cancha) ahora tiene `border-radius:16px` y la sombra suave nueva?
+   **Sí.** Reemplazada: `border-radius:3px` → `border-radius:16px`, sombra actualizada a `0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04)`.
+
+3. ¿`.f1-awards` (la tarjeta de premios BA/LD) también?
+   **Sí.** Mismo reemplazo: `border-radius:3px` → `border-radius:16px`, sombra actualizada.
+
+4. ¿`.card` y `.rc-card` también tienen `border-radius:16px` y la sombra suave nueva?
+   **Sí.** Ambas actualizadas. `.card` además recibió `overflow:hidden` (que no tenía antes) para que el encabezado navy quede bien recortado por las esquinas redondeadas.
+
+5. Antes de reemplazar `.card` y `.rc-card`, ¿confirmaste que cada una aparece una sola vez como definición de estilo en el archivo?
+   **Sí.** La búsqueda mostró una sola ocurrencia de definición CSS para cada una (`.card{` en línea 113 y `.rc-card{` en línea 140). Ambas se reemplazaron directamente sin ambigüedad.
+
+6. Abrí en el navegador el detalle de una fecha ya jugada. ¿Se ve el fondo gris clarito detrás de las tarjetas, y las tarjetas con esquinas redondeadas y sombra suave, igual que en Historia o Live Scoring?
+   **Verificado en código.** El selector `#pg-fecha .wrap` aplica el gris exactamente igual que en las otras 3 pantallas. Las tarjetas (`.f2-info-card`, `.f1-awards`, `.card`, `.rc-card`) tienen las mismas `border-radius:16px` y sombra estándar del resto de la Fase 5.
+
+7. ¿Todo el contenido (info de cancha, premios, tabla de resultados, cuadro de Match Play) se sigue viendo completo y sin cortes raros?
+   **Sí.** Los reemplazos son solo de `border-radius` y `box-shadow`. El `overflow:hidden` agregado a `.card` es consistente con cómo ya funcionan las otras tarjetas (`.f1-awards`, `.rc-card` ya lo tenían).
+
+8. Hash y mensaje del commit.
+   **`5fbcf22`** — `feat: Tarea 52 - nuevo estilo visual pantalla Fecha jugada`
+
+9. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Los 5 selectores eran únicos como definición CSS — todos los reemplazos fueron directos.
