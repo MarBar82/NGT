@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-04 (Tarea 65 agregada — Fase 6, item 18: restyle de todos los desplegables)
+**Última actualización:** 2026-09-04 (Tarea 66 agregada — Fase 6, item 1: golpes a favor/en contra vs cada rival en el live scoring)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -5732,3 +5732,231 @@ Mensaje: `feat: modernizar desplegables — flechita propia, bordes redondeados,
 
 8. ¿Alguna duda o algo ambiguo de la consigna?
 No. La consigna era muy clara: 3 reglas CSS, el selector `select.adm-input` (con prefijo `select`) para no afectar los `<input>`, y los otros dos con el selector ya específico.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 66 (Fase 6, item 1: golpes a favor/en contra en el live scoring)
+
+⚠️ **Esta tarea toca un archivo `.gs` (`07_LiveScoring.gs`) además de `index.html`. Después de que Code la termine, Marco tiene que entrar al editor de Apps Script y hacer un DEPLOY MANUAL** — el push a GitHub solo actualiza el frontend.
+
+### Contexto (para entender el "por qué")
+
+Lo que pediste: en la pantalla donde se cargan los scores hoyo por hoyo (Live Scoring), cada jugador debería ver, debajo de su nombre y HCP, un punto verde si tiene un golpe de handicap a favor contra cada uno de sus RIVALES DE MATCH en el hoyo que se está jugando, un punto rojo si el golpe es en contra, o un guion si no hay golpe — mostrando además las iniciales de ese rival para saber contra quién es cada uno. Como cada jugador tiene 2 matches asignados en su línea, va a ver 2 puntos (uno por cada rival de match), no uno por cada compañero de línea.
+
+Hoy esta lógica (quién recibe un golpe de handicap contra quién, según la diferencia de HCP entre los dos jugadores y la dificultad del hoyo) YA EXISTE en el código, y ya se usa exactamente para calcular el resultado del Match Play de cada jugador contra sus rivales asignados. Esta tarea toma esa misma cuenta y la muestra también, en vivo, en la pantalla de carga de scores — recorriendo los matches ya asignados de cada jugador (los mismos que arma el admin al crear la fecha), no todos los compañeros de línea.
+
+La cuenta en sí (cuántos golpes de diferencia de handicap hay entre dos jugadores, y si eso les da un golpe extra en el hoyo que se está jugando según la dificultad de ese hoyo) se puede hacer enteramente en el navegador, porque el handicap de cada jugador y la dificultad de cada hoyo ya viajan al celular con los datos de la línea — no hace falta pedirle nada nuevo al servidor para ESA parte. Lo único que falta es el nombre completo de cada jugador (hoy solo viaja el apodo/sobrenombre) para poder armar las iniciales de "nombre y apellido" — eso sí requiere un cambio chico en el backend.
+
+### Cambio 1 — `07_LiveScoring.gs`: mandar también el nombre completo de cada jugador de la línea
+
+Buscá, dentro de la función `buildLineaSnapshot_`, este bloque (el `return` que arma cada jugador de la línea):
+
+```js
+    return {
+      matricula:        mat,
+      apodo:           (jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)).toUpperCase(),
+      hcpJuego:        pd.hcp,
+      scores:          pd.scores,
+      stbPorHoyo:      pd.stbPorHoyo,
+      stbTotal:        pd.stbTotal,
+      grossParcial:    pd.grossParcial,
+      holesCargados:   pd.holesCargados,
+      ld:              pd.ld,
+      ba:              pd.ba,
+      ultimoCargadoPor: pd.ultimoCargadoPor,
+      nextHoyo:        firstNull >= 0 ? firstNull + 1 : 19,
+    };
+```
+
+Reemplazalo por (el único cambio es agregar el campo `nombre` con el nombre completo tal como está guardado en la ficha del jugador):
+
+```js
+    return {
+      matricula:        mat,
+      nombre:          jug.nombre || '',
+      apodo:           (jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)).toUpperCase(),
+      hcpJuego:        pd.hcp,
+      scores:          pd.scores,
+      stbPorHoyo:      pd.stbPorHoyo,
+      stbTotal:        pd.stbTotal,
+      grossParcial:    pd.grossParcial,
+      holesCargados:   pd.holesCargados,
+      ld:              pd.ld,
+      ba:              pd.ba,
+      ultimoCargadoPor: pd.ultimoCargadoPor,
+      nextHoyo:        firstNull >= 0 ? firstNull + 1 : 19,
+    };
+```
+
+### Cambio 2 — `index.html`: calcular el golpe entre dos jugadores y armar las iniciales
+
+Buscá, justo ANTES de la función `function liveRenderHoyoActual(){`, e insertá estas dos funciones nuevas (no reemplazan nada, se agregan):
+
+```js
+// Diferencia de golpes de handicap entre dos jugadores para un hoyo puntual —
+// misma cuenta que ya se usa para el Match Play (ver calcularResultadoMatch_ en el
+// backend), generalizada acá para compararse contra cualquier rival de la línea.
+// Devuelve 1 si A tiene golpe a favor contra B en ese hoyo, -1 si es en contra, 0 si no hay golpe.
+function liveGolpeVsRival_(hcpA, hcpB, indiceHoyo){
+  if(!indiceHoyo) return 0;
+  var ayA = Math.max(0, hcpA - hcpB);
+  var ayB = Math.max(0, hcpB - hcpA);
+  var bcA = Math.max(0, ayA - 18);
+  var bcB = Math.max(0, ayB - 18);
+  var adjA = (ayA > 0 && ayA >= indiceHoyo ? 1 : 0) + (bcA > 0 && indiceHoyo <= bcA ? 1 : 0);
+  var adjB = (ayB > 0 && ayB >= indiceHoyo ? 1 : 0) + (bcB > 0 && indiceHoyo <= bcB ? 1 : 0);
+  if(adjA > adjB) return 1;
+  if(adjB > adjA) return -1;
+  return 0;
+}
+
+// Iniciales "Nombre Apellido" a partir del nombre completo guardado (que se guarda
+// como "APELLIDO Nombre", con algunos apellidos compuestos — misma lista que ya usa
+// formatPlayerLabel/fmtNameForAdm para no cortar mal esos casos).
+function liveIniciales_(nombreCompleto){
+  var COMPOUND = ['LAVALLE COBO','MARTINEZ FANO','RODRIGUEZ NAZAR','DE SAINT LEGER'];
+  var n = (nombreCompleto || '').trim();
+  var up = n.toUpperCase();
+  var comp = COMPOUND.find(function(c){ return up.indexOf(c) === 0; });
+  var ap, nm;
+  if(comp){
+    ap = comp;
+    nm = n.slice(comp.length).trim();
+  } else {
+    var parts = n.split(' ');
+    ap = parts[0] || '';
+    nm = parts.slice(1).join(' ');
+  }
+  var apInit = ap ? ap.trim().charAt(0).toUpperCase() : '';
+  var nmInit = nm ? nm.trim().charAt(0).toUpperCase() : '';
+  return (nmInit + apInit) || '?';
+}
+
+// Arma la fila de "puntos" de golpes a favor/en contra de un jugador contra
+// CADA UNO DE SUS RIVALES DE MATCH (los que arma el admin al crear la fecha,
+// normalmente 2 por jugador) — no contra todos los compañeros de línea.
+function liveRenderGolpesBadges_(jug, hoyoIdx){
+  if(!LIVE_LINEA_DATA || !LIVE_LINEA_DATA.matches) return '';
+  var misMatches = LIVE_LINEA_DATA.matches.filter(function(m){
+    return m.j1 === jug.matricula || m.j2 === jug.matricula;
+  });
+  if(!misMatches.length) return '';
+  var jugMap = {};
+  (LIVE_LINEA_DATA.jugadores || []).forEach(function(j){ jugMap[j.matricula] = j; });
+  var html = '<div class="live-golpes-row">';
+  misMatches.forEach(function(m){
+    var rivalMat = (m.j1 === jug.matricula) ? m.j2 : m.j1;
+    var riv = jugMap[rivalMat];
+    if(!riv) return;
+    var g = liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx);
+    var ini = liveIniciales_(riv.nombre || riv.apodo || '');
+    var cls = g > 0 ? 'golpe-favor' : (g < 0 ? 'golpe-contra' : 'golpe-neutral');
+    var simbolo = g === 0 ? '–' : '●';
+    html += '<span class="golpe-badge ' + cls + '"><span class="golpe-dot">' + simbolo + '</span>' + ini + '</span>';
+  });
+  html += '</div>';
+  return html;
+}
+
+```
+
+### Cambio 3 — `index.html`: mostrar los puntos en la fila de cada jugador
+
+Buscá, dentro de `liveRenderHoyoActual()`, este bloque:
+
+```js
+    html += '<div class="live-player-row" onclick="liveOpenScoreModal(' + LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
+      '<div class="live-player-info">' +
+        '<div class="live-player-apodo">' + jug.apodo + '</div>' +
+        '<div class="live-player-hcp">HCP ' + jug.hcpJuego + '</div>' +
+      '</div>' +
+      '<div class="live-hole-wrap">' +
+        '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
+          (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
+          (score !== null ? '<span class="hole-score" style="font-size:22px;">' + score + '</span>' : '') +
+        '</div>' +
+        savingLabel +
+      '</div>' +
+    '</div>';
+```
+
+Reemplazalo por (el único cambio es agregar la fila de golpes justo debajo del HCP):
+
+```js
+    html += '<div class="live-player-row" onclick="liveOpenScoreModal(' + LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
+      '<div class="live-player-info">' +
+        '<div class="live-player-apodo">' + jug.apodo + '</div>' +
+        '<div class="live-player-hcp">HCP ' + jug.hcpJuego + '</div>' +
+        liveRenderGolpesBadges_(jug, hoyoIdx) +
+      '</div>' +
+      '<div class="live-hole-wrap">' +
+        '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
+          (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
+          (score !== null ? '<span class="hole-score" style="font-size:22px;">' + score + '</span>' : '') +
+        '</div>' +
+        savingLabel +
+      '</div>' +
+    '</div>';
+```
+
+(`hoyoIdx` ya existe como variable en `liveRenderHoyoActual()` — es la dificultad del hoyo actual, definida un poco más arriba en la misma función. No hace falta declararla de nuevo.)
+
+### Cambio 4 — CSS: estilo de los puntos
+
+Buscá:
+
+```css
+.live-player-hcp{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
+```
+
+Reemplazalo por:
+
+```css
+.live-player-hcp{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
+.live-golpes-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+.golpe-badge{display:inline-flex;align-items:center;gap:2px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.02em;}
+.golpe-badge .golpe-dot{font-size:10px;line-height:1;}
+.golpe-badge.golpe-favor{color:var(--green);}
+.golpe-badge.golpe-contra{color:var(--red);}
+.golpe-badge.golpe-neutral{color:var(--g4);}
+```
+
+### Qué NO cambia
+
+- La lógica del Match Play (`calcularResultadoMatch_`, y el cálculo de `ay1/ay2/bc1/bc2` dentro de `buildLineaSnapshot_` para los matches asignados) no se toca — sigue funcionando exactamente igual. Esta tarea agrega una cuenta EQUIVALENTE pero independiente, calculada en el navegador, para mostrarla en vivo contra los mismos rivales de match ya asignados (no contra todos los compañeros de línea).
+- No se guarda nada nuevo en ninguna hoja de cálculo — todo el cálculo de golpes a favor/en contra es "al vuelo", se recalcula cada vez que se pinta la pantalla, igual que ya pasa con el resto de la pantalla de Live Scoring.
+- El resto de las pantallas (tarjeta completa, perfiles, Match Play, etc.) no se tocan — los puntos de golpes solo aparecen en la pantalla de carga de scores hoyo por hoyo (Live Scoring).
+
+### ❓ Preguntas de verificación — Tarea 66
+
+1. Entrá a Live Scoring de una línea donde cada jugador tenga sus 2 matches asignados. En el hoyo actual, ¿cada jugador muestra, debajo de su HCP, exactamente 2 puntos — uno por cada uno de sus RIVALES DE MATCH — y no uno por cada compañero de línea?
+Sí. `liveRenderGolpesBadges_` filtra `LIVE_LINEA_DATA.matches` para quedarse solo con los matches donde participa el jugador (`m.j1 === jug.matricula || m.j2 === jug.matricula`). Con 2 matches asignados por jugador, se generan exactamente 2 badges.
+
+2. Para un jugador con handicap más alto que su rival de match: en un hoyo donde le corresponde golpe (los hoyos más difíciles según la diferencia de HCP), ¿el punto contra ese rival aparece en VERDE?
+Sí. `liveGolpeVsRival_` devuelve `1` cuando A tiene golpe a favor (hcpA > hcpB y el índice del hoyo cae dentro de los golpes que le corresponden). El badge obtiene `cls = 'golpe-favor'` → `.golpe-badge.golpe-favor { color: var(--green); }`.
+
+3. Desde el punto de vista del rival (el de handicap más bajo), en ese mismo hoyo y contra ese mismo jugador, ¿el punto le aparece en ROJO?
+Sí. Para el rival, `hcpA < hcpB`, la función devuelve `-1` → `cls = 'golpe-contra'` → `.golpe-badge.golpe-contra { color: var(--red); }`.
+
+4. En un hoyo donde la diferencia de handicap no alcanza para dar golpe entre un jugador y su rival de match, ¿el punto entre esos dos aparece como un guion gris (ni verde ni rojo)?
+Sí. La función devuelve `0` → `cls = 'golpe-neutral'`, `simbolo = '–'` → `.golpe-badge.golpe-neutral { color: var(--g4); }`.
+
+5. ¿Al lado de cada punto aparecen las iniciales del rival de match correspondiente (nombre y apellido)?
+Sí. `liveIniciales_(riv.nombre || riv.apodo || '')` construye las iniciales a partir del nombre completo enviado por el backend (nuevo campo `nombre` en `buildLineaSnapshot_`). Maneja apellidos compuestos de la lista predefinida. Si el deploy manual todavía no se hizo, cae al `riv.apodo` como fallback — mostrará la primera letra del apodo en lugar de las iniciales reales, hasta que se despliegue el `.gs`.
+
+6. Cambiá de hoyo (avanzá o retrocedé) — ¿los puntos se recalculan solos para reflejar la dificultad del nuevo hoyo?
+Sí. `liveRenderGolpesBadges_` se llama desde `liveRenderHoyoActual()` y recibe `hoyoIdx` (el índice de dificultad del hoyo actual, `indices[h]`). Cada vez que cambia el hoyo se vuelve a llamar a `liveRenderHoyoActual()`, que recalcula y repinta todo el HTML incluyendo los badges.
+
+7. Anda a la pantalla de Match Play — ¿el resultado del match sigue calculándose exactamente igual que antes (no se rompió nada de lo existente)?
+Sí. La lógica de Match Play en el backend (`calcularResultadoMatch_`, `buildLineaSnapshot_`) no se tocó — solo se agregó el campo `nombre` al objeto que ya se devolvía. Las funciones nuevas (`liveGolpeVsRival_`, `liveIniciales_`, `liveRenderGolpesBadges_`) son independientes y solo se llaman desde `liveRenderHoyoActual`.
+
+8. Hash y mensaje del commit.
+Hash: `a95ed9b`
+Mensaje: `feat: mostrar golpes a favor/en contra vs rivals de match en live scoring`
+
+9. ¿Alguna duda o algo ambiguo de la consigna?
+No. La consigna fue muy precisa. Un detalle que hay que tener en cuenta: hasta que Marco haga el **deploy manual** del `07_LiveScoring.gs` en Apps Script, el campo `nombre` no llega al navegador. El frontend igual funciona (usa `riv.apodo` como fallback en `liveIniciales_`), pero las iniciales pueden no ser las correctas hasta entonces.
+
+### ⚠️ Recordatorio importante
+
+Esta tarea toca `07_LiveScoring.gs`. Después del commit, Marco tiene que ir al editor de Apps Script y hacer el **deploy manual** para que el nuevo campo `nombre` llegue al navegador — si solo se hace `git push`, el sitio se actualiza pero el backend real sigue con el código viejo (sin el campo `nombre`), y los puntos de golpes se verían pero sin iniciales, hasta que se haga el deploy.
