@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-04 (Tarea 42 agregada — Fase 4, paso 3: buscador y contador de jugadores)
+**Última actualización:** 2026-09-04 (Tarea 63 agregada — Fase 6, item 4: bonus parcial/definitivo + reasignar hoyo de bonus)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -4010,3 +4010,510 @@ function wizAutoFecha_(){
 4. Sí. Se eliminó el `if(el.value.trim()) return;` que antes cortaba la ejecución si el campo ya tenía valor. Ahora `wizAutoFecha_` siempre recalcula (y muestra "Calculando…" mientras espera), así que cada vez que se entra a la pantalla el número se actualiza desde el servidor.
 5. Hash: `da73fbb`. Mensaje: `Tarea 62: numero de fecha calculado automatico, no editable`.
 6. Sin dudas. La consigna era clara y el truco del `type="hidden"` para no tocar el resto del código es una solución limpia.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 63 (Fase 6, item 4 + función nueva de reasignar hoyo de bonus)
+
+⚠️ **Esta tarea toca archivos `.gs` (backend). Después de que Code la termine, Marco tiene que entrar al editor de Apps Script y hacer un DEPLOY MANUAL para que los cambios de backend entren en efecto — el push a GitHub solo actualiza el frontend (`index.html`), no el backend.**
+
+### Contexto (para entender el "por qué")
+
+El mecanismo de bonus (BA = Best Approach, LD = Long Drive) funciona así: las líneas pasan por el hoyo de bonus una por una (no al mismo tiempo, en cualquier orden). Cada línea, cuando termina de jugar ese hoyo, tiene que reportar si alguno de sus jugadores superó la mejor marca actual — si sí, dice quién (y ese pasa a ser el récord); si no, reporta "Nadie ganó" (el récord actual queda como está). Recién cuando **todas** las líneas de la fecha reportaron (ganen o digan "nadie"), el resultado es definitivo — antes de eso es "provisorio".
+
+Hoy el código tiene dos bugs relacionados:
+
+1. **El cartel "provisorio/definitivo" está mal calculado.** Hoy, apenas UNA línea reporta un ganador, el sistema ya marca el bonus como "definitivo" — sin esperar a que las demás líneas jueguen el hoyo y reporten.
+2. **Una vez que una línea reporta un ganador, a las líneas siguientes nunca más se les pregunta.** El aviso para reportar solo aparece si "todavía no hay ningún ganador registrado" — así que en cuanto la línea 1 reporta un nombre, las líneas 2 y 3 pasan por el hoyo de bonus y el sistema nunca les pregunta nada, aunque el mecanismo real dice que TODAS tienen que reportar.
+
+La solución: en vez de guardar solo "quién ganó", el sistema también tiene que llevar la cuenta de **qué líneas ya reportaron** (sin importar si ganaron o dijeron "nadie"). Con esa cuenta se puede calcular bien el "provisorio/definitivo" y disparar el aviso a cada línea exactamente una vez.
+
+Además, Marco agregó un caso real: **si nadie gana en el hoyo asignado, el admin puede decidir jugar el bonus en otro hoyo** (uno que todavía no se jugó) y cambiar cuál es el "hoyo de bonus" desde Gestionar Fechas. Hoy esa función NO existe en la app — se agrega en esta misma tarea. Al cambiar el hoyo, el seguimiento de "quién ya reportó" y el ganador anterior de ese tipo se borran, porque es una competencia nueva en un hoyo nuevo.
+
+El frontend que muestra "Provisorio · falta L1, L3" (función `liveRenderBonus()`) **ya está bien hecho** y no hace falta tocarlo — el problema es 100% de backend.
+
+### Cambio 1 — `07_LiveScoring.gs`: guardar qué líneas ya reportaron
+
+Buscá la función `setBonusGanador_` completa:
+
+```js
+function setBonusGanador_(params) {
+  const { fecha, tipo, lineaNum, matricula, matriculaReporta } = params;
+  if (!fecha || !tipo || !lineaNum) return { ok: false, error: 'Faltan parámetros' };
+
+  const fStr = String(fecha).trim();
+  const meta = getFechaMeta_(fStr);
+  if (!meta) return { ok: false, error: 'Fecha no encontrada' };
+
+  const tipoLower = String(tipo).toLowerCase();
+  if (tipoLower !== 'ba' && tipoLower !== 'ld') return { ok: false, error: 'Tipo inválido' };
+
+  const lineaIdx = parseInt(lineaNum) - 1;
+  const reportaMat = String(matriculaReporta || '').trim();
+
+  if (!checkAdmin_(params.adminKey)) {
+    const linea = (meta.lineas || [])[lineaIdx] || [];
+    if (linea.map(String).indexOf(reportaMat) < 0)
+      return { ok: false, error: 'No autorizado' };
+  }
+
+  const props = PropertiesService.getDocumentProperties();
+  let metaAll;
+  try { metaAll = JSON.parse(props.getProperty('FECHA_META') || '{}'); } catch(e) { metaAll = {}; }
+  if (!metaAll[fStr]) metaAll[fStr] = {};
+  if (!metaAll[fStr].bonusEstado) metaAll[fStr].bonusEstado = {};
+
+  let ganador = null;
+  if (matricula) {
+    const jugMap = {};
+    cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+    const jug = jugMap[String(matricula)] || {};
+    ganador = {
+      matricula: String(matricula),
+      apodo: ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : matricula)) + '').toUpperCase(),
+      lineaNum: parseInt(lineaNum),
+    };
+    metaAll[fStr].bonusEstado[tipoLower] = { matricula: String(matricula), lineaNum: parseInt(lineaNum), timestamp: Date.now() };
+    props.setProperty('FECHA_META', JSON.stringify(metaAll));
+  }
+
+  audit_('SET_BONUS_GANADOR', reportaMat, { fecha, tipo, lineaNum, matricula });
+  return { ok: true, tipo, ganador, final: false };
+}
+```
+
+Reemplazala por (los únicos cambios son: llevar la cuenta de líneas que reportaron, y guardar SIEMPRE — antes solo se guardaba cuando había un ganador, así que un "Nadie ganó" no quedaba registrado en ningún lado):
+
+```js
+function setBonusGanador_(params) {
+  const { fecha, tipo, lineaNum, matricula, matriculaReporta } = params;
+  if (!fecha || !tipo || !lineaNum) return { ok: false, error: 'Faltan parámetros' };
+
+  const fStr = String(fecha).trim();
+  const meta = getFechaMeta_(fStr);
+  if (!meta) return { ok: false, error: 'Fecha no encontrada' };
+
+  const tipoLower = String(tipo).toLowerCase();
+  if (tipoLower !== 'ba' && tipoLower !== 'ld') return { ok: false, error: 'Tipo inválido' };
+
+  const lineaIdx = parseInt(lineaNum) - 1;
+  const reportaMat = String(matriculaReporta || '').trim();
+
+  if (!checkAdmin_(params.adminKey)) {
+    const linea = (meta.lineas || [])[lineaIdx] || [];
+    if (linea.map(String).indexOf(reportaMat) < 0)
+      return { ok: false, error: 'No autorizado' };
+  }
+
+  const props = PropertiesService.getDocumentProperties();
+  let metaAll;
+  try { metaAll = JSON.parse(props.getProperty('FECHA_META') || '{}'); } catch(e) { metaAll = {}; }
+  if (!metaAll[fStr]) metaAll[fStr] = {};
+  if (!metaAll[fStr].bonusEstado) metaAll[fStr].bonusEstado = {};
+  if (!metaAll[fStr].bonusReportes) metaAll[fStr].bonusReportes = {};
+  if (!metaAll[fStr].bonusReportes[tipoLower]) metaAll[fStr].bonusReportes[tipoLower] = {};
+
+  let ganador = null;
+  if (matricula) {
+    const jugMap = {};
+    cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+    const jug = jugMap[String(matricula)] || {};
+    ganador = {
+      matricula: String(matricula),
+      apodo: ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : matricula)) + '').toUpperCase(),
+      lineaNum: parseInt(lineaNum),
+    };
+    metaAll[fStr].bonusEstado[tipoLower] = { matricula: String(matricula), lineaNum: parseInt(lineaNum), timestamp: Date.now() };
+  }
+
+  // Marcar que esta línea ya reportó para este tipo de bonus (haya ganador o "Nadie ganó")
+  metaAll[fStr].bonusReportes[tipoLower][String(parseInt(lineaNum))] = true;
+  props.setProperty('FECHA_META', JSON.stringify(metaAll));
+
+  audit_('SET_BONUS_GANADOR', reportaMat, { fecha, tipo, lineaNum, matricula });
+  return { ok: true, tipo, ganador, final: false };
+}
+```
+
+### Cambio 2 — `07_LiveScoring.gs`: calcular bien "provisorio/definitivo"
+
+Buscá, dentro de la función `getBonusEstado_`, este bloque:
+
+```js
+  const bonusHoyos  = meta.bonusHoyos  || {};
+  const bonusEstado = meta.bonusEstado || {};
+  const totalLineas = meta.lineas ? meta.lineas.length : 0;
+  const jugMap = {};
+  cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+
+  function buildBonusInfo(tipo) {
+    const hoyo = bonusHoyos[tipo] || null;
+    if (!hoyo) return null;
+    const est = bonusEstado[tipo];
+    let ganador = null;
+    if (est && est.matricula) {
+      const jug = jugMap[String(est.matricula)] || {};
+      ganador = {
+        matricula: est.matricula,
+        apodo: ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : est.matricula)) + '').toUpperCase(),
+        lineaNum: est.lineaNum,
+      };
+    }
+    // Simplified: any line without bonusEstado entry is pending
+    const lineasFaltantes = [];
+    if (!est) {
+      for (let i = 1; i <= totalLineas; i++) lineasFaltantes.push('L' + i);
+    }
+    return { hoyo, ganador, final: lineasFaltantes.length === 0, lineasFaltantes };
+  }
+```
+
+Reemplazalo por:
+
+```js
+  const bonusHoyos    = meta.bonusHoyos    || {};
+  const bonusEstado   = meta.bonusEstado   || {};
+  const bonusReportes = meta.bonusReportes || {};
+  const totalLineas = meta.lineas ? meta.lineas.length : 0;
+  const jugMap = {};
+  cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+
+  function buildBonusInfo(tipo) {
+    const hoyo = bonusHoyos[tipo] || null;
+    if (!hoyo) return null;
+    const est = bonusEstado[tipo];
+    let ganador = null;
+    if (est && est.matricula) {
+      const jug = jugMap[String(est.matricula)] || {};
+      ganador = {
+        matricula: est.matricula,
+        apodo: ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : est.matricula)) + '').toUpperCase(),
+        lineaNum: est.lineaNum,
+      };
+    }
+    // "Definitivo" recién cuando TODAS las líneas reportaron para este tipo (ganaron o dijeron "Nadie ganó")
+    const reportaron = bonusReportes[tipo] || {};
+    const lineasFaltantes = [];
+    for (let i = 1; i <= totalLineas; i++) {
+      if (!reportaron[String(i)]) lineasFaltantes.push('L' + i);
+    }
+    return { hoyo, ganador, final: lineasFaltantes.length === 0, lineasFaltantes };
+  }
+```
+
+### Cambio 3 — `07_LiveScoring.gs`: preguntar a CADA línea, no solo hasta que alguien gane
+
+Buscá, dentro de la función que carga un score (`cargarScore_`), este bloque:
+
+```js
+  let bonusPendiente = null;
+  if (scoreVal !== '' && meta.bonusHoyos && snap && snap.jugadores) {
+    const bonusEstado = meta.bonusEstado || {};
+    const hoyoIdx = hoyoNum - 1;
+    const allHaveScore = snap.jugadores.every(function(j){ return j.scores[hoyoIdx] !== null; });
+    if (allHaveScore) {
+      if (hoyoNum === meta.bonusHoyos.ba && !bonusEstado.ba) {
+        bonusPendiente = { tipo: 'ba', hoyo: hoyoNum };
+      } else if (hoyoNum === meta.bonusHoyos.ld && !bonusEstado.ld) {
+        bonusPendiente = { tipo: 'ld', hoyo: hoyoNum };
+      }
+    }
+  }
+```
+
+Reemplazalo por:
+
+```js
+  let bonusPendiente = null;
+  if (scoreVal !== '' && meta.bonusHoyos && snap && snap.jugadores) {
+    const bonusReportes = meta.bonusReportes || {};
+    const miLineaNum = String(lineaIdx + 1);
+    const yaReportoBA = !!(bonusReportes.ba && bonusReportes.ba[miLineaNum]);
+    const yaReportoLD = !!(bonusReportes.ld && bonusReportes.ld[miLineaNum]);
+    const hoyoIdx = hoyoNum - 1;
+    const allHaveScore = snap.jugadores.every(function(j){ return j.scores[hoyoIdx] !== null; });
+    if (allHaveScore) {
+      if (hoyoNum === meta.bonusHoyos.ba && !yaReportoBA) {
+        bonusPendiente = { tipo: 'ba', hoyo: hoyoNum };
+      } else if (hoyoNum === meta.bonusHoyos.ld && !yaReportoLD) {
+        bonusPendiente = { tipo: 'ld', hoyo: hoyoNum };
+      }
+    }
+  }
+```
+
+Con esto: ahora se compara "esta línea (`lineaIdx`) ya reportó este tipo" en vez de "existe algún ganador global" — así que cada línea recibe el aviso una sola vez, sin importar lo que hayan reportado las demás.
+
+### Cambio 4 — `07_LiveScoring.gs`: función nueva para reasignar el hoyo de bonus
+
+Buscá el final de la función `setBonusGanador_` que acabás de modificar en el Cambio 1 (termina con `return { ok: true, tipo, ganador, final: false }; }`) y justo DESPUÉS de esa función (antes del comentario `/**\n * Shared match play calculator...`), agregá esta función nueva:
+
+```js
+/**
+ * setBonusHoyo_ — Admin reasigna cuál es el hoyo de bonus (BA o LD) para una fecha
+ * en curso. Se usa cuando, en la práctica, nadie ganó en el hoyo original y el admin
+ * decide jugarlo en otro hoyo (que todavía no se jugó).
+ * Al cambiar el hoyo se borra el ganador y el seguimiento de "quién ya reportó" de
+ * ese tipo, porque es una competencia nueva en un hoyo nuevo.
+ */
+function setBonusHoyo_(params) {
+  const { adminKey, fecha, tipo, hoyo } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const tipoLower = String(tipo || '').toLowerCase();
+  if (tipoLower !== 'ba' && tipoLower !== 'ld') return { ok: false, error: 'Tipo inválido' };
+
+  const hoyoNum = parseInt(hoyo);
+  if (!hoyoNum || hoyoNum < 1 || hoyoNum > 18) return { ok: false, error: 'Hoyo inválido' };
+
+  const fStr = String(fecha).trim();
+  const props = PropertiesService.getDocumentProperties();
+  let metaAll;
+  try { metaAll = JSON.parse(props.getProperty('FECHA_META') || '{}'); } catch(e) { metaAll = {}; }
+  if (!metaAll[fStr]) return { ok: false, error: 'Fecha no encontrada' };
+
+  if (!metaAll[fStr].bonusHoyos) metaAll[fStr].bonusHoyos = {};
+  metaAll[fStr].bonusHoyos[tipoLower] = hoyoNum;
+
+  // Nuevo hoyo = nueva competencia: se descarta el ganador y los reportes previos de este tipo
+  if (metaAll[fStr].bonusEstado) delete metaAll[fStr].bonusEstado[tipoLower];
+  if (!metaAll[fStr].bonusReportes) metaAll[fStr].bonusReportes = {};
+  metaAll[fStr].bonusReportes[tipoLower] = {};
+
+  props.setProperty('FECHA_META', JSON.stringify(metaAll));
+  SpreadsheetApp.flush();
+  audit_('SET_BONUS_HOYO', 'admin', { fecha: fStr, tipo: tipoLower, hoyo: hoyoNum });
+  try { CacheService.getScriptCache().remove('fechaRes_' + fStr); } catch(e) {}
+  return { ok: true, tipo: tipoLower, hoyo: hoyoNum };
+}
+```
+
+### Cambio 5 — `10_Routing.gs`: registrar la acción nueva
+
+Buscá:
+
+```js
+      case 'setBonusWinners':       result = setBonusWinners_(params); break;
+```
+
+Y agregá inmediatamente después (misma indentación):
+
+```js
+      case 'setBonusHoyo':          result = setBonusHoyo_(params); break;
+```
+
+### Cambio 6 — `03_Reads.gs`: exponer el hoyo de bonus actual al frontend
+
+Buscá, al final de la función `getFechaDetalle_`:
+
+```js
+  return { fecha: fecha, cancha: cancha, colorTee: colorTee, jugadores: jugadores, invitados: invitados, dobles: dobles, hoyoSalida: hoyoSalidaDet, horario: horarioDet };
+```
+
+Reemplazalo por:
+
+```js
+  const bonusHoyosDet = (metaDet && metaDet.bonusHoyos) ? metaDet.bonusHoyos : {};
+  return { fecha: fecha, cancha: cancha, colorTee: colorTee, jugadores: jugadores, invitados: invitados, dobles: dobles, hoyoSalida: hoyoSalidaDet, horario: horarioDet, bonusHoyos: bonusHoyosDet };
+```
+
+### Cambio 7 — `index.html`: agregar los selectores de hoyo en "Gestionar Fechas"
+
+Buscá este bloque completo (la tarjeta "LD / BA" dentro del panel de edición de una fecha):
+
+```html
+        <!-- LD / BA -->
+        <div class="adm-card" id="adm-edit-ldba-card">
+          <div class="adm-card-hdr">🏆 Long Drive / Best Approach</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Ganador</label>
+                <select id="adm-ldba-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Ganador</label>
+                <select id="adm-ldba-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-primary" onclick="adminSetBonusWinners()" style="margin-top:12px;">Guardar LD/BA</button>
+            <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+```
+
+Reemplazalo por (se agrega un bloque nuevo arriba, con los selectores de HOYO y su propio botón; el bloque de "Ganador" que ya existía queda igual, más abajo):
+
+```html
+        <!-- LD / BA -->
+        <div class="adm-card" id="adm-edit-ldba-card">
+          <div class="adm-card-hdr">🏆 Long Drive / Best Approach</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-ghost" onclick="adminSetBonusHoyo()" style="margin-top:8px;">Cambiar hoyo de bonus</button>
+            <div id="adm-bonus-hoyo-msg" class="adm-msg" style="display:none;"></div>
+            <div style="font-size:11px;color:var(--g4);margin-top:8px;">Usá esto solo si nadie ganó en el hoyo original y decidiste jugarlo en otro hoyo. Al cambiar el hoyo se borra el seguimiento en vivo de ese bonus (arranca de cero en el hoyo nuevo).</div>
+
+            <div class="adm-row" style="margin-top:16px;">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Ganador</label>
+                <select id="adm-ldba-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Ganador</label>
+                <select id="adm-ldba-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-primary" onclick="adminSetBonusWinners()" style="margin-top:12px;">Guardar LD/BA</button>
+            <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+```
+
+### Cambio 8 — `index.html`: cargar y guardar los selectores de hoyo
+
+Buscá la función `loadAdmLdBa` completa:
+
+```js
+function loadAdmLdBa(fecha) {
+  const ldSel = document.getElementById('adm-ldba-ld');
+  const baSel = document.getElementById('adm-ldba-ba');
+  const msg   = document.getElementById('adm-ldba-msg');
+  if(!ldSel || !baSel) return;
+  if(msg) msg.style.display = 'none';
+  ldSel.innerHTML = '<option value="">Cargando...</option>';
+  baSel.innerHTML = '<option value="">Cargando...</option>';
+  Promise.all([
+    ngtApiGet('fechaDetalle', { fecha: fecha }),
+    ngtApiGet('bonusWinners', { fecha: fecha }),
+  ]).then(results => {
+    const det = (results[0] && results[0].data) || {};
+    const bw  = (results[1] && results[1].data) || {};
+    const jugs = (det.jugadores || []);
+    const noOpt = '<option value="">-- Nadie --</option>';
+    const opts = jugs.map(j => `<option value="${j.matricula}">${fmtNameForAdm(j.nombre)}</option>`).join('');
+    ldSel.innerHTML = noOpt + opts;
+    baSel.innerHTML = noOpt + opts;
+    if(bw.ldWinner) ldSel.value = String(bw.ldWinner.matricula);
+    if(bw.baWinner) baSel.value = String(bw.baWinner.matricula);
+  });
+}
+```
+
+Reemplazala por:
+
+```js
+function loadAdmLdBa(fecha) {
+  const ldSel = document.getElementById('adm-ldba-ld');
+  const baSel = document.getElementById('adm-ldba-ba');
+  const msg   = document.getElementById('adm-ldba-msg');
+  const hoyoLdSel = document.getElementById('adm-bonus-hoyo-ld');
+  const hoyoBaSel = document.getElementById('adm-bonus-hoyo-ba');
+  if(!ldSel || !baSel) return;
+  if(msg) msg.style.display = 'none';
+  ldSel.innerHTML = '<option value="">Cargando...</option>';
+  baSel.innerHTML = '<option value="">Cargando...</option>';
+  if(hoyoLdSel) hoyoLdSel.innerHTML = '<option value="">Cargando...</option>';
+  if(hoyoBaSel) hoyoBaSel.innerHTML = '<option value="">Cargando...</option>';
+  Promise.all([
+    ngtApiGet('fechaDetalle', { fecha: fecha }),
+    ngtApiGet('bonusWinners', { fecha: fecha }),
+  ]).then(results => {
+    const det = (results[0] && results[0].data) || {};
+    const bw  = (results[1] && results[1].data) || {};
+    const jugs = (det.jugadores || []);
+    const noOpt = '<option value="">-- Nadie --</option>';
+    const opts = jugs.map(j => `<option value="${j.matricula}">${fmtNameForAdm(j.nombre)}</option>`).join('');
+    ldSel.innerHTML = noOpt + opts;
+    baSel.innerHTML = noOpt + opts;
+    if(bw.ldWinner) ldSel.value = String(bw.ldWinner.matricula);
+    if(bw.baWinner) baSel.value = String(bw.baWinner.matricula);
+
+    const bonusHoyos = det.bonusHoyos || {};
+    let hoyoOpts = '<option value="">-- Sin asignar --</option>';
+    for(let h = 1; h <= 18; h++) hoyoOpts += `<option value="${h}">Hoyo ${h}</option>`;
+    if(hoyoLdSel){
+      hoyoLdSel.innerHTML = hoyoOpts;
+      hoyoLdSel.value = bonusHoyos.ld ? String(bonusHoyos.ld) : '';
+      hoyoLdSel.dataset.original = hoyoLdSel.value;
+    }
+    if(hoyoBaSel){
+      hoyoBaSel.innerHTML = hoyoOpts;
+      hoyoBaSel.value = bonusHoyos.ba ? String(bonusHoyos.ba) : '';
+      hoyoBaSel.dataset.original = hoyoBaSel.value;
+    }
+  });
+}
+
+function adminSetBonusHoyo() {
+  const fecha = ADM_EDIT_FECHA;
+  const hoyoLdSel = document.getElementById('adm-bonus-hoyo-ld');
+  const hoyoBaSel = document.getElementById('adm-bonus-hoyo-ba');
+  const msg = document.getElementById('adm-bonus-hoyo-msg');
+  if(!hoyoLdSel || !hoyoBaSel) return;
+  const cambios = [];
+  if(hoyoLdSel.value && hoyoLdSel.value !== hoyoLdSel.dataset.original) cambios.push({ tipo: 'ld', hoyo: hoyoLdSel.value });
+  if(hoyoBaSel.value && hoyoBaSel.value !== hoyoBaSel.dataset.original) cambios.push({ tipo: 'ba', hoyo: hoyoBaSel.value });
+  if(cambios.length === 0){
+    msg.className = 'adm-msg'; msg.textContent = 'No cambiaste ningún hoyo'; msg.style.display = 'block';
+    return;
+  }
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+  Promise.all(cambios.map(c => ngtApiPost({ action: 'setBonusHoyo', adminKey: ADMIN_KEY_OK, fecha: fecha, tipo: c.tipo, hoyo: c.hoyo })))
+    .then(results => {
+      const errores = results.filter(r => !r.ok);
+      if(errores.length === 0){
+        msg.className = 'adm-msg ok'; msg.textContent = '✓ Hoyo de bonus actualizado';
+        loadAdmLdBa(fecha);
+      } else {
+        msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (errores[0].error || 'Error');
+      }
+    }).catch(e => {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+    });
+}
+```
+
+### Qué NO cambia
+
+- `bonusEstado[tipo]` (quién ganó) sigue guardándose exactamente igual que antes — no se toca su forma ni su lógica de "el último nombre reportado pisa al anterior". Los 3 lugares que ya lo leían (`04_Writes.gs` al firmar tarjeta, `buildLineaSnapshot_` para el cartel LD/BA en la tarjeta, y el propio cartel de "provisorio/definitivo") siguen funcionando exactamente igual, sin tocarlos.
+- El botón "Guardar LD/BA" (elegir directamente el ganador a mano) sigue funcionando exactamente igual que antes — es la herramienta de siempre para cuando el admin quiere forzar un resultado final, sin relación con el hoyo.
+- El frontend que muestra "Provisorio · falta L1, L3" (`liveRenderBonus()`) no se toca — ya estaba bien hecho, ahora sí va a recibir los datos correctos.
+- No se agrega validación de "el hoyo nuevo tiene que estar sin jugar" — queda a criterio del admin elegir un hoyo que todavía no se jugó, como corresponde en la práctica. Si en el futuro esto genera confusión lo ajustamos.
+
+### ❓ Preguntas de verificación — Tarea 63
+
+1. Con una fecha de prueba con 2 o 3 líneas: hacé que la línea 1 reporte un ganador de BA en el hoyo de bonus. ¿El cartel de BA queda en "Provisorio" (no "Definitivo") mientras las otras líneas todavía no jugaron ese hoyo?
+2. Seguí cargando scores hasta que la línea 2 (y la 3, si hay) lleguen al hoyo de bonus — ¿a cada una le aparece el aviso para reportar, aunque la línea 1 ya haya reportado un ganador?
+3. Cuando la última línea reporta (gane o diga "Nadie ganó"), ¿el cartel pasa a "Definitivo"?
+4. En "Gestionar Fechas", entrá a editar la fecha de prueba — ¿aparecen los nuevos selectores "Hoyo de bonus" (LD y BA) con el hoyo actual ya seleccionado?
+5. Cambiá el hoyo de BA a uno distinto y guardá — ¿dice que se guardó bien? ¿Si volvés a entrar al panel de edición, el nuevo hoyo aparece seleccionado?
+6. Después de cambiar el hoyo, ¿el seguimiento de "quién reportó" arranca de cero para ese tipo (o sea, si antes ya habían reportado 2 líneas, después de cambiar el hoyo el cartel vuelve a pedir que reporten todas)?
+7. Si tocás "Cambiar hoyo de bonus" SIN cambiar ningún valor en los selectores, ¿dice "No cambiaste ningún hoyo" y no hace ningún guardado de más (para no borrar progreso por error)?
+8. Hash y mensaje del commit.
+9. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ⚠️ Recordatorio importante
+
+Esta tarea toca 3 archivos `.gs` (`07_LiveScoring.gs`, `10_Routing.gs`, `03_Reads.gs`). Después del commit, Marco tiene que ir al editor de Apps Script y hacer el **deploy manual** para que estos cambios entren en efecto — si solo se hace `git push`, el sitio de GitHub Pages se actualiza pero el backend real (donde vive esta lógica) sigue con el código viejo hasta el deploy.
+
+### ✅ Respuestas de verificación — Tarea 63
+
+1. No fue posible probar en vivo. En código: `setBonusGanador_` ahora guarda `bonusReportes[tipo][lineaNum] = true` siempre (con ganador o sin él), y `getBonusEstado_` calcula `lineasFaltantes` iterando todas las líneas y verificando `reportaron[String(i)]` — por eso con solo L1 reportada, L2 y L3 seguirán en `lineasFaltantes` → `final: false` → "Provisorio".
+2. No fue posible probar en vivo. En código: `cargarScore_` ahora chequea `bonusReportes[tipo][miLineaNum]` (específico de LA LÍNEA QUE ESTÁ CARGANDO) en vez de `bonusEstado[tipo]` (global). Entonces aunque L1 haya reportado un ganador, cuando L2 llega al hoyo de bonus, `yaReportoBA` para L2 es `false` → se dispara el aviso.
+3. No fue posible probar en vivo. En código: recién cuando el loop `for (i=1..totalLineas)` no encuentra ninguna línea faltante, `lineasFaltantes` queda vacío → `final: true` → "Definitivo".
+4. Sí. `loadAdmLdBa` ahora lee `det.bonusHoyos` (que `getFechaDetalle_` ya expone, Cambio 6), construye opciones Hoyo 1–18, y pone `hoyoLdSel.value` / `hoyoBaSel.value` al valor actual. También guarda `dataset.original` para detectar cambios.
+5. No fue posible probar en vivo (no hay acceso al backend). En código: `adminSetBonusHoyo` detecta los cambios comparando con `dataset.original`, llama `setBonusHoyo` en el backend, y recarga `loadAdmLdBa` al terminar — el nuevo valor quedaría seleccionado al recargar.
+6. Sí. `setBonusHoyo_` hace `metaAll[fStr].bonusReportes[tipoLower] = {}` (vacía los reportes) y `delete metaAll[fStr].bonusEstado[tipoLower]` (borra el ganador) — todo arranca de cero para ese tipo.
+7. Sí. `adminSetBonusHoyo` solo pushea en `cambios` los selectores cuyo `value !== dataset.original`. Si ninguno cambió, `cambios.length === 0` → muestra "No cambiaste ningún hoyo" sin hacer ninguna llamada al backend.
+8. Hash: `8557bf4`. Mensaje: `Tarea 63: fix bonus provisorio/definitivo + reasignar hoyo de bonus desde admin`.
+9. Sin dudas. La consigna fue muy detallada, con los snippets exactos y la explicación del "por qué" de cada cambio.
