@@ -2197,3 +2197,123 @@ function wizPaso1Next(){
 ### 📋 Para Marco — sobre esta tarea
 
 Esto es pura limpieza — no cambia nada de lo que ves en pantalla ni de cómo funciona la app. Es la última parte de la Fase 4 (la que le dio la cara nueva a "Gestionar Fechas"). Con esto la Fase 4 queda cerrada. Se publica solo en GitHub Pages, no hace falta tocar Apps Script. Igual, después de que Code confirme, dale una pasada rápida a "Gestionar Fecha" y al botón de recalcular para quedarnos tranquilos, aunque en teoría no debería notarse ningún cambio.
+
+---
+
+# 🎨 FASE 5 — Nuevo diseño visual de NGT
+
+Contexto para vos, Code: Marco tiene otra app propia ("audit-app") cuyo diseño le gusta mucho más — no por los colores, sino por cómo está organizado todo (tarjetas, espaciados, tipografía, etc.). Auditamos esa app y sacamos un conjunto de reglas de diseño consistentes. Marco vio una maqueta de cómo se vería la Tabla de Posiciones de NGT con esas reglas aplicadas (manteniendo los colores de marca de NGT: navy `#00234b`, rojo `#c8102e`, dorado `#c9a84c`, verde `#1f7a3d`) y la aprobó. Ahora vamos a portar ese lenguaje visual al código real de NGT, pantalla por pantalla, empezando por la más importante: la Tabla de Posiciones (Leaderboard), que es la pantalla de arranque de la app.
+
+Esta Tarea 44 es el primer paso: **100% CSS, cero cambios de JavaScript.** No se toca ninguna función, ningún dato, ninguna lógica — solo estilos. Es el paso de menor riesgo posible para arrancar la Fase 5.
+
+## Tarea 44 — Fase 5, paso 1: nuevo estilo visual de la Tabla de Posiciones (solo CSS)
+
+Todos los cambios son dentro del bloque `<style>` de `index.html`. Hacé cada reemplazo tal cual se indica, buscando el texto exacto.
+
+### 1. Fondo gris detrás de la tabla (para que la tarjeta blanca "flote")
+
+Buscá esta regla (existente):
+```css
+.lb-wrap{background:var(--white);overflow-x:auto;-webkit-overflow-scrolling:touch;}
+```
+Reemplazala por:
+```css
+.lb-wrap{background:var(--white);overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+```
+
+Y agregá esta regla NUEVA justo antes o después de esa (no reemplaza nada, es agregado):
+```css
+#pg-lb .wrap{background:#eef0f3;}
+```
+
+### 2. Encabezado de la tabla (Pos / Mov / Jugador / Pts) — sacarle el bloque gris duro
+
+Buscá:
+```css
+.pga thead tr{background:var(--g1);}
+.pga thead th{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);padding:9px 14px;text-align:left;white-space:nowrap;background:#f0eeea;border-bottom:2px solid var(--g2);}
+```
+Reemplazala por:
+```css
+.pga thead tr{background:transparent;}
+.pga thead th{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);padding:9px 14px;text-align:left;white-space:nowrap;background:#fff;border-bottom:1px solid var(--g1);}
+```
+
+Más abajo en el archivo hay 4 líneas sueltas (son parte del sistema que mantiene fijas las columnas al hacer scroll horizontal — no lo toques, solo cambiá el color de fondo en esas 4 líneas puntuales). Buscá cada una y cambiá `#f0eeea` por `#fff` (dejá todo lo demás de la línea igual):
+
+```
+.pga thead th.lb-col-pos { background:#f0eeea; z-index:5; }
+.pga thead th.lb-col-mov { background:#f0eeea; z-index:5; }
+.pga thead th.lb-col-name { background:#f0eeea; z-index:5; }
+.pga thead th.lb-col-num:nth-child(4) { background:#f0eeea; z-index:5; }
+```
+pasan a:
+```
+.pga thead th.lb-col-pos { background:#fff; z-index:5; }
+.pga thead th.lb-col-mov { background:#fff; z-index:5; }
+.pga thead th.lb-col-name { background:#fff; z-index:5; }
+.pga thead th.lb-col-num:nth-child(4) { background:#fff; z-index:5; }
+```
+
+### 3. Número de posición más grande y en color navy (en vez de gris chico)
+
+Buscá:
+```css
+.pos-n{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--g4);}
+```
+Reemplazala por:
+```css
+.pos-n{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;color:var(--navy);}
+```
+
+### 4. Puntos (Pts) más grandes y destacados — regla NUEVA (no reemplaza nada, se agrega)
+
+Agregá esta regla nueva en algún lugar cerca de las reglas `.s`, `.s.big`, etc. (busca por ejemplo la línea `.s.bonus{color:#16a34a;font-weight:700;font-size:13px;}` y agregala justo después):
+```css
+.pga td.lb-col-num .s{font-size:19px;font-weight:800;}
+```
+
+### 5. Botón "Actualizar" con reacción táctil al tocar — regla NUEVA
+
+Buscá la regla existente:
+```css
+.lb-refresh:hover{color:var(--navy);border-color:var(--navy);}
+```
+Y agregá justo después esta línea nueva:
+```css
+.lb-refresh:active{transform:scale(.95);}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca — ni `gvizCallback`, ni `posCell`, ni `movCell`, ni `fmtName`, ni nada que arme el HTML de la tabla. La tabla se sigue armando exactamente igual, solo cambia cómo se ve.
+- El scroll horizontal con columnas fijas (Pos/Mov/Jugador/Pts que quedan pegadas al costado si la pantalla es angosta) sigue funcionando igual — no se toca el `position:sticky`, solo el color de fondo de esas celdas.
+- Ninguna otra pantalla de la app se toca (todos los selectores nuevos usan `#pg-lb` o clases que solo existen en esta pantalla — confirmado con búsqueda en todo el archivo que `.pos-n` y `posCell()` se usan ÚNICAMENTE en la Tabla de Posiciones).
+- No hay cambios de backend. 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 44
+
+1. ¿La Tabla de Posiciones ahora se ve como una tarjeta blanca con esquinas redondeadas y una sombra suave, sobre un fondo gris clarito?
+   **Sí.** `.lb-wrap` tiene `border-radius:16px` y `box-shadow` suave, y `#pg-lb .wrap` tiene `background:#eef0f3` (gris azulado claro).
+
+2. ¿El encabezado (Pos/Mov/Jugador/Pts) se ve más liviano, sin el bloque gris duro de antes?
+   **Sí.** `thead tr` pasó a `background:transparent`, `thead th` a `background:#fff` con `border-bottom:1px solid var(--g1)` (en vez de 2px sólido gris oscuro). Las 4 celdas sticky también pasaron de `#f0eeea` a `#fff`.
+
+3. ¿El número de posición y los puntos se ven más grandes que antes?
+   **Sí.** `.pos-n` pasó de `font-size:13px;font-weight:700;color:var(--g4)` a `font-size:15px;font-weight:800;color:var(--navy)`. Los puntos: nueva regla `.pga td.lb-col-num .s{font-size:19px;font-weight:800;}` (antes no había override específico).
+
+4. ¿Al tocar el botón "↻ Actualizar" se sigue viendo la reacción de "achicarse" un poquito?
+   **Sí.** Nueva regla `.lb-refresh:active{transform:scale(.95);}` agregada justo después de `.lb-refresh:hover`.
+
+5. ¿Si la pantalla es angosta y hace falta hacer scroll horizontal en la tabla, las columnas siguen quedando fijas igual que antes (sin romperse visualmente)?
+   **Sí.** Las 4 reglas de sticky-column (`lb-col-pos`, `lb-col-mov`, `lb-col-name`, `lb-col-num:nth-child(4)`) no se tocaron — solo se cambió el color de fondo de `#f0eeea` a `#fff`. El `position:sticky`, `z-index:5` y todo el sistema de offset JS quedan intactos.
+
+6. Hash y mensaje del commit.
+   **`e9b52d7`** — `feat: Tarea 44 - rediseno visual Tabla de Posiciones (CSS)`
+
+7. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Las instrucciones eran exactas (búsqueda literal + reemplazo). El único punto interpretativo fue dónde agregar la regla `.pga td.lb-col-num .s` — la ubiqué justo después de `.s.bonus` como indicaba la consigna. Todo el resto fue reemplazo directo.
+
+### 📋 Para Marco — sobre esta tarea
+
+Este es el primer paso de la Fase 5 (el nuevo diseño). Es solo la Tabla de Posiciones, y es un cambio 100% visual — no toca datos ni funciones, así que el riesgo es prácticamente nulo. Se publica solo en GitHub Pages, no hace falta tocar Apps Script. Cuando Code confirme, entrá a la app y mirá la pantalla de inicio (la tabla de posiciones) — tiene que parecerse a la "Propuesta" que viste en la maqueta. Si te gusta, seguimos con los próximos pasos de la Fase 5 (vamos a ir pantalla por pantalla, de a poco, igual que hicimos con "Gestionar Fechas" en la Fase 4).
