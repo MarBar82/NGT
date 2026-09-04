@@ -4010,7 +4010,7 @@ function wizCrearTodo(){
     }
     // Step B: cargar matches si hay
     if(!matches.length){
-      finalizarWizard(r);
+      finalizarWizard(r, null, lineasParam);
       return;
     }
     msg.textContent = 'Cargando matches...';
@@ -4026,7 +4026,7 @@ function wizCrearTodo(){
         msg.textContent = 'Fecha creada, pero error en matches: ' + (rm.error || '');
         return;
       }
-      finalizarWizard(r, rm);
+      finalizarWizard(r, rm, lineasParam);
     }).catch(e => {
       if(crearBtn){ crearBtn.disabled = false; crearBtn.textContent = '🏌 Comenzar Partida'; }
       msg.className = 'adm-msg err';
@@ -4039,7 +4039,7 @@ function wizCrearTodo(){
   });
 }
 
-function finalizarWizard(rFecha, rMatches){
+function finalizarWizard(rFecha, rMatches, lineasParam){
   const msg = document.getElementById('adm-s2-msg');
   msg.className = 'adm-msg ok';
   let txt = '✓ Fecha creada — ' + rFecha.added + ' tarjetas';
@@ -4057,8 +4057,16 @@ function finalizarWizard(rFecha, rMatches){
     ngtInitData(); // recarga home con el nuevo botón FECHA
     // Refresh admin data
     loadAdminData();
-    // Redirect to Leader Board
-    pg('lb', null);
+    // Si el admin logueado también juega esta fecha, lo llevamos directo a su Live Scoring
+    var misMat = (NGT_SESSION && NGT_SESSION.mat) ? String(NGT_SESSION.mat) : null;
+    var soyJugador = misMat && lineasParam && lineasParam.some(function(linea){
+      return linea.some(function(m){ return String(m) === misMat; });
+    });
+    if(soyJugador){
+      pg('mit', null);
+    } else {
+      pg('lb', null);
+    }
   }, 1800);
 }
 
@@ -5444,12 +5452,22 @@ function loginStepMat() {
   }).catch(function() { err.textContent = 'Error de conexión'; });
 }
 
+function loginRedirectSiFechaActiva(){
+  ngtInitData().then(function(){
+    var strip = document.getElementById('fecha-activa-strip');
+    if(strip && strip.dataset.active === '1'){
+      pg('mit', null);
+    }
+  });
+}
+
 function loginWithLocalSession(mat, p) {
   var sess = { token: 'local_' + mat + '_' + Date.now(), exp: Date.now() + 90*24*3600*1000,
                mat: mat, nombre: p.nombre || '', apodo: p.apodo || '', rol: 'Jugador' };
   sessionSave(sess.token, sess);
   applySession(NGT_SESSION);
   loginHideOverlay();
+  loginRedirectSiFechaActiva();
 }
 
 function showLoginS2(p) {
@@ -5488,6 +5506,7 @@ function loginSubmitPin() {
       sessionSave(r.token, r.player);
       applySession(NGT_SESSION);
       loginHideOverlay();
+      loginRedirectSiFechaActiva();
       return;
     }
     if (r.needsPin) {
@@ -5533,6 +5552,7 @@ function loginCrearPinStep(pin) {
       sessionSave(r.token, r.player);
       applySession(NGT_SESSION);
       loginHideOverlay();
+      loginRedirectSiFechaActiva();
     } else {
       err.textContent = r.error || 'Error al crear PIN';
       LOGIN_PIN2_STEP = 1; LOGIN_PIN2_FIRST = '';
@@ -8052,7 +8072,7 @@ function ngtInitData(){
   }
 
   // Un solo JSONP al backend → proximaFecha + fechasConEstado + jugadoresHist
-  ngtApiGet('initData').then(r => {
+  return ngtApiGet('initData').then(r => {
     const d = (r && r.data) || {};
 
     // Fecha activa (con líneas confirmadas, aún sin tarjetas completas) — fuente primaria del botón FECHA
