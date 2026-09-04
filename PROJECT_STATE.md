@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-03 (Tarea 39 agregada — rediseño del aviso de bonus)
+**Última actualización:** 2026-09-04 (Tarea 40 agregada — Fase 4, paso 1: tarjetas en Gestionar Fechas)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -1563,3 +1563,190 @@ function bonusAvisoCerrar(){
 ### 📋 Para Marco — después de este fix
 
 Se publica solo (GitHub Pages, sin deploy en Apps Script). Probá igual que la vez pasada — cargando scores en vivo hasta llegar a un hoyo de bonus — y contame si el aviso emergente y el encabezado verde con emoji se ven como esperabas.
+
+---
+
+## 🗺️ Plan — Fase 4: llevar el diseño de tarjetas a "Gestionar Fechas"
+
+Marco confirmó que la Tarea 39 quedó bien y pidió seguir con la Fase 4: aplicar el diseño de tarjetas (el mismo que se usa al armar líneas en "Crear Fecha") a la pantalla de "Gestionar Fechas" (editar una fecha que ya existe), sin perder ninguna función actual: datos de cancha, edición de jugadores, puntos dobles, recalcular fecha.
+
+Repasé a fondo cómo está armada "Gestionar Fechas" hoy. Es una pantalla grande con varias secciones (elegir fecha, datos de cancha, jugadores, dobles, matches/armar líneas, recalcular, tarjetas de jugadores, long drive/best approach, borrar fecha). Cambiar todo de una sola vez sería un cambio muy grande y riesgoso de verificar. Como venimos haciendo con éxito en todo este proyecto, prefiero dividir la Fase 4 en pasos chicos y seguros, cada uno con su propia verificación — así si algo no queda bien, es fácil encontrar cuál paso fue.
+
+**Plan de pasos (podemos ajustar el orden si preferís otra cosa):**
+
+1. **Tarea 40 (esta):** el paso de "Armar líneas" dentro de Gestionar Fecha hoy muestra un texto plano y feo (nombres y "vs" en texto corrido). Lo cambiamos para que use EXACTAMENTE la misma tarjeta linda (con los jugadores en recuadros y los matches colapsables) que ya se ve al crear una fecha nueva. Es el cambio de mayor impacto visual con el menor riesgo, porque reutiliza código que ya existe y funciona bien.
+2. **Fase 4b (después):** rediseñar las fichitas para elegir qué fecha editar (hoy son cuadraditos simples con solo el número).
+3. **Fase 4c (después):** mejorar la lista de jugadores para agregar/sacar de una fecha (hoy es una lista larga de casilleros de texto).
+4. **Fase 4d (después, limpieza):** de paso encontré un par de restos de código viejo sin usar en esta pantalla (un casillero de "dobles" duplicado que ya no se ve, y dos botones de recalcular que no están conectados a nada) — los vamos a sacar en algún momento para simplificar el archivo, no afecta el funcionamiento actual.
+
+Arrancamos con la Tarea 40.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 40 (Fase 4, paso 1: diseño de tarjetas en "Armar líneas" dentro de Gestionar Fecha)
+
+### Qué hace esta tarea
+
+Cuando en "Gestionar Fechas" el admin usa el botón "⚡ Armar líneas" para proponer cómo se arman los grupos y los matches de una fecha, hoy aparece una vista previa en texto plano. La cambiamos para que use la misma tarjeta con diseño (jugadores en recuadros, matches con "VS" y colapsables) que ya usa el asistente de "Crear Fecha" — es la función `renderFechaCardAdmin_`, que ya existe y ya funciona bien en otro lugar de la app. No se toca nada de la lógica de armado de líneas ni de guardado — solo cómo se ve la vista previa.
+
+De paso, la tarjeta también va a mostrar el horario estimado de salida de cada línea (algo que hoy no se calculaba en esta pantalla porque faltaba un dato al servidor) — por eso esta tarea tiene un cambio chico de backend además del de frontend.
+
+### Parte 1 — Backend (`03_Reads.gs`)
+
+Buscá la función `getFechaDetalle_`, específicamente este bloque cerca del final:
+
+```js
+  const dobles = getDoblesForFecha_(fecha);
+  const metaDet = getFechaMeta_(fecha);
+  const hoyoSalidaDet = (metaDet && metaDet.hoyoSalida) ? metaDet.hoyoSalida : 1;
+
+  return { fecha: fecha, cancha: cancha, colorTee: colorTee, jugadores: jugadores, invitados: invitados, dobles: dobles, hoyoSalida: hoyoSalidaDet };
+```
+
+Reemplazalo por:
+
+```js
+  const dobles = getDoblesForFecha_(fecha);
+  const metaDet = getFechaMeta_(fecha);
+  const hoyoSalidaDet = (metaDet && metaDet.hoyoSalida) ? metaDet.hoyoSalida : 1;
+  const horarioDet = (metaDet && metaDet.horario) ? metaDet.horario : '';
+
+  return { fecha: fecha, cancha: cancha, colorTee: colorTee, jugadores: jugadores, invitados: invitados, dobles: dobles, hoyoSalida: hoyoSalidaDet, horario: horarioDet };
+```
+
+⚠️ Este es un cambio de backend — después de que Code lo suba a GitHub, Marco tiene que ir a Apps Script y actualizar el archivo `03_Reads` (mismo proceso de siempre: copiar el contenido del archivo local, pegarlo en Apps Script reemplazando todo, guardar, y hacer un Deploy nuevo).
+
+### Parte 2 — Frontend (`index.html`)
+
+#### Cambio 1 — guardar el detalle de la fecha en una variable global para poder usarlo después
+
+Buscá:
+
+```js
+let MGR_FECHA_JUGS = [];
+let MGR_FECHA = null;
+```
+
+Reemplazala por:
+
+```js
+let MGR_FECHA_JUGS = [];
+let MGR_FECHA = null;
+let MGR_FECHA_DETALLE = {}; // detalle (cancha, colorTee, hoyoSalida, horario) de la fecha que se está editando
+```
+
+#### Cambio 2 — guardar el detalle recién llega, dentro de `abrirEditPanel`
+
+Buscá:
+
+```js
+    const det = (results[0] && results[0].data) || {};
+    const jugadores = (results[1] && results[1].data) || [];
+```
+
+Reemplazala por:
+
+```js
+    const det = (results[0] && results[0].data) || {};
+    MGR_FECHA_DETALLE = det;
+    const jugadores = (results[1] && results[1].data) || [];
+```
+
+#### Cambio 3 — usar la tarjeta con diseño en vez del texto plano, dentro de `admArmarLineas`
+
+Buscá este bloque completo:
+
+```js
+    // Mostrar preview de líneas
+    if(preview){
+      const repeats = r.repeatCount || 0;
+      const repeatColor = repeats > 0 ? 'var(--red)' : 'var(--navy)';
+      const repeatTxt = repeats > 0
+        ? ' · <span style="color:var(--red);">⚠ ' + repeats + ' match' + (repeats > 1 ? 'es' : '') + ' repetido' + (repeats > 1 ? 's' : '') + '</span>'
+        : ' · <span style="color:green;">✓ sin repeticiones</span>';
+      let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+        '<strong style="color:' + repeatColor + ';">Propuesta — ' + r.lines.length + ' líneas · ' +
+        r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches' + repeatTxt + '</strong>' +
+        '<button onclick="admRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
+        '</div>';
+      r.lines.forEach(l => {
+        html += '<strong>Línea ' + l.lineNum + '</strong>: ' +
+          l.players.map(p => p.apodo + ' (' + p.hcp + ')').join(' · ') + '<br>';
+        l.matches.forEach(m => {
+          const pA = l.players.find(p => p.matricula === m.j1);
+          const pB = l.players.find(p => p.matricula === m.j2);
+          html += '&nbsp;&nbsp;⚔ ' + (pA ? pA.apodo : m.j1) + ' vs ' + (pB ? pB.apodo : m.j2) + '<br>';
+        });
+        html += '<br>';
+      });
+      html += '<span style="color:var(--g4);">Revisá los matches arriba y hacé clic en "Guardar Matches" para confirmar.</span>';
+      preview.innerHTML = html;
+      preview.style.display = 'block';
+    }
+```
+
+Reemplazalo por:
+
+```js
+    // Mostrar preview de líneas — mismo diseño de tarjetas que usa el asistente de Crear Fecha
+    if(preview){
+      const repeats = r.repeatCount || 0;
+      const repeatColor = repeats > 0 ? 'var(--red)' : 'var(--navy)';
+      const repeatTxt = repeats > 0
+        ? ' · <span style="color:var(--red);">⚠ ' + repeats + ' match' + (repeats > 1 ? 'es' : '') + ' repetido' + (repeats > 1 ? 's' : '') + '</span>'
+        : ' · <span style="color:green;">✓ sin repeticiones</span>';
+      let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+        '<strong style="color:' + repeatColor + ';">Propuesta — ' + r.lines.length + ' líneas · ' +
+        r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches' + repeatTxt + '</strong>' +
+        '<button onclick="admRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
+        '</div>';
+      const det = MGR_FECHA_DETALLE || {};
+      const normalized = normalizeLineasArmado_(r.lines, det.horario, det.hoyoSalida, det.colorTee);
+      html += renderFechaCardAdmin_(normalized);
+      html += '<div style="padding:8px 4px 0;color:var(--g4);font-size:12px;">Revisá los matches arriba y hacé clic en "Guardar Matches" para confirmar.</div>';
+      preview.innerHTML = html;
+      preview.style.display = 'block';
+    }
+```
+
+### Qué NO cambia
+
+- La lógica de armado de líneas en el servidor (`armarLineas_`) — no se toca.
+- Los renglones editables de matches (los `<select>` de "VS" debajo de la tarjeta, donde el admin puede cambiar un rival) — siguen igual, la tarjeta es solo la vista previa de arriba.
+- El botón "↻ Rearmar" y el aviso de matches repetidos — siguen funcionando igual.
+- El resto de las secciones de "Gestionar Fecha" (datos de cancha, jugadores, dobles, recalcular, tarjetas, LD/BA, borrar fecha) — no se tocan en esta tarea, quedan para los pasos siguientes.
+
+### ❓ Preguntas de verificación — Tarea 40
+
+1. ¿`getFechaDetalle_` ahora devuelve también `horario`, leído de `FECHA_META` igual que `hoyoSalida`?
+2. ¿Se agregó `MGR_FECHA_DETALLE` y se guarda el detalle apenas llega en `abrirEditPanel`?
+3. ¿`admArmarLineas` ahora arma la vista previa con `normalizeLineasArmado_` + `renderFechaCardAdmin_`, usando `MGR_FECHA_DETALLE` para el horario/hoyo de salida/color de tee?
+4. Si `MGR_FECHA_DETALLE` todavía no se cargó por algún motivo (quedó `{}`), ¿la tarjeta se sigue mostrando sin romperse (aunque el horario salga como "—")?
+5. Hash y mensaje del commit.
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+## ✅ Respuestas de verificación — Tarea 40
+
+1. **Sí.** En `getFechaDetalle_` (`03_Reads.gs`), se agrega `const horarioDet = (metaDet && metaDet.horario) ? metaDet.horario : '';` justo después de `hoyoSalidaDet`, y el objeto de retorno incluye `horario: horarioDet` junto a los demás campos. Lee `metaDet.horario` de la misma llamada a `getFechaMeta_(fecha)` que ya existe — sin pedido extra al servidor.
+
+2. **Sí.** Se declaró `let MGR_FECHA_DETALLE = {};` junto a las otras variables globales de gestión de matches (línea ~4227). Dentro del `.then()` de `abrirEditPanel`, la primera línea al recibir los resultados es `MGR_FECHA_DETALLE = det;` — justo antes de leer `jugadores`, `canchas`, etc. — así queda disponible globalmente para cuando después se llame a `admArmarLineas`.
+
+3. **Sí.** El bloque de texto plano fue reemplazado por:
+   ```js
+   const det = MGR_FECHA_DETALLE || {};
+   const normalized = normalizeLineasArmado_(r.lines, det.horario, det.hoyoSalida, det.colorTee);
+   html += renderFechaCardAdmin_(normalized);
+   ```
+   Usa exactamente las mismas funciones que el asistente de "Crear Fecha" para generar el HTML de la tarjeta — jugadores en recuadros, matches con "VS" y colapsables.
+
+4. **Sí.** `MGR_FECHA_DETALLE || {}` garantiza que si la variable quedó vacía, `det` es `{}`. En ese caso `det.horario`, `det.hoyoSalida` y `det.colorTee` son todos `undefined`. `normalizeLineasArmado_` ya maneja valores `undefined`/falsy: el horario muestra "—" y el hoyo de salida usa el default. No hay acceso a propiedades de `null` ni nada que pueda romper.
+
+5. **Hash:** `7aeae55` — "Tarea 40: tarjeta de lineas en Gestionar Fecha, horario en getFechaDetalle"
+
+6. Sin dudas. Recordatorio: `03_Reads.gs` requiere deploy manual en Apps Script para que el campo `horario` llegue al frontend (sin ese deploy, `det.horario` llega `undefined` y la tarjeta muestra "—" en el horario de salida, pero no rompe nada — el resto de la tarjeta se ve igual).
+
+### 📋 Para Marco — después de este fix
+
+Este cambio tiene una parte de backend (`03_Reads.gs`) — después de que Code lo suba, andá a Apps Script, actualizá el archivo `03_Reads` (pegá el contenido nuevo, guardá) y hacé un Deploy nuevo. La parte de `index.html` se publica sola.
+
+Para probar: entrá a "Gestionar Fechas", abrí una fecha, y en la sección de matches apretá "⚡ Armar líneas" — la vista previa debería verse ahora como la tarjeta linda (con los jugadores en recuadros) en vez del texto plano de antes.
