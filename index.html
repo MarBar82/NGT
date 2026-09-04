@@ -47,7 +47,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 #pg-historia-hub .adm-tab:active{transform:scale(.96);}
 #historia-body{background:var(--white);border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);overflow:hidden;}
 #pg-mit .adm-card{border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
-.lb-refresh{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;color:var(--g4);cursor:pointer;padding:4px 10px;border:1px solid var(--g3);border-radius:3px;background:none;transition:.12s;}
+.lb-refresh{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;color:var(--g4);cursor:pointer;padding:5px 14px;border:1px solid var(--g3);border-radius:999px;background:none;transition:.12s;}
 .lb-refresh:hover{color:var(--navy);border-color:var(--navy);}
 .lb-refresh:active{transform:scale(.95);}
 .lb-topbar{display:flex;align-items:flex-end;justify-content:flex-end;padding:6px 0;gap:12px;flex-wrap:wrap;}
@@ -566,8 +566,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
 .adm-btn-secondary{background:none;color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;padding:6px 12px;border:1px solid var(--navy);border-radius:3px;cursor:pointer;margin-top:8px;}
 .adm-btn-secondary:hover{background:var(--navy);color:#fff;}
-.btn-back{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;color:var(--g4);background:none;border:1px solid var(--g3);border-radius:3px;padding:7px 14px;cursor:pointer;transition:.12s;}
+.btn-back{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;color:var(--g4);background:none;border:1px solid var(--g3);border-radius:999px;padding:7px 14px;cursor:pointer;transition:.12s;}
 .btn-back:hover{border-color:var(--navy);color:var(--navy);}
+.btn-back:active{transform:scale(.95);}
 .adm-card-hdr .btn-back{color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.25);}
 .adm-card-hdr .btn-back:hover{color:#fff;border-color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);}
 .btn-cancel{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);background:none;border:none;padding:6px 10px;cursor:pointer;transition:.12s;}
@@ -1823,9 +1824,9 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   <!-- Score entry screen -->
   <div id="mit-score" style="display:none;">
     <div class="adm-card">
-      <div class="adm-card-hdr">
-        <span id="mit-score-title">Tarjeta</span>
-        <button class="btn-back" onclick="mitBackToFechas()" style="float:right;">← Volver</button>
+      <div class="adm-card-hdr" style="display:flex;align-items:center;gap:10px;">
+        <button class="btn-back" onclick="mitBackToFechas()">← Volver</button>
+        <span id="mit-score-title" style="flex:1;text-align:right;">Tarjeta</span>
       </div>
       <div class="adm-card-body">
 
