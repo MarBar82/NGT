@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-03 (Tarea 38 agregada)
+**Última actualización:** 2026-09-03 (Tarea 39 agregada — rediseño del aviso de bonus)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -1190,3 +1190,376 @@ Este cambio se publica solo (GitHub Pages, sin deploy en Apps Script). Una vez q
 4. Con esos valores reales voy a poder ver exactamente qué está comparando mal la app, y en la próxima tarea lo arreglamos de una vez y sacamos el diagnóstico.
 
 Si el cartel de bonus sigue sin aparecer después de esto, avisame — ahí sí tendría que ser otra causa distinta, y lo investigo de nuevo desde cero con esa información.
+
+---
+
+## 📣 Resultado — el cartel de bonus ya funciona
+
+Causa real: `07_LiveScoring.gs` tenía una versión vieja desplegada en Apps Script (le faltaba un dato que se agregó hace unas tareas). Marco hizo un resync completo de todos los `.gs` y ahora el servidor manda bien el dato — confirmado con el cartelito de diagnóstico de la Tarea 38, que ya mostraba los hoyos de bonus correctos en vez de `undefined`.
+
+**Ahora Marco pidió 3 mejoras de diseño sobre esa base que ya funciona:**
+
+1. El aviso de bonus tiene que ser una ventana emergente (con una "✕" para cerrarla) — no un cartelito de texto pegado arriba. La ventana muestra el emoji grande, el texto "Best Approach!" o "Long Drive!" según corresponda, y un botón "Continuar" que la cierra y te deja cargar los scores del hoyo.
+2. Lo que tiene que cambiar de color (a VERDE, no dorado) es el encabezado de la vista de hoyo actual — el que dice "HOYO 3 · Par 4 · HCP 15" — no el encabezado del tecladito donde cargás el score.
+3. El emoji (🎯 o 💪 según corresponda) va DESPUÉS del HCP, en ese mismo encabezado verde.
+
+Esto reemplaza el enfoque anterior (cartelito de texto + encabezado dorado en el tecladito de carga) por uno más claro: un aviso emergente una sola vez al llegar al hoyo, más un aviso permanente (el encabezado en verde con el emoji) mientras estás jugando ese hoyo. De paso, esto saca el diagnóstico temporal de la Tarea 38 (ya cumplió su función).
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 39 (rediseño del aviso de bonus: ventana emergente + encabezado verde, saca el diagnóstico de la Tarea 38)
+
+### Qué hace esta tarea
+
+1. Cuando llegás a un hoyo de bonus (BA o LD) en la carga de scores en vivo, aparece UNA VEZ una ventana emergente con el emoji grande, el texto "Best Approach!" o "Long Drive!", una "✕" arriba a la derecha para cerrarla, y un botón "Continuar" abajo que hace lo mismo (cerrarla y dejarte cargar los scores).
+2. Mientras estás en ese hoyo, el encabezado que dice "HOYO 3 · Par 4 · HCP 15" se pone VERDE, y después del HCP aparece el emoji correspondiente (🎯 para Best Approach, 💪 para Long Drive).
+3. Se saca el diagnóstico temporal de la Tarea 38 y el diseño anterior (cartelitos de texto sueltos + encabezado dorado en el tecladito de carga de score), que quedan reemplazados por lo de arriba.
+
+Es 100% frontend (`index.html`) — se publica solo en GitHub Pages, no hace falta tocar Apps Script.
+
+### Dónde está el código
+
+Todo en `index.html`: los estilos (CSS, dentro de `<style>` al principio del archivo), el HTML de los modales, y las funciones `liveRenderHoyoActual()`, `liveOpenScoreModal()`, `openLiveView()`, y la sección de variables globales de "Live Scoring".
+
+### Cambio 1 — CSS: agregar el color verde a la paleta
+
+Buscá esta línea:
+
+```css
+  --navy:#00234b;--navy2:#001533;--red:#c8102e;--gold:#c9a84c;
+```
+
+Reemplazala por:
+
+```css
+  --navy:#00234b;--navy2:#001533;--red:#c8102e;--gold:#c9a84c;--green:#1f7a3d;
+```
+
+### Cambio 2 — CSS: variante verde del encabezado de tarjeta (mismo patrón que ya existe para "danger")
+
+Buscá esta línea:
+
+```css
+.adm-card-hdr.danger{background:#7f1d1d;border-bottom-color:#b91c1c;}
+```
+
+Reemplazala por:
+
+```css
+.adm-card-hdr.danger{background:#7f1d1d;border-bottom-color:#b91c1c;}
+.adm-card-hdr.bonus{background:var(--green);border-bottom-color:var(--navy);}
+```
+
+### Cambio 3 — CSS: sacar el dorado del encabezado del tecladito (ya no se usa) y agregar el botón "✕"
+
+Buscá este bloque:
+
+```css
+.sm-box{background:var(--white);border-radius:6px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:320px;width:100%;overflow:hidden;}
+.sm-hdr{background:var(--navy);color:#fff;padding:14px 18px;text-align:center;border-bottom:3px solid var(--red);}
+.sm-hoyo{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;letter-spacing:.06em;}
+.sm-par{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-top:2px;}
+.sm-hdr.bonus{background:var(--gold);color:var(--navy);border-bottom-color:var(--navy);}
+.sm-hdr.bonus .sm-par{color:var(--navy);}
+```
+
+Reemplazalo por:
+
+```css
+.sm-box{background:var(--white);border-radius:6px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:320px;width:100%;overflow:hidden;position:relative;}
+.sm-hdr{background:var(--navy);color:#fff;padding:14px 18px;text-align:center;border-bottom:3px solid var(--red);}
+.sm-hoyo{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;letter-spacing:.06em;}
+.sm-par{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-top:2px;}
+.sm-close-x{position:absolute;top:8px;right:10px;background:none;border:none;font-size:22px;color:var(--g4);cursor:pointer;line-height:1;padding:6px;z-index:2;}
+.sm-close-x:hover{color:var(--navy);}
+```
+
+### Cambio 4 — CSS: sacar el estilo del cartelito de texto viejo (ya no se usa)
+
+Buscá esta línea y borrala (no la reemplaces por nada):
+
+```css
+.bonus-banner{background:var(--gold);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-align:center;padding:9px 12px;border-radius:6px;margin-bottom:8px;}
+```
+
+### Cambio 5 — HTML: sacar el cartelito de texto viejo de la vista de hoyo, y ponerle id al encabezado que ahora se va a poner verde
+
+Buscá:
+
+```html
+      <div id="live-pane-tarjeta">
+        <div id="live-bonus-banner" class="bonus-banner" style="display:none;"></div>
+        <div id="live-hoyo-view">
+          <div class="adm-card">
+            <div class="adm-card-hdr">
+              <div class="live-hoyo-hdr">
+```
+
+Reemplazalo por:
+
+```html
+      <div id="live-pane-tarjeta">
+        <div id="live-hoyo-view">
+          <div class="adm-card">
+            <div class="adm-card-hdr" id="live-hoyo-card-hdr">
+              <div class="live-hoyo-hdr">
+```
+
+### Cambio 6 — HTML: sacar el cartelito de texto viejo del tecladito de carga (era el que tenía el diagnóstico de la Tarea 38)
+
+Buscá esta línea y borrala:
+
+```html
+    <div id="sm-bonus-banner" class="bonus-banner" style="display:none;"></div>
+```
+
+### Cambio 7 — HTML: agregar la ventana emergente nueva
+
+Buscá este bloque (el final del tecladito de score, antes del modal de "¿quién lo ganó?"):
+
+```html
+    <div class="sm-keypad" id="sm-keypad-high" style="display:none;">
+      <button onclick="smSetAndClose(10)">10</button>
+      <button onclick="smSetAndClose(11)">11</button>
+      <button onclick="smSetAndClose(12)">12</button>
+      <button onclick="smSetAndClose(13)">13</button>
+      <button onclick="smSetAndClose(14)">14</button>
+      <button onclick="smSetAndClose(15)">15</button>
+      <button onclick="smSetAndClose(16)">16</button>
+      <button onclick="smSetAndClose(17)">17</button>
+      <button onclick="smSetAndClose(18)">18</button>
+      <button onclick="smSetAndClose(19)">19</button>
+      <button onclick="smSetAndClose(20)">20</button>
+      <button class="sm-more" onclick="smShowLow()">‹ 1-9</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Bonus modal -->
+<div id="bonus-modal" class="sm-overlay" style="display:none;">
+```
+
+Reemplazalo por:
+
+```html
+    <div class="sm-keypad" id="sm-keypad-high" style="display:none;">
+      <button onclick="smSetAndClose(10)">10</button>
+      <button onclick="smSetAndClose(11)">11</button>
+      <button onclick="smSetAndClose(12)">12</button>
+      <button onclick="smSetAndClose(13)">13</button>
+      <button onclick="smSetAndClose(14)">14</button>
+      <button onclick="smSetAndClose(15)">15</button>
+      <button onclick="smSetAndClose(16)">16</button>
+      <button onclick="smSetAndClose(17)">17</button>
+      <button onclick="smSetAndClose(18)">18</button>
+      <button onclick="smSetAndClose(19)">19</button>
+      <button onclick="smSetAndClose(20)">20</button>
+      <button class="sm-more" onclick="smShowLow()">‹ 1-9</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Bonus hole arrival notice -->
+<div id="bonus-aviso-modal" class="sm-overlay" style="display:none;" onclick="if(event.target===this) bonusAvisoCerrar()">
+  <div class="sm-box" style="max-width:300px;text-align:center;" onclick="event.stopPropagation()">
+    <button class="sm-close-x" onclick="bonusAvisoCerrar()">✕</button>
+    <div style="padding:38px 20px 6px;">
+      <div id="ba-aviso-emoji" style="font-size:52px;line-height:1;margin-bottom:10px;"></div>
+      <div id="ba-aviso-titulo" style="font-family:'Oswald',sans-serif;font-size:21px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.02em;"></div>
+    </div>
+    <div style="padding:18px 20px 22px;">
+      <button class="adm-btn-primary" style="width:100%;" onclick="bonusAvisoCerrar()">Continuar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bonus modal -->
+<div id="bonus-modal" class="sm-overlay" style="display:none;">
+```
+
+### Cambio 8 — JS: variable nueva para que el aviso aparezca UNA sola vez por hoyo
+
+Buscá:
+
+```js
+let LIVE_LINEA_DATA = null;
+```
+
+Reemplazala por:
+
+```js
+let LIVE_LINEA_DATA = null;
+let LIVE_BONUS_AVISO_MOSTRADO = {}; // { [hoyo]: true } — para que el aviso emergente salga una sola vez por hoyo
+```
+
+### Cambio 9 — JS: reiniciar ese control cada vez que se entra a la vista en vivo
+
+Buscá (dentro de `openLiveView`):
+
+```js
+function openLiveView(fecha, cancha){
+  MIT_FECHA = fecha;
+  LIVE_MODE = true;
+  LIVE_TAB = 'tarjeta';
+  LIVE_HOYO = 1;
+  LIVE_LINEA_DATA = null;
+```
+
+Reemplazala por:
+
+```js
+function openLiveView(fecha, cancha){
+  MIT_FECHA = fecha;
+  LIVE_MODE = true;
+  LIVE_TAB = 'tarjeta';
+  LIVE_HOYO = 1;
+  LIVE_LINEA_DATA = null;
+  LIVE_BONUS_AVISO_MOSTRADO = {};
+```
+
+### Cambio 10 — JS: `liveRenderHoyoActual()` — encabezado verde + emoji después del HCP + disparo del aviso emergente
+
+Buscá este bloque:
+
+```js
+  var indices = d.indices || [];
+  var hoyoIdx = indices[h];
+  document.getElementById('live-hoyo-label').textContent = 'Hoyo ' + LIVE_HOYO;
+  document.getElementById('live-par-label').textContent = (par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '');
+
+  var bonusHoyos = d.bonusHoyos || {};
+  var banner = document.getElementById('live-bonus-banner');
+  if(banner){
+    var avisos = [];
+    if(bonusHoyos.ba === LIVE_HOYO) avisos.push('🎯 Best Approach en este hoyo');
+    if(bonusHoyos.ld === LIVE_HOYO) avisos.push('💪 Long Drive en este hoyo');
+    if(avisos.length){
+      banner.textContent = avisos.join(' · ');
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+```
+
+Reemplazalo por:
+
+```js
+  var indices = d.indices || [];
+  var hoyoIdx = indices[h];
+  document.getElementById('live-hoyo-label').textContent = 'Hoyo ' + LIVE_HOYO;
+
+  var bonusHoyos = d.bonusHoyos || {};
+  var tipoBonusAqui = bonusHoyos.ba === LIVE_HOYO ? 'ba' : (bonusHoyos.ld === LIVE_HOYO ? 'ld' : null);
+  var emojiBonus = tipoBonusAqui === 'ba' ? ' 🎯' : (tipoBonusAqui === 'ld' ? ' 💪' : '');
+  document.getElementById('live-par-label').textContent =
+    (par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '') + emojiBonus;
+
+  var cardHdr = document.getElementById('live-hoyo-card-hdr');
+  if(cardHdr) cardHdr.classList.toggle('bonus', !!tipoBonusAqui);
+
+  // Aviso emergente — una sola vez por hoyo, la primera vez que se detecta que es de bonus
+  if(tipoBonusAqui && !LIVE_BONUS_AVISO_MOSTRADO[LIVE_HOYO]){
+    LIVE_BONUS_AVISO_MOSTRADO[LIVE_HOYO] = true;
+    bonusAvisoAbrir(tipoBonusAqui);
+  }
+```
+
+### Cambio 11 — JS: `liveOpenScoreModal()` — simplificar (sacar diagnóstico y dorado, dejar solo el emoji chiquito junto a "Hoyo X")
+
+Buscá este bloque:
+
+```js
+  var bonusHoyos = LIVE_LINEA_DATA.bonusHoyos || {};
+  var smBanner = document.getElementById('sm-bonus-banner');
+  var smHdr = document.getElementById('sm-hdr');
+  var avisos = [];
+  var hoyoEmoji = '';
+  if(bonusHoyos.ba === hoyo){ avisos.push('🎯 Best Approach en este hoyo'); hoyoEmoji += '🎯 '; }
+  if(bonusHoyos.ld === hoyo){ avisos.push('💪 Long Drive en este hoyo'); hoyoEmoji += '💪 '; }
+  document.getElementById('sm-hoyo').textContent = hoyoEmoji + 'Hoyo ' + hoyo;
+  // ⚠️ TEMPORAL — Tarea 38: diagnóstico visible, sacar en la Tarea 39
+  var debugTxt_ = 'DEBUG · hoyo=' + JSON.stringify(hoyo) + ' · ba=' + JSON.stringify(bonusHoyos.ba) +
+                  ' · ld=' + JSON.stringify(bonusHoyos.ld) + ' · match=' + avisos.length;
+  if(smBanner){
+    if(avisos.length){
+      smBanner.textContent = avisos.join(' · ') + '  [' + debugTxt_ + ']';
+    } else {
+      smBanner.textContent = debugTxt_;
+    }
+    smBanner.style.display = 'block'; // TEMPORAL: siempre visible mientras diagnosticamos
+  }
+  if(smHdr){ smHdr.classList.toggle('bonus', avisos.length > 0); }
+```
+
+Reemplazalo por:
+
+```js
+  var bonusHoyos = LIVE_LINEA_DATA.bonusHoyos || {};
+  var hoyoEmoji = '';
+  if(bonusHoyos.ba === hoyo){ hoyoEmoji = '🎯 '; }
+  else if(bonusHoyos.ld === hoyo){ hoyoEmoji = '💪 '; }
+  document.getElementById('sm-hoyo').textContent = hoyoEmoji + 'Hoyo ' + hoyo;
+```
+
+### Cambio 12 — JS: las dos funciones nuevas del aviso emergente
+
+Buscá la función `liveBonusModalAbrir` (el modal de "¿quién lo ganó?"):
+
+```js
+function liveBonusModalAbrir(pending){
+```
+
+Agregá estas dos funciones nuevas justo ANTES de esa línea (sin tocar `liveBonusModalAbrir` ni nada de lo que sigue):
+
+```js
+function bonusAvisoAbrir(tipo){
+  var tipoLabel = tipo === 'ba' ? 'Best Approach' : 'Long Drive';
+  var emoji = tipo === 'ba' ? '🎯' : '💪';
+  document.getElementById('ba-aviso-emoji').textContent = emoji;
+  document.getElementById('ba-aviso-titulo').textContent = tipoLabel + '!';
+  document.getElementById('bonus-aviso-modal').style.display = 'flex';
+}
+function bonusAvisoCerrar(){
+  document.getElementById('bonus-aviso-modal').style.display = 'none';
+}
+
+```
+
+### Qué NO cambia
+
+- El modal de "¿quién lo ganó?" (`bonus-modal`, `liveBonusModalAbrir`, `liveBonusSeleccionar`) — sigue funcionando igual, es el que aparece DESPUÉS de cargar los 4 scores del hoyo. No se toca.
+- La lógica de detección de bonus en el servidor (`cargarHoyoLive_`, `07_LiveScoring.gs`) — no se toca, ya funciona bien.
+- No hay cambios de backend — 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 39
+
+1. ¿El aviso emergente (`bonus-aviso-modal`) aparece la PRIMERA vez que se detecta un hoyo de bonus, y NO se repite si el jugador sigue en el mismo hoyo (por ejemplo, si hay un refresco de datos en segundo plano)?
+2. ¿El botón "✕" y el botón "Continuar" hacen lo mismo (cerrar el aviso)?
+3. ¿El encabezado "HOYO X · Par Y · HCP Z" se pone verde solo en los hoyos de bonus, y el emoji aparece DESPUÉS del HCP?
+4. ¿Quedó algún rastro del diagnóstico de la Tarea 38 (el texto "DEBUG...") en algún lado? Debería estar completamente sacado.
+5. ¿El tecladito de carga de score (`score-modal`) ya no cambia de color — solo muestra el emoji chiquito antes de "Hoyo X"?
+6. Hash y mensaje del commit.
+7. ¿Alguna duda o algo ambiguo de la consigna?
+
+## ✅ Respuestas de verificación — Tarea 39
+
+1. **Sí.** En `liveRenderHoyoActual()`, el aviso solo se dispara si `tipoBonusAqui && !LIVE_BONUS_AVISO_MOSTRADO[LIVE_HOYO]`. La primera vez que se detecta el hoyo de bonus, se escribe `LIVE_BONUS_AVISO_MOSTRADO[LIVE_HOYO] = true` antes de llamar a `bonusAvisoAbrir()`. Los refrescos de fondo (`livePoll`) también llaman a `liveRender()` → `liveRenderHoyoActual()`, pero como `LIVE_BONUS_AVISO_MOSTRADO[LIVE_HOYO]` ya es `true`, el `if` no entra y el aviso no vuelve a aparecer. `LIVE_BONUS_AVISO_MOSTRADO` se resetea a `{}` cada vez que se entra a la vista en vivo (`openLiveView`), así que al iniciar una nueva ronda funciona fresco.
+
+2. **Sí.** El botón "✕" tiene `onclick="bonusAvisoCerrar()"`. El botón "Continuar" también tiene `onclick="bonusAvisoCerrar()"`. Ambos llaman a la misma función, que hace `document.getElementById('bonus-aviso-modal').style.display = 'none'`. También se cierra si el jugador toca fuera del cuadro (el overlay tiene `onclick="if(event.target===this) bonusAvisoCerrar()"`).
+
+3. **Sí.** En `liveRenderHoyoActual()`, `emojiBonus` es `' 🎯'` o `' 💪'` (con espacio adelante) si hay bonus, o `''` si no. Se concatena DESPUÉS del HCP: `(par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '') + emojiBonus`. El encabezado de la tarjeta (`live-hoyo-card-hdr`) recibe `classList.toggle('bonus', !!tipoBonusAqui)` — clase `.adm-card-hdr.bonus` con `background:var(--green)` solo cuando hay bonus. En hoyos sin bonus, `tipoBonusAqui` es `null` (falsy), y el toggle remueve la clase.
+
+4. **No quedó ningún rastro.** Grep sobre `DEBUG|bonus-banner|live-bonus-banner|sm-bonus-banner|sm-hdr\.bonus` devolvió cero coincidencias. El CSS `.bonus-banner` fue eliminado, los elementos HTML `#live-bonus-banner` y `#sm-bonus-banner` fueron eliminados, las clases `.sm-hdr.bonus` fueron eliminadas, y el bloque completo del diagnóstico de la Tarea 38 fue reemplazado por el código limpio.
+
+5. **Sí.** `liveOpenScoreModal` ahora solo calcula `hoyoEmoji` (sin `avisos`, sin toggle de clases en `sm-hdr`) y lo pone antes de "Hoyo X" en `#sm-hoyo`. El header `#sm-hdr` del tecladito siempre queda con su CSS original (navy, sin dorado ni ninguna otra variante). Los elementos `#sm-bonus-banner` y `#sm-hdr` (con id) fueron removidos del HTML también — el `sm-hdr` sigue existiendo como clase pero ya no tiene id `sm-hdr` ni ninguna clase `.bonus`.
+
+6. **Hash:** `b1271c3` — "Tarea 39: ventana emergente de bonus + encabezado verde, saca diagnostico T38"
+
+7. Sin dudas. Nota sobre el id `sm-hdr`: en el Cambio 2 del HTML de la Tarea 34 se había agregado `id="sm-hdr"` al div del encabezado del tecladito. En la Tarea 39 ese id ya no es necesario (el JS de `liveOpenScoreModal` ya no lo busca), y el div queda sin ese id — lo que es correcto ya que el único encabezado que ahora cambia de clase es `live-hoyo-card-hdr`.
+
+### 📋 Para Marco — después de este fix
+
+Se publica solo (GitHub Pages, sin deploy en Apps Script). Probá igual que la vez pasada — cargando scores en vivo hasta llegar a un hoyo de bonus — y contame si el aviso emergente y el encabezado verde con emoji se ven como esperabas.
