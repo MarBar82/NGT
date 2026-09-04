@@ -1202,7 +1202,8 @@ function getFechaDetalle_(fecha) {
   const hoyoSalidaDet = (metaDet && metaDet.hoyoSalida) ? metaDet.hoyoSalida : 1;
   const horarioDet = (metaDet && metaDet.horario) ? metaDet.horario : '';
 
-  return { fecha: fecha, cancha: cancha, colorTee: colorTee, jugadores: jugadores, invitados: invitados, dobles: dobles, hoyoSalida: hoyoSalidaDet, horario: horarioDet };
+  const bonusHoyosDet = (metaDet && metaDet.bonusHoyos) ? metaDet.bonusHoyos : {};
+  return { fecha: fecha, cancha: cancha, colorTee: colorTee, jugadores: jugadores, invitados: invitados, dobles: dobles, hoyoSalida: hoyoSalidaDet, horario: horarioDet, bonusHoyos: bonusHoyosDet };
 }
 
 function getDoblesForFecha_(fecha) {

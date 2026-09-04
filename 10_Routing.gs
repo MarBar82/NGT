@@ -157,6 +157,7 @@ function doPost(e) {
       case 'eliminarFecha':         result = eliminarFecha_(params); break;
       case 'getTarjetasForFecha':   result = getTarjetasForFecha_(params); break;
       case 'setBonusWinners':       result = setBonusWinners_(params); break;
+      case 'setBonusHoyo':          result = setBonusHoyo_(params); break;
       case 'cargarMatches':       result = cargarMatches_(params); break;
       case 'editarMatches':       result = editarMatches_(params); break;
       case 'actualizarHcpIndices': result = actualizarHcpIndices_(params); break;

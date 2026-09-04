@@ -321,13 +321,16 @@ function cargarHoyoLive_(params) {
   // Solo disparar cuando los 4 jugadores de la línea tengan score en ese hoyo.
   let bonusPendiente = null;
   if (scoreVal !== '' && meta.bonusHoyos && snap && snap.jugadores) {
-    const bonusEstado = meta.bonusEstado || {};
+    const bonusReportes = meta.bonusReportes || {};
+    const miLineaNum = String(lineaIdx + 1);
+    const yaReportoBA = !!(bonusReportes.ba && bonusReportes.ba[miLineaNum]);
+    const yaReportoLD = !!(bonusReportes.ld && bonusReportes.ld[miLineaNum]);
     const hoyoIdx = hoyoNum - 1;
     const allHaveScore = snap.jugadores.every(function(j){ return j.scores[hoyoIdx] !== null; });
     if (allHaveScore) {
-      if (hoyoNum === meta.bonusHoyos.ba && !bonusEstado.ba) {
+      if (hoyoNum === meta.bonusHoyos.ba && !yaReportoBA) {
         bonusPendiente = { tipo: 'ba', hoyo: hoyoNum };
-      } else if (hoyoNum === meta.bonusHoyos.ld && !bonusEstado.ld) {
+      } else if (hoyoNum === meta.bonusHoyos.ld && !yaReportoLD) {
         bonusPendiente = { tipo: 'ld', hoyo: hoyoNum };
       }
     }
@@ -380,8 +383,9 @@ function getBonusEstado_(params) {
   const meta = getFechaMeta_(fStr);
   if (!meta) return { ok: false, error: 'Fecha no encontrada' };
 
-  const bonusHoyos  = meta.bonusHoyos  || {};
-  const bonusEstado = meta.bonusEstado || {};
+  const bonusHoyos    = meta.bonusHoyos    || {};
+  const bonusEstado   = meta.bonusEstado   || {};
+  const bonusReportes = meta.bonusReportes || {};
   const totalLineas = meta.lineas ? meta.lineas.length : 0;
   const jugMap = {};
   cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
@@ -399,10 +403,11 @@ function getBonusEstado_(params) {
         lineaNum: est.lineaNum,
       };
     }
-    // Simplified: any line without bonusEstado entry is pending
+    // "Definitivo" recién cuando TODAS las líneas reportaron para este tipo (ganaron o dijeron "Nadie ganó")
+    const reportaron = bonusReportes[tipo] || {};
     const lineasFaltantes = [];
-    if (!est) {
-      for (let i = 1; i <= totalLineas; i++) lineasFaltantes.push('L' + i);
+    for (let i = 1; i <= totalLineas; i++) {
+      if (!reportaron[String(i)]) lineasFaltantes.push('L' + i);
     }
     return { hoyo, ganador, final: lineasFaltantes.length === 0, lineasFaltantes };
   }
@@ -435,6 +440,8 @@ function setBonusGanador_(params) {
   try { metaAll = JSON.parse(props.getProperty('FECHA_META') || '{}'); } catch(e) { metaAll = {}; }
   if (!metaAll[fStr]) metaAll[fStr] = {};
   if (!metaAll[fStr].bonusEstado) metaAll[fStr].bonusEstado = {};
+  if (!metaAll[fStr].bonusReportes) metaAll[fStr].bonusReportes = {};
+  if (!metaAll[fStr].bonusReportes[tipoLower]) metaAll[fStr].bonusReportes[tipoLower] = {};
 
   let ganador = null;
   if (matricula) {
@@ -447,11 +454,52 @@ function setBonusGanador_(params) {
       lineaNum: parseInt(lineaNum),
     };
     metaAll[fStr].bonusEstado[tipoLower] = { matricula: String(matricula), lineaNum: parseInt(lineaNum), timestamp: Date.now() };
-    props.setProperty('FECHA_META', JSON.stringify(metaAll));
   }
+
+  // Marcar que esta línea ya reportó para este tipo de bonus (haya ganador o "Nadie ganó")
+  metaAll[fStr].bonusReportes[tipoLower][String(parseInt(lineaNum))] = true;
+  props.setProperty('FECHA_META', JSON.stringify(metaAll));
 
   audit_('SET_BONUS_GANADOR', reportaMat, { fecha, tipo, lineaNum, matricula });
   return { ok: true, tipo, ganador, final: false };
+}
+
+/**
+ * setBonusHoyo_ — Admin reasigna cuál es el hoyo de bonus (BA o LD) para una fecha
+ * en curso. Se usa cuando, en la práctica, nadie ganó en el hoyo original y el admin
+ * decide jugarlo en otro hoyo (que todavía no se jugó).
+ * Al cambiar el hoyo se borra el ganador y el seguimiento de "quién ya reportó" de
+ * ese tipo, porque es una competencia nueva en un hoyo nuevo.
+ */
+function setBonusHoyo_(params) {
+  const { adminKey, fecha, tipo, hoyo } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const tipoLower = String(tipo || '').toLowerCase();
+  if (tipoLower !== 'ba' && tipoLower !== 'ld') return { ok: false, error: 'Tipo inválido' };
+
+  const hoyoNum = parseInt(hoyo);
+  if (!hoyoNum || hoyoNum < 1 || hoyoNum > 18) return { ok: false, error: 'Hoyo inválido' };
+
+  const fStr = String(fecha).trim();
+  const props = PropertiesService.getDocumentProperties();
+  let metaAll;
+  try { metaAll = JSON.parse(props.getProperty('FECHA_META') || '{}'); } catch(e) { metaAll = {}; }
+  if (!metaAll[fStr]) return { ok: false, error: 'Fecha no encontrada' };
+
+  if (!metaAll[fStr].bonusHoyos) metaAll[fStr].bonusHoyos = {};
+  metaAll[fStr].bonusHoyos[tipoLower] = hoyoNum;
+
+  // Nuevo hoyo = nueva competencia: se descarta el ganador y los reportes previos de este tipo
+  if (metaAll[fStr].bonusEstado) delete metaAll[fStr].bonusEstado[tipoLower];
+  if (!metaAll[fStr].bonusReportes) metaAll[fStr].bonusReportes = {};
+  metaAll[fStr].bonusReportes[tipoLower] = {};
+
+  props.setProperty('FECHA_META', JSON.stringify(metaAll));
+  SpreadsheetApp.flush();
+  audit_('SET_BONUS_HOYO', 'admin', { fecha: fStr, tipo: tipoLower, hoyo: hoyoNum });
+  try { CacheService.getScriptCache().remove('fechaRes_' + fStr); } catch(e) {}
+  return { ok: true, tipo: tipoLower, hoyo: hoyoNum };
 }
 
 /**

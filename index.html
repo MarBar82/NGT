@@ -2342,6 +2342,20 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           <div class="adm-card-body">
             <div class="adm-row">
               <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-ghost" onclick="adminSetBonusHoyo()" style="margin-top:8px;">Cambiar hoyo de bonus</button>
+            <div id="adm-bonus-hoyo-msg" class="adm-msg" style="display:none;"></div>
+            <div style="font-size:11px;color:var(--g4);margin-top:8px;">Usá esto solo si nadie ganó en el hoyo original y decidiste jugarlo en otro hoyo. Al cambiar el hoyo se borra el seguimiento en vivo de ese bonus (arranca de cero en el hoyo nuevo).</div>
+
+            <div class="adm-row" style="margin-top:16px;">
+              <div class="adm-field">
                 <label class="adm-label">💪 Long Drive — Ganador</label>
                 <select id="adm-ldba-ld" class="adm-input"></select>
               </div>
@@ -5247,10 +5261,14 @@ function loadAdmLdBa(fecha) {
   const ldSel = document.getElementById('adm-ldba-ld');
   const baSel = document.getElementById('adm-ldba-ba');
   const msg   = document.getElementById('adm-ldba-msg');
+  const hoyoLdSel = document.getElementById('adm-bonus-hoyo-ld');
+  const hoyoBaSel = document.getElementById('adm-bonus-hoyo-ba');
   if(!ldSel || !baSel) return;
   if(msg) msg.style.display = 'none';
   ldSel.innerHTML = '<option value="">Cargando...</option>';
   baSel.innerHTML = '<option value="">Cargando...</option>';
+  if(hoyoLdSel) hoyoLdSel.innerHTML = '<option value="">Cargando...</option>';
+  if(hoyoBaSel) hoyoBaSel.innerHTML = '<option value="">Cargando...</option>';
   Promise.all([
     ngtApiGet('fechaDetalle', { fecha: fecha }),
     ngtApiGet('bonusWinners', { fecha: fecha }),
@@ -5264,7 +5282,49 @@ function loadAdmLdBa(fecha) {
     baSel.innerHTML = noOpt + opts;
     if(bw.ldWinner) ldSel.value = String(bw.ldWinner.matricula);
     if(bw.baWinner) baSel.value = String(bw.baWinner.matricula);
+
+    const bonusHoyos = det.bonusHoyos || {};
+    let hoyoOpts = '<option value="">-- Sin asignar --</option>';
+    for(let h = 1; h <= 18; h++) hoyoOpts += `<option value="${h}">Hoyo ${h}</option>`;
+    if(hoyoLdSel){
+      hoyoLdSel.innerHTML = hoyoOpts;
+      hoyoLdSel.value = bonusHoyos.ld ? String(bonusHoyos.ld) : '';
+      hoyoLdSel.dataset.original = hoyoLdSel.value;
+    }
+    if(hoyoBaSel){
+      hoyoBaSel.innerHTML = hoyoOpts;
+      hoyoBaSel.value = bonusHoyos.ba ? String(bonusHoyos.ba) : '';
+      hoyoBaSel.dataset.original = hoyoBaSel.value;
+    }
   });
+}
+
+function adminSetBonusHoyo() {
+  const fecha = ADM_EDIT_FECHA;
+  const hoyoLdSel = document.getElementById('adm-bonus-hoyo-ld');
+  const hoyoBaSel = document.getElementById('adm-bonus-hoyo-ba');
+  const msg = document.getElementById('adm-bonus-hoyo-msg');
+  if(!hoyoLdSel || !hoyoBaSel) return;
+  const cambios = [];
+  if(hoyoLdSel.value && hoyoLdSel.value !== hoyoLdSel.dataset.original) cambios.push({ tipo: 'ld', hoyo: hoyoLdSel.value });
+  if(hoyoBaSel.value && hoyoBaSel.value !== hoyoBaSel.dataset.original) cambios.push({ tipo: 'ba', hoyo: hoyoBaSel.value });
+  if(cambios.length === 0){
+    msg.className = 'adm-msg'; msg.textContent = 'No cambiaste ningún hoyo'; msg.style.display = 'block';
+    return;
+  }
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+  Promise.all(cambios.map(c => ngtApiPost({ action: 'setBonusHoyo', adminKey: ADMIN_KEY_OK, fecha: fecha, tipo: c.tipo, hoyo: c.hoyo })))
+    .then(results => {
+      const errores = results.filter(r => !r.ok);
+      if(errores.length === 0){
+        msg.className = 'adm-msg ok'; msg.textContent = '✓ Hoyo de bonus actualizado';
+        loadAdmLdBa(fecha);
+      } else {
+        msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (errores[0].error || 'Error');
+      }
+    }).catch(e => {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+    });
 }
 
 function adminSetBonusWinners() {
