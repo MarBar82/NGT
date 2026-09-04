@@ -4,6 +4,8 @@
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
+**Permiso permanente para Code:** Marco autoriza a Code a hacer todo lo que necesite para completar las tareas de este archivo (leer/editar/crear archivos del proyecto, correr comandos de git, comandos de terminal, instalar dependencias si hiciera falta, etc.) sin tener que pedir confirmación paso a paso. Esta autorización vale para todas las tareas de este archivo, de ahora en adelante — no hace falta que Marco apruebe cada acción individual.
+
 Progreso: Tareas 31 a 34 confirmadas por Code y verificadas contra el repo — coinciden exactamente con lo pedido. Pero Marco seguía sin ver el cartel/color/emoji del bonus, incluso en la compu (no solo el celular) — así que no era caché. Marco dio una pista clave: "elijo la cancha, me carga los hoyos de bonus, los elijo, y después es como que la cancha no queda seleccionada — el usuario va más rápido que la app."
 
 **Encontré la causa real revisando `applyAdminResults_` / `loadAdminData()` en `index.html`.** Es un bug de fondo, no de caché ni de despliegue:
@@ -2438,3 +2440,97 @@ Por último, agregá esta regla nueva para la etiqueta "Líder" (por ejemplo cer
 ### 📋 Para Marco — sobre esta tarea
 
 Segundo paso de la Fase 5, mismo lugar (la Tabla de Posiciones). Ahora el jugador que va primero se destaca con un fondo suave y una etiqueta "Líder" — así no hace falta fijarse en el número de posición para saber quién va ganando, se nota de un vistazo. Se publica solo en GitHub Pages. Después de este paso, la Tabla de Posiciones queda terminada por ahora — la siguiente pantalla a mejorar sería Live Scoring o Mi Tarjeta, decimos cuál cuando llegue el momento.
+
+---
+
+## Tarea 46 — Fase 5, paso 3: nuevo estilo visual de Live Scoring (carga de scores)
+
+Ahora pasamos a la pantalla donde los jugadores cargan el resultado hoyo por hoyo durante la ronda (vive dentro de `#pg-mit`). Igual que la Tarea 44: **100% CSS, cero cambios de JavaScript.** Además, en este caso son TODAS reglas nuevas — no se modifica ninguna línea existente, solo se agregan reglas. Es el paso de menor riesgo posible.
+
+Aviso importante para vos, Code: la clase `.adm-card` se usa en más de 20 pantallas distintas de la app (formularios de administración, wizard de crear fecha, etc.). NO toques la definición base de `.adm-card` — todo lo de esta tarea usa selectores que empiezan con `#pg-mit` para que el cambio quede encerrado únicamente dentro de esta pantalla (Mi Tarjeta / Live Scoring) y no se filtre a ningún otro lado.
+
+### Reglas nuevas a agregar (todas van dentro del bloque `<style>`, en cualquier lugar — te doy una ubicación sugerida para cada una, pero lo importante es que se agreguen, no dónde exactamente)
+
+**1. Fondo gris detrás de las tarjetas de esta pantalla.** Sugerencia: agregala justo al lado de la regla equivalente que ya existe para la Tabla de Posiciones — buscá `#pg-lb .wrap{background:#eef0f3;}` y agregá esta línea nueva justo después:
+```css
+#pg-mit .wrap{background:#eef0f3;}
+```
+
+**2. Esquinas redondeadas y sombra suave para las tarjetas de esta pantalla** (la tarjeta del hoyo actual, la de Stableford, la de Match, etc. — todas usan `.adm-card` pero esta regla solo pisa el estilo DENTRO de `#pg-mit`, en ningún otro lado). Agregala junto a la anterior:
+```css
+#pg-mit .adm-card{border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+```
+
+**3. Reacción táctil al tocar el círculo donde se carga el score de cada hoyo.** Buscá esta línea existente:
+```css
+.hole-circle:hover{border-color:var(--navy);transform:scale(1.05);}
+```
+Agregá justo después:
+```css
+.hole-circle:active{transform:scale(.92);}
+```
+
+**4. Reacción táctil en las flechitas de navegación entre hoyos (‹ y ›).** Buscá:
+```css
+.live-nav-btn:hover{color:#fff;}
+```
+Agregá justo después:
+```css
+.live-nav-btn:active{transform:scale(.85);}
+```
+
+**5. Reacción táctil y color al tocar los números del teclado donde se carga el score (el modal que aparece al tocar un jugador).** Buscá:
+```css
+.sm-keypad button:hover{background:var(--navy);color:#fff;}
+```
+Agregá justo después:
+```css
+.sm-keypad button:active{transform:scale(.94);background:var(--navy);color:#fff;}
+```
+
+**6. Reacción táctil en el selector de línea de juego (el "pill" que aparece si hay más de una línea armada para esa fecha).** Buscá:
+```css
+.live-linea-pill.active{background:var(--navy);color:#fff;}
+```
+Agregá justo después:
+```css
+.live-linea-pill:active{transform:scale(.95);}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca — nada de `liveRender`, `liveRenderHoyoActual`, `liveOpenScoreModal`, ni ninguna otra. Solo estilos.
+- El header navy de cada tarjeta (con el borde rojo abajo) no se toca — ese ya es parte de la identidad visual de NGT en toda la app, se mantiene igual.
+- El diseño del aviso de bonus (popup + header verde) de la Tarea 39 no se toca para nada.
+- Ninguna otra pantalla de la app se ve afectada — todos los selectores nuevos empiezan con `#pg-mit`, o son reglas `:active` agregadas a clases (`.hole-circle`, `.live-nav-btn`, `.sm-keypad button`, `.live-linea-pill`) que solo existen en esta pantalla.
+- No hay cambios de backend. 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 46
+
+1. ¿La pantalla de carga de scores ahora tiene fondo gris clarito detrás de las tarjetas blancas, con esquinas redondeadas y sombra suave?
+   **Sí.** `#pg-mit .wrap{background:#eef0f3;}` pone el fondo gris, y `#pg-mit .adm-card{border-radius:16px;box-shadow:...}` redondea y agrega sombra a todas las tarjetas de esa pantalla.
+
+2. ¿Al tocar el círculo de un hoyo para cargar el score, se ve que "reacciona" achicándose un poquito?
+   **Sí.** `.hole-circle:active{transform:scale(.92);}` agregada justo después del `:hover` existente.
+
+3. ¿Al tocar las flechitas ‹ › para cambiar de hoyo pasa lo mismo?
+   **Sí.** `.live-nav-btn:active{transform:scale(.85);}` agregada justo después de `.live-nav-btn:hover`.
+
+4. ¿Al tocar un número en el teclado del modal de carga de score, el número reacciona (se pone navy con letra blanca y se achica un poquito) antes de cerrarse?
+   **Sí.** `.sm-keypad button:active{transform:scale(.94);background:var(--navy);color:#fff;}` agregada justo después del `:hover` existente.
+
+5. ¿Las otras pestañas de esta pantalla (Stableford, Match, Bonus) también se ven con el fondo gris y las tarjetas redondeadas?
+   **Sí.** El selector `#pg-mit .adm-card` aplica a todas las `.adm-card` dentro de `#pg-mit`, independientemente de la pestaña activa.
+
+6. ¿Ninguna otra pantalla de la app (Gestionar Fechas, Crear Fecha, etc.) cambió de aspecto?
+   **Sí (no cambió nada).** Las reglas de fondo y `border-radius` usan el prefijo `#pg-mit`, y las reglas `:active` agregadas corresponden a clases que solo existen en esta pantalla (`.hole-circle`, `.live-nav-btn`, `.live-linea-pill`). La única clase más genérica es `.sm-keypad button`, pero el modal de score solo se abre desde Live Scoring.
+
+7. Hash y mensaje del commit.
+   **`4e3fd5b`** — `feat: Tarea 46 - nuevo estilo visual Live Scoring (CSS)`
+
+8. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Todas las reglas eran adiciones puras — ninguna línea existente fue modificada.
+
+### 📋 Para Marco — sobre esta tarea
+
+Tercer paso de la Fase 5, ahora en la pantalla de carga de scores — la que más usan todos durante una ronda. Como es puramente visual y son todo reglas nuevas (no se toca nada existente), el riesgo es mínimo. Se publica solo en GitHub Pages. Cuando Code confirme, jugá un poco con la carga de un hoyo (no hace falta que sea una fecha real, cualquier fecha activa sirve) y fijate si se siente más "de app" — sobre todo al tocar los números para cargar un score.
