@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-04 (Tarea 40 agregada — Fase 4, paso 1: tarjetas en Gestionar Fechas)
+**Última actualización:** 2026-09-04 (Tarea 41 agregada — Fase 4, paso 2: fichitas de fecha con estado)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -1750,3 +1750,144 @@ Reemplazalo por:
 Este cambio tiene una parte de backend (`03_Reads.gs`) — después de que Code lo suba, andá a Apps Script, actualizá el archivo `03_Reads` (pegá el contenido nuevo, guardá) y hacé un Deploy nuevo. La parte de `index.html` se publica sola.
 
 Para probar: entrá a "Gestionar Fechas", abrí una fecha, y en la sección de matches apretá "⚡ Armar líneas" — la vista previa debería verse ahora como la tarjeta linda (con los jugadores en recuadros) en vez del texto plano de antes.
+
+---
+
+## 📣 Tarea 40 confirmada — seguimos con la Fase 4b
+
+Marco probó "Armar líneas" (sin guardar, solo mirando la propuesta) y confirmó que la tarjeta se ve bien. Seguimos con el paso 2 del plan: las fichitas para elegir qué fecha editar (hoy son cuadraditos simples con solo el número).
+
+## 🎯 Tarea para Claude Code — Tarea 41 (Fase 4, paso 2: fichitas de fecha con estado)
+
+### Qué hace esta tarea
+
+Las fichitas de "Gestionar Fechas" (donde elegís qué fecha editar o borrar) hoy solo muestran el número de fecha. Le agregamos una etiqueta chica que dice si la fecha ya está completa (todos firmaron tarjeta) o cuántos jugadores van firmando — así de un vistazo se sabe el estado de cada fecha sin tener que entrar a cada una. El dato ya existe en el servidor (lo usa otra pantalla de la app), así que no hace falta ningún cambio de backend — es 100% frontend.
+
+### Dónde está el código
+
+Todo en `index.html`: los estilos CSS de `.adm-fecha-tile*` y la función `renderFechasGrid()`.
+
+### Cambio 1 — CSS: agregar el estilo de la etiqueta de estado
+
+Buscá este bloque:
+
+```css
+.adm-fecha-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-bottom:16px;}
+.adm-fecha-tile{background:var(--white);border:var(--border);border-radius:3px;padding:14px 10px 10px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.04);}
+.adm-fecha-tile-num{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:800;color:var(--navy);line-height:1;}
+.adm-fecha-tile-lbl{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);margin:2px 0 10px;}
+.adm-fecha-tile-btns{display:flex;gap:6px;justify-content:center;}
+.adm-fecha-tile-btn{flex:1;background:none;border:1px solid var(--g3);border-radius:3px;padding:6px 4px;cursor:pointer;font-size:15px;transition:.12s;}
+.adm-fecha-tile-btn:hover{background:var(--off);}
+.adm-fecha-tile-btn.danger:hover{background:#fee2e2;border-color:#b91c1c;}
+```
+
+Reemplazalo por:
+
+```css
+.adm-fecha-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-bottom:16px;}
+.adm-fecha-tile{background:var(--white);border:var(--border);border-radius:3px;padding:14px 10px 10px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.04);}
+.adm-fecha-tile-num{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:800;color:var(--navy);line-height:1;}
+.adm-fecha-tile-lbl{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);margin:2px 0 6px;}
+.adm-fecha-tile-badge{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:10px;margin-bottom:8px;}
+.adm-fecha-tile-badge.completa{background:rgba(31,122,61,.12);color:var(--green);}
+.adm-fecha-tile-badge.pendiente{background:rgba(0,35,75,.08);color:var(--navy);}
+.adm-fecha-tile-btns{display:flex;gap:6px;justify-content:center;}
+.adm-fecha-tile-btn{flex:1;background:none;border:1px solid var(--g3);border-radius:3px;padding:6px 4px;cursor:pointer;font-size:15px;transition:.12s;}
+.adm-fecha-tile-btn:hover{background:var(--off);}
+.adm-fecha-tile-btn.danger:hover{background:#fee2e2;border-color:#b91c1c;}
+```
+
+### Cambio 2 — JS: `renderFechasGrid()` — usar el dato de estado y mostrar la etiqueta
+
+Buscá la función completa:
+
+```js
+function renderFechasGrid(){
+  const grid = document.getElementById('adm-fechas-grid');
+  grid.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:4px;">Cargando...</div>';
+  cerrarEditPanel();
+  ngtApiGet('fechas').then(r => {
+    const fechas = (r && r.data) || [];
+    if(!fechas.length){
+      grid.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:4px;">No hay fechas creadas</div>';
+      return;
+    }
+    grid.innerHTML = fechas.map(f => `
+      <div class="adm-fecha-tile">
+        <div class="adm-fecha-tile-num">${f}</div>
+        <div class="adm-fecha-tile-lbl">Fecha</div>
+        <div class="adm-fecha-tile-btns">
+          <button class="adm-fecha-tile-btn" title="Editar" onclick="abrirEditPanel('${f}')">✏</button>
+          <button class="adm-fecha-tile-btn danger" title="Borrar" onclick="adminEliminarFechaDesdeGrid('${f}')">🗑</button>
+        </div>
+      </div>`).join('');
+  }).catch(() => {
+    grid.innerHTML = '<div style="color:#c8102e;font-size:13px;">Error al cargar fechas</div>';
+  });
+}
+```
+
+Reemplazala por:
+
+```js
+function renderFechasGrid(){
+  const grid = document.getElementById('adm-fechas-grid');
+  grid.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:4px;">Cargando...</div>';
+  cerrarEditPanel();
+  ngtApiGet('fechasConEstado').then(r => {
+    const fechas = (r && r.data) || [];
+    if(!fechas.length){
+      grid.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:4px;">No hay fechas creadas</div>';
+      return;
+    }
+    grid.innerHTML = fechas.map(item => {
+      const f = item.fecha;
+      const badge = item.completa
+        ? '<div class="adm-fecha-tile-badge completa">✓ Completa</div>'
+        : '<div class="adm-fecha-tile-badge pendiente">' + item.firmados + '/' + item.totalJugadores + ' firmados</div>';
+      return `
+      <div class="adm-fecha-tile">
+        <div class="adm-fecha-tile-num">${f}</div>
+        <div class="adm-fecha-tile-lbl">Fecha</div>
+        ${badge}
+        <div class="adm-fecha-tile-btns">
+          <button class="adm-fecha-tile-btn" title="Editar" onclick="abrirEditPanel('${f}')">✏</button>
+          <button class="adm-fecha-tile-btn danger" title="Borrar" onclick="adminEliminarFechaDesdeGrid('${f}')">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+  }).catch(() => {
+    grid.innerHTML = '<div style="color:#c8102e;font-size:13px;">Error al cargar fechas</div>';
+  });
+}
+```
+
+### Qué NO cambia
+
+- Los botones ✏ (editar) y 🗑 (borrar) — siguen funcionando exactamente igual, con los mismos nombres de clase (`adminEliminarFechaDesdeGrid` busca las fichitas por `.adm-fecha-tile-num`, que sigue existiendo igual que antes).
+- No hay cambios de backend — el dato de "completa"/"firmados" ya lo devuelve una acción que existe hace rato (`fechasConEstado`), usada en otra pantalla de la app. 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 41
+
+1. ¿`renderFechasGrid()` ahora pide `fechasConEstado` en vez de `fechas`, y usa `item.fecha`, `item.completa`, `item.firmados`, `item.totalJugadores`?
+2. ¿La etiqueta dice "✓ Completa" (en verde) cuando la fecha está completa, y "X/Y firmados" (en azul) cuando no?
+3. ¿Los botones de editar y borrar siguen funcionando igual que antes (probá abrir una fecha y ver que el panel de edición se abra bien)?
+4. Hash y mensaje del commit.
+5. ¿Alguna duda o algo ambiguo de la consigna?
+
+## ✅ Respuestas de verificación — Tarea 41
+
+1. **Sí.** `ngtApiGet('fechas')` fue reemplazado por `ngtApiGet('fechasConEstado')`. El `.map()` ahora recibe objetos `item` en vez de valores primitivos: extrae `item.fecha` (el número) para los botones y la clase, `item.completa` para el condicional, `item.firmados` e `item.totalJugadores` para el texto del badge pendiente.
+
+2. **Sí.** Si `item.completa` es truthy: `badge = '<div class="adm-fecha-tile-badge completa">✓ Completa</div>'` — la clase `.completa` aplica fondo verde claro y texto `var(--green)`. Si no: `badge = '<div class="adm-fecha-tile-badge pendiente">' + item.firmados + '/' + item.totalJugadores + ' firmados</div>'` — la clase `.pendiente` aplica fondo navy claro y texto `var(--navy)`.
+
+3. **Sí.** Los botones usan `onclick="abrirEditPanel('${f}')"` y `onclick="adminEliminarFechaDesdeGrid('${f}')"` donde `f = item.fecha` — exactamente el mismo valor que antes (el número de fecha). `adminEliminarFechaDesdeGrid` busca `.adm-fecha-tile-num` para leer el número, que sigue existiendo con el mismo contenido. No cambia ninguna lógica ni nombre de función.
+
+4. **Hash:** `851ae61` — "Tarea 41: fichitas de fecha con estado en Gestionar Fechas"
+
+5. Sin dudas. La acción `fechasConEstado` ya existía en el servidor y ya devuelve los campos `fecha`, `completa`, `firmados`, `totalJugadores` — no fue necesario ningún cambio de backend.
+
+### 📋 Para Marco — después de este fix
+
+Se publica solo (GitHub Pages, sin deploy en Apps Script). Entrá a "Gestionar Fechas" y fijate que cada fichita ahora tenga la etiqueta de estado debajo del número.
