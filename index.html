@@ -42,6 +42,10 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .lb-wrap{background:var(--white);overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
 #pg-lb .wrap{background:#eef0f3;}
 #pg-mit .wrap{background:#eef0f3;}
+#pg-historia-hub .wrap{background:#eef0f3;}
+#pg-historia-hub .adm-card{border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+#pg-historia-hub .adm-tab:active{transform:scale(.96);}
+#historia-body{background:var(--white);border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);overflow:hidden;}
 #pg-mit .adm-card{border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
 .lb-refresh{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;color:var(--g4);cursor:pointer;padding:4px 10px;border:1px solid var(--g3);border-radius:3px;background:none;transition:.12s;}
 .lb-refresh:hover{color:var(--navy);border-color:var(--navy);}
@@ -337,7 +341,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
 /* HISTORIA */
 .hist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
-.hist-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);}
+.hist-card{background:var(--white);border:var(--border);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);}
 .hist-card-hdr{background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;letter-spacing:.08em;text-align:center;padding:10px 14px;border-bottom:3px solid var(--red);}
 .hist-yr-tbl{width:100%;border-collapse:collapse;}
 .hist-yr-tbl thead tr{background:var(--g1);}
@@ -1109,6 +1113,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
   transition:background .12s,border-color .12s;
 }
 .perf-pick-row:hover{background:var(--g1);border-color:var(--g3);}
+.perf-pick-row:active{transform:scale(.96);background:var(--g1);}
 .perf-pick-name{color:var(--text);font-weight:600;}
 .perf-pick-debut{font-size:10px;color:var(--g4);font-weight:500;letter-spacing:.06em;}
 
