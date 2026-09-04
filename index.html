@@ -2207,6 +2207,10 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             </div>
 
             <label class="adm-label">Jugadores que disputan</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <input type="text" id="adm-edit-jugs-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="filterAdmEditJugs()" style="flex:1;">
+              <span id="adm-edit-jugs-count" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--g4);white-space:nowrap;"></span>
+            </div>
             <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
 
             <div class="adm-row" style="margin-top:6px;">
@@ -3605,6 +3609,22 @@ function loadAdminData(){
   });
 }
 
+function filterAdmEditJugs(){
+  const searchEl = document.getElementById('adm-edit-jugs-search');
+  const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
+  document.querySelectorAll('#adm-edit-jugs .adm-jug-item').forEach(function(item){
+    const label = item.querySelector('label');
+    const txt = label ? label.textContent.toLowerCase() : '';
+    item.style.display = (!q || txt.indexOf(q) >= 0) ? '' : 'none';
+  });
+}
+function admUpdateJugCount_(){
+  const el = document.getElementById('adm-edit-jugs-count');
+  if(!el) return;
+  const n = document.querySelectorAll('#adm-edit-jugs .edit-jug:checked').length;
+  el.textContent = n + ' seleccionado' + (n === 1 ? '' : 's');
+}
+
 function formatPlayerLabel(nombreCompleto){
   const COMPOUND = ['LAVALLE COBO','MARTINEZ FANO','RODRIGUEZ NAZAR','DE SAINT LEGER'];
   const n = (nombreCompleto || '').trim();
@@ -4900,6 +4920,8 @@ function abrirEditPanel(fecha){
   document.getElementById('adm-edit-msg').style.display = 'none';
   document.getElementById('adm-reset-msg').style.display = 'none';
   document.getElementById('adm-edit-jugs').innerHTML = 'Cargando...';
+  const _searchEl = document.getElementById('adm-edit-jugs-search');
+  if(_searchEl) _searchEl.value = '';
   const _doblesEl = document.getElementById('adm-edit-dobles');
   if(_doblesEl) _doblesEl.innerHTML = 'Cargando...';
 
@@ -4975,9 +4997,10 @@ function abrirEditPanel(fecha){
     jugadores.forEach(j => {
       const checked = curMatriculas.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
       const lbl = formatPlayerLabel(j.nombre);
-      jugHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-jug" value="' + j.matricula + '" id="ejug-' + j.matricula + '" ' + checked + '><label for="ejug-' + j.matricula + '">' + lbl + '</label></div>';
+      jugHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-jug" value="' + j.matricula + '" id="ejug-' + j.matricula + '" ' + checked + ' onchange="admUpdateJugCount_()"><label for="ejug-' + j.matricula + '">' + lbl + '</label></div>';
     });
     jl.innerHTML = jugHtml;
+    admUpdateJugCount_();
 
     // Render dobles (solo si el elemento todavía existe — fue movido a card separada)
     const dl = document.getElementById('adm-edit-dobles');
