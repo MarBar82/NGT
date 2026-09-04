@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-04 (Tarea 66 agregada — Fase 6, item 1: golpes a favor/en contra vs cada rival en el live scoring)
+**Última actualización:** 2026-09-04 (Tarea 67 agregada — Fase 6, item 6: reemplazar "Volver" por el navbar en Mi Tarjeta / Live Scoring)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -5960,3 +5960,100 @@ No. La consigna fue muy precisa. Un detalle que hay que tener en cuenta: hasta q
 ### ⚠️ Recordatorio importante
 
 Esta tarea toca `07_LiveScoring.gs`. Después del commit, Marco tiene que ir al editor de Apps Script y hacer el **deploy manual** para que el nuevo campo `nombre` llegue al navegador — si solo se hace `git push`, el sitio se actualiza pero el backend real sigue con el código viejo (sin el campo `nombre`), y los puntos de golpes se verían pero sin iniciales, hasta que se haga el deploy.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 67 (Fase 6, item 6: reemplazar "Volver" por el navbar en Mi Tarjeta / Live Scoring)
+
+✅ Esta tarea es 100% frontend (`index.html`). No toca ningún archivo `.gs` — el push a GitHub Pages ya deja todo funcionando, sin deploy manual.
+
+### Contexto (para entender el "por qué")
+
+Lo que pediste: hoy, para salir de la pantalla de "Mi Tarjeta" (que incluye el login del jugador, la lista de fechas, y la carga de scores hoyo por hoyo en Live Scoring), la única forma es tocar el botón "← Volver", que además corta el sondeo en vivo (polling) y te manda siempre al Leaderboard. Vos preferís que, en lugar de ese botón, esté visible el navbar de abajo (los íconos LB / Fechas / Historia / Match) para poder ir a cualquier sección directamente. Y separado de esto — cuando salís hacia cualquier otra sección mientras hay una fecha en juego, el botoncito flotante rojo ("NGT FECHA X · EN JUEGO") ya te deja volver a entrar a cargar la tarjeta; eso ya funciona hoy y esta tarea no lo toca.
+
+Confirmaste que el navbar debe aparecer en TODA la sección de Mi Tarjeta (login, lista de fechas, y Live Scoring), no solo en la pantalla de carga hoyo por hoyo — es más simple y consistente con el resto de la app.
+
+Hoy el código oculta el navbar específicamente para esta sección (`id === 'mit'`), dejando ese espacio vacío abajo. Al mostrarlo también ahí, no hace falta ajustar ningún margen: la pantalla ya está preparada para dejarle lugar al navbar (el mismo padding inferior que usan todas las demás pantallas).
+
+Un detalle técnico importante: hoy, el único lugar donde se corta el sondeo en vivo (el pedido automático que refresca los datos cada 8 segundos) al salir de Live Scoring es el propio botón "Volver" que vamos a sacar. Si alguien sale tocando un ícono del navbar en cambio, hay que asegurarse de que ese sondeo se corte igual — si no, seguiría pidiendo datos de fondo aunque ya no se esté viendo esa pantalla.
+
+### Cambio 1 — sacar el botón "Volver" del header de Live Scoring
+
+Buscá, dentro del bloque `<div id="mit-live"...>`, este header:
+
+```html
+    <!-- Header row -->
+    <div style="display:flex;align-items:center;margin-bottom:10px;">
+      <button class="btn-back" onclick="livePollStop(); LIVE_MODE=false; pg('lb',null)">← Volver</button>
+      <span id="live-title" style="flex:1;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
+    </div>
+```
+
+Reemplazalo por (se saca el botón, y el título pasa a ocupar todo el ancho, centrado):
+
+```html
+    <!-- Header row -->
+    <div style="display:flex;align-items:center;margin-bottom:10px;">
+      <span id="live-title" style="flex:1;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
+    </div>
+```
+
+### Cambio 2 — mostrar el navbar también en Mi Tarjeta, y cortar el sondeo al salir por cualquier vía
+
+Buscá, dentro de la función `pg(id,btn)`, este bloque:
+
+```js
+  // Hide bottom nav inside Live Scoring, show it everywhere else
+  var bnavEl = document.getElementById('bnav-main');
+  if (bnavEl) bnavEl.style.display = id === 'mit' ? 'none' : '';
+  if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else if(NGT_SESSION){ MIT_PLAYER={matricula:NGT_SESSION.mat,nombre:NGT_SESSION.nombre||'',apodo:NGT_SESSION.apodo||''}; showMitFechas(); } else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; } }
+```
+
+Reemplazalo por (el navbar ya no se oculta nunca, y se corta el sondeo en vivo apenas se navega a cualquier pantalla que no sea "mit", venga de donde venga el toque):
+
+```js
+  // El navbar de abajo ahora se ve en todas las pantallas, incluyendo Mi Tarjeta / Live Scoring
+  var bnavEl = document.getElementById('bnav-main');
+  if (bnavEl) bnavEl.style.display = '';
+  // Si se sale de Live Scoring hacia cualquier otra sección (navbar, u otro camino),
+  // hay que cortar el sondeo en vivo — antes esto solo lo hacía el botón "Volver" que sacamos.
+  if(id !== 'mit' && LIVE_MODE){ livePollStop(); LIVE_MODE=false; }
+  if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else if(NGT_SESSION){ MIT_PLAYER={matricula:NGT_SESSION.mat,nombre:NGT_SESSION.nombre||'',apodo:NGT_SESSION.apodo||''}; showMitFechas(); } else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; } }
+```
+
+### Qué NO cambia
+
+- El botoncito flotante rojo ("NGT FECHA X · EN JUEGO") que aparece cuando hay una fecha en juego y te deja volver a entrar a cargar la tarjeta desde cualquier otra pantalla — no se toca, sigue funcionando exactamente igual que hoy.
+- La lógica de qué ícono del navbar se marca como "activo" no cambia — como Mi Tarjeta/Live Scoring no tiene un ícono propio en el navbar (se entra por el botón flotante o desde la franja de fecha activa), simplemente no va a haber ningún ícono marcado como activo mientras estés ahí adentro, igual que pasa hoy en otras pantallas sin ícono propio (por ejemplo el panel de Admin).
+- El sondeo en vivo (refresco cada 8 segundos) sigue funcionando igual mientras estés adentro de Live Scoring — el único cambio es que ahora se corta de forma confiable sin importar por dónde salgas.
+- Nada de la lógica de carga de scores, Match Play, Stableford ni Bonus se toca.
+
+### ❓ Preguntas de verificación — Tarea 67
+
+1. Entrá a "Mi Tarjeta" (login o lista de fechas) — ¿el navbar de abajo (LB / Fechas / Historia / Match) está visible ahí, en vez de quedar oculto como antes?
+Sí. El cambio `bnavEl.style.display = ''` (sin condición) lo hace visible en todas las pantallas, incluyendo `id === 'mit'`. Antes era `id === 'mit' ? 'none' : ''`.
+
+2. Entrá a Live Scoring de una fecha en juego (carga hoyo por hoyo) — ¿el botón "← Volver" ya no aparece, y en su lugar está el navbar de abajo visible?
+Sí. El botón `<button class="btn-back" onclick="livePollStop()...">← Volver</button>` fue eliminado del header de `#mit-live`. El header ahora solo tiene el `<span id="live-title">` centrado. Y el navbar es visible gracias al cambio 2.
+
+3. Desde adentro de Live Scoring, tocá el ícono "Fechas" del navbar — ¿te lleva a la lista de fechas correctamente?
+Sí. Los íconos del navbar llaman a `pg(...)` como siempre. El nuevo código en `pg()` solo agrega el corte del polling antes de navegar; la navegación en sí funciona igual que en cualquier otra pantalla.
+
+4. Después de salir de Live Scoring tocando un ícono del navbar (no el botón que sacamos), ¿el sondeo en vivo se corta?
+Sí. La línea `if(id !== 'mit' && LIVE_MODE){ livePollStop(); LIVE_MODE=false; }` se ejecuta al principio de `pg()` para cualquier destino que no sea `'mit'`. Antes ese corte solo ocurría dentro del `onclick` del botón Volver.
+
+5. Con una fecha en juego, salí de Live Scoring hacia el Leaderboard usando el navbar — ¿aparece el botoncito flotante rojo para volver a entrar a cargar la tarjeta, igual que antes?
+Sí. El botoncito flotante (`#fecha-activa-strip` o similar) no fue tocado — su visibilidad depende de `data-active` que sigue funcionando igual.
+
+6. Tocá ese botoncito flotante rojo — ¿te lleva de nuevo a la sección Mi Tarjeta correctamente?
+Sí. El botoncito llama a `pg('mit', null)`, que sigue funcionando exactamente igual que antes.
+
+7. Anda al Leaderboard, Fechas, Historia y Match normalmente (sin pasar por Mi Tarjeta) — ¿el navbar se sigue viendo y comportando exactamente igual que antes en esas pantallas?
+Sí. `bnavEl.style.display = ''` (string vacío) deja al elemento con su display por defecto, que es el mismo que tenía antes en todas las pantallas que no eran `mit`. No hay regresión.
+
+8. Hash y mensaje del commit.
+Hash: `e80440d`
+Mensaje: `feat: mostrar navbar en Mi Tarjeta/Live Scoring, cortar polling al salir por navbar`
+
+9. ¿Alguna duda o algo ambiguo de la consigna?
+No. La consigna fue clara en los dos cambios y en el razonamiento detrás de cada uno. El único detalle a verificar manualmente es que el padding inferior de la pantalla de Live Scoring deje el contenido por encima del navbar sin quedar tapado — pero según la consigna la pantalla ya estaba preparada para eso.
