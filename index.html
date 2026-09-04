@@ -1899,8 +1899,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
     <!-- Header row -->
     <div style="display:flex;align-items:center;margin-bottom:10px;">
-      <button class="btn-back" onclick="livePollStop(); LIVE_MODE=false; pg('lb',null)">← Volver</button>
-      <span id="live-title" style="flex:1;text-align:right;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
+      <span id="live-title" style="flex:1;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
     </div>
 
     <!-- Section tabs (inline, above content) -->
@@ -3490,9 +3489,12 @@ function pg(id,btn){
   if(id==='lb')loadLB();
   if(id==='historia-hub')histHubTab('campeones');
   if(id==='match')loadMatch();
-  // Hide bottom nav inside Live Scoring, show it everywhere else
+  // El navbar de abajo ahora se ve en todas las pantallas, incluyendo Mi Tarjeta / Live Scoring
   var bnavEl = document.getElementById('bnav-main');
-  if (bnavEl) bnavEl.style.display = id === 'mit' ? 'none' : '';
+  if (bnavEl) bnavEl.style.display = '';
+  // Si se sale de Live Scoring hacia cualquier otra sección (navbar, u otro camino),
+  // hay que cortar el sondeo en vivo — antes esto solo lo hacía el botón "Volver" que sacamos.
+  if(id !== 'mit' && LIVE_MODE){ livePollStop(); LIVE_MODE=false; }
   if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else if(NGT_SESSION){ MIT_PLAYER={matricula:NGT_SESSION.mat,nombre:NGT_SESSION.nombre||'',apodo:NGT_SESSION.apodo||''}; showMitFechas(); } else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; } }
   if(id==='admin' && NGT_SESSION && NGT_SESSION.rol==='Admin'){ ADMIN_KEY_OK=NGT_SESSION.token; showAdminPanel(); }
   if(id==='admin-crear') wizAutoFecha_();
