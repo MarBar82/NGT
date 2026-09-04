@@ -58,6 +58,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .pga tbody tr{border-bottom:1px solid var(--g1);background:#fff;position:relative;z-index:0;}
 .pga tbody tr:last-child{border-bottom:none;}
 .pga tbody tr:hover td{background:var(--off);}
+.pga tbody tr.lb-row-lead td{background:#fdf8ec;}
 .pga tbody td{padding:11px 14px;vertical-align:middle;white-space:nowrap;}
 .pga tbody td.c{text-align:center;}
 
@@ -82,6 +83,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .lb-clickable-name:hover .plyr-name{color:var(--red);}
 .plyr-first{font-family:'Oswald',sans-serif;font-size:14px;font-weight:400;color:var(--navy);margin-left:4px;white-space:nowrap;}
 .plyr-nick{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:var(--g4);margin-left:5px;}
+.lb-badge-leader{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:#fbf0d4;color:#8a6a1a;padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:1px;}
 .s{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;color:var(--text);}
 .s.big{font-size:18px;font-weight:800;color:var(--navy);}
 .s.gold{color:#7a5e18;font-weight:800;font-size:18px;}
@@ -473,6 +475,12 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .pga tbody tr:hover td.lb-col-name,
 .pga tbody tr:hover td.lb-col-num:nth-child(4) {
   background:var(--off);
+}
+.pga tbody tr.lb-row-lead td.lb-col-pos,
+.pga tbody tr.lb-row-lead td.lb-col-mov,
+.pga tbody tr.lb-row-lead td.lb-col-name,
+.pga tbody tr.lb-row-lead td.lb-col-num:nth-child(4) {
+  background:#fdf8ec;
 }
 
 /* Compute left offsets via CSS variables — actual values set by JS after render
@@ -2636,8 +2644,9 @@ function gvizCallback(response){
       LB_PLAYER_DATA[nombre.toUpperCase().trim()]={pos,nombre,movDir,movQty,pts,stb,mch,pb,fjug,fgan,doble,pd,golpes,champ};
       const mov=movCell(movDir,movQty);
       const ptsHtml=pts&&pts!=='-'&&pts!=='0'?`<span class="s" style="color:var(--red);">${pts}</span>`:'<span class="s dim">–</span>';
-      html+=`<tr><td class="c lb-col-pos">${posCell(pos,i)}</td><td class="c lb-col-mov">${mov}</td>
-        <td class="lb-col-name"><span class="lb-clickable-name" onclick="showPlayerFechaModal('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span><span class="lb-bonus-slot">${bonusEmojis(nombre)}</span></td>
+      const isLeader=(parseInt(pos)||(i+1))===1;
+      html+=`<tr${isLeader?' class="lb-row-lead"':''}><td class="c lb-col-pos">${posCell(pos,i)}</td><td class="c lb-col-mov">${mov}</td>
+        <td class="lb-col-name"><span class="lb-clickable-name" onclick="showPlayerFechaModal('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span>${isLeader?'<span class="lb-badge-leader">Líder</span>':''}<span class="lb-bonus-slot">${bonusEmojis(nombre)}</span></td>
         <td class="c lb-col-num">${ptsHtml}</td>
       </tr>`;
     });
