@@ -4225,6 +4225,7 @@ function adminGuardarMatches(){
 // ══ GESTIONAR MATCHES (dentro de Gestionar Fecha) ══
 let MGR_FECHA_JUGS = [];
 let MGR_FECHA = null;
+let MGR_FECHA_DETALLE = {}; // detalle (cancha, colorTee, hoyoSalida, horario) de la fecha que se está editando
 
 function loadMatchesForGestion(fecha){
   MGR_FECHA = fecha;
@@ -4768,7 +4769,7 @@ function admArmarLineas(prioridades, seed){
     list.innerHTML = '';
     r.lines.forEach(l => l.matches.forEach(m => addMgrMatchRow(m.j1, m.j2)));
 
-    // Mostrar preview de líneas
+    // Mostrar preview de líneas — mismo diseño de tarjetas que usa el asistente de Crear Fecha
     if(preview){
       const repeats = r.repeatCount || 0;
       const repeatColor = repeats > 0 ? 'var(--red)' : 'var(--navy)';
@@ -4780,17 +4781,10 @@ function admArmarLineas(prioridades, seed){
         r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches' + repeatTxt + '</strong>' +
         '<button onclick="admRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
         '</div>';
-      r.lines.forEach(l => {
-        html += '<strong>Línea ' + l.lineNum + '</strong>: ' +
-          l.players.map(p => p.apodo + ' (' + p.hcp + ')').join(' · ') + '<br>';
-        l.matches.forEach(m => {
-          const pA = l.players.find(p => p.matricula === m.j1);
-          const pB = l.players.find(p => p.matricula === m.j2);
-          html += '&nbsp;&nbsp;⚔ ' + (pA ? pA.apodo : m.j1) + ' vs ' + (pB ? pB.apodo : m.j2) + '<br>';
-        });
-        html += '<br>';
-      });
-      html += '<span style="color:var(--g4);">Revisá los matches arriba y hacé clic en "Guardar Matches" para confirmar.</span>';
+      const det = MGR_FECHA_DETALLE || {};
+      const normalized = normalizeLineasArmado_(r.lines, det.horario, det.hoyoSalida, det.colorTee);
+      html += renderFechaCardAdmin_(normalized);
+      html += '<div style="padding:8px 4px 0;color:var(--g4);font-size:12px;">Revisá los matches arriba y hacé clic en "Guardar Matches" para confirmar.</div>';
       preview.innerHTML = html;
       preview.style.display = 'block';
     }
@@ -4912,6 +4906,7 @@ function abrirEditPanel(fecha){
     ngtApiGet('jugadoresConDoble'),
   ]).then(results => {
     const det = (results[0] && results[0].data) || {};
+    MGR_FECHA_DETALLE = det;
     const jugadores = (results[1] && results[1].data) || [];
     const canchas = (results[2] && results[2].data) || [];
     const disponibles = (results[3] && results[3].data) || [];
