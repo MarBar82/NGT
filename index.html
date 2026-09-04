@@ -2049,7 +2049,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   </div>
 </div>
 
-<!-- ════ ADMIN ════ -->
+<!-- ════ ADMIN — HOME ════ -->
 <div class="pg" id="pg-admin">
 <div class="wrap" style="max-width:680px;padding:16px;">
 
@@ -2063,10 +2063,10 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <button class="btn-cancel" onclick="pg('lb',null)">Salir ✕</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <button class="adm-big-btn" onclick="admGoTo('crear')">
+        <button class="adm-big-btn" onclick="pg('admin-crear',null)">
           <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>Crear Fecha
         </button>
-        <button class="adm-big-btn" onclick="admGoTo('editar')">
+        <button class="adm-big-btn" onclick="pg('admin-editar',null)">
           <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>Gestionar Fechas
         </button>
         <button class="adm-big-btn" onclick="admActualizarHcp()" id="adm-hcp-btn">
@@ -2074,16 +2074,22 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           <span>Actualizar HCP</span>
           <span id="adm-hcp-btn-sub" style="font-size:9px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--g4);margin-top:-4px;">Consulta la AAG</span>
         </button>
-        <button class="adm-big-btn" onclick="admGoTo('canchas')">
+        <button class="adm-big-btn" onclick="pg('admin-canchas',null)">
           <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Gestionar Canchas
         </button>
       </div>
     </div>
 
-    <!-- Crear Fecha (wizard 2 pasos) -->
-    <div class="adm-section" id="adm-crear" style="display:none;">
+  </div>
+</div>
+</div>
+
+<!-- ════ ADMIN — CREAR FECHA ════ -->
+<div class="pg" id="pg-admin-crear">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
       <div class="adm-sec-back">
-        <button class="btn-back" onclick="admGoHome()">← Volver</button>
+        <button class="btn-back" onclick="pg('admin',null)">← Volver</button>
         <span class="adm-sec-title">Crear Fecha</span>
       </div>
 
@@ -2200,13 +2206,15 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         </div>
       </div>
 
-    </div>
+</div>
+</div>
 
+<!-- ════ ADMIN — GESTIONAR FECHAS ════ -->
+<div class="pg" id="pg-admin-editar">
+<div class="wrap" style="max-width:680px;padding:16px;">
 
-    <!-- Gestionar Fecha -->
-    <div class="adm-section" id="adm-editar" style="display:none;">
       <div class="adm-sec-back">
-        <button class="btn-back" onclick="admGoHome()">← Volver</button>
+        <button class="btn-back" onclick="pg('admin',null)">← Volver</button>
         <span class="adm-sec-title">Gestionar Fechas</span>
       </div>
 
@@ -2215,13 +2223,17 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <div style="color:var(--g4);font-size:13px;padding:4px;">Cargando...</div>
       </div>
 
-      <!-- Panel de edición — oculto hasta clickear el lápiz -->
-      <div id="adm-edit-panel" style="display:none;">
+</div>
+</div>
 
-        <div class="adm-edit-panel-hdr">
-          <div class="adm-edit-panel-title">✏ Editando Fecha <span id="adm-edit-panel-num"></span></div>
-          <button class="adm-edit-panel-close" onclick="cerrarEditPanel()">✕ Cerrar</button>
-        </div>
+<!-- ════ ADMIN — EDITANDO FECHA ════ -->
+<div class="pg" id="pg-admin-editar-detalle">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="cerrarEditPanel();pg('admin-editar',null);">← Volver</button>
+        <span class="adm-sec-title">Editando Fecha <span id="adm-edit-panel-num"></span></span>
+      </div>
 
         <!-- DATOS: cancha / jugadores / dobles -->
         <div class="adm-card" id="adm-edit-data-card">
@@ -2369,7 +2381,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           </div>
         </div>
 
-        <!-- BORRAR FECHA — al fondo del panel de edición -->
+        <!-- BORRAR FECHA — al fondo de la pantalla de edición -->
         <div class="adm-card" style="border-color:#fca5a5;">
           <div class="adm-card-hdr danger">Borrar Fecha</div>
           <div class="adm-card-body">
@@ -2382,14 +2394,15 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           </div>
         </div>
 
-      </div><!-- /adm-edit-panel -->
+</div>
+</div>
 
-    </div>
+<!-- ════ ADMIN — GESTIONAR CANCHAS ════ -->
+<div class="pg" id="pg-admin-canchas">
+<div class="wrap" style="max-width:680px;padding:16px;">
 
-    <!-- Gestionar Canchas -->
-    <div class="adm-section" id="adm-canchas" style="display:none;">
       <div class="adm-sec-back">
-        <button class="btn-back" onclick="admGoHome()">← Volver</button>
+        <button class="btn-back" onclick="pg('admin',null)">← Volver</button>
         <span class="adm-sec-title">Gestionar Canchas</span>
       </div>
 
@@ -2404,8 +2417,18 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         </div>
       </div>
 
-      <!-- Panel edición cancha existente -->
-      <div id="adm-cancha-edit" style="display:none;">
+</div>
+</div>
+
+<!-- ════ ADMIN — EDITANDO CANCHA ════ -->
+<div class="pg" id="pg-admin-canchas-detalle">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="pg('admin-canchas',null)">← Volver</button>
+        <span class="adm-sec-title">Editando Cancha — <span id="adm-cancha-edit-nombre"></span></span>
+      </div>
+
         <div class="adm-card" style="margin-top:12px;">
           <div class="adm-card-hdr">⛳ Par por Hoyo</div>
           <div class="adm-card-body">
@@ -2426,12 +2449,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         </div>
         <button class="adm-btn-secondary" onclick="admGuardarHoyos()" style="width:100%;background:var(--navy);color:#fff;border-color:var(--navy);margin-top:4px;">💾 Guardar Hoyos</button>
         <div id="adm-cancha-holes-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
-      </div>
-    </div>
 
-    </div>
-
-  </div>
 </div>
 </div>
 
@@ -3469,6 +3487,9 @@ function pg(id,btn){
   if (bnavEl) bnavEl.style.display = id === 'mit' ? 'none' : '';
   if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else if(NGT_SESSION){ MIT_PLAYER={matricula:NGT_SESSION.mat,nombre:NGT_SESSION.nombre||'',apodo:NGT_SESSION.apodo||''}; showMitFechas(); } else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; } }
   if(id==='admin' && NGT_SESSION && NGT_SESSION.rol==='Admin'){ ADMIN_KEY_OK=NGT_SESSION.token; showAdminPanel(); }
+  if(id==='admin-crear') wizAutoFecha_();
+  if(id==='admin-editar') renderFechasGrid();
+  if(id==='admin-canchas') admLoadCanchas();
   if(id==='fechas') loadFechasScreen();
   if(fechaNum) loadFechaDinamica(fechaNum);
   // Show/hide fecha activa strip — hidden inside Live Scoring (pg-mit), visible elsewhere
@@ -3546,7 +3567,7 @@ function ngtApiPost(payload){
 
 function showAdminPanel(){
   document.getElementById('admin-panel').style.display = 'block';
-  admGoHome();
+  cerrarEditPanel();
   loadAdminData();
 }
 
@@ -4087,16 +4108,6 @@ function finalizarWizard(rFecha, rMatches, lineasParam){
 
 
 
-function admGoTo(section) {
-  document.getElementById('adm-home').style.display = 'none';
-  document.getElementById('adm-crear').style.display = section === 'crear' ? 'block' : 'none';
-  document.getElementById('adm-editar').style.display = section === 'editar' ? 'block' : 'none';
-  document.getElementById('adm-canchas').style.display = section === 'canchas' ? 'block' : 'none';
-  if(section === 'editar') renderFechasGrid();
-  if(section === 'crear') wizAutoFecha_();
-  if(section === 'canchas') admLoadCanchas();
-}
-
 function wizAutoFecha_(){
   // Auto-fill número de fecha = max(fechas existentes) + 1
   const el = document.getElementById('adm-fecha');
@@ -4112,17 +4123,6 @@ function wizAutoFecha_(){
     if(disp) disp.textContent = 'Error al calcular — reintentá volviendo a esta pantalla';
   });
 }
-
-function admGoHome() {
-  document.getElementById('adm-home').style.display = 'block';
-  document.getElementById('adm-crear').style.display = 'none';
-  document.getElementById('adm-editar').style.display = 'none';
-  document.getElementById('adm-canchas').style.display = 'none';
-  cerrarEditPanel();
-}
-
-// Kept for compatibility
-function admTab(name, btn){ admGoTo(name); }
 
 function admActualizarHcp(){
   const btn = document.getElementById('adm-hcp-btn');
@@ -4428,9 +4428,7 @@ var ADM_NP_TARGET = null; // { el, hoyo, field, page }
 
 function admLoadCanchas(){
   const sel = document.getElementById('adm-canchas-sel');
-  const editDiv = document.getElementById('adm-cancha-edit');
   sel.innerHTML = '<option value="">— Cargando... —</option>';
-  editDiv.style.display = 'none';
   ngtApiGet('canchasAdmin').then(r => {
     if(!r || !r.data || !r.data.length){
       sel.innerHTML = '<option value="">— Sin canchas —</option>'; return;
@@ -4444,14 +4442,15 @@ function admLoadCanchas(){
 
 function admCanchaSeleccionada(){
   const sel = document.getElementById('adm-canchas-sel');
-  const editDiv = document.getElementById('adm-cancha-edit');
   const id = sel.value;
-  if(!id){ editDiv.style.display = 'none'; return; }
+  if(!id) return;
   const c = ADM_CANCHAS_DATA.find(x => String(x.id) === String(id));
-  if(!c){ editDiv.style.display = 'none'; return; }
+  if(!c) return;
   admRenderCanchaEditPanel(c);
-  editDiv.style.display = 'block';
   document.getElementById('adm-cancha-holes-msg').style.display = 'none';
+  const nombreEl = document.getElementById('adm-cancha-edit-nombre');
+  if(nombreEl) nombreEl.textContent = c.nombre;
+  pg('admin-canchas-detalle', null);
 }
 
 function admRenderHoleCircles(containerId, values, field){
@@ -4921,8 +4920,6 @@ function renderFechasGrid(){
 
 function cerrarEditPanel(){
   ADM_EDIT_FECHA = null;
-  const panel = document.getElementById('adm-edit-panel');
-  if(panel) panel.style.display = 'none';
   const msg = document.getElementById('adm-reset-msg');
   if(msg) msg.style.display = 'none';
   cerrarAdmTarEditor();
@@ -4930,10 +4927,8 @@ function cerrarEditPanel(){
 
 function abrirEditPanel(fecha){
   ADM_EDIT_FECHA = String(fecha);
-  const panel = document.getElementById('adm-edit-panel');
-  panel.style.display = 'block';
-  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.getElementById('adm-edit-panel-num').textContent = fecha;
+  pg('admin-editar-detalle', null);
 
   // Reset mensajes
   document.getElementById('adm-edit-msg').style.display = 'none';
@@ -5368,7 +5363,7 @@ function _doEliminarFecha(fecha, msgEl){
       try { localStorage.removeItem('ngt_fechaActiva'); } catch(e2){}
       ngtInitData();
       // Cerrar panel y refrescar grilla
-      setTimeout(() => { cerrarEditPanel(); renderFechasGrid(); }, 1200);
+      setTimeout(() => { cerrarEditPanel(); pg('admin-editar', null); }, 1200);
     } else {
       if(msgEl){ msgEl.className='adm-msg err'; msgEl.textContent='✗ ' + (r.error || 'Error'); }
       else alert('✗ ' + (r.error || 'Error al borrar fecha ' + fecha));
