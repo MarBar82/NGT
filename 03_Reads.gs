@@ -310,6 +310,28 @@ function getHcpsForFecha_(fecha) {
 }
 
 /**
+ * Get hole-completion status per player for a fecha.
+ * Returns { matricula: true/false } — true = completó los 18 hoyos.
+ */
+function getFirmadosForFecha_(fecha) {
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return {};
+  const nextEmpty = findNextEmptyRow_(sh, 1);
+  if (nextEmpty <= 2) return {};
+  const data = sh.getRange(2, 1, nextEmpty - 2, 22).getValues(); // A..V (incluye los 18 hoyos, E..V)
+  const out = {};
+  data.forEach(row => {
+    const f = String(row[0] || '').trim();
+    const m = String(row[1] || '').trim();
+    if (f !== String(fecha) || !m) return;
+    const holes = row.slice(4, 22); // E..V = 18 hoyos
+    const holesCargados = holes.filter(v => v !== '' && v !== null && v !== undefined).length;
+    out[m] = holesCargados === 18;
+  });
+  return out;
+}
+
+/**
  * Get the bonus winners (LD and BA) for a fecha.
  * Reads cols Z (LD) and AA (BA) in TARJETAS.
  */
@@ -425,15 +447,16 @@ function getMatchesFullForFecha_(fecha) {
 
 /**
  * Returns a list of ALL active fechas with a "completa" flag.
- * A fecha is "completa" if every player has HCP loaded (tarjeta firmada)
+ * A fecha is "completa" if every player completed the 18 holes (tarjeta firmada)
  */
 function getFechasConEstado_() {
   const fechas = getFechasActivas_();
   const result = [];
   fechas.forEach(f => {
     const hcps = getHcpsForFecha_(f);
+    const firmadosMap = getFirmadosForFecha_(f);
     const totalJugs = Object.keys(hcps).length;
-    const firmados = Object.values(hcps).filter(h => h !== null).length;
+    const firmados = Object.values(firmadosMap).filter(Boolean).length;
     result.push({
       fecha: f,
       totalJugadores: totalJugs,
