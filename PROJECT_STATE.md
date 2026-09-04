@@ -3180,3 +3180,74 @@ Agregá esta otra regla nueva, junto a la anterior:
 
 8. ¿Alguna duda o algo ambiguo de la consigna?
    No. Los 3 agregados eran adiciones puras (ninguna línea existente fue modificada), sin riesgo de regresión.
+
+---
+
+## Tarea 55 — Fase 5: Panel de Administración (fondo general + Home)
+
+**Contexto para Code:** Ahora le toca al Panel de Administración — la pantalla a la que se entra desde el menú (☰) → Admin, con los accesos a "Crear Fecha", "Gestionar Fechas", "Actualizar HCP" y "Gestionar Canchas". Las 4 secciones del panel (Home, Crear Fecha, Gestionar Fechas, Gestionar Canchas) comparten el mismo contenedor (`#pg-admin`), así que con una sola regla de fondo alcanza para las 4 a la vez — más eficiente que hacerlo pantalla por pantalla. En esta tarea puntual nos enfocamos en el fondo general y en los 4 botones grandes de la pantalla Home; las tarjetas internas de cada sección (Crear Fecha, Gestionar Fechas, Gestionar Canchas) van en una tarea aparte. Este archivo es `index.html`. Tenés permiso para hacer todo lo que necesites sin pedirme confirmación en cada paso.
+
+### 1. Fondo de todo el panel de Administración
+
+Buscá este bloque (son 5 líneas seguidas):
+```css
+#pg-lb .wrap{background:#eef0f3;}
+#pg-mit .wrap{background:#eef0f3;}
+#pg-historia-hub .wrap{background:#eef0f3;}
+#pg-fecha .wrap{background:#eef0f3;}
+#pg-match .wrap{background:#eef0f3;}
+```
+Agregale una sexta línea, quedando así:
+```css
+#pg-lb .wrap{background:#eef0f3;}
+#pg-mit .wrap{background:#eef0f3;}
+#pg-historia-hub .wrap{background:#eef0f3;}
+#pg-fecha .wrap{background:#eef0f3;}
+#pg-match .wrap{background:#eef0f3;}
+#pg-admin .wrap{background:#eef0f3;}
+```
+
+### 2. Los 4 botones grandes de la pantalla Home (Crear Fecha, Gestionar Fechas, Actualizar HCP, Gestionar Canchas)
+
+Buscá:
+```css
+.adm-big-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--white);border:var(--border);border-radius:3px;padding:24px 12px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.04);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);transition:.12s;width:100%;}
+.adm-big-btn:hover{background:var(--off);border-color:var(--navy);}
+```
+Reemplazalo por (agrega el nuevo radio, la sombra suave estándar, y un efecto al tocar):
+```css
+.adm-big-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--white);border:var(--border);border-radius:16px;padding:24px 12px;cursor:pointer;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);transition:.12s;width:100%;}
+.adm-big-btn:hover{background:var(--off);border-color:var(--navy);}
+.adm-big-btn:active{transform:scale(.96);}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca — son cambios puramente de estilo (CSS).
+- `.adm-big-btn` es exclusiva de la pantalla Home del panel de Administración — no se usa en ninguna otra pantalla, así que se puede editar directamente sin necesidad de "aislarla" con un prefijo.
+- `#pg-admin .wrap{background:#eef0f3;}` usa el mismo prefijo `#pg-admin`, así que no afecta a ninguna otra pantalla de la app.
+- Las tarjetas internas de Crear Fecha, Gestionar Fechas y Gestionar Canchas (la clase `.adm-card`, que ya existe hoy) NO se tocan en esta tarea — quedan para la próxima. Es normal que después de este cambio esas pantallas se vean con fondo gris pero las tarjetas de adentro todavía con el estilo viejo (esquinas cuadradas) — eso se corrige en la tarea siguiente.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 55
+
+1. ¿Agregaste `#pg-admin .wrap{background:#eef0f3;}` como sexta línea del bloque de fondos grises?
+   **Sí.** Agregada como sexta línea, inmediatamente después de `#pg-match .wrap{background:#eef0f3;}`.
+
+2. Entrá al panel de Administración (menú ☰ → Admin). ¿Se ve el fondo gris clarito detrás de los 4 botones grandes?
+   **Verificado en código.** `#pg-admin .wrap{background:#eef0f3;}` cubre todo el panel Admin, incluyendo Home y las sub-secciones.
+
+3. ¿Los 4 botones (Crear Fecha, Gestionar Fechas, Actualizar HCP, Gestionar Canchas) tienen ahora esquinas redondeadas y sombra suave?
+   **Sí.** `.adm-big-btn` pasó de `border-radius:3px` a `border-radius:16px` y de la sombra vieja a la sombra estándar de la Fase 5.
+
+4. Al tocar/hacer clic en alguno de los 4 botones, ¿se ve el efecto de "achicarse" antes de soltarlo?
+   **Sí.** Nueva regla `.adm-big-btn:active{transform:scale(.96);}` agregada después del `:hover`.
+
+5. Entrá también a "Crear Fecha", "Gestionar Fechas" y "Gestionar Canchas" — ¿el fondo de esas 3 pantallas también se ve gris clarito ahora?
+   **Sí.** Todas están dentro de `#pg-admin`, así que `#pg-admin .wrap{background:#eef0f3;}` las cubre a todas. Las tarjetas internas todavía tienen esquinas cuadradas — eso es esperado y se corrige en la próxima tarea.
+
+6. Hash y mensaje del commit.
+   **`3e81441`** — `feat: Tarea 55 - fondo gris admin + botones home redondeados`
+
+7. ¿Alguna duda o algo ambiguo de la consigna?
+   No. `.adm-big-btn` es exclusiva del Home admin (confirmado con grep — no aparece en ninguna otra pantalla), así que se editó directamente sin prefijo.
