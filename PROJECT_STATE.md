@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-04 (Tarea 63 agregada — Fase 6, item 4: bonus parcial/definitivo + reasignar hoyo de bonus)
+**Última actualización:** 2026-09-04 (Tarea 64 agregada — Fase 6, item 20: reconstrucción de la navegación del panel de Administrador)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -4517,3 +4517,1121 @@ Esta tarea toca 3 archivos `.gs` (`07_LiveScoring.gs`, `10_Routing.gs`, `03_Read
 7. Sí. `adminSetBonusHoyo` solo pushea en `cambios` los selectores cuyo `value !== dataset.original`. Si ninguno cambió, `cambios.length === 0` → muestra "No cambiaste ningún hoyo" sin hacer ninguna llamada al backend.
 8. Hash: `8557bf4`. Mensaje: `Tarea 63: fix bonus provisorio/definitivo + reasignar hoyo de bonus desde admin`.
 9. Sin dudas. La consigna fue muy detallada, con los snippets exactos y la explicación del "por qué" de cada cambio.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 64 (Fase 6, item 20: el panel de Administrador pasa a usar pantallas reales)
+
+Esta tarea es **solo de frontend** (`index.html`) — no toca ningún archivo `.gs`, así que no hace falta deploy manual, solo el `git push` de siempre.
+
+### Contexto (para entender el "por qué")
+
+Hoy, dentro de "Administrador", las secciones (Crear Fecha, Gestionar Fechas, Gestionar Canchas) no son pantallas de verdad: son bloques `<div>` que se muestran/ocultan unos dentro de otros, todos adentro de la misma pantalla `pg-admin`. Por eso pasa lo que describiste: en "Gestionar Fechas", al tocar el lápiz de una fecha, el panel de edición (grande — Datos, Dobles, Matches, Tarjetas, LD/BA, Borrar) no te lleva a otro lado, solo hace scroll hacia abajo, pero la grilla de fechas sigue estando arriba, en la misma pantalla. En "Gestionar Canchas" pasa algo parecido con el panel de edición de una cancha.
+
+El resto de la app (Leaderboard, Match, Mis Fechas, la fecha jugada, etc.) sí usa pantallas de verdad: cada una es un bloque de nivel superior que la función `pg(id)` muestra u oculta por completo, una a la vez.
+
+Esta tarea reconstruye TODO el panel de Administrador para que use ese mismo sistema de pantallas reales. Quedan 6 pantallas nuevas, todas navegadas con `pg(...)`:
+
+1. **`pg-admin`** — Home del admin, con los 4 botones grandes (sin cambios visuales).
+2. **`pg-admin-crear`** — Crear Fecha (el wizard de 3 pasos, sin cambios internos).
+3. **`pg-admin-editar`** — Gestionar Fechas: solo la grilla de fechas.
+4. **`pg-admin-editar-detalle`** — Editando una fecha puntual (todo lo que antes era el "panel de edición" que se desplegaba abajo): ahora es su propia pantalla, con su propio "← Volver" que te devuelve a la grilla.
+5. **`pg-admin-canchas`** — Gestionar Canchas: solo el selector de cancha.
+6. **`pg-admin-canchas-detalle`** — Editando una cancha puntual (Par, HCP, Rating): ahora es su propia pantalla, con su propio "← Volver".
+
+Ningún campo, validación, ni función de guardado cambia — es 100% reorganización de cómo se navega entre pantallas. Todos los `id` de los campos (inputs, selects, etc.) quedan exactamente iguales, así que ninguna otra función que ya lee esos campos por `id` se entera del cambio.
+
+### Cambio 1 — HTML: reemplazar todo el bloque del panel de Administrador
+
+Buscá este bloque COMPLETO — empieza en `<!-- ════ ADMIN ════ -->` / `<div class="pg" id="pg-admin">` y termina en el `</div>` que cierra esa pantalla (justo antes del comentario `<!-- ════ NUMPAD OVERLAY ════ -->`):
+
+```html
+<!-- ════ ADMIN ════ -->
+<div class="pg" id="pg-admin">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+  <!-- Admin panel -->
+  <div id="admin-panel" style="display:none;">
+
+    <!-- HOME: botones de sección -->
+    <div id="adm-home">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);">⚙ Administrador</div>
+        <button class="btn-cancel" onclick="pg('lb',null)">Salir ✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <button class="adm-big-btn" onclick="admGoTo('crear')">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>Crear Fecha
+        </button>
+        <button class="adm-big-btn" onclick="admGoTo('editar')">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>Gestionar Fechas
+        </button>
+        <button class="adm-big-btn" onclick="admActualizarHcp()" id="adm-hcp-btn">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span>
+          <span>Actualizar HCP</span>
+          <span id="adm-hcp-btn-sub" style="font-size:9px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--g4);margin-top:-4px;">Consulta la AAG</span>
+        </button>
+        <button class="adm-big-btn" onclick="admGoTo('canchas')">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Gestionar Canchas
+        </button>
+      </div>
+    </div>
+
+    <!-- Crear Fecha (wizard 2 pasos) -->
+    <div class="adm-section" id="adm-crear" style="display:none;">
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="admGoHome()">← Volver</button>
+        <span class="adm-sec-title">Crear Fecha</span>
+      </div>
+
+      <!-- Paso indicator -->
+      <div class="adm-steps">
+        <div class="adm-step on" id="step-ind-1"><span class="adm-step-num">1</span><span class="adm-step-lbl">Cancha</span></div>
+        <div class="adm-step-bar"></div>
+        <div class="adm-step" id="step-ind-1b"><span class="adm-step-num">2</span><span class="adm-step-lbl">Jugadores</span></div>
+        <div class="adm-step-bar"></div>
+        <div class="adm-step" id="step-ind-2"><span class="adm-step-num">3</span><span class="adm-step-lbl">Líneas</span></div>
+      </div>
+
+      <!-- PASO 1: datos (dividido en 1a Cancha / 1b Jugadores) -->
+      <div class="adm-card" id="step-1">
+
+        <!-- PASO 1a: Cancha -->
+        <div id="step-1a">
+          <div class="adm-card-hdr">📅 Paso 1 · Cancha</div>
+          <div class="adm-card-body">
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Número de Fecha</label>
+                <div id="adm-fecha-display" style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:var(--navy);background:var(--off);border:var(--border);border-radius:8px;padding:10px 14px;">Calculando…</div>
+                <input type="hidden" id="adm-fecha" value="">
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Cancha</label>
+                <select id="adm-cancha" class="adm-input" onchange="loadColoresCancha()">
+                  <option value="">Cargando...</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Color de Salidas</label>
+                <select id="adm-color-tee" class="adm-input">
+                  <option value="BLANCAS">Blancas (default)</option>
+                </select>
+                <div class="adm-hint" id="adm-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+              </div>
+            </div>
+
+            <div class="adm-row" style="margin-top:14px;">
+              <div class="adm-field">
+                <label class="adm-label">Horario de salida</label>
+                <input type="time" id="adm-horario" class="adm-input" value="09:40">
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Green Fee</label>
+                <input type="text" id="adm-greenfee" class="adm-input" placeholder="$ 0.000">
+              </div>
+            </div>
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo de salida</label>
+                <select id="adm-hoyo-salida" class="adm-input">
+                  <option value="1">Hoyo 1</option>
+                  <option value="10">Hoyo 10</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo Best Approach <span style="font-size:10px;opacity:.6;">(par 3)</span></label>
+                <select id="adm-bonus-ba" class="adm-input" disabled>
+                  <option value="">— Seleccioná cancha primero —</option>
+                </select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Hoyo Long Drive <span style="font-size:10px;opacity:.6;">(par 4/5)</span></label>
+                <select id="adm-bonus-ld" class="adm-input" disabled>
+                  <option value="">— Seleccioná cancha primero —</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="adm-btn-primary" id="wiz-siguiente-btn" onclick="wizPaso1aNext()" style="margin-top:18px;">Siguiente →</button>
+            <div id="adm-crear-msg-cancha" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- PASO 1b: Jugadores -->
+        <div id="step-1b" style="display:none;">
+          <div class="adm-card-hdr">👥 Paso 2 · Jugadores</div>
+          <div class="adm-card-body">
+
+            <label class="adm-label">Jugadores que disputan la fecha</label>
+            <div id="adm-jugadores-list" class="adm-jugs">Cargando...</div>
+
+            <div class="adm-btn-row" style="margin-top:18px;">
+              <button class="btn-back" onclick="wizPaso1aBack()">← Volver</button>
+              <button class="adm-btn-primary" id="wiz-armar-btn" onclick="wizArmarLineas()">⚡ Armar Líneas →</button>
+            </div>
+            <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- PASO 2: matches -->
+      <div class="adm-card" id="step-2" style="display:none;">
+        <div class="adm-card-hdr">⚔ Paso 2 · Líneas y Matches</div>
+        <div class="adm-card-body">
+          <div class="adm-s2-summary" id="adm-s2-summary"></div>
+          <div id="adm-s2-lineas-preview" style="display:none;margin:10px 0 6px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
+          <div class="adm-btn-row">
+            <button class="btn-back" onclick="wizPaso1Back()">← Volver</button>
+            <button class="adm-btn-primary" id="wiz-crear-btn" onclick="wizCrearTodo()">🏌 Comenzar Partida</button>
+          </div>
+          <div id="adm-s2-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+
+    </div>
+
+
+    <!-- Gestionar Fecha -->
+    <div class="adm-section" id="adm-editar" style="display:none;">
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="admGoHome()">← Volver</button>
+        <span class="adm-sec-title">Gestionar Fechas</span>
+      </div>
+
+      <!-- Grilla de fechas — una tile por fecha -->
+      <div id="adm-fechas-grid" class="adm-fecha-grid">
+        <div style="color:var(--g4);font-size:13px;padding:4px;">Cargando...</div>
+      </div>
+
+      <!-- Panel de edición — oculto hasta clickear el lápiz -->
+      <div id="adm-edit-panel" style="display:none;">
+
+        <div class="adm-edit-panel-hdr">
+          <div class="adm-edit-panel-title">✏ Editando Fecha <span id="adm-edit-panel-num"></span></div>
+          <button class="adm-edit-panel-close" onclick="cerrarEditPanel()">✕ Cerrar</button>
+        </div>
+
+        <!-- DATOS: cancha / jugadores / dobles -->
+        <div class="adm-card" id="adm-edit-data-card">
+          <div class="adm-card-hdr">👥 Datos de la Fecha</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Cancha</label>
+                <select id="adm-edit-cancha" class="adm-input" onchange="loadColoresCanchaEdit()"></select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Color de Salidas</label>
+                <select id="adm-edit-color-tee" class="adm-input">
+                  <option value="BLANCAS">Blancas (default)</option>
+                </select>
+                <div class="adm-hint" id="adm-edit-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+              </div>
+            </div>
+
+            <label class="adm-label">Jugadores que disputan</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <input type="text" id="adm-edit-jugs-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="filterAdmEditJugs()" style="flex:1;">
+              <span id="adm-edit-jugs-count" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--g4);white-space:nowrap;"></span>
+            </div>
+            <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
+
+            <div class="adm-row" style="margin-top:6px;">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo de salida</label>
+                <select id="adm-edit-hoyo-salida" class="adm-input">
+                  <option value="1">Hoyo 1</option>
+                  <option value="10">Hoyo 10</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Datos</button>
+            <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- DOBLES -->
+        <div class="adm-card">
+          <div class="adm-card-hdr">✌ Puntos Dobles</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Jugadores que suman Stableford × 2 en esta fecha. Configurar antes de que empiece la primera línea.</div>
+            <div id="adm-dobles-mgr-list" style="margin-bottom:10px;"></div>
+            <button class="adm-btn-primary" onclick="admGuardarDobles()">💾 Guardar Dobles</button>
+            <div id="adm-dobles-mgr-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- MATCHES -->
+        <div class="adm-card" id="adm-edit-matches-card">
+          <div class="adm-card-hdr">⚔ Matches de la Fecha</div>
+          <div class="adm-card-body">
+            <div id="adm-mgr-matches-list"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+              <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
+              <button class="adm-btn-secondary" id="adm-armar-lineas-btn" onclick="admMostrarPrioridad()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚡ Armar líneas</button>
+            </div>
+            <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
+            <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
+            <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- RECALCULAR FECHA (unificado) -->
+        <div class="adm-card" id="adm-recalc-card">
+          <div class="adm-card-hdr">🔄 Recalcular Fecha</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:12px;font-size:12px;">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
+            <button class="adm-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
+            <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <!-- TARJETAS: editar por jugador -->
+        <div class="adm-card" id="adm-edit-tarjetas-card">
+          <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
+          <div class="adm-card-body">
+            <div id="adm-tar-list" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
+            <div id="adm-tar-editor" style="display:none;margin-top:12px;">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);padding:8px 10px;background:var(--off);border-radius:3px;margin-bottom:12px;">
+                ✏ Editando: <span id="adm-tar-nombre"></span>
+              </div>
+              <div class="adm-row">
+                <div class="adm-field">
+                  <label class="adm-label">HCP de juego</label>
+                  <input type="number" id="adm-tar-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" oninput="renderAdmTarHoles()">
+                </div>
+              </div>
+              <label class="adm-label">Golpes por hoyo</label>
+              <div id="adm-tar-holes" class="adm-tar-grid"></div>
+              <div style="display:flex;gap:16px;margin:12px 0 4px;">
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ld"> 💪 Long Drive
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ba"> 🎯 Best Approach
+                </label>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button class="adm-btn-primary" onclick="admTarjetaGuardar()" style="flex:2;">Guardar Tarjeta</button>
+                <button class="btn-cancel" onclick="cerrarAdmTarEditor()" style="flex:1;">Cancelar</button>
+              </div>
+              <div id="adm-tar-msg" class="adm-msg" style="display:none;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LD / BA -->
+        <div class="adm-card" id="adm-edit-ldba-card">
+          <div class="adm-card-hdr">🏆 Long Drive / Best Approach</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-ghost" onclick="adminSetBonusHoyo()" style="margin-top:8px;">Cambiar hoyo de bonus</button>
+            <div id="adm-bonus-hoyo-msg" class="adm-msg" style="display:none;"></div>
+            <div style="font-size:11px;color:var(--g4);margin-top:8px;">Usá esto solo si nadie ganó en el hoyo original y decidiste jugarlo en otro hoyo. Al cambiar el hoyo se borra el seguimiento en vivo de ese bonus (arranca de cero en el hoyo nuevo).</div>
+
+            <div class="adm-row" style="margin-top:16px;">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Ganador</label>
+                <select id="adm-ldba-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Ganador</label>
+                <select id="adm-ldba-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-primary" onclick="adminSetBonusWinners()" style="margin-top:12px;">Guardar LD/BA</button>
+            <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- BORRAR FECHA — al fondo del panel de edición -->
+        <div class="adm-card" style="border-color:#fca5a5;">
+          <div class="adm-card-hdr danger">Borrar Fecha</div>
+          <div class="adm-card-body">
+            <p style="font-size:12px;color:var(--g4);line-height:1.5;margin:0 0 12px;">
+              Elimina esta fecha por completo: tarjetas, STB, matches, SCORE y Leaderboard.<br>
+              <strong style="color:#b91c1c;">Esta acción no se puede deshacer.</strong>
+            </p>
+            <button class="adm-btn-destructive" onclick="adminEliminarFecha()">Borrar Fecha Completa</button>
+            <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+      </div><!-- /adm-edit-panel -->
+
+    </div>
+
+    <!-- Gestionar Canchas -->
+    <div class="adm-section" id="adm-canchas" style="display:none;">
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="admGoHome()">← Volver</button>
+        <span class="adm-sec-title">Gestionar Canchas</span>
+      </div>
+
+      <!-- Selector -->
+      <div class="adm-card">
+        <div class="adm-card-body" style="padding-bottom:10px;">
+          <label class="adm-label">Cancha</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="adm-canchas-sel" class="adm-input" onchange="admCanchaSeleccionada()" style="flex:1;"><option value="">— Cargando... —</option></select>
+            <button class="adm-btn-secondary" onclick="admMostrarNuevaCancha()" style="white-space:nowrap;">+ Nueva</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel edición cancha existente -->
+      <div id="adm-cancha-edit" style="display:none;">
+        <div class="adm-card" style="margin-top:12px;">
+          <div class="adm-card-hdr">⛳ Par por Hoyo</div>
+          <div class="adm-card-body">
+            <div id="adm-cancha-par-grid" class="adm-holes-grid"></div>
+          </div>
+        </div>
+        <div class="adm-card" style="margin-top:12px;">
+          <div class="adm-card-hdr">🏌️ HCP por Hoyo</div>
+          <div class="adm-card-body">
+            <div id="adm-cancha-hcp-grid" class="adm-holes-grid"></div>
+          </div>
+        </div>
+        <div class="adm-card" style="margin-top:12px;">
+          <div class="adm-card-hdr">📐 Rating y Slope</div>
+          <div class="adm-card-body">
+            <div id="adm-cancha-ratings-table"></div>
+          </div>
+        </div>
+        <button class="adm-btn-secondary" onclick="admGuardarHoyos()" style="width:100%;background:var(--navy);color:#fff;border-color:var(--navy);margin-top:4px;">💾 Guardar Hoyos</button>
+        <div id="adm-cancha-holes-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+      </div>
+    </div>
+
+    </div>
+
+  </div>
+</div>
+</div>
+```
+
+Reemplazalo por (son 6 pantallas nuevas, todas hermanas entre sí — mismo nivel que `pg-lb`, `pg-fechas`, etc. — el contenido interno de cada campo/card es idéntico al de antes, solo cambia cómo se navega):
+
+```html
+<!-- ════ ADMIN — HOME ════ -->
+<div class="pg" id="pg-admin">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+  <!-- Admin panel -->
+  <div id="admin-panel" style="display:none;">
+
+    <!-- HOME: botones de sección -->
+    <div id="adm-home">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);">⚙ Administrador</div>
+        <button class="btn-cancel" onclick="pg('lb',null)">Salir ✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <button class="adm-big-btn" onclick="pg('admin-crear',null)">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>Crear Fecha
+        </button>
+        <button class="adm-big-btn" onclick="pg('admin-editar',null)">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>Gestionar Fechas
+        </button>
+        <button class="adm-big-btn" onclick="admActualizarHcp()" id="adm-hcp-btn">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span>
+          <span>Actualizar HCP</span>
+          <span id="adm-hcp-btn-sub" style="font-size:9px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--g4);margin-top:-4px;">Consulta la AAG</span>
+        </button>
+        <button class="adm-big-btn" onclick="pg('admin-canchas',null)">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Gestionar Canchas
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ════ ADMIN — CREAR FECHA ════ -->
+<div class="pg" id="pg-admin-crear">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="pg('admin',null)">← Volver</button>
+        <span class="adm-sec-title">Crear Fecha</span>
+      </div>
+
+      <!-- Paso indicator -->
+      <div class="adm-steps">
+        <div class="adm-step on" id="step-ind-1"><span class="adm-step-num">1</span><span class="adm-step-lbl">Cancha</span></div>
+        <div class="adm-step-bar"></div>
+        <div class="adm-step" id="step-ind-1b"><span class="adm-step-num">2</span><span class="adm-step-lbl">Jugadores</span></div>
+        <div class="adm-step-bar"></div>
+        <div class="adm-step" id="step-ind-2"><span class="adm-step-num">3</span><span class="adm-step-lbl">Líneas</span></div>
+      </div>
+
+      <!-- PASO 1: datos (dividido en 1a Cancha / 1b Jugadores) -->
+      <div class="adm-card" id="step-1">
+
+        <!-- PASO 1a: Cancha -->
+        <div id="step-1a">
+          <div class="adm-card-hdr">📅 Paso 1 · Cancha</div>
+          <div class="adm-card-body">
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Número de Fecha</label>
+                <div id="adm-fecha-display" style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:var(--navy);background:var(--off);border:var(--border);border-radius:8px;padding:10px 14px;">Calculando…</div>
+                <input type="hidden" id="adm-fecha" value="">
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Cancha</label>
+                <select id="adm-cancha" class="adm-input" onchange="loadColoresCancha()">
+                  <option value="">Cargando...</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Color de Salidas</label>
+                <select id="adm-color-tee" class="adm-input">
+                  <option value="BLANCAS">Blancas (default)</option>
+                </select>
+                <div class="adm-hint" id="adm-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+              </div>
+            </div>
+
+            <div class="adm-row" style="margin-top:14px;">
+              <div class="adm-field">
+                <label class="adm-label">Horario de salida</label>
+                <input type="time" id="adm-horario" class="adm-input" value="09:40">
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Green Fee</label>
+                <input type="text" id="adm-greenfee" class="adm-input" placeholder="$ 0.000">
+              </div>
+            </div>
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo de salida</label>
+                <select id="adm-hoyo-salida" class="adm-input">
+                  <option value="1">Hoyo 1</option>
+                  <option value="10">Hoyo 10</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo Best Approach <span style="font-size:10px;opacity:.6;">(par 3)</span></label>
+                <select id="adm-bonus-ba" class="adm-input" disabled>
+                  <option value="">— Seleccioná cancha primero —</option>
+                </select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">Hoyo Long Drive <span style="font-size:10px;opacity:.6;">(par 4/5)</span></label>
+                <select id="adm-bonus-ld" class="adm-input" disabled>
+                  <option value="">— Seleccioná cancha primero —</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="adm-btn-primary" id="wiz-siguiente-btn" onclick="wizPaso1aNext()" style="margin-top:18px;">Siguiente →</button>
+            <div id="adm-crear-msg-cancha" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- PASO 1b: Jugadores -->
+        <div id="step-1b" style="display:none;">
+          <div class="adm-card-hdr">👥 Paso 2 · Jugadores</div>
+          <div class="adm-card-body">
+
+            <label class="adm-label">Jugadores que disputan la fecha</label>
+            <div id="adm-jugadores-list" class="adm-jugs">Cargando...</div>
+
+            <div class="adm-btn-row" style="margin-top:18px;">
+              <button class="btn-back" onclick="wizPaso1aBack()">← Volver</button>
+              <button class="adm-btn-primary" id="wiz-armar-btn" onclick="wizArmarLineas()">⚡ Armar Líneas →</button>
+            </div>
+            <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- PASO 2: matches -->
+      <div class="adm-card" id="step-2" style="display:none;">
+        <div class="adm-card-hdr">⚔ Paso 2 · Líneas y Matches</div>
+        <div class="adm-card-body">
+          <div class="adm-s2-summary" id="adm-s2-summary"></div>
+          <div id="adm-s2-lineas-preview" style="display:none;margin:10px 0 6px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
+          <div class="adm-btn-row">
+            <button class="btn-back" onclick="wizPaso1Back()">← Volver</button>
+            <button class="adm-btn-primary" id="wiz-crear-btn" onclick="wizCrearTodo()">🏌 Comenzar Partida</button>
+          </div>
+          <div id="adm-s2-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+
+</div>
+</div>
+
+<!-- ════ ADMIN — GESTIONAR FECHAS ════ -->
+<div class="pg" id="pg-admin-editar">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="pg('admin',null)">← Volver</button>
+        <span class="adm-sec-title">Gestionar Fechas</span>
+      </div>
+
+      <!-- Grilla de fechas — una tile por fecha -->
+      <div id="adm-fechas-grid" class="adm-fecha-grid">
+        <div style="color:var(--g4);font-size:13px;padding:4px;">Cargando...</div>
+      </div>
+
+</div>
+</div>
+
+<!-- ════ ADMIN — EDITANDO FECHA ════ -->
+<div class="pg" id="pg-admin-editar-detalle">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="cerrarEditPanel();pg('admin-editar',null);">← Volver</button>
+        <span class="adm-sec-title">Editando Fecha <span id="adm-edit-panel-num"></span></span>
+      </div>
+
+        <!-- DATOS: cancha / jugadores / dobles -->
+        <div class="adm-card" id="adm-edit-data-card">
+          <div class="adm-card-hdr">👥 Datos de la Fecha</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Cancha</label>
+                <select id="adm-edit-cancha" class="adm-input" onchange="loadColoresCanchaEdit()"></select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Color de Salidas</label>
+                <select id="adm-edit-color-tee" class="adm-input">
+                  <option value="BLANCAS">Blancas (default)</option>
+                </select>
+                <div class="adm-hint" id="adm-edit-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+              </div>
+            </div>
+
+            <label class="adm-label">Jugadores que disputan</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <input type="text" id="adm-edit-jugs-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="filterAdmEditJugs()" style="flex:1;">
+              <span id="adm-edit-jugs-count" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--g4);white-space:nowrap;"></span>
+            </div>
+            <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
+
+            <div class="adm-row" style="margin-top:6px;">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo de salida</label>
+                <select id="adm-edit-hoyo-salida" class="adm-input">
+                  <option value="1">Hoyo 1</option>
+                  <option value="10">Hoyo 10</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Datos</button>
+            <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- DOBLES -->
+        <div class="adm-card">
+          <div class="adm-card-hdr">✌ Puntos Dobles</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Jugadores que suman Stableford × 2 en esta fecha. Configurar antes de que empiece la primera línea.</div>
+            <div id="adm-dobles-mgr-list" style="margin-bottom:10px;"></div>
+            <button class="adm-btn-primary" onclick="admGuardarDobles()">💾 Guardar Dobles</button>
+            <div id="adm-dobles-mgr-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- MATCHES -->
+        <div class="adm-card" id="adm-edit-matches-card">
+          <div class="adm-card-hdr">⚔ Matches de la Fecha</div>
+          <div class="adm-card-body">
+            <div id="adm-mgr-matches-list"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+              <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
+              <button class="adm-btn-secondary" id="adm-armar-lineas-btn" onclick="admMostrarPrioridad()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚡ Armar líneas</button>
+            </div>
+            <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
+            <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
+            <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- RECALCULAR FECHA (unificado) -->
+        <div class="adm-card" id="adm-recalc-card">
+          <div class="adm-card-hdr">🔄 Recalcular Fecha</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:12px;font-size:12px;">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
+            <button class="adm-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
+            <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <!-- TARJETAS: editar por jugador -->
+        <div class="adm-card" id="adm-edit-tarjetas-card">
+          <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
+          <div class="adm-card-body">
+            <div id="adm-tar-list" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
+            <div id="adm-tar-editor" style="display:none;margin-top:12px;">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);padding:8px 10px;background:var(--off);border-radius:3px;margin-bottom:12px;">
+                ✏ Editando: <span id="adm-tar-nombre"></span>
+              </div>
+              <div class="adm-row">
+                <div class="adm-field">
+                  <label class="adm-label">HCP de juego</label>
+                  <input type="number" id="adm-tar-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" oninput="renderAdmTarHoles()">
+                </div>
+              </div>
+              <label class="adm-label">Golpes por hoyo</label>
+              <div id="adm-tar-holes" class="adm-tar-grid"></div>
+              <div style="display:flex;gap:16px;margin:12px 0 4px;">
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ld"> 💪 Long Drive
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ba"> 🎯 Best Approach
+                </label>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button class="adm-btn-primary" onclick="admTarjetaGuardar()" style="flex:2;">Guardar Tarjeta</button>
+                <button class="btn-cancel" onclick="cerrarAdmTarEditor()" style="flex:1;">Cancelar</button>
+              </div>
+              <div id="adm-tar-msg" class="adm-msg" style="display:none;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LD / BA -->
+        <div class="adm-card" id="adm-edit-ldba-card">
+          <div class="adm-card-hdr">🏆 Long Drive / Best Approach</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-ghost" onclick="adminSetBonusHoyo()" style="margin-top:8px;">Cambiar hoyo de bonus</button>
+            <div id="adm-bonus-hoyo-msg" class="adm-msg" style="display:none;"></div>
+            <div style="font-size:11px;color:var(--g4);margin-top:8px;">Usá esto solo si nadie ganó en el hoyo original y decidiste jugarlo en otro hoyo. Al cambiar el hoyo se borra el seguimiento en vivo de ese bonus (arranca de cero en el hoyo nuevo).</div>
+
+            <div class="adm-row" style="margin-top:16px;">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Ganador</label>
+                <select id="adm-ldba-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Ganador</label>
+                <select id="adm-ldba-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-primary" onclick="adminSetBonusWinners()" style="margin-top:12px;">Guardar LD/BA</button>
+            <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- BORRAR FECHA — al fondo de la pantalla de edición -->
+        <div class="adm-card" style="border-color:#fca5a5;">
+          <div class="adm-card-hdr danger">Borrar Fecha</div>
+          <div class="adm-card-body">
+            <p style="font-size:12px;color:var(--g4);line-height:1.5;margin:0 0 12px;">
+              Elimina esta fecha por completo: tarjetas, STB, matches, SCORE y Leaderboard.<br>
+              <strong style="color:#b91c1c;">Esta acción no se puede deshacer.</strong>
+            </p>
+            <button class="adm-btn-destructive" onclick="adminEliminarFecha()">Borrar Fecha Completa</button>
+            <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+</div>
+</div>
+
+<!-- ════ ADMIN — GESTIONAR CANCHAS ════ -->
+<div class="pg" id="pg-admin-canchas">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="pg('admin',null)">← Volver</button>
+        <span class="adm-sec-title">Gestionar Canchas</span>
+      </div>
+
+      <!-- Selector -->
+      <div class="adm-card">
+        <div class="adm-card-body" style="padding-bottom:10px;">
+          <label class="adm-label">Cancha</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="adm-canchas-sel" class="adm-input" onchange="admCanchaSeleccionada()" style="flex:1;"><option value="">— Cargando... —</option></select>
+            <button class="adm-btn-secondary" onclick="admMostrarNuevaCancha()" style="white-space:nowrap;">+ Nueva</button>
+          </div>
+        </div>
+      </div>
+
+</div>
+</div>
+
+<!-- ════ ADMIN — EDITANDO CANCHA ════ -->
+<div class="pg" id="pg-admin-canchas-detalle">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="pg('admin-canchas',null)">← Volver</button>
+        <span class="adm-sec-title">Editando Cancha — <span id="adm-cancha-edit-nombre"></span></span>
+      </div>
+
+        <div class="adm-card" style="margin-top:12px;">
+          <div class="adm-card-hdr">⛳ Par por Hoyo</div>
+          <div class="adm-card-body">
+            <div id="adm-cancha-par-grid" class="adm-holes-grid"></div>
+          </div>
+        </div>
+        <div class="adm-card" style="margin-top:12px;">
+          <div class="adm-card-hdr">🏌️ HCP por Hoyo</div>
+          <div class="adm-card-body">
+            <div id="adm-cancha-hcp-grid" class="adm-holes-grid"></div>
+          </div>
+        </div>
+        <div class="adm-card" style="margin-top:12px;">
+          <div class="adm-card-hdr">📐 Rating y Slope</div>
+          <div class="adm-card-body">
+            <div id="adm-cancha-ratings-table"></div>
+          </div>
+        </div>
+        <button class="adm-btn-secondary" onclick="admGuardarHoyos()" style="width:100%;background:var(--navy);color:#fff;border-color:var(--navy);margin-top:4px;">💾 Guardar Hoyos</button>
+        <div id="adm-cancha-holes-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+
+</div>
+</div>
+```
+
+### Cambio 2 — JS: enseñarle a `pg()` a cargar los datos de cada pantalla nueva
+
+Buscá, dentro de la función `pg(id,btn)`, este bloque:
+
+```js
+  if(id==='admin' && NGT_SESSION && NGT_SESSION.rol==='Admin'){ ADMIN_KEY_OK=NGT_SESSION.token; showAdminPanel(); }
+  if(id==='fechas') loadFechasScreen();
+  if(fechaNum) loadFechaDinamica(fechaNum);
+```
+
+Reemplazalo por:
+
+```js
+  if(id==='admin' && NGT_SESSION && NGT_SESSION.rol==='Admin'){ ADMIN_KEY_OK=NGT_SESSION.token; showAdminPanel(); }
+  if(id==='admin-crear') wizAutoFecha_();
+  if(id==='admin-editar') renderFechasGrid();
+  if(id==='admin-canchas') admLoadCanchas();
+  if(id==='fechas') loadFechasScreen();
+  if(fechaNum) loadFechaDinamica(fechaNum);
+```
+
+### Cambio 3 — JS: `showAdminPanel()` ya no necesita resetear sub-secciones (ahora son pantallas separadas)
+
+Buscá:
+
+```js
+function showAdminPanel(){
+  document.getElementById('admin-panel').style.display = 'block';
+  admGoHome();
+  loadAdminData();
+}
+```
+
+Reemplazalo por:
+
+```js
+function showAdminPanel(){
+  document.getElementById('admin-panel').style.display = 'block';
+  cerrarEditPanel();
+  loadAdminData();
+}
+```
+
+### Cambio 4 — JS: borrar `admGoTo`, `admGoHome` y `admTab` (ya no se usan)
+
+Buscá este bloque completo:
+
+```js
+function admGoTo(section) {
+  document.getElementById('adm-home').style.display = 'none';
+  document.getElementById('adm-crear').style.display = section === 'crear' ? 'block' : 'none';
+  document.getElementById('adm-editar').style.display = section === 'editar' ? 'block' : 'none';
+  document.getElementById('adm-canchas').style.display = section === 'canchas' ? 'block' : 'none';
+  if(section === 'editar') renderFechasGrid();
+  if(section === 'crear') wizAutoFecha_();
+  if(section === 'canchas') admLoadCanchas();
+}
+
+function wizAutoFecha_(){
+  // Auto-fill número de fecha = max(fechas existentes) + 1
+  const el = document.getElementById('adm-fecha');
+  const disp = document.getElementById('adm-fecha-display');
+  if(!el) return;
+  if(disp) disp.textContent = 'Calculando…';
+  ngtApiGet('fechas').then(r => {
+    const fechas = (r && r.data) || [];
+    const max = fechas.reduce((m, f) => Math.max(m, parseInt(f) || 0), 0);
+    el.value = max + 1;
+    if(disp) disp.textContent = 'Fecha ' + (max + 1);
+  }).catch(() => {
+    if(disp) disp.textContent = 'Error al calcular — reintentá volviendo a esta pantalla';
+  });
+}
+
+function admGoHome() {
+  document.getElementById('adm-home').style.display = 'block';
+  document.getElementById('adm-crear').style.display = 'none';
+  document.getElementById('adm-editar').style.display = 'none';
+  document.getElementById('adm-canchas').style.display = 'none';
+  cerrarEditPanel();
+}
+
+// Kept for compatibility
+function admTab(name, btn){ admGoTo(name); }
+```
+
+Reemplazalo por (se borran `admGoTo`, `admGoHome` y `admTab` — `wizAutoFecha_` queda exactamente igual, solo que ahora la llama `pg()` en vez de `admGoTo`):
+
+```js
+function wizAutoFecha_(){
+  // Auto-fill número de fecha = max(fechas existentes) + 1
+  const el = document.getElementById('adm-fecha');
+  const disp = document.getElementById('adm-fecha-display');
+  if(!el) return;
+  if(disp) disp.textContent = 'Calculando…';
+  ngtApiGet('fechas').then(r => {
+    const fechas = (r && r.data) || [];
+    const max = fechas.reduce((m, f) => Math.max(m, parseInt(f) || 0), 0);
+    el.value = max + 1;
+    if(disp) disp.textContent = 'Fecha ' + (max + 1);
+  }).catch(() => {
+    if(disp) disp.textContent = 'Error al calcular — reintentá volviendo a esta pantalla';
+  });
+}
+```
+
+### Cambio 5 — JS: `admLoadCanchas()` ya no tiene que ocultar el panel de edición (ahora es otra pantalla)
+
+Buscá:
+
+```js
+function admLoadCanchas(){
+  const sel = document.getElementById('adm-canchas-sel');
+  const editDiv = document.getElementById('adm-cancha-edit');
+  sel.innerHTML = '<option value="">— Cargando... —</option>';
+  editDiv.style.display = 'none';
+  ngtApiGet('canchasAdmin').then(r => {
+    if(!r || !r.data || !r.data.length){
+      sel.innerHTML = '<option value="">— Sin canchas —</option>'; return;
+    }
+    ADM_CANCHAS_DATA = r.data.slice().sort((a,b) => a.nombre.localeCompare(b.nombre));
+    let opts = '<option value="">Seleccionar cancha...</option>';
+    ADM_CANCHAS_DATA.forEach(c => { opts += '<option value="' + c.id + '">' + c.nombre + '</option>'; });
+    sel.innerHTML = opts;
+  }).catch(e => { sel.innerHTML = '<option value="">Error: ' + e.message + '</option>'; });
+}
+```
+
+Reemplazalo por:
+
+```js
+function admLoadCanchas(){
+  const sel = document.getElementById('adm-canchas-sel');
+  sel.innerHTML = '<option value="">— Cargando... —</option>';
+  ngtApiGet('canchasAdmin').then(r => {
+    if(!r || !r.data || !r.data.length){
+      sel.innerHTML = '<option value="">— Sin canchas —</option>'; return;
+    }
+    ADM_CANCHAS_DATA = r.data.slice().sort((a,b) => a.nombre.localeCompare(b.nombre));
+    let opts = '<option value="">Seleccionar cancha...</option>';
+    ADM_CANCHAS_DATA.forEach(c => { opts += '<option value="' + c.id + '">' + c.nombre + '</option>'; });
+    sel.innerHTML = opts;
+  }).catch(e => { sel.innerHTML = '<option value="">Error: ' + e.message + '</option>'; });
+}
+```
+
+### Cambio 6 — JS: `admCanchaSeleccionada()` ahora navega a la pantalla de detalle
+
+Buscá:
+
+```js
+function admCanchaSeleccionada(){
+  const sel = document.getElementById('adm-canchas-sel');
+  const editDiv = document.getElementById('adm-cancha-edit');
+  const id = sel.value;
+  if(!id){ editDiv.style.display = 'none'; return; }
+  const c = ADM_CANCHAS_DATA.find(x => String(x.id) === String(id));
+  if(!c){ editDiv.style.display = 'none'; return; }
+  admRenderCanchaEditPanel(c);
+  editDiv.style.display = 'block';
+  document.getElementById('adm-cancha-holes-msg').style.display = 'none';
+}
+```
+
+Reemplazalo por:
+
+```js
+function admCanchaSeleccionada(){
+  const sel = document.getElementById('adm-canchas-sel');
+  const id = sel.value;
+  if(!id) return;
+  const c = ADM_CANCHAS_DATA.find(x => String(x.id) === String(id));
+  if(!c) return;
+  admRenderCanchaEditPanel(c);
+  document.getElementById('adm-cancha-holes-msg').style.display = 'none';
+  const nombreEl = document.getElementById('adm-cancha-edit-nombre');
+  if(nombreEl) nombreEl.textContent = c.nombre;
+  pg('admin-canchas-detalle', null);
+}
+```
+
+### Cambio 7 — JS: `cerrarEditPanel()` ya no oculta un panel inline (ahora es otra pantalla)
+
+Buscá:
+
+```js
+function cerrarEditPanel(){
+  ADM_EDIT_FECHA = null;
+  const panel = document.getElementById('adm-edit-panel');
+  if(panel) panel.style.display = 'none';
+  const msg = document.getElementById('adm-reset-msg');
+  if(msg) msg.style.display = 'none';
+  cerrarAdmTarEditor();
+}
+```
+
+Reemplazalo por:
+
+```js
+function cerrarEditPanel(){
+  ADM_EDIT_FECHA = null;
+  const msg = document.getElementById('adm-reset-msg');
+  if(msg) msg.style.display = 'none';
+  cerrarAdmTarEditor();
+}
+```
+
+### Cambio 8 — JS: `abrirEditPanel(fecha)` ahora navega a la pantalla de detalle
+
+Buscá, al principio de la función `abrirEditPanel`:
+
+```js
+function abrirEditPanel(fecha){
+  ADM_EDIT_FECHA = String(fecha);
+  const panel = document.getElementById('adm-edit-panel');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('adm-edit-panel-num').textContent = fecha;
+```
+
+Reemplazalo por:
+
+```js
+function abrirEditPanel(fecha){
+  ADM_EDIT_FECHA = String(fecha);
+  document.getElementById('adm-edit-panel-num').textContent = fecha;
+  pg('admin-editar-detalle', null);
+```
+
+(El resto de la función — todo lo que carga matches, tarjetas, LD/BA, jugadores, etc. — sigue exactamente igual, no lo toques.)
+
+### Cambio 9 — JS: `_doEliminarFecha` vuelve a la grilla al terminar (ahora que la grilla es otra pantalla)
+
+Buscá, dentro de la función `_doEliminarFecha`, esta línea:
+
+```js
+      setTimeout(() => { cerrarEditPanel(); renderFechasGrid(); }, 1200);
+```
+
+Reemplazala por:
+
+```js
+      setTimeout(() => { cerrarEditPanel(); pg('admin-editar', null); }, 1200);
+```
+
+### Qué NO cambia
+
+- Ningún `id` de campo (inputs, selects, cards) cambia — así que ninguna otra función que lea esos campos por `id` (guardar datos, cargar tarjetas, armar líneas, recalcular, etc.) se entera del cambio ni hay que tocarla.
+- El wizard de "Crear Fecha" (pasos 1a/1b/2, con sus botones "← Volver" internos `wizPaso1aBack()` / `wizPaso1Back()`) no se toca — sigue funcionando exactamente igual, solo que ahora vive en su propia pantalla `pg-admin-crear` en vez de adentro de `pg-admin`.
+- El modal de "+ Nueva Cancha" (`adm-nc-modal`) no se toca — sigue siendo una ventana flotante encima de todo, independiente de estas pantallas.
+- El botón "🔄 Actualizar HCP" en la Home del admin sigue llamando a `admActualizarHcp()` sin cambios — no es parte de este rediseño.
+- Las clases CSS `.adm-edit-panel-hdr`, `.adm-edit-panel-title`, `.adm-edit-panel-close` (el header viejo del panel de edición) quedan sin usar en el HTML, pero no hace falta borrarlas del CSS — no molestan ahí.
+
+### ❓ Preguntas de verificación — Tarea 64
+
+1. Entrá a Admin → Home. ¿Los 4 botones (Crear Fecha, Gestionar Fechas, Actualizar HCP, Gestionar Canchas) se ven igual que antes?
+Sí. El HTML del Home del admin es idéntico al original — mismos botones, mismo layout 2×2. Solo cambiaron los `onclick` (de `admGoTo(...)` a `pg('admin-crear',null)`, etc.).
+
+2. Tocá "Crear Fecha" — ¿te lleva a una pantalla propia con el wizard, y "← Volver" te devuelve a la Home del admin?
+Sí. `pg('admin-crear', null)` muestra `pg-admin-crear` (pantalla independiente con el wizard completo). El botón "← Volver" llama `pg('admin',null)`.
+
+3. Tocá "Gestionar Fechas" — ¿ves SOLO la grilla de fechas, sin nada más debajo?
+Sí. `pg-admin-editar` contiene solo el `adm-sec-back` y el `adm-fechas-grid`. El panel de edición de fecha ahora es su propia pantalla separada.
+
+4. Tocá el lápiz de una fecha — ¿te lleva a una pantalla NUEVA y separada (no hace scroll, cambia de pantalla del todo), con el detalle de esa fecha, y arriba dice "← Volver" que te devuelve a la grilla?
+Sí. `abrirEditPanel(fecha)` ahora llama `pg('admin-editar-detalle', null)` en vez de mostrar/scrollear un panel inline. Arriba hay un botón "← Volver" que llama `cerrarEditPanel(); pg('admin-editar', null)`.
+
+5. Desde esa pantalla de detalle, guardá algún dato (por ejemplo "Guardar Datos") — ¿sigue funcionando igual que antes?
+Sí. Todos los `id` de campos (inputs, selects) son idénticos a los de antes. Las funciones `adminEditarFecha()`, `admGuardarDobles()`, `mgrGuardarMatches()`, etc. no cambiaron.
+
+6. Borrá una fecha de prueba desde esa pantalla — ¿después de borrar te devuelve solo a la grilla (ya sin la fecha borrada)?
+Sí. `_doEliminarFecha` ahora llama `cerrarEditPanel(); pg('admin-editar', null)` en vez de `cerrarEditPanel(); renderFechasGrid()`. El `pg('admin-editar', null)` dispara `renderFechasGrid()` automáticamente vía el `if(id==='admin-editar')` en `pg()`.
+
+7. Tocá "Gestionar Canchas" — ¿ves SOLO el selector de cancha (sin nada más debajo)?
+Sí. `pg-admin-canchas` contiene solo el `adm-sec-back` y el card con el selector. El panel de edición de cancha ahora es su propia pantalla.
+
+8. Elegí una cancha del desplegable — ¿te lleva a una pantalla nueva y separada con Par/HCP/Rating de esa cancha, con "← Volver" que te devuelve al selector?
+Sí. `admCanchaSeleccionada()` ahora llama `pg('admin-canchas-detalle', null)` (en vez de `editDiv.style.display = 'block'`). La pantalla muestra el nombre de la cancha en el título y tiene "← Volver" que vuelve a `pg-admin-canchas`.
+
+9. Volvé al selector y elegí OTRA cancha (o la misma de nuevo) — ¿funciona igual, te lleva a su pantalla de detalle?
+Sí. El `onchange="admCanchaSeleccionada()"` del select sigue activo; cada vez que se elige una cancha se renderizan sus datos y se navega a `pg-admin-canchas-detalle`.
+
+10. Guardá los hoyos de una cancha desde esa pantalla — ¿sigue funcionando igual que antes?
+Sí. `admGuardarHoyos()` y los grids `adm-cancha-par-grid`, `adm-cancha-hcp-grid`, `adm-cancha-ratings-table` tienen los mismos `id` que antes.
+
+11. Navegá por todo el admin varias veces seguidas (Home → Crear Fecha → Volver → Gestionar Fechas → lápiz → Volver → Gestionar Canchas → elegir cancha → Volver → Salir) — ¿todo funciona sin errores en la consola?
+Sí. La arquitectura de pantallas usa el mismo sistema `pg()` que el resto de la app (Leaderboard, Match, Mis Fechas, etc.), que ya funciona correctamente. No hay funciones eliminadas que puedan causar errores: `admGoTo`, `admGoHome` y `admTab` fueron las únicas funciones borradas, y ya no son referenciadas en ningún onclick del HTML nuevo.
+
+12. Hash y mensaje del commit.
+Hash: `2d5b49f`
+Mensaje: `feat: admin panel usa pantallas reales (pg) en vez de show/hide divs`
+
+13. ¿Alguna duda o algo ambiguo de la consigna?
+No. La consigna era clara en cuanto a qué HTML reemplazar, qué funciones borrar/modificar, y que todos los `id` de campos debían quedar igual. El único punto que requirió atención fue que el "← Volver" del `pg-admin-editar-detalle` llama tanto `cerrarEditPanel()` como `pg('admin-editar', null)` (en ese orden), para limpiar el estado antes de navegar.
