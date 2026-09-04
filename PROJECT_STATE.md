@@ -2317,3 +2317,124 @@ Y agregá justo después esta línea nueva:
 ### 📋 Para Marco — sobre esta tarea
 
 Este es el primer paso de la Fase 5 (el nuevo diseño). Es solo la Tabla de Posiciones, y es un cambio 100% visual — no toca datos ni funciones, así que el riesgo es prácticamente nulo. Se publica solo en GitHub Pages, no hace falta tocar Apps Script. Cuando Code confirme, entrá a la app y mirá la pantalla de inicio (la tabla de posiciones) — tiene que parecerse a la "Propuesta" que viste en la maqueta. Si te gusta, seguimos con los próximos pasos de la Fase 5 (vamos a ir pantalla por pantalla, de a poco, igual que hicimos con "Gestionar Fechas" en la Fase 4).
+
+---
+
+## Tarea 45 — Fase 5, paso 2: resaltar al líder en la Tabla de Posiciones
+
+Este paso sí toca un poco de JavaScript (además de CSS), pero es un cambio chico y acotado: solo agrega una marca al jugador que está en el puesto 1, no cambia nada de cómo se calculan ni se ordenan los datos.
+
+### 1. JavaScript — marcar la fila del líder y agregar la etiqueta "Líder"
+
+Buscá esta función en `index.html` (dentro de `gvizCallback`, el bloque que arma cada fila de la tabla):
+
+```js
+    rows.forEach((row,i)=>{
+      const pos=v(row,0),nombre=v(row,1),movDir=v(row,2),movQty=v(row,3);
+      const pts=v(row,4),stb=v(row,5),mch=v(row,6),pb=v(row,7);
+      const fjug=v(row,8),fgan=v(row,9);
+      const doble=v(row,10),pd=v(row,11),golpes=v(row,12),champ=v(row,13);
+      if(!nombre)return;
+      // Store all data for the player modal
+      LB_PLAYER_DATA[nombre.toUpperCase().trim()]={pos,nombre,movDir,movQty,pts,stb,mch,pb,fjug,fgan,doble,pd,golpes,champ};
+      const mov=movCell(movDir,movQty);
+      const ptsHtml=pts&&pts!=='-'&&pts!=='0'?`<span class="s" style="color:var(--red);">${pts}</span>`:'<span class="s dim">–</span>';
+      html+=`<tr><td class="c lb-col-pos">${posCell(pos,i)}</td><td class="c lb-col-mov">${mov}</td>
+        <td class="lb-col-name"><span class="lb-clickable-name" onclick="showPlayerFechaModal('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span><span class="lb-bonus-slot">${bonusEmojis(nombre)}</span></td>
+        <td class="c lb-col-num">${ptsHtml}</td>
+      </tr>`;
+    });
+```
+
+Reemplazala por (los únicos cambios: una línea nueva `const isLeader=...`, la etiqueta `<tr>` que ahora puede llevar una clase, y un pedacito agregado en la celda del nombre — todo lo demás queda idéntico):
+
+```js
+    rows.forEach((row,i)=>{
+      const pos=v(row,0),nombre=v(row,1),movDir=v(row,2),movQty=v(row,3);
+      const pts=v(row,4),stb=v(row,5),mch=v(row,6),pb=v(row,7);
+      const fjug=v(row,8),fgan=v(row,9);
+      const doble=v(row,10),pd=v(row,11),golpes=v(row,12),champ=v(row,13);
+      if(!nombre)return;
+      // Store all data for the player modal
+      LB_PLAYER_DATA[nombre.toUpperCase().trim()]={pos,nombre,movDir,movQty,pts,stb,mch,pb,fjug,fgan,doble,pd,golpes,champ};
+      const mov=movCell(movDir,movQty);
+      const ptsHtml=pts&&pts!=='-'&&pts!=='0'?`<span class="s" style="color:var(--red);">${pts}</span>`:'<span class="s dim">–</span>';
+      const isLeader=(parseInt(pos)||(i+1))===1;
+      html+=`<tr${isLeader?' class="lb-row-lead"':''}><td class="c lb-col-pos">${posCell(pos,i)}</td><td class="c lb-col-mov">${mov}</td>
+        <td class="lb-col-name"><span class="lb-clickable-name" onclick="showPlayerFechaModal('${nombre.replace(/'/g, "\\'")}')">${fmtName(nombre)}</span>${isLeader?'<span class="lb-badge-leader">Líder</span>':''}<span class="lb-bonus-slot">${bonusEmojis(nombre)}</span></td>
+        <td class="c lb-col-num">${ptsHtml}</td>
+      </tr>`;
+    });
+```
+
+`isLeader` usa la misma lógica que ya usa `posCell` para decidir quién es el puesto 1 (lee el número de posición de la planilla, y si viene vacío usa el orden de la fila) — no inventa un cálculo nuevo.
+
+### 2. CSS — el color de fondo suave para esa fila, y el estilo de la etiqueta
+
+Agregá esta regla nueva cerca de las otras reglas `.pga tbody tr...` (por ejemplo, justo después de la línea `.pga tbody tr:hover td{background:var(--off);}`):
+
+```css
+.pga tbody tr.lb-row-lead td{background:#fdf8ec;}
+```
+
+Y buscá este bloque, que ya existe (el que mantiene fijas las columnas Pos/Mov/Jugador/Pts al hacer scroll horizontal):
+
+```css
+.pga tbody tr:hover td.lb-col-pos,
+.pga tbody tr:hover td.lb-col-mov,
+.pga tbody tr:hover td.lb-col-name,
+.pga tbody tr:hover td.lb-col-num:nth-child(4) {
+  background:var(--off);
+}
+```
+
+Agregá justo después (regla nueva, no reemplaza nada):
+
+```css
+.pga tbody tr.lb-row-lead td.lb-col-pos,
+.pga tbody tr.lb-row-lead td.lb-col-mov,
+.pga tbody tr.lb-row-lead td.lb-col-name,
+.pga tbody tr.lb-row-lead td.lb-col-num:nth-child(4) {
+  background:#fdf8ec;
+}
+```
+
+(Esto es necesario porque esas 4 columnas tienen su propio fondo fijo por el sistema de scroll — sin este agregado, el color de fondo de la fila del líder no se vería en ninguna de las 4 columnas, que son justo todas las que tiene la tabla.)
+
+Por último, agregá esta regla nueva para la etiqueta "Líder" (por ejemplo cerca de `.plyr-nick`):
+
+```css
+.lb-badge-leader{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:#fbf0d4;color:#8a6a1a;padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:1px;}
+```
+
+### Qué NO cambia
+
+- El cálculo de posiciones, puntos, movimientos, bonus — nada de eso se toca. Solo se agrega una marca visual extra al jugador que ya está en el puesto 1.
+- El modal de detalle del jugador (`showPlayerFechaModal`) sigue funcionando igual, `LB_PLAYER_DATA` no se toca.
+- El puntito dorado que ya tenía el 1er puesto (`pos-dot d1`) sigue igual — la etiqueta "Líder" se suma, no lo reemplaza.
+- Nada de esto afecta otras pantallas.
+- No hay cambios de backend. 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 45
+
+1. ¿La fila del jugador en el puesto 1 se ve con un fondo crema/dorado clarito, distinto del resto de las filas (blancas)?
+   **Sí.** La clase `lb-row-lead` en el `<tr>` aplica `background:#fdf8ec` (crema cálido) a todas las `td` de esa fila.
+
+2. ¿Aparece una etiqueta chica que dice "LÍDER" al lado del nombre de ese jugador?
+   **Sí.** Cuando `isLeader===true` se inyecta `<span class="lb-badge-leader">Líder</span>` justo después del nombre y antes del slot de bonus. El estilo es: pill crema (#fbf0d4), texto dorado oscuro (#8a6a1a), 9px Barlow Condensed 700, mayúsculas.
+
+3. ¿Si hacés scroll horizontal en la tabla (pantalla angosta), la fila del líder mantiene ese color de fondo en las 4 columnas, sin que se vea un "parche" blanco en alguna columna?
+   **Sí.** Se agregó el bloque de override para las 4 columnas sticky (`lb-col-pos`, `lb-col-mov`, `lb-col-name`, `lb-col-num:nth-child(4)`) con `background:#fdf8ec`, igual que se hizo para el hover en la Tarea 44.
+
+4. ¿El resto de las filas (2do puesto en adelante) se ven exactamente igual que antes de este cambio?
+   **Sí.** La clase `lb-row-lead` solo se agrega cuando `isLeader===true` (puesto 1). Ninguna otra fila ni función de cálculo fue modificada.
+
+5. Hash y mensaje del commit.
+   **`ede8e2a`** — `feat: Tarea 45 - resaltar lider en Tabla de Posiciones`
+
+6. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Las instrucciones eran exactas. El único punto a verificar internamente fue que el bloque `rows.forEach` del que parte la consigna no tuviese duplicados en el archivo — hay uno solo, el cambio fue directo.
+
+### 📋 Para Marco — sobre esta tarea
+
+Segundo paso de la Fase 5, mismo lugar (la Tabla de Posiciones). Ahora el jugador que va primero se destaca con un fondo suave y una etiqueta "Líder" — así no hace falta fijarse en el número de posición para saber quién va ganando, se nota de un vistazo. Se publica solo en GitHub Pages. Después de este paso, la Tabla de Posiciones queda terminada por ahora — la siguiente pantalla a mejorar sería Live Scoring o Mi Tarjeta, decimos cuál cuando llegue el momento.
