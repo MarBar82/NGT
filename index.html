@@ -19,7 +19,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Barlow:wght@400;500;600&family=Oswald:wght@400;700&family=Roboto+Slab:wght@700;900&display=swap" rel="stylesheet">
 <style>
 :root{
-  --navy:#00234b;--navy2:#001533;--red:#c8102e;--gold:#c9a84c;
+  --navy:#00234b;--navy2:#001533;--red:#c8102e;--gold:#c9a84c;--green:#1f7a3d;
   --white:#fff;--off:#f7f6f3;--g1:#f0eeea;--g2:#e3e0d8;
   --g3:#bbb8b0;--g4:#8a8780;--g5:#3d3c38;--text:#1a1918;
   --border:1px solid #e3e0d8;
@@ -527,6 +527,7 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 20px rgba(0,0,0,.06);margin-bottom:14px;}
 .adm-card-hdr{background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;letter-spacing:.05em;padding:12px 16px;border-bottom:4px solid var(--red);}
 .adm-card-hdr.danger{background:#7f1d1d;border-bottom-color:#b91c1c;}
+.adm-card-hdr.bonus{background:var(--green);border-bottom-color:var(--navy);}
 .adm-card-body{padding:18px;}
 .adm-label{display:block;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--g4);margin-bottom:5px;}
 .adm-input{width:100%;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;color:var(--navy);padding:8px 12px;border:1px solid var(--g3);border-radius:3px;background:var(--white);box-sizing:border-box;}
@@ -660,12 +661,12 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
 /* Score modal — telephone-style keypad */
 .sm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;}
-.sm-box{background:var(--white);border-radius:6px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:320px;width:100%;overflow:hidden;}
+.sm-box{background:var(--white);border-radius:6px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:320px;width:100%;overflow:hidden;position:relative;}
 .sm-hdr{background:var(--navy);color:#fff;padding:14px 18px;text-align:center;border-bottom:3px solid var(--red);}
 .sm-hoyo{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;letter-spacing:.06em;}
 .sm-par{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-top:2px;}
-.sm-hdr.bonus{background:var(--gold);color:var(--navy);border-bottom-color:var(--navy);}
-.sm-hdr.bonus .sm-par{color:var(--navy);}
+.sm-close-x{position:absolute;top:8px;right:10px;background:none;border:none;font-size:22px;color:var(--g4);cursor:pointer;line-height:1;padding:6px;z-index:2;}
+.sm-close-x:hover{color:var(--navy);}
 .sm-big{text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:56px;font-weight:800;color:var(--navy);padding:14px 0;}
 .sm-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:12px;}
 .sm-keypad button{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--navy);background:var(--off);border:1px solid var(--g2);border-radius:6px;padding:16px 8px;cursor:pointer;transition:.1s;min-height:54px;}
@@ -692,7 +693,6 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .live-player-hcp{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
 .live-cargado-por{font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--g4);margin-top:2px;letter-spacing:.02em;}
 .live-hole-wrap{display:flex;align-items:center;gap:8px;}
-.bonus-banner{background:var(--gold);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-align:center;padding:9px 12px;border-radius:6px;margin-bottom:8px;}
 .live-stb-badge{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);min-width:28px;text-align:center;line-height:1;}
 .live-stb-pts{font-size:9px;font-weight:400;display:block;}
 .live-offline{background:#fee;border-radius:3px;padding:8px 12px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--red);margin-top:8px;text-align:center;}
@@ -1871,10 +1871,9 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 
       <!-- Pane: Tarjeta -->
       <div id="live-pane-tarjeta">
-        <div id="live-bonus-banner" class="bonus-banner" style="display:none;"></div>
         <div id="live-hoyo-view">
           <div class="adm-card">
-            <div class="adm-card-hdr">
+            <div class="adm-card-hdr" id="live-hoyo-card-hdr">
               <div class="live-hoyo-hdr">
                 <button class="live-nav-btn" onclick="livePrevHoyo()">‹</button>
                 <div class="live-hoyo-title">
@@ -1929,7 +1928,6 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       <div class="sm-hoyo" id="sm-hoyo">Hoyo 1</div>
       <div class="sm-par" id="sm-par">Par 4</div>
     </div>
-    <div id="sm-bonus-banner" class="bonus-banner" style="display:none;"></div>
     <div class="sm-big" id="sm-big">–</div>
     <div class="sm-keypad" id="sm-keypad-low">
       <button onclick="smSetAndClose(1)">1</button>
@@ -1962,6 +1960,20 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   </div>
 </div>
 
+
+<!-- Bonus hole arrival notice -->
+<div id="bonus-aviso-modal" class="sm-overlay" style="display:none;" onclick="if(event.target===this) bonusAvisoCerrar()">
+  <div class="sm-box" style="max-width:300px;text-align:center;" onclick="event.stopPropagation()">
+    <button class="sm-close-x" onclick="bonusAvisoCerrar()">✕</button>
+    <div style="padding:38px 20px 6px;">
+      <div id="ba-aviso-emoji" style="font-size:52px;line-height:1;margin-bottom:10px;"></div>
+      <div id="ba-aviso-titulo" style="font-family:'Oswald',sans-serif;font-size:21px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.02em;"></div>
+    </div>
+    <div style="padding:18px 20px 22px;">
+      <button class="adm-btn-primary" style="width:100%;" onclick="bonusAvisoCerrar()">Continuar</button>
+    </div>
+  </div>
+</div>
 
 <!-- Bonus modal -->
 <div id="bonus-modal" class="sm-overlay" style="display:none;">
@@ -5740,6 +5752,7 @@ let MIT_CUR_HOLE = 0;         // hole currently in modal (0-indexed)
 // Live Scoring state
 let LIVE_MODE = false;
 let LIVE_LINEA_DATA = null;
+let LIVE_BONUS_AVISO_MOSTRADO = {}; // { [hoyo]: true } — para que el aviso emergente salga una sola vez por hoyo
 let LIVE_HOYO = 1;
 let LIVE_TARGET_MAT = null;
 let LIVE_TAB = 'tarjeta';
@@ -6182,6 +6195,7 @@ function openLiveView(fecha, cancha){
   LIVE_TAB = 'tarjeta';
   LIVE_HOYO = 1;
   LIVE_LINEA_DATA = null;
+  LIVE_BONUS_AVISO_MOSTRADO = {};
   LIVE_MATCH_LINEA = null;
   LIVE_MATCH_DATA = {};
   LIVE_REVIEW_MAT = null;
@@ -6306,20 +6320,20 @@ function liveRenderHoyoActual(){
   var indices = d.indices || [];
   var hoyoIdx = indices[h];
   document.getElementById('live-hoyo-label').textContent = 'Hoyo ' + LIVE_HOYO;
-  document.getElementById('live-par-label').textContent = (par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '');
 
   var bonusHoyos = d.bonusHoyos || {};
-  var banner = document.getElementById('live-bonus-banner');
-  if(banner){
-    var avisos = [];
-    if(bonusHoyos.ba === LIVE_HOYO) avisos.push('🎯 Best Approach en este hoyo');
-    if(bonusHoyos.ld === LIVE_HOYO) avisos.push('💪 Long Drive en este hoyo');
-    if(avisos.length){
-      banner.textContent = avisos.join(' · ');
-      banner.style.display = 'block';
-    } else {
-      banner.style.display = 'none';
-    }
+  var tipoBonusAqui = bonusHoyos.ba === LIVE_HOYO ? 'ba' : (bonusHoyos.ld === LIVE_HOYO ? 'ld' : null);
+  var emojiBonus = tipoBonusAqui === 'ba' ? ' 🎯' : (tipoBonusAqui === 'ld' ? ' 💪' : '');
+  document.getElementById('live-par-label').textContent =
+    (par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '') + emojiBonus;
+
+  var cardHdr = document.getElementById('live-hoyo-card-hdr');
+  if(cardHdr) cardHdr.classList.toggle('bonus', !!tipoBonusAqui);
+
+  // Aviso emergente — una sola vez por hoyo, la primera vez que se detecta que es de bonus
+  if(tipoBonusAqui && !LIVE_BONUS_AVISO_MOSTRADO[LIVE_HOYO]){
+    LIVE_BONUS_AVISO_MOSTRADO[LIVE_HOYO] = true;
+    bonusAvisoAbrir(tipoBonusAqui);
   }
 
   var html = '';
@@ -6751,25 +6765,10 @@ function liveOpenScoreModal(hoyo, mat){
   document.getElementById('sm-keypad-high').style.display = 'none';
 
   var bonusHoyos = LIVE_LINEA_DATA.bonusHoyos || {};
-  var smBanner = document.getElementById('sm-bonus-banner');
-  var smHdr = document.getElementById('sm-hdr');
-  var avisos = [];
   var hoyoEmoji = '';
-  if(bonusHoyos.ba === hoyo){ avisos.push('🎯 Best Approach en este hoyo'); hoyoEmoji += '🎯 '; }
-  if(bonusHoyos.ld === hoyo){ avisos.push('💪 Long Drive en este hoyo'); hoyoEmoji += '💪 '; }
+  if(bonusHoyos.ba === hoyo){ hoyoEmoji = '🎯 '; }
+  else if(bonusHoyos.ld === hoyo){ hoyoEmoji = '💪 '; }
   document.getElementById('sm-hoyo').textContent = hoyoEmoji + 'Hoyo ' + hoyo;
-  // ⚠️ TEMPORAL — Tarea 38: diagnóstico visible, sacar en la Tarea 39
-  var debugTxt_ = 'DEBUG · hoyo=' + JSON.stringify(hoyo) + ' · ba=' + JSON.stringify(bonusHoyos.ba) +
-                  ' · ld=' + JSON.stringify(bonusHoyos.ld) + ' · match=' + avisos.length;
-  if(smBanner){
-    if(avisos.length){
-      smBanner.textContent = avisos.join(' · ') + '  [' + debugTxt_ + ']';
-    } else {
-      smBanner.textContent = debugTxt_;
-    }
-    smBanner.style.display = 'block'; // TEMPORAL: siempre visible mientras diagnosticamos
-  }
-  if(smHdr){ smHdr.classList.toggle('bonus', avisos.length > 0); }
 
   document.getElementById('score-modal').style.display = 'flex';
 }
@@ -6924,6 +6923,17 @@ function liveAutoAdvance(){
     var anyMissing = jugs.some(function(j){ return j.scores[h] === null; });
     if(anyMissing){ LIVE_HOYO = h + 1; liveRenderHoyoActual(); return; }
   }
+}
+
+function bonusAvisoAbrir(tipo){
+  var tipoLabel = tipo === 'ba' ? 'Best Approach' : 'Long Drive';
+  var emoji = tipo === 'ba' ? '🎯' : '💪';
+  document.getElementById('ba-aviso-emoji').textContent = emoji;
+  document.getElementById('ba-aviso-titulo').textContent = tipoLabel + '!';
+  document.getElementById('bonus-aviso-modal').style.display = 'flex';
+}
+function bonusAvisoCerrar(){
+  document.getElementById('bonus-aviso-modal').style.display = 'none';
 }
 
 function liveBonusModalAbrir(pending){
