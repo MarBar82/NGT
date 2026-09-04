@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-04 (Tarea 41 agregada — Fase 4, paso 2: fichitas de fecha con estado)
+**Última actualización:** 2026-09-04 (Tarea 42 agregada — Fase 4, paso 3: buscador y contador de jugadores)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -1891,3 +1891,158 @@ function renderFechasGrid(){
 ### 📋 Para Marco — después de este fix
 
 Se publica solo (GitHub Pages, sin deploy en Apps Script). Entrá a "Gestionar Fechas" y fijate que cada fichita ahora tenga la etiqueta de estado debajo del número.
+
+---
+
+## 📣 Tarea 41 confirmada — seguimos con la Fase 4c
+
+Marco confirmó que las fichitas con estado quedaron bien. Seguimos con el paso 3 del plan: la lista de jugadores para agregar/sacar de una fecha (hoy es una lista larga de casilleros de texto, sin forma de buscar).
+
+## 🎯 Tarea para Claude Code — Tarea 42 (Fase 4, paso 3: buscador y contador en la lista de jugadores de una fecha)
+
+### Qué hace esta tarea
+
+Dentro de "Gestionar Fechas" → "Datos de la Fecha", la lista de jugadores que participan (donde tildás o destildás para agregar/sacar gente de la fecha) hoy es una lista larga sin forma de buscar un nombre puntual — hay que scrollear todo. Le agregamos:
+1. Un buscador arriba de la lista: al escribir, se van ocultando los jugadores que no coinciden con lo escrito.
+2. Un contador ("N seleccionados") que se actualiza en vivo a medida que tildás/destildás.
+
+No cambia nada de cómo se guarda — sigue siendo el mismo botón "Guardar Datos" de siempre. Es 100% frontend.
+
+### Dónde está el código
+
+Todo en `index.html`: el HTML de la card "Datos de la Fecha", y la función `abrirEditPanel()`.
+
+### Cambio 1 — HTML: agregar el buscador y el contador arriba de la lista
+
+Buscá:
+
+```html
+            <label class="adm-label">Jugadores que disputan</label>
+            <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
+```
+
+Reemplazalo por:
+
+```html
+            <label class="adm-label">Jugadores que disputan</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <input type="text" id="adm-edit-jugs-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="filterAdmEditJugs()" style="flex:1;">
+              <span id="adm-edit-jugs-count" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--g4);white-space:nowrap;"></span>
+            </div>
+            <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
+```
+
+### Cambio 2 — JS: limpiar el buscador cada vez que se abre una fecha distinta
+
+Buscá:
+
+```js
+  // Reset mensajes
+  document.getElementById('adm-edit-msg').style.display = 'none';
+  document.getElementById('adm-reset-msg').style.display = 'none';
+  document.getElementById('adm-edit-jugs').innerHTML = 'Cargando...';
+```
+
+Reemplazalo por:
+
+```js
+  // Reset mensajes
+  document.getElementById('adm-edit-msg').style.display = 'none';
+  document.getElementById('adm-reset-msg').style.display = 'none';
+  document.getElementById('adm-edit-jugs').innerHTML = 'Cargando...';
+  const _searchEl = document.getElementById('adm-edit-jugs-search');
+  if(_searchEl) _searchEl.value = '';
+```
+
+### Cambio 3 — JS: que cada casillero avise cuando cambia, para actualizar el contador
+
+Buscá:
+
+```js
+    // Render jugadores checkboxes with current selection checked
+    const jl = document.getElementById('adm-edit-jugs');
+    let jugHtml = '';
+    jugadores.forEach(j => {
+      const checked = curMatriculas.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
+      const lbl = formatPlayerLabel(j.nombre);
+      jugHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-jug" value="' + j.matricula + '" id="ejug-' + j.matricula + '" ' + checked + '><label for="ejug-' + j.matricula + '">' + lbl + '</label></div>';
+    });
+    jl.innerHTML = jugHtml;
+```
+
+Reemplazalo por:
+
+```js
+    // Render jugadores checkboxes with current selection checked
+    const jl = document.getElementById('adm-edit-jugs');
+    let jugHtml = '';
+    jugadores.forEach(j => {
+      const checked = curMatriculas.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
+      const lbl = formatPlayerLabel(j.nombre);
+      jugHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-jug" value="' + j.matricula + '" id="ejug-' + j.matricula + '" ' + checked + ' onchange="admUpdateJugCount_()"><label for="ejug-' + j.matricula + '">' + lbl + '</label></div>';
+    });
+    jl.innerHTML = jugHtml;
+    admUpdateJugCount_();
+```
+
+### Cambio 4 — JS: las dos funciones nuevas (buscar y contar)
+
+Buscá la función `formatPlayerLabel`:
+
+```js
+function formatPlayerLabel(nombreCompleto){
+```
+
+Agregá estas dos funciones nuevas justo ANTES de esa línea (sin tocar `formatPlayerLabel` ni nada de lo que sigue):
+
+```js
+function filterAdmEditJugs(){
+  const searchEl = document.getElementById('adm-edit-jugs-search');
+  const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
+  document.querySelectorAll('#adm-edit-jugs .adm-jug-item').forEach(function(item){
+    const label = item.querySelector('label');
+    const txt = label ? label.textContent.toLowerCase() : '';
+    item.style.display = (!q || txt.indexOf(q) >= 0) ? '' : 'none';
+  });
+}
+function admUpdateJugCount_(){
+  const el = document.getElementById('adm-edit-jugs-count');
+  if(!el) return;
+  const n = document.querySelectorAll('#adm-edit-jugs .edit-jug:checked').length;
+  el.textContent = n + ' seleccionado' + (n === 1 ? '' : 's');
+}
+
+```
+
+### Qué NO cambia
+
+- El guardado (`adminEditarFecha()`, botón "Guardar Datos") — sigue leyendo `.edit-jug:checked` exactamente igual que antes, no se toca.
+- El resto de "Gestionar Fecha" (cancha, dobles, matches, recalcular, etc.) — no se toca.
+- No hay cambios de backend. 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 42
+
+1. ¿Al escribir en el buscador se ocultan los jugadores que no coinciden, y al borrar el texto vuelven a aparecer todos?
+2. ¿El contador ("N seleccionados") se actualiza al tildar/destildar un jugador?
+3. ¿El buscador se limpia solo cuando se abre una fecha distinta (no queda el texto de la fecha anterior)?
+4. ¿Guardar los datos (`adminEditarFecha`) sigue funcionando igual — sigue mandando todos los jugadores tildados, incluidos los que estén ocultos por el buscador en ese momento?
+5. Hash y mensaje del commit.
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+## ✅ Respuestas de verificación — Tarea 42
+
+1. **Sí.** `filterAdmEditJugs()` lee el valor del input, lo pasa a minúsculas, y para cada `.adm-jug-item` dentro de `#adm-edit-jugs` compara ese texto con el label del jugador (también en minúsculas): si no coincide, pone `style.display = 'none'`; si coincide o el buscador está vacío (`!q`), restaura `style.display = ''` (que muestra el elemento con su display original). Al borrar el texto, `q` queda vacío y todos vuelven a mostrarse.
+
+2. **Sí.** Cada checkbox tiene `onchange="admUpdateJugCount_()"`. `admUpdateJugCount_` cuenta `#adm-edit-jugs .edit-jug:checked` y escribe `N seleccionado/s` en `#adm-edit-jugs-count`. También se llama una vez al terminar de renderizar la lista (`admUpdateJugCount_()` después de `jl.innerHTML = jugHtml`) para mostrar el conteo inicial correcto.
+
+3. **Sí.** En el bloque de "Reset mensajes" de `abrirEditPanel`, se limpia el input con `_searchEl.value = ''` cada vez que se abre una fecha. El guard `if(_searchEl)` evita errores si el elemento no estuviera en el DOM.
+
+4. **Sí.** `adminEditarFecha()` lee los jugadores con `document.querySelectorAll('#adm-edit-jugs .edit-jug:checked')`. `querySelectorAll` devuelve todos los elementos que coincidan con el selector, independientemente de si tienen `display:none` o no — los elementos ocultos por el buscador siguen en el DOM y siguen siendo encontrados si están tildados. El guardado no cambia en nada.
+
+5. **Hash:** `b22470d` — "Tarea 42: buscador y contador en lista de jugadores de Gestionar Fecha"
+
+6. Sin dudas. El buscador filtra por el texto del label (nombre del jugador formateado por `formatPlayerLabel`), que es lo que el admin ve en pantalla — coherente y sin sorpresas.
+
+### 📋 Para Marco — después de este fix
+
+Se publica solo (GitHub Pages, sin deploy en Apps Script). Entrá a "Gestionar Fechas", abrí una fecha, y en "Datos de la Fecha" probá escribir un nombre en el buscador nuevo y tildar/destildar algún jugador para ver el contador.
