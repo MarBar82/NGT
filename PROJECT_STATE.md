@@ -3440,3 +3440,150 @@ Reemplazala por (agrega esquinas más redondeadas, sombra suave, y separa el efe
 ### 📋 Para Marco — sobre esta tarea
 
 Con esta tarea se termina de aplicar el diseño nuevo a **todas** las pantallas de la app — Posiciones, Live Scoring, Historia (3 pestañas), Fecha jugada, Match, todo el panel de Administración, Login, y ahora Mis Fechas. La Fase 5 (el rediseño visual) queda completa.
+
+---
+
+# FASE 6 — Lista de mejoras de Marco (18/9/2026)
+
+Marco pasó una lista de 16 mejoras puntuales. Las ordenamos de más simple a más compleja. Grupo 1 (esta tarea) son 5 arreglos chicos e independientes, todos de bajo riesgo.
+
+## Tarea 59 — 5 arreglos chicos y aislados entre sí
+
+**Contexto para Code:** Esta tarea junta 5 cambios chicos, cada uno en una parte distinta de la app y sin relación entre sí — podés hacerlos en cualquier orden. Todos son CSS o HTML puntual, sin tocar lógica de negocio. Este archivo es `index.html`. Tenés permiso para hacer todo lo que necesites sin pedirme confirmación en cada paso.
+
+### PARTE A — Placeholder de matrícula en Login
+
+El input de matrícula muestra como ejemplo un número que podría ser la matrícula real de un jugador (`60803`). Hay que cambiarlo por algo obviamente ficticio en las 2 pantallas donde aparece.
+
+Buscá (aparece 2 veces, en 2 inputs distintos):
+```
+placeholder="Ej: 60803"
+```
+Reemplazá **ambas apariciones** por:
+```
+placeholder="Ej: 00000"
+```
+
+### PARTE B — Sacar el chip redundante de arriba a la derecha
+
+El círculo con inicial + nombre que aparece arriba a la derecha (cuando hay sesión iniciada) hace exactamente lo mismo que el botón de menú (☰) — los dos abren el mismo menú. Es redundante, lo sacamos.
+
+Buscá este bloque completo:
+```html
+  <div class="tb-right-actions">
+    <div class="tb-player-chip" id="tb-player-chip" onclick="hamburgerOpen()" style="display:none;">
+      <div class="tb-player-avatar" id="tb-player-avatar">?</div>
+      <span class="tb-player-apodo" id="tb-player-apodo">—</span>
+    </div>
+  </div>
+```
+Borralo completo (las 6 líneas). Ya confirmé que el JavaScript que actualiza ese chip (`applySession`, y la función que cierra sesión) usa `if (chip) ...` antes de tocarlo, así que no rompe nada si el elemento ya no existe en el HTML — simplemente va a dejar de encontrarlo y no hacer nada, sin errores.
+
+### PARTE C — La "X" para cerrar el perfil de jugador no se ve bien
+
+Es un botón compartido por 2 ventanas flotantes (el perfil de jugador en Historia, y el modal de "ronda bajo par"). El problema es que el color gris del botón se pierde tanto sobre fondo blanco como sobre el fondo azul oscuro de la tarjeta de arriba del perfil. La solución: darle al botón un círculo blanco de fondo propio, así se ve siempre, sin importar qué haya detrás.
+
+Buscá:
+```css
+.ronda-modal-close{
+  position:absolute;top:6px;right:8px;background:none;border:none;
+  font-size:28px;color:var(--g4);cursor:pointer;line-height:1;padding:4px 10px;
+  font-family:'Barlow Condensed',sans-serif;font-weight:300;
+}
+.ronda-modal-close:hover{color:var(--navy);}
+```
+Reemplazalo por:
+```css
+.ronda-modal-close{
+  position:absolute;top:8px;right:8px;background:rgba(255,255,255,.92);border:none;
+  font-size:20px;color:var(--navy);cursor:pointer;line-height:1;
+  width:32px;height:32px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Barlow Condensed',sans-serif;font-weight:400;
+  box-shadow:0 1px 4px rgba(0,0,0,.25);
+  z-index:2;
+}
+.ronda-modal-close:hover{color:var(--red);}
+```
+
+### PARTE D — Falta la línea divisoria entre jugadores en la tabla Stableford de Live Scoring
+
+Encontré la causa: hay un error de tipeo en el nombre de una variable de color CSS, que hace que el navegador descarte la línea divisoria por completo (es un CSS inválido, aunque no se note a simple vista en el código).
+
+Buscá (dentro de la función que arma esa tabla):
+```
+'<thead><tr style="border-bottom:2px solid var(--border);font-size:11px;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;">' +
+```
+Reemplazá por:
+```
+'<thead><tr style="border-bottom:2px solid var(--g2);font-size:11px;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;">' +
+```
+
+Y buscá también:
+```
+html += '<tr style="border-bottom:1px solid var(--border);cursor:pointer;' + rowBg + '"' +
+```
+Reemplazá por:
+```
+html += '<tr style="border-bottom:1px solid var(--g1);cursor:pointer;' + rowBg + '"' +
+```
+
+### PARTE E — La pantalla de "¿quién ganó el bonus?" muy cargada de rojo
+
+Es la ventana que se abre en Live Scoring cuando llegan al hoyo de bonus (Best Approach / Long Drive) y hay que indicar quién lo ganó. Hoy cada nombre de jugador es un botón sólido rojo grande — muy cargado. Lo pasamos a botones blancos con borde fino, más discretos, y de paso arreglamos el botón "Nadie ganó" que hoy usa una clase que ni siquiera existe en el CSS (por eso se ve como un botón sin estilo, feo).
+
+Primero, agregá esta nueva regla CSS (en cualquier lugar dentro de `<style>`, por ejemplo cerca de `.adm-btn-ghost`):
+```css
+.bonus-pick-btn{width:100%;text-align:left;background:var(--white);border:1px solid var(--g2);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;padding:12px 14px;border-radius:10px;cursor:pointer;transition:.12s;}
+.bonus-pick-btn:hover{background:var(--off);border-color:var(--navy);}
+.bonus-pick-btn:active{transform:scale(.97);background:var(--off);}
+```
+
+Después, buscá esta línea (dentro de la función `liveBonusModalAbrir`):
+```
+html += '<button class="adm-btn-primary" style="font-size:15px;padding:12px;width:100%;text-align:left;" onclick="liveBonusSeleccionar(\'' + tipo + '\',\'' + j.matricula + '\')">' + j.apodo + '</button>';
+```
+Reemplazala por:
+```
+html += '<button class="bonus-pick-btn" onclick="liveBonusSeleccionar(\'' + tipo + '\',\'' + j.matricula + '\')">' + j.apodo + '</button>';
+```
+
+Y la línea siguiente:
+```
+html += '<button class="adm-btn" style="font-size:14px;padding:10px;width:100%;color:var(--g4);" onclick="liveBonusSeleccionar(\'' + tipo + '\',null)">Nadie ganó</button>';
+```
+Reemplazala por:
+```
+html += '<button class="adm-btn-ghost" style="width:100%;" onclick="liveBonusSeleccionar(\'' + tipo + '\',null)">Nadie ganó</button>';
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript cambia su comportamiento — en la Parte E solo cambian las clases CSS de los botones, el `onclick` de cada uno sigue exactamente igual.
+- `.bonus-pick-btn` es una clase nueva, exclusiva de esta ventana — no afecta a ningún otro botón de la app.
+- `.adm-btn-ghost` ya existe y se usa en otros lugares de la app (por ejemplo el wizard de Crear Fecha) — la estamos reutilizando tal cual está, no la modificamos.
+- `.adm-btn-primary` (el botón rojo) NO se toca en su definición — se sigue usando igual en las otras 17 pantallas donde aparece. Solo dejamos de usarlo en este caso puntual.
+- El contenido y la lógica de guardado de quién ganó el bonus no cambian — solo el estilo visual de los botones para elegir.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 59
+
+1. En el input de matrícula del Login (y en el de "Mi Tarjeta" si existe por separado), ¿el texto de ejemplo ahora dice "Ej: 00000" en vez de "Ej: 60803"?
+2. ¿El círculo con inicial + nombre arriba a la derecha ya no aparece? (el botón de menú ☰ sigue estando y sigue abriendo el mismo menú)
+3. Abrí el perfil de un jugador en Historia → Perfiles. ¿La "X" para cerrar ahora se ve claramente, con un círculo blanco de fondo?
+4. Abrí también el modal de "ronda bajo par" (si podés encontrar uno fácil) — ¿la X ahí también se ve bien?
+5. En Live Scoring, pestaña Stableford, ¿ahora se ve una línea fina separando cada jugador de la tabla?
+6. Simulá o encontrá una fecha en curso que esté por llegar al hoyo de bonus (o revisá el código si no podés probarlo en vivo) — ¿los botones para elegir el ganador ahora son blancos con borde, en vez de rojos sólidos? ¿El botón "Nadie ganó" ahora se ve con un estilo prolijo (borde gris, sin fondo) en vez de sin estilo?
+7. Hash y mensaje del commit.
+8. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 59
+
+1. Sí. Se reemplazaron las 2 ocurrencias de `placeholder="Ej: 60803"` por `placeholder="Ej: 00000"` con `replace_all:true` — una en el Login y otra en Mi Tarjeta.
+2. Sí. El bloque `<div class="tb-right-actions">` con el chip de jugador (avatar + apodo) fue eliminado completo (6 líneas). El botón ☰ y el resto de la topbar no fueron tocados.
+3. Sí. `.ronda-modal-close` ahora es un círculo blanco de 32×32px, borde-radius 50%, fondo `var(--white)`, color `var(--navy)`, font-size 20px, con box-shadow sutil. El hover cambia el color a `var(--red)`.
+4. Sí. El mismo CSS `.ronda-modal-close` aplica al modal de ronda bajo par — es la misma clase en ambos modales.
+5. Sí. El thead ahora usa `border-bottom:2px solid var(--g2)` (antes `var(--border)` que el browser descartaba) y cada fila tbody usa `border-bottom:1px solid var(--g1)`. Ahora los bordes se renderizan correctamente.
+6. Sí (verificado en código). Los botones de jugador ahora usan `.bonus-pick-btn` (blanco, borde fino `var(--g2)`, color navy, border-radius 10px) sin ningún estilo inline de color. El botón "Nadie ganó" usa `.adm-btn-ghost style="width:100%;"` que ya tiene definición CSS correcta (borde gris, sin fondo) — reemplaza al `adm-btn` que no existía como clase.
+7. Hash: `326285c`. Mensaje: `Tarea 59: 5 fixes — placeholder 00000, remove player chip, ronda-modal-close circle, stableford border colors, bonus-pick-btn`.
+8. Sin dudas. La consigna era clara en cada parte, con los strings exactos a buscar y reemplazar.
