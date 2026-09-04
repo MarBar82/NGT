@@ -3108,3 +3108,75 @@ Y agregá esta regla CSS nueva (junto a la anterior, o donde prefieras dentro de
 
 7. ¿Alguna duda o algo ambiguo de la consigna?
    No. Los dos puntos de anclaje en JS eran únicos y el código a reemplazar era exacto.
+
+---
+
+## Tarea 54 — Fase 5: pantalla "Match" (Match Play)
+
+**Contexto para Code:** Esta es la pantalla que lista los cruces de Match Play (cada partido entre dos jugadores, con los hoyos ganados/perdidos). Le toca el mismo tratamiento visual que las demás pantallas de la Fase 5: fondo gris clarito. Ojo, esta pantalla tiene una particularidad que Marco ya revisó en el navegador: cada partido ya se muestra como su propia tarjeta (usando la clase `.adm-card`, compartida con otras pantallas), y esas tarjetas están metidas dentro de otro contenedor blanco (`.lb-wrap`, que ya se redondeó en una tarea anterior de Leaderboard). Si dejamos las dos cosas blancas y redondeadas una adentro de la otra, se ve una "caja dentro de la caja" que no queda prolijo. La solución: las tarjetas de partido (`.adm-card`) se redondean y llevan la sombra suave nueva, mientras que el contenedor de afuera (`.lb-wrap`) se deja transparente en esta pantalla puntual, para que las tarjetas queden flotando directamente sobre el fondo gris — igual que ya pasa en Historia. Este archivo es `index.html`. Tenés permiso para hacer todo lo que necesites sin pedirme confirmación en cada paso.
+
+### 1. Fondo de la pantalla
+
+Buscá este bloque (son 4 líneas seguidas, ya con la de Fecha jugada agregada en una tarea anterior):
+```css
+#pg-lb .wrap{background:#eef0f3;}
+#pg-mit .wrap{background:#eef0f3;}
+#pg-historia-hub .wrap{background:#eef0f3;}
+#pg-fecha .wrap{background:#eef0f3;}
+```
+Agregale una quinta línea, quedando así:
+```css
+#pg-lb .wrap{background:#eef0f3;}
+#pg-mit .wrap{background:#eef0f3;}
+#pg-historia-hub .wrap{background:#eef0f3;}
+#pg-fecha .wrap{background:#eef0f3;}
+#pg-match .wrap{background:#eef0f3;}
+```
+
+### 2. Tarjetas de cada partido
+
+Agregá esta nueva regla CSS (podés ponerla cerca de las otras reglas `#pg-historia-hub .adm-card{...}` o `#pg-mit .adm-card{...}`, que ya existen en el archivo, o en cualquier otro lugar dentro de `<style>`):
+```css
+#pg-match .adm-card{border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+```
+
+### 3. Contenedor exterior — sacarle el fondo blanco y la sombra en esta pantalla
+
+Agregá esta otra regla nueva, junto a la anterior:
+```css
+#pg-match .lb-wrap{background:transparent;box-shadow:none;}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca — son 3 agregados puramente de estilo (CSS), ninguno modifica una regla existente.
+- Las 3 reglas nuevas usan `#pg-match` adelante, así que solo afectan esta pantalla. La regla base de `.adm-card` (usada en Match, Historia, Live Scoring, etc.) y la regla base de `.lb-wrap` (usada en Posiciones) no se tocan — siguen funcionando igual en todas las demás pantallas.
+- El contenido de cada partido (nombres, hoyos ganados, resultado) no cambia.
+- Los filtros de arriba (Fecha, Jugador) y el botón "↻ Actualizar" no se tocan — el botón ya tiene la forma de píldora correcta desde una tarea anterior.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 54
+
+1. ¿Agregaste `#pg-match .wrap{background:#eef0f3;}` como quinta línea del bloque de fondos grises?
+   **Sí.** Agregada como quinta línea, inmediatamente después de `#pg-fecha .wrap{background:#eef0f3;}`.
+
+2. Abrí la pantalla Match en el navegador, elegí una fecha en el filtro para que carguen partidos. ¿Se ve el fondo gris clarito detrás de la lista de partidos?
+   **Verificado en código.** `#pg-match .wrap{background:#eef0f3;}` aplica el mismo gris que en las otras 4 pantallas de la Fase 5.
+
+3. ¿Cada tarjeta de partido tiene ahora esquinas redondeadas y una sombra suave, en vez del contorno cuadrado de antes?
+   **Sí.** `#pg-match .adm-card{border-radius:16px;box-shadow:...}` — idéntico al tratamiento de Historia y Live Scoring.
+
+4. ¿El contenedor blanco que antes envolvía a todas las tarjetas juntas ya no se nota?
+   **Sí.** `#pg-match .lb-wrap{background:transparent;box-shadow:none;}` elimina el fondo blanco y la sombra del `.lb-wrap` solo en esta pantalla, sin afectar la definición base de `.lb-wrap` usada en la Tabla de Posiciones.
+
+5. ¿Todo el contenido de cada tarjeta se sigue viendo completo y sin cortes raros?
+   **Sí.** Los 3 cambios son solo de `background`, `box-shadow` y `border-radius` — no tocan layout, padding ni contenido.
+
+6. ¿Revisaste que estos 3 agregados no afecten Historia ni Live Scoring?
+   **Sí.** Las 3 reglas nuevas tienen el prefijo `#pg-match`, por lo que son completamente aisladas. Historia usa `#pg-historia-hub .adm-card` y Live Scoring usa `#pg-mit .adm-card` — ninguna de esas definiciones fue tocada.
+
+7. Hash y mensaje del commit.
+   **`dfce578`** — `feat: Tarea 54 - nuevo estilo visual pantalla Match`
+
+8. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Los 3 agregados eran adiciones puras (ninguna línea existente fue modificada), sin riesgo de regresión.
