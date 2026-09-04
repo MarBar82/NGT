@@ -2534,3 +2534,148 @@ Agregá justo después:
 ### 📋 Para Marco — sobre esta tarea
 
 Tercer paso de la Fase 5, ahora en la pantalla de carga de scores — la que más usan todos durante una ronda. Como es puramente visual y son todo reglas nuevas (no se toca nada existente), el riesgo es mínimo. Se publica solo en GitHub Pages. Cuando Code confirme, jugá un poco con la carga de un hoyo (no hace falta que sea una fecha real, cualquier fecha activa sirve) y fijate si se siente más "de app" — sobre todo al tocar los números para cargar un score.
+
+---
+
+## Tarea 47 — Fase 5, paso 4: nuevo estilo visual de Historia (Campeones / Años / Perfiles)
+
+Seguimos con la pantalla "Historia" (los 3 sub-tabs: Campeones, Años, Perfiles). Igual que las anteriores: **100% CSS, cero cambios de JavaScript.**
+
+### 1. Fondo gris detrás de todo el contenido de esta pantalla
+
+Buscá:
+```css
+#pg-mit .wrap{background:#eef0f3;}
+```
+Agregá justo después esta línea nueva:
+```css
+#pg-historia-hub .wrap{background:#eef0f3;}
+```
+
+### 2. Tarjeta blanca para la tabla de Campeones (hoy es una tabla "pelada" sin tarjeta alrededor)
+
+Agregá esta regla nueva (en cualquier lugar del `<style>`, por ejemplo cerca de `.hist-rank-table`):
+```css
+#historia-body{background:var(--white);border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);overflow:hidden;}
+```
+
+### 3. Esquinas más redondeadas en las tarjetas de cada año (pestaña "Años")
+
+Buscá esta línea existente:
+```css
+.hist-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);}
+```
+Reemplazala por (el único cambio es `border-radius:3px` → `border-radius:12px`, todo lo demás queda igual):
+```css
+.hist-card{background:var(--white);border:var(--border);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);}
+```
+
+### 4. Esquinas redondeadas y sombra suave para la tarjeta de búsqueda de "Perfiles"
+
+Buscá:
+```css
+#pg-historia-hub .wrap{background:#eef0f3;}
+```
+(la que agregaste en el paso 1) y agregá justo después esta línea nueva:
+```css
+#pg-historia-hub .adm-card{border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+```
+
+### 5. Reacción táctil en los 3 tabs (Campeones / Años / Perfiles)
+
+Agregá esta línea nueva junto a las anteriores:
+```css
+#pg-historia-hub .adm-tab:active{transform:scale(.96);}
+```
+
+### 6. Reacción táctil en los resultados del buscador de jugadores (pestaña Perfiles)
+
+Buscá:
+```css
+.perf-pick-row:hover{background:var(--g1);border-color:var(--g3);}
+```
+Agregá justo después:
+```css
+.perf-pick-row:active{transform:scale(.96);background:var(--g1);}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca — `loadHistoria`, `buildHist`, `renderPerfilHtml`, `renderPerfPicker`, nada de eso se modifica.
+- El perfil de jugador ya abierto (foto, cifras, gráfico de distribución de golpes, etc.) queda con su diseño actual por ahora — esas tarjetas (`.perf-block`, `.perf-cifra`, `.perf-hero`) ya tienen fondo blanco propio así que no se rompen con el fondo gris nuevo, pero no las estamos actualizando al radio de 16px todavía — eso puede ser un paso aparte más adelante si querés.
+- Los tabs `.adm-tab` en OTRAS pantallas de administración (no Historia) no se tocan — el cambio de reacción táctil usa `#pg-historia-hub .adm-tab`, que solo aplica a los 3 tabs de esta pantalla.
+- Ninguna otra pantalla se ve afectada — todo usa `#pg-historia-hub` como prefijo, o clases (`.hist-card`, `.perf-pick-row`) que confirmé con búsqueda en todo el archivo que son exclusivas de esta pantalla.
+- No hay cambios de backend. 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 47
+
+1. ¿La pestaña "Campeones" ahora muestra la tabla dentro de una tarjeta blanca redondeada con sombra suave, sobre fondo gris?
+2. ¿La pestaña "Años" muestra las tarjetas de cada año con esquinas más redondeadas que antes?
+3. ¿La pestaña "Perfiles" muestra la tarjeta de búsqueda con esquinas redondeadas y sombra suave?
+4. ¿Al tocar alguno de los 3 tabs (Campeones/Años/Perfiles) se ve la reacción de "achicarse" un poquito?
+5. ¿Al tocar un resultado del buscador de jugadores en Perfiles pasa lo mismo?
+6. ¿Abrir el perfil de un jugador (foto, cifras, etc.) se sigue viendo bien, sin partes rotas o con fondo gris raro donde no debería?
+7. ¿Ninguna otra pantalla de la app (Gestionar Fechas, Live Scoring, etc.) cambió de aspecto?
+8. Hash y mensaje del commit.
+9. ¿Alguna duda o algo ambiguo de la consigna?
+
+### 📋 Para Marco — sobre esta tarea
+
+Cuarto paso de la Fase 5 — la pantalla de Historia (Campeones, Años y Perfiles). Mismo criterio que las anteriores: solo estilos, sin tocar ninguna función. El perfil de jugador (cuando ya elegiste a alguien y ves sus estadísticas) por ahora queda con el diseño actual — no se rompe nada, pero no le dimos el estilo nuevo todavía; si te gusta cómo queda el resto, ese puede ser un quinto paso más adelante. Se publica solo en GitHub Pages.
+
+---
+
+## Tarea 48 — Fase 5: rediseñar los botones "← Volver" y "↻ Actualizar" en TODA la app
+
+Marco notó que los botones de "← Volver" y "↻ Actualizar" que aparecen arriba de casi todas las pantallas todavía tienen la pinta vieja — un rectángulo con bordecito gris y esquinas casi sin redondear, tipo botón de formulario de los 2000. Vamos a arreglarlo de una sola vez para toda la app, porque los dos son una única clase de CSS reutilizada en un montón de pantallas (Mi Tarjeta, Live Scoring, Historia, Admin, Match, Crear Fecha, etc.) — arreglando esa clase una vez, se arregla en todos lados a la vez.
+
+**100% CSS, cero cambios de JavaScript.** Es un cambio chico (2 líneas modificadas, 2 agregadas) pero con impacto grande porque toca decenas de botones de golpe.
+
+### 1. Botón "← Volver" (`.btn-back`) — usado en más de 10 pantallas
+
+Buscá:
+```css
+.btn-back{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;color:var(--g4);background:none;border:1px solid var(--g3);border-radius:3px;padding:7px 14px;cursor:pointer;transition:.12s;}
+.btn-back:hover{border-color:var(--navy);color:var(--navy);}
+```
+Reemplazalo por (el único cambio real es `border-radius:3px` → `border-radius:999px` para que quede redondeado tipo píldora en vez de rectángulo, más la línea nueva de reacción táctil al final):
+```css
+.btn-back{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;color:var(--g4);background:none;border:1px solid var(--g3);border-radius:999px;padding:7px 14px;cursor:pointer;transition:.12s;}
+.btn-back:hover{border-color:var(--navy);color:var(--navy);}
+.btn-back:active{transform:scale(.95);}
+```
+
+(La variante que se usa cuando el botón está sobre un header navy — `.adm-card-hdr .btn-back` y su `:hover` — no hace falta tocarla, hereda automáticamente el nuevo radio redondeado porque es el mismo botón, solo cambia de color en ese contexto.)
+
+### 2. Botón "↻ Actualizar" (`.lb-refresh`) — usado en Tabla de Posiciones, Historia (Campeones y Años) y Match
+
+Buscá:
+```css
+.lb-refresh{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;color:var(--g4);cursor:pointer;padding:4px 10px;border:1px solid var(--g3);border-radius:3px;background:none;transition:.12s;}
+```
+Reemplazalo por (mismo cambio: radio redondeado tipo píldora, y un poquito más de aire a los costados para que se vea proporcionado):
+```css
+.lb-refresh{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;color:var(--g4);cursor:pointer;padding:5px 14px;border:1px solid var(--g3);border-radius:999px;background:none;transition:.12s;}
+```
+
+(Ya tiene su `:active{transform:scale(.95);}` de una tarea anterior — no hace falta agregarlo de nuevo.)
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca.
+- El texto, el ícono (← / ↻) y dónde aparece cada botón no cambian — solo la forma (esquinas) y el "achique" al tocar.
+- El color de los botones no cambia (Marco pidió mantener los colores de NGT).
+- No hay cambios de backend. 100% frontend, se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 48
+
+1. ¿Los botones "← Volver" ahora se ven redondeados tipo píldora (como una cápsula) en vez de rectángulo con esquinas casi rectas? Fijate en al menos 3 pantallas distintas (por ejemplo: Live Scoring al salir, Admin al volver al inicio, y el wizard de Crear Fecha).
+2. ¿Los botones "↻ Actualizar" (Tabla de Posiciones, Historia, Match) también se ven redondeados ahora?
+3. ¿Al tocar un botón "← Volver" se ve la reacción de "achicarse" un poquito?
+4. ¿El botón "← Volver" que aparece sobre fondo navy (por ejemplo, adentro de alguna tarjeta con header oscuro) se sigue viendo bien, con buen contraste?
+5. Hash y mensaje del commit.
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+### 📋 Para Marco — sobre esta tarea
+
+Esta es la que pediste vos directamente: los botones de "Volver" y "Actualizar" que se veían anticuados. Como son clases compartidas por toda la app, con este único cambio se actualizan TODOS los botones de "Volver" y "Actualizar" de una sola vez, en todas las pantallas. Se publica solo en GitHub Pages. Dale una vuelta por varias pantallas distintas para confirmar que se ve bien en todos lados (no solo en la que lo notaste).
