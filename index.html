@@ -728,6 +728,12 @@ select.adm-input:disabled{opacity:.55;cursor:not-allowed;background-color:var(--
 .live-player-info{flex:1;min-width:0;}
 .live-player-apodo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;text-transform:uppercase;letter-spacing:.03em;color:var(--navy);}
 .live-player-hcp{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
+.live-golpes-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+.golpe-badge{display:inline-flex;align-items:center;gap:2px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.02em;}
+.golpe-badge .golpe-dot{font-size:10px;line-height:1;}
+.golpe-badge.golpe-favor{color:var(--green);}
+.golpe-badge.golpe-contra{color:var(--red);}
+.golpe-badge.golpe-neutral{color:var(--g4);}
 .live-cargado-por{font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--g4);margin-top:2px;letter-spacing:.02em;}
 .live-hole-wrap{display:flex;align-items:center;gap:8px;}
 .live-stb-badge{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);min-width:28px;text-align:center;line-height:1;}
@@ -6392,6 +6398,71 @@ function liveRender(){
   }
 }
 
+// Diferencia de golpes de handicap entre dos jugadores para un hoyo puntual —
+// misma cuenta que ya se usa para el Match Play (ver calcularResultadoMatch_ en el
+// backend), generalizada acá para compararse contra cualquier rival de la línea.
+// Devuelve 1 si A tiene golpe a favor contra B en ese hoyo, -1 si es en contra, 0 si no hay golpe.
+function liveGolpeVsRival_(hcpA, hcpB, indiceHoyo){
+  if(!indiceHoyo) return 0;
+  var ayA = Math.max(0, hcpA - hcpB);
+  var ayB = Math.max(0, hcpB - hcpA);
+  var bcA = Math.max(0, ayA - 18);
+  var bcB = Math.max(0, ayB - 18);
+  var adjA = (ayA > 0 && ayA >= indiceHoyo ? 1 : 0) + (bcA > 0 && indiceHoyo <= bcA ? 1 : 0);
+  var adjB = (ayB > 0 && ayB >= indiceHoyo ? 1 : 0) + (bcB > 0 && indiceHoyo <= bcB ? 1 : 0);
+  if(adjA > adjB) return 1;
+  if(adjB > adjA) return -1;
+  return 0;
+}
+
+// Iniciales "Nombre Apellido" a partir del nombre completo guardado (que se guarda
+// como "APELLIDO Nombre", con algunos apellidos compuestos — misma lista que ya usa
+// formatPlayerLabel/fmtNameForAdm para no cortar mal esos casos).
+function liveIniciales_(nombreCompleto){
+  var COMPOUND = ['LAVALLE COBO','MARTINEZ FANO','RODRIGUEZ NAZAR','DE SAINT LEGER'];
+  var n = (nombreCompleto || '').trim();
+  var up = n.toUpperCase();
+  var comp = COMPOUND.find(function(c){ return up.indexOf(c) === 0; });
+  var ap, nm;
+  if(comp){
+    ap = comp;
+    nm = n.slice(comp.length).trim();
+  } else {
+    var parts = n.split(' ');
+    ap = parts[0] || '';
+    nm = parts.slice(1).join(' ');
+  }
+  var apInit = ap ? ap.trim().charAt(0).toUpperCase() : '';
+  var nmInit = nm ? nm.trim().charAt(0).toUpperCase() : '';
+  return (nmInit + apInit) || '?';
+}
+
+// Arma la fila de "puntos" de golpes a favor/en contra de un jugador contra
+// CADA UNO DE SUS RIVALES DE MATCH (los que arma el admin al crear la fecha,
+// normalmente 2 por jugador) — no contra todos los compañeros de línea.
+function liveRenderGolpesBadges_(jug, hoyoIdx){
+  if(!LIVE_LINEA_DATA || !LIVE_LINEA_DATA.matches) return '';
+  var misMatches = LIVE_LINEA_DATA.matches.filter(function(m){
+    return m.j1 === jug.matricula || m.j2 === jug.matricula;
+  });
+  if(!misMatches.length) return '';
+  var jugMap = {};
+  (LIVE_LINEA_DATA.jugadores || []).forEach(function(j){ jugMap[j.matricula] = j; });
+  var html = '<div class="live-golpes-row">';
+  misMatches.forEach(function(m){
+    var rivalMat = (m.j1 === jug.matricula) ? m.j2 : m.j1;
+    var riv = jugMap[rivalMat];
+    if(!riv) return;
+    var g = liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx);
+    var ini = liveIniciales_(riv.nombre || riv.apodo || '');
+    var cls = g > 0 ? 'golpe-favor' : (g < 0 ? 'golpe-contra' : 'golpe-neutral');
+    var simbolo = g === 0 ? '–' : '●';
+    html += '<span class="golpe-badge ' + cls + '"><span class="golpe-dot">' + simbolo + '</span>' + ini + '</span>';
+  });
+  html += '</div>';
+  return html;
+}
+
 function liveRenderHoyoActual(){
   if(!LIVE_LINEA_DATA) return;
   var d = LIVE_LINEA_DATA;
@@ -6430,6 +6501,7 @@ function liveRenderHoyoActual(){
       '<div class="live-player-info">' +
         '<div class="live-player-apodo">' + jug.apodo + '</div>' +
         '<div class="live-player-hcp">HCP ' + jug.hcpJuego + '</div>' +
+        liveRenderGolpesBadges_(jug, hoyoIdx) +
       '</div>' +
       '<div class="live-hole-wrap">' +
         '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +

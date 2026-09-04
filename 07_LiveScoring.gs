@@ -103,6 +103,7 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
     const firstNull = pd.scores.indexOf(null);
     return {
       matricula:        mat,
+      nombre:          jug.nombre || '',
       apodo:           (jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)).toUpperCase(),
       hcpJuego:        pd.hcp,
       scores:          pd.scores,
