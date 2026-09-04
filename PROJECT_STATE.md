@@ -3719,3 +3719,210 @@ function getFechasConEstado_() {
 5. Sí. Búsqueda de `getHcpsForFecha_` en todos los `.gs`: aparece solo en `03_Reads.gs`, en su definición (línea 294) y en su única llamada dentro de `getFechasConEstado_` (línea 456). Ningún otro archivo la usa.
 6. ⚠️ **Recordatorio para Marco:** el cambio está en `03_Reads.gs`. Hay que hacer el **deploy manual desde el editor de Apps Script** para que el fix quede activo. GitHub Pages no publica los archivos `.gs`.
 7. Sin dudas. La consigna era muy clara.
+
+---
+
+## Tarea 61 — Llevar al usuario directo a su Live Scoring (ítems 11 y 12)
+
+**Contexto para Code:** Esta tarea junta dos pedidos relacionados: (A) cuando un admin termina de crear una fecha y él mismo juega esa fecha, que lo lleve directo a su Live Scoring en vez de al Leaderboard; y (B) cuando cualquier usuario se loguea y hay una fecha activa, que lo lleve directo a Live Scoring en vez de dejarlo en el Leaderboard. Los dos tocan `index.html`, son independientes entre sí (podés hacerlos en cualquier orden), y reusan piezas que ya existen en la app (la pantalla de Live Scoring y su lógica de carga ya están hechas y probadas — no estamos escribiendo esa parte de cero). Tenés permiso para hacer todo lo que necesites sin pedirme confirmación en cada paso.
+
+### PARTE A — Ítem 11: Crear Fecha → directo a mi Live Scoring si yo también juego
+
+Hoy, al terminar el wizard de "Crear Fecha", la función `finalizarWizard` siempre redirige al Leaderboard (`pg('lb', null)`), sin importar si el admin logueado también está anotado como jugador en la fecha recién creada.
+
+Buscá:
+```js
+function finalizarWizard(rFecha, rMatches){
+  const msg = document.getElementById('adm-s2-msg');
+  msg.className = 'adm-msg ok';
+  let txt = '✓ Fecha creada — ' + rFecha.added + ' tarjetas';
+  if(rMatches) txt += ' + ' + rMatches.count + ' matches';
+  msg.textContent = txt;
+
+  // Reset wizard
+  setTimeout(function(){
+    document.getElementById('adm-fecha').value = '';
+    document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
+    WIZ_PASO1_DATA = null;
+    wizResetWizardCompleto_();
+    // Limpiar caches y refrescar home con la nueva fecha
+    try { localStorage.removeItem('ngt_fechaActiva'); } catch(e){}
+    ngtInitData(); // recarga home con el nuevo botón FECHA
+    // Refresh admin data
+    loadAdminData();
+    // Redirect to Leader Board
+    pg('lb', null);
+  }, 1800);
+}
+```
+Reemplazala por:
+```js
+function finalizarWizard(rFecha, rMatches, lineasParam){
+  const msg = document.getElementById('adm-s2-msg');
+  msg.className = 'adm-msg ok';
+  let txt = '✓ Fecha creada — ' + rFecha.added + ' tarjetas';
+  if(rMatches) txt += ' + ' + rMatches.count + ' matches';
+  msg.textContent = txt;
+
+  // Reset wizard
+  setTimeout(function(){
+    document.getElementById('adm-fecha').value = '';
+    document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
+    WIZ_PASO1_DATA = null;
+    wizResetWizardCompleto_();
+    // Limpiar caches y refrescar home con la nueva fecha
+    try { localStorage.removeItem('ngt_fechaActiva'); } catch(e){}
+    ngtInitData(); // recarga home con el nuevo botón FECHA
+    // Refresh admin data
+    loadAdminData();
+    // Si el admin logueado también juega esta fecha, lo llevamos directo a su Live Scoring
+    var misMat = (NGT_SESSION && NGT_SESSION.mat) ? String(NGT_SESSION.mat) : null;
+    var soyJugador = misMat && lineasParam && lineasParam.some(function(linea){
+      return linea.some(function(m){ return String(m) === misMat; });
+    });
+    if(soyJugador){
+      pg('mit', null);
+    } else {
+      pg('lb', null);
+    }
+  }, 1800);
+}
+```
+
+Ahora hay que pasarle `lineasParam` en los 2 lugares donde se llama a esta función. Buscá:
+```js
+    if(!matches.length){
+      finalizarWizard(r);
+      return;
+    }
+```
+Reemplazá por:
+```js
+    if(!matches.length){
+      finalizarWizard(r, null, lineasParam);
+      return;
+    }
+```
+
+Y buscá:
+```js
+      finalizarWizard(r, rm);
+```
+Reemplazá por:
+```js
+      finalizarWizard(r, rm, lineasParam);
+```
+
+### PARTE B — Ítem 12: Login → directo a Live Scoring si hay fecha activa
+
+Hoy, después de loguearse, el usuario siempre queda en el Leaderboard, incluso si hay una fecha en curso y está anotado en una línea de esa fecha. La app YA tiene la lógica para saltar directo a Live Scoring cuando hay fecha activa (la usa el botón "Mi Tarjeta" del menú de abajo) — solo falta dispararla automáticamente al terminar de loguearse.
+
+Primero, agregá esta función nueva (en cualquier lugar del archivo, por ejemplo justo antes de `function loginWithLocalSession`):
+```js
+function loginRedirectSiFechaActiva(){
+  ngtInitData().then(function(){
+    var strip = document.getElementById('fecha-activa-strip');
+    if(strip && strip.dataset.active === '1'){
+      pg('mit', null);
+    }
+  });
+}
+```
+Esto espera a que la app confirme (con datos frescos del servidor, no viejos de caché) si hay una fecha activa antes de decidir si redirige — así no salta a Live Scoring por error con un dato desactualizado.
+
+Para que la función de arriba funcione, `ngtInitData` tiene que devolver la promesa de su pedido al servidor (hoy no la devuelve, así que no se podría "esperar" a que termine). Buscá:
+```js
+  // Un solo JSONP al backend → proximaFecha + fechasConEstado + jugadoresHist
+  ngtApiGet('initData').then(r => {
+```
+Reemplazá por:
+```js
+  // Un solo JSONP al backend → proximaFecha + fechasConEstado + jugadoresHist
+  return ngtApiGet('initData').then(r => {
+```
+(Ojo: esto NO afecta a ninguno de los otros lugares donde ya se llama `ngtInitData();` sin usar lo que devuelve — un `return` adentro de la función no cambia nada para quien la llama sin esperar nada de vuelta.)
+
+Por último, agregá la llamada a la función nueva en los 3 lugares donde termina un login exitoso. Buscá (aparece dentro de `loginWithLocalSession`):
+```js
+  sessionSave(sess.token, sess);
+  applySession(NGT_SESSION);
+  loginHideOverlay();
+}
+```
+Reemplazá por:
+```js
+  sessionSave(sess.token, sess);
+  applySession(NGT_SESSION);
+  loginHideOverlay();
+  loginRedirectSiFechaActiva();
+}
+```
+
+Buscá (dentro de `loginSubmitPin`):
+```js
+      sessionSave(r.token, r.player);
+      applySession(NGT_SESSION);
+      loginHideOverlay();
+      return;
+```
+Reemplazá por:
+```js
+      sessionSave(r.token, r.player);
+      applySession(NGT_SESSION);
+      loginHideOverlay();
+      loginRedirectSiFechaActiva();
+      return;
+```
+
+Buscá (dentro de `loginCrearPinStep`):
+```js
+    if (r.ok) {
+      sessionSave(r.token, r.player);
+      applySession(NGT_SESSION);
+      loginHideOverlay();
+    } else {
+```
+Reemplazá por:
+```js
+    if (r.ok) {
+      sessionSave(r.token, r.player);
+      applySession(NGT_SESSION);
+      loginHideOverlay();
+      loginRedirectSiFechaActiva();
+    } else {
+```
+
+### Qué NO cambia
+
+- No se toca la lógica de Live Scoring en sí (`openLiveView`, `showMitFechas`, `livePoll`) — se reutiliza tal cual está.
+- Si un usuario no está anotado en ninguna línea de la fecha activa, ya existe una pantalla de error prolija con un botón "← Volver" que lo manda al Leaderboard — no hay riesgo de que se rompa nada ni de pantallas en blanco.
+- El comportamiento para cuando NO hay fecha activa no cambia — el usuario sigue quedando en el Leaderboard después de loguearse, igual que hoy.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 61
+
+1. ¿`finalizarWizard` ahora recibe un tercer parámetro `lineasParam` y lo usa para decidir entre `pg('mit', null)` y `pg('lb', null)`?
+2. ¿Actualizaste los 2 lugares donde se llama a `finalizarWizard` para que le pasen `lineasParam`?
+3. Si es posible probarlo: creá una fecha de prueba donde tu propio usuario esté entre los jugadores elegidos — al terminar el wizard, ¿te lleva directo a Live Scoring en vez del Leaderboard? Creá otra fecha donde NO estés vos entre los jugadores — ¿ahí sí te deja en el Leaderboard como antes?
+4. ¿Agregaste la función `loginRedirectSiFechaActiva` y el `return` en `ngtInitData`?
+5. ¿Agregaste la llamada a `loginRedirectSiFechaActiva()` en los 3 lugares de login exitoso (`loginWithLocalSession`, `loginSubmitPin`, `loginCrearPinStep`)?
+6. Si es posible probarlo: cerrá sesión, y volvé a loguearte en un momento donde haya una fecha activa y estés anotado en una línea — ¿te lleva directo a Live Scoring? Si no hay ninguna fecha activa ahora mismo, contame qué revisaste en el código para confirmar que la lógica está bien aunque no lo hayas podido ver en vivo.
+7. Hash y mensaje del commit.
+8. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 61
+
+1. Sí. `finalizarWizard` ahora recibe `lineasParam` como tercer parámetro. Dentro del `setTimeout`, compara la matrícula del admin logueado (`NGT_SESSION.mat`) contra las líneas y redirige a `pg('mit', null)` si está anotado, o a `pg('lb', null)` si no.
+2. Sí. Los dos lugares actualizados:
+   - `finalizarWizard(r)` → `finalizarWizard(r, null, lineasParam)` (cuando no hay matches)
+   - `finalizarWizard(r, rm)` → `finalizarWizard(r, rm, lineasParam)` (cuando hay matches)
+   En ambos casos `lineasParam` ya estaba definido en el mismo scope, es el array de arrays de matrículas por línea.
+3. No fue posible probar en vivo (no hay acceso al navegador con sesión admin). La lógica es correcta: `lineasParam.some(linea => linea.some(m => String(m) === misMat))` busca la matrícula del admin en todas las líneas.
+4. Sí. `loginRedirectSiFechaActiva` fue agregada justo antes de `loginWithLocalSession`. El `return` fue agregado en `ngtInitData` delante de `ngtApiGet('initData').then(...)` para que la función retorne la promesa. Esto no afecta a los otros lugares donde se llama sin usar el retorno.
+5. Sí. Se agregó `loginRedirectSiFechaActiva()` en los 3 lugares:
+   - `loginWithLocalSession` (login sin PIN)
+   - `loginSubmitPin` (login con PIN existente)
+   - `loginCrearPinStep` (primer login con PIN nuevo)
+6. No fue posible probar en vivo. La lógica usa `ngtInitData().then(...)` para esperar datos frescos del servidor, luego lee `strip.dataset.active === '1'` del elemento `fecha-activa-strip` — el mismo criterio que ya usa el resto de la app para saber si hay fecha activa. Si no hay fecha activa, `strip` no tendrá `data-active="1"` y no se redirige.
+7. Hash: `29810d0`. Mensaje: `Tarea 61: redirigir a Live Scoring al crear fecha y al loguearse si hay fecha activa`.
+8. Sin dudas. La consigna era precisa, con todos los snippets exactos a buscar y reemplazar.
