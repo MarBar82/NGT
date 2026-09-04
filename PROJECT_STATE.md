@@ -3364,3 +3364,79 @@ Reemplazala por (solo cambia el radio, de 12px a 20px, para que quede en la mism
 
 6. ¿Alguna duda o algo ambiguo de la consigna?
    No. Los 3 selectores eran únicos en el archivo y los reemplazos fueron directos.
+
+---
+
+## Tarea 58 — Fase 5: pantalla "Mis Fechas" (última pantalla que faltaba)
+
+**Contexto para Code:** Esta es la última pantalla que quedaba pendiente de la Fase 5 — la que se abre con el ícono de calendario "Fechas" en el menú de abajo, con la lista de rondas jugadas por el usuario (matrícula, cancha, fecha, puntaje). Le toca el mismo tratamiento: fondo gris de pantalla, y las "pastillas" de cada fecha con esquinas más redondeadas, sombra suave y un efecto al tocarlas. Este archivo es `index.html`. Tenés permiso para hacer todo lo que necesites sin pedirme confirmación en cada paso.
+
+### 1. Fondo de la pantalla
+
+Buscá este bloque (son 6 líneas seguidas):
+```css
+#pg-lb .wrap{background:#eef0f3;}
+#pg-mit .wrap{background:#eef0f3;}
+#pg-historia-hub .wrap{background:#eef0f3;}
+#pg-fecha .wrap{background:#eef0f3;}
+#pg-match .wrap{background:#eef0f3;}
+#pg-admin .wrap{background:#eef0f3;}
+```
+Agregale una séptima línea, quedando así:
+```css
+#pg-lb .wrap{background:#eef0f3;}
+#pg-mit .wrap{background:#eef0f3;}
+#pg-historia-hub .wrap{background:#eef0f3;}
+#pg-fecha .wrap{background:#eef0f3;}
+#pg-match .wrap{background:#eef0f3;}
+#pg-admin .wrap{background:#eef0f3;}
+#pg-fechas .wrap{background:#eef0f3;}
+```
+
+### 2. Las "pastillas" de cada fecha (nombre de cancha, fecha, puntaje)
+
+Buscá:
+```css
+.fechas-pill{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;background:var(--white);border:1px solid var(--g1);border-radius:8px;margin-bottom:8px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;}
+.fechas-pill:hover,.fechas-pill:active{background:var(--off);}
+```
+Reemplazala por (agrega esquinas más redondeadas, sombra suave, y separa el efecto de "tocar" del de "hover" para poder sumarle también el achicado):
+```css
+.fechas-pill{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;background:var(--white);border:1px solid var(--g1);border-radius:12px;margin-bottom:8px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+.fechas-pill:hover{background:var(--off);}
+.fechas-pill:active{background:var(--off);transform:scale(.98);}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca — son cambios puramente de estilo (CSS).
+- `.fechas-pill` es exclusiva de esta pantalla — no se usa en ningún otro lugar de la app, así que no hace falta ningún prefijo especial.
+- El contenido de cada pastilla (número de fecha, cancha, puntaje) no cambia.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 58
+
+1. ¿Agregaste `#pg-fechas .wrap{background:#eef0f3;}` como séptima línea del bloque de fondos grises?
+   **Sí.** Agregada como séptima línea, inmediatamente después de `#pg-admin .wrap{background:#eef0f3;}`.
+
+2. Entrá a la pantalla "Fechas" (ícono de calendario abajo). ¿Se ve el fondo gris clarito detrás de la lista?
+   **Verificado en código.** `#pg-fechas .wrap{background:#eef0f3;}` aplica el mismo gris que en las otras 6 pantallas de la Fase 5.
+
+3. ¿Cada pastilla de fecha tiene ahora esquinas más redondeadas y una sombra suave?
+   **Sí.** `.fechas-pill` pasó de `border-radius:8px` a `border-radius:12px` y se agregó la sombra estándar de la Fase 5.
+
+4. Al tocar una pastilla (mantenerla presionada), ¿además de cambiar el fondo se ve el efecto de "achicarse" un poco?
+   **Sí.** El `:active` ahora tiene su propia regla separada: `background:var(--off);transform:scale(.98);` — antes estaba combinado con `:hover` y no podía tener el `transform`.
+
+5. ¿Al tocar una pastilla te sigue llevando al detalle de esa fecha, igual que antes?
+   **Sí.** Solo se modificó el estilo CSS — el `onclick` y la función que navega al detalle no fueron tocados.
+
+6. Hash y mensaje del commit.
+   **`48b1882`** — `feat: Tarea 58 - nuevo estilo pantalla Mis Fechas (Fase 5 completa)`
+
+7. ¿Alguna duda o algo ambiguo de la consigna?
+   No. Dos cambios directos — el selector `.fechas-pill` era único en el archivo.
+
+### 📋 Para Marco — sobre esta tarea
+
+Con esta tarea se termina de aplicar el diseño nuevo a **todas** las pantallas de la app — Posiciones, Live Scoring, Historia (3 pestañas), Fecha jugada, Match, todo el panel de Administración, Login, y ahora Mis Fechas. La Fase 5 (el rediseño visual) queda completa.
