@@ -1184,6 +1184,7 @@ select.adm-input:disabled{opacity:.55;cursor:not-allowed;background-color:var(--
   background:linear-gradient(90deg, var(--gold) 0%, var(--red) 100%);
 }
 .perf-hero-photo{
+  position:relative;
   width:90px;
   height:90px;
   border-radius:50%;
@@ -1193,6 +1194,9 @@ select.adm-input:disabled{opacity:.55;cursor:not-allowed;background-color:var(--
   background:rgba(255,255,255,.05);
   box-shadow:0 4px 14px rgba(0,0,0,.3);
 }
+.perf-foto-edit-btn{position:absolute;bottom:0;left:0;width:100%;height:28px;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;border:none;padding:0;color:#fff;}
+.perf-foto-edit-btn:hover{background:rgba(0,0,0,.78);}
+.perf-hero-photo.perf-foto-subiendo{opacity:.6;pointer-events:none;}
 .perf-hero-photo img{
   width:100%;
   height:100%;
@@ -5430,7 +5434,7 @@ function applySession(sess) {
     if (mat) {
       var img = document.createElement('img');
       img.alt = initial;
-      img.src = './fotos/' + mat + '.jpg';
+      img.src = sess.fotoUrl || '';
       img.onerror = function() { el.removeChild(img); el.textContent = initial; };
       el.textContent = '';
       el.appendChild(img);
@@ -7723,6 +7727,58 @@ function loadPerfil(matricula){
   });
 }
 
+function perfilAbrirSelectorFoto() {
+  var inp = document.getElementById('perf-foto-input');
+  if (inp) inp.click();
+}
+
+function perfilFotoSeleccionada(ev) {
+  var file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  if (file.size > 3 * 1024 * 1024) { alert('La foto no puede superar 3 MB.'); return; }
+  perfilProcesarYSubirFoto_(file);
+}
+
+function perfilProcesarYSubirFoto_(file) {
+  var wrapper = document.getElementById('perf-photo-wrapper');
+  if (wrapper) wrapper.classList.add('perf-foto-subiendo');
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var dataUrl = e.target.result;
+    var comma = dataUrl.indexOf(',');
+    var base64 = dataUrl.substring(comma + 1);
+    var mimeType = file.type || 'image/jpeg';
+    perfilSubirFotoAlServidor_(base64, mimeType);
+  };
+  reader.readAsDataURL(file);
+}
+
+function perfilSubirFotoAlServidor_(base64, mimeType) {
+  var sess = NGT_SESSION;
+  if (!sess || !sess.token) { alert('Sesión no válida'); return; }
+  ngtApiPost({ action: 'subirFoto', token: sess.token, base64: base64, mimeType: mimeType })
+  .then(function(res) {
+    var wrapper = document.getElementById('perf-photo-wrapper');
+    if (wrapper) wrapper.classList.remove('perf-foto-subiendo');
+    if (!res.ok) { alert('Error al subir la foto: ' + (res.error || 'desconocido')); return; }
+    var img = document.getElementById('perf-photo-img');
+    if (img) { img.src = res.fotoUrl + '&cb=' + Date.now(); img.classList.remove('is-fallback'); }
+    updateSessionFotoUrl(res.fotoUrl);
+  })
+  .catch(function() {
+    var wrapper = document.getElementById('perf-photo-wrapper');
+    if (wrapper) wrapper.classList.remove('perf-foto-subiendo');
+    alert('Error de red al subir la foto.');
+  });
+}
+
+function updateSessionFotoUrl(fotoUrl) {
+  if (!NGT_SESSION) return;
+  NGT_SESSION.fotoUrl = fotoUrl;
+  try { localStorage.setItem('NGT_SESSION', JSON.stringify(NGT_SESSION)); } catch(e) {}
+  applySession(NGT_SESSION);
+}
+
 function renderPerfil(data){
   openFloatingModal(renderPerfilHtml(data));
 }
@@ -7743,13 +7799,13 @@ function renderPerfilHtml(data){
   const apo = apoSpan ? apoSpan.textContent : '';
   const nombre = nameSpan ? nameSpan.textContent : '';
 
-  // Photo URL: try /fotos/{matricula}.jpg, fallback to logo.png
-  const photoUrl = './fotos/' + id.matricula + '.jpg';
-  const fallbackUrl = './logo.png';
+  const photoUrl = id.fotoUrl || './logo.png';
+  const isOwnProfile = NGT_SESSION && NGT_SESSION.mat === id.matricula;
 
   let html = '<div class="perf-hero">' +
-    '<div class="perf-hero-photo">' +
-      '<img src="' + photoUrl + '" onerror="this.onerror=null;this.src=\'' + fallbackUrl + '\';this.classList.add(\'is-fallback\');" alt="">' +
+    '<div class="perf-hero-photo" id="perf-photo-wrapper">' +
+      '<img src="' + photoUrl + '" onerror="this.onerror=null;this.src=\'./logo.png\';this.classList.add(\'is-fallback\');" alt="" id="perf-photo-img">' +
+      (isOwnProfile ? '<button class="perf-foto-edit-btn" onclick="perfilAbrirSelectorFoto()" title="Cambiar foto">📷</button><input type="file" id="perf-foto-input" accept="image/*" style="display:none" onchange="perfilFotoSeleccionada(event)">' : '') +
     '</div>' +
     '<div class="perf-hero-info">' +
       '<div class="perf-hero-apo">' + (apo || id.nombre) + '</div>' +

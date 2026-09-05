@@ -57,7 +57,7 @@ function doGet(e) {
         if (!sess) { result = { ok: false, error: 'Sesión inválida' }; break; }
         const jugsList = cachedRead_('jugadores', 300, getJugadores_);
         const jugInfo = jugsList.find(function(j){ return j.matricula === sess.mat; }) || {};
-        result = { ok: true, player: { matricula: sess.mat, nombre: jugInfo.nombre || '', apodo: jugInfo.apodo || '', hcpIndex: jugInfo.hcpIndex || null, rol: sess.rol } };
+        result = { ok: true, player: { matricula: sess.mat, nombre: jugInfo.nombre || '', apodo: jugInfo.apodo || '', hcpIndex: jugInfo.hcpIndex || null, rol: sess.rol, fotoUrl: jugInfo.fotoUrl || '' } };
         break;
       }
       case 'getRankingCampeones': result = getRankingCampeones_(); break;
@@ -174,6 +174,7 @@ function doPost(e) {
       case 'cambiarPin':         result = cambiarPin_(params); break;
       case 'resetPin':           result = resetPin_(params); break;
       case 'cerrarSesion':       result = cerrarSesion_(params); break;
+      case 'subirFoto':          result = subirFoto_(params); break;
       case 'cargarHoyoLive':     result = cargarHoyoLive_(params); break;
       case 'setBonusGanador':    result = setBonusGanador_(params); break;
       case 'armarLineas':          result = armarLineas_(params); break;

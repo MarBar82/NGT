@@ -530,6 +530,8 @@ function getJugadorPerfil_(matricula) {
   const jugadores = getJugadoresHist_();
   const jug = jugadores.find(j => j.matricula === matStr);
   if (!jug) return { ok: false, error: 'Jugador no encontrado en histórico' };
+  const jugLive = cachedRead_('jugadores', 300, getJugadores_).find(function(j){ return j.matricula === matStr; });
+  const fotoUrl = (jugLive && jugLive.fotoUrl) || '';
 
   // Tarjetas históricas
   const tarjetas = getTarjetasHistJugador_(matStr);
@@ -791,6 +793,7 @@ function getJugadorPerfil_(matricula) {
       edicionesConTarjeta: aniosSet.size,
       edicionesPrev: jug.edicionesPrev || 0,
       fechasJugadas: tarjetas.length,
+      fotoUrl: fotoUrl,
     },
     cifras: {
       mejorStableford: mejorStbInfo,

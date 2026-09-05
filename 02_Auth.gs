@@ -59,6 +59,7 @@ function loginConPin_(params) {
       apodo:  String(data[i][COL_J.APODO]  || '').trim(),
       hcpIndex: (function(v){ return (v !== '' && v !== null) ? (parseFloat(v) || null) : null; })(data[i][COL_J.HCP_INDEX]),
       rol: rol,
+      fotoUrl: getFotoUrl_(String(data[i][COL_J.FOTO_ID] || '').trim()),
     }};
   }
   return { ok: false, error: 'Matrícula no encontrada' };
@@ -88,6 +89,7 @@ function crearPin_(params) {
       nombre: String(data[i][COL_J.NOMBRE] || '').trim(),
       apodo:  String(data[i][COL_J.APODO]  || '').trim(),
       rol: rol,
+      fotoUrl: getFotoUrl_(String(data[i][COL_J.FOTO_ID] || '').trim()),
     }};
   }
   return { ok: false, error: 'Matrícula no encontrada' };
@@ -198,6 +200,7 @@ function checkPlayerByMat_(matricula) {
         apodo:      String(data[i][COL_J.APODO]     || '').trim(),
         hcpIndex:   (rawHcp !== '' && rawHcp !== null && rawHcp !== undefined) ? (parseFloat(rawHcp) || null) : null,
         hcpUpdated: String(data[i][COL_J.HCP_UPDATED] || '').trim(),
+        fotoUrl:    getFotoUrl_(String(data[i][COL_J.FOTO_ID] || '').trim()),
       };
     }
   }

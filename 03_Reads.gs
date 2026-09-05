@@ -14,6 +14,7 @@ function getJugadores_() {
       apodo:      String(data[i][COL_J.APODO]    || '').trim(),
       hcpIndex:   (rawHcp !== '' && rawHcp !== null && rawHcp !== undefined) ? (parseFloat(rawHcp) || null) : null,
       hcpUpdated: String(data[i][COL_J.HCP_UPDATED] || '').trim(),
+      fotoUrl:    getFotoUrl_(String(data[i][COL_J.FOTO_ID] || '').trim()),
     });
   }
   return out;

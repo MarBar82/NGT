@@ -14,5 +14,5 @@ const SHEETS = {
   AUDIT:     '_AUDIT',
 };
 
-const COL_J = { ORDEN: 0, MATRICULA: 1, NOMBRE: 2, APODO: 3, HCP_INDEX: 4, HCP_UPDATED: 5, PIN_HASH: 6, ROL: 7 };
+const COL_J = { ORDEN: 0, MATRICULA: 1, NOMBRE: 2, APODO: 3, HCP_INDEX: 4, HCP_UPDATED: 5, PIN_HASH: 6, ROL: 7, FOTO_ID: 8 };
 const COL_C = { ID: 0, NOMBRE: 1 }; // Slope/Rating leídos desde NGT DB hoja "Rating"
