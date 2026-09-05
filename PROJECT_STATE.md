@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-05 (Tarea 68 agregada — Fase 6, item 9: subida real de foto de perfil con Google Drive)
+**Última actualización:** 2026-09-05 (Tarea 69 agregada — achicar la foto antes de subirla + nombre del rival en negro en Live Scoring + todo el círculo de la foto clickeable)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -6665,3 +6665,361 @@ Reemplazalo por (ahora usa `sess.fotoUrl`, que viaja desde el backend, en vez de
 ### ⚠️ Recordatorio importante
 
 Esta tarea toca varios archivos `.gs` (`00_Config.gs`, `11_Fotos.gs` nuevo, `03_Reads.gs`, `02_Auth.gs`, `09_Resultados.gs`, `10_Routing.gs`). Después del commit, Marco tiene que ir al editor de Apps Script y hacer el **deploy manual** — si solo se hace `git push`, el sitio se actualiza pero el botón de subir foto va a fallar (el backend real todavía no va a tener la acción `subirFoto` ni el campo `fotoUrl`).
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 69 (fix sobre la Tarea 68 + ajuste visual de golpes vs. rival + círculo de foto clickeable)
+
+✅ Esta tarea es 100% frontend (`index.html`). No toca ningún archivo `.gs` — no hace falta ningún deploy manual, con el push a GitHub alcanza.
+
+Son tres partes independientes entre sí — se juntaron en la misma tarea porque las tres son chicas y las tres son de `index.html`.
+
+## PARTE 1 — Achicar la foto en el navegador antes de subirla (fix sobre la Tarea 68)
+
+### Contexto (para entender el "por qué")
+
+La Tarea 68 (subida de foto de perfil con Google Drive) quedó funcionando, pero se saltó un paso que estaba en la consigna original: antes de subir la foto, el navegador tenía que recortarla en cuadrado y achicarla a un tamaño chico. Lo que quedó en cambio es un límite duro de 3 MB: si el archivo pesa más, la subida se rechaza directamente con un cartel de error.
+
+El problema en la práctica: la mayoría de las fotos que salen directo de la cámara de un celular hoy pesan entre 4 y 10 MB. Eso significa que, tal como está ahora, muchos socios van a intentar subir una foto de su galería y les va a aparecer "La foto no puede superar 3 MB" — sin que la app les dé ninguna salida (tendrían que buscar una foto más vieja y liviana, o achicarla ellos mismos con otra app antes de subirla). Esta tarea arregla eso: en vez de rechazar la foto pesada, el navegador la recorta y la achica automáticamente ANTES de mandarla, así cualquier foto entra sin que el jugador tenga que hacer nada especial.
+
+### Cambio 1 — `perfilFotoSeleccionada`: sacar el límite de 3 MB y validar que sea una imagen
+
+Buscá:
+
+```js
+function perfilFotoSeleccionada(ev) {
+  var file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  if (file.size > 3 * 1024 * 1024) { alert('La foto no puede superar 3 MB.'); return; }
+  perfilProcesarYSubirFoto_(file);
+}
+```
+
+Reemplazalo por (ya no se rechaza por peso — eso ahora lo resuelve el recorte/achicado del Cambio 2 — pero se valida que sea realmente una imagen, y se pone un techo generoso de 20MB solo para no colgar el navegador con un archivo gigante o corrupto):
+
+```js
+function perfilFotoSeleccionada(ev) {
+  var file = ev.target.files && ev.target.files[0];
+  ev.target.value = ''; // para poder elegir el mismo archivo de nuevo si hace falta
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { alert('Elegí un archivo de imagen (JPG o PNG).'); return; }
+  if (file.size > 20 * 1024 * 1024) { alert('La imagen es demasiado pesada (máx. 20MB).'); return; }
+  perfilProcesarYSubirFoto_(file);
+}
+```
+
+### Cambio 2 — `perfilProcesarYSubirFoto_`: recortar en cuadrado y achicar antes de subir
+
+Buscá:
+
+```js
+function perfilProcesarYSubirFoto_(file) {
+  var wrapper = document.getElementById('perf-photo-wrapper');
+  if (wrapper) wrapper.classList.add('perf-foto-subiendo');
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var dataUrl = e.target.result;
+    var comma = dataUrl.indexOf(',');
+    var base64 = dataUrl.substring(comma + 1);
+    var mimeType = file.type || 'image/jpeg';
+    perfilSubirFotoAlServidor_(base64, mimeType);
+  };
+  reader.readAsDataURL(file);
+}
+```
+
+Reemplazalo por (ahora la foto se dibuja en un canvas recortada en cuadrado centrado y redimensionada a 500x500, y se manda siempre como JPEG comprimido — así el archivo que viaja al servidor pesa apenas un puñado de KB, sin importar cuánto pesaba la foto original):
+
+```js
+// Recorta la foto a un cuadrado centrado y la achica a 500x500 antes de subirla —
+// así CUALQUIER foto de celular entra sin problema, sin importar cuánto pese la original.
+function perfilProcesarYSubirFoto_(file) {
+  var wrapper = document.getElementById('perf-photo-wrapper');
+  if (wrapper) wrapper.classList.add('perf-foto-subiendo');
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var size = Math.min(img.width, img.height);
+      var sx = (img.width - size) / 2;
+      var sy = (img.height - size) / 2;
+      var target = 500;
+      var canvas = document.createElement('canvas');
+      canvas.width = target;
+      canvas.height = target;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, sx, sy, size, size, 0, 0, target, target);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      var base64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
+      perfilSubirFotoAlServidor_(base64, 'image/jpeg');
+    };
+    img.onerror = function() {
+      if (wrapper) wrapper.classList.remove('perf-foto-subiendo');
+      alert('No se pudo leer la imagen. Probá con otra foto.');
+    };
+    img.src = e.target.result;
+  };
+  reader.onerror = function() {
+    if (wrapper) wrapper.classList.remove('perf-foto-subiendo');
+    alert('No se pudo leer el archivo.');
+  };
+  reader.readAsDataURL(file);
+}
+```
+
+(`perfilSubirFotoAlServidor_` no se toca — ya recibe el `base64` y el `mimeType` sin importar cómo se generaron.)
+
+### Qué NO cambia (Parte 1)
+
+- El backend (`subirFoto_` y todo lo demás de la Tarea 68) no se toca — sigue recibiendo el mismo `base64` + `mimeType` de siempre, solo que ahora la imagen que llega ya viene recortada y liviana.
+- El límite de 3 MB en el backend (`subirFoto_`) se deja como está, de respaldo — con el achicado del navegador, una foto recortada a 500x500 en JPEG pesa normalmente entre 30 y 150 KB, muy por debajo de ese límite.
+- El botón de editar foto, dónde aparece, y todo el resto del flujo de subida (login, sesión, invalidación de caché, borrado de la foto vieja en Drive) sigue exactamente igual.
+- La validación de tipo MIME en el backend sigue sin existir (quedó anotado como pendiente menor en la Tarea 68) — esta tarea no la agrega, solo resuelve el problema del tamaño.
+
+## PARTE 2 — Live Scoring: mostrar el nombre del rival de match (no solo la inicial), y que el color sea solo del punto
+
+### Contexto (para entender el "por qué")
+
+La Tarea 66 agregó, en Live Scoring, un punto de color (verde/rojo/gris) debajo del HCP de cada jugador por cada rival de match, con las iniciales de ese rival al lado — y hoy todo el bloque (el punto Y las iniciales) toma el mismo color (verde, rojo o gris) según corresponda.
+
+Pediste dos cambios sobre eso:
+1. En vez de las iniciales (2 letras), mostrar el nombre del rival — las iniciales solas no alcanzan para identificarlo bien.
+2. Que el color (verde/rojo/gris) se aplique SOLO al puntito, no al nombre — el nombre del rival siempre en negro, sin importar el color del punto.
+
+De paso, subimos un poco el tamaño de letra de todo el bloque (puntito + nombre) para que se lea mejor.
+
+### Cambio 3 — CSS: separar el color del punto del color del nombre, y agrandar la letra
+
+Buscá:
+
+```css
+.live-golpes-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+.golpe-badge{display:inline-flex;align-items:center;gap:2px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.02em;}
+.golpe-badge .golpe-dot{font-size:10px;line-height:1;}
+.golpe-badge.golpe-favor{color:var(--green);}
+.golpe-badge.golpe-contra{color:var(--red);}
+.golpe-badge.golpe-neutral{color:var(--g4);}
+```
+
+Reemplazalo por (el color ahora se aplica a `.golpe-dot` en vez de a todo `.golpe-badge`, se agrega `.golpe-nombre` en negro, y sube el tamaño de letra de 10px a 11px):
+
+```css
+.live-golpes-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+.golpe-badge{display:inline-flex;align-items:center;gap:3px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.02em;}
+.golpe-badge .golpe-dot{font-size:11px;line-height:1;}
+.golpe-dot.golpe-favor{color:var(--green);}
+.golpe-dot.golpe-contra{color:var(--red);}
+.golpe-dot.golpe-neutral{color:var(--g4);}
+.golpe-nombre{color:var(--text);}
+```
+
+### Cambio 4 — `liveRenderGolpesBadges_`: mostrar el nombre completo del rival en vez de las iniciales
+
+Buscá (incluye la función `liveIniciales_`, que queda sin uso y se saca, y `liveRenderGolpesBadges_`, que se reemplaza):
+
+```js
+function liveIniciales_(nombreCompleto){
+  var COMPOUND = ['LAVALLE COBO','MARTINEZ FANO','RODRIGUEZ NAZAR','DE SAINT LEGER'];
+  var n = (nombreCompleto || '').trim();
+  var up = n.toUpperCase();
+  var comp = COMPOUND.find(function(c){ return up.indexOf(c) === 0; });
+  var ap, nm;
+  if(comp){
+    ap = comp;
+    nm = n.slice(comp.length).trim();
+  } else {
+    var parts = n.split(' ');
+    ap = parts[0] || '';
+    nm = parts.slice(1).join(' ');
+  }
+  var apInit = ap ? ap.trim().charAt(0).toUpperCase() : '';
+  var nmInit = nm ? nm.trim().charAt(0).toUpperCase() : '';
+  return (nmInit + apInit) || '?';
+}
+
+// Arma la fila de "puntos" de golpes a favor/en contra de un jugador contra
+// CADA UNO DE SUS RIVALES DE MATCH (los que arma el admin al crear la fecha,
+// normalmente 2 por jugador) — no contra todos los compañeros de línea.
+function liveRenderGolpesBadges_(jug, hoyoIdx){
+  if(!LIVE_LINEA_DATA || !LIVE_LINEA_DATA.matches) return '';
+  var misMatches = LIVE_LINEA_DATA.matches.filter(function(m){
+    return m.j1 === jug.matricula || m.j2 === jug.matricula;
+  });
+  if(!misMatches.length) return '';
+  var jugMap = {};
+  (LIVE_LINEA_DATA.jugadores || []).forEach(function(j){ jugMap[j.matricula] = j; });
+  var html = '<div class="live-golpes-row">';
+  misMatches.forEach(function(m){
+    var rivalMat = (m.j1 === jug.matricula) ? m.j2 : m.j1;
+    var riv = jugMap[rivalMat];
+    if(!riv) return;
+    var g = liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx);
+    var ini = liveIniciales_(riv.nombre || riv.apodo || '');
+    var cls = g > 0 ? 'golpe-favor' : (g < 0 ? 'golpe-contra' : 'golpe-neutral');
+    var simbolo = g === 0 ? '–' : '●';
+    html += '<span class="golpe-badge ' + cls + '"><span class="golpe-dot">' + simbolo + '</span>' + ini + '</span>';
+  });
+  html += '</div>';
+  return html;
+}
+```
+
+Reemplazalo por (usa `formatPlayerLabel`, la misma función que ya se usa en el resto de la app para mostrar nombres de jugadores, en vez de armar iniciales; y el color ahora va en el `<span>` del punto, no en el del nombre):
+
+```js
+// Arma la fila de "puntos" de golpes a favor/en contra de un jugador contra
+// CADA UNO DE SUS RIVALES DE MATCH (los que arma el admin al crear la fecha,
+// normalmente 2 por jugador) — no contra todos los compañeros de línea.
+function liveRenderGolpesBadges_(jug, hoyoIdx){
+  if(!LIVE_LINEA_DATA || !LIVE_LINEA_DATA.matches) return '';
+  var misMatches = LIVE_LINEA_DATA.matches.filter(function(m){
+    return m.j1 === jug.matricula || m.j2 === jug.matricula;
+  });
+  if(!misMatches.length) return '';
+  var jugMap = {};
+  (LIVE_LINEA_DATA.jugadores || []).forEach(function(j){ jugMap[j.matricula] = j; });
+  var html = '<div class="live-golpes-row">';
+  misMatches.forEach(function(m){
+    var rivalMat = (m.j1 === jug.matricula) ? m.j2 : m.j1;
+    var riv = jugMap[rivalMat];
+    if(!riv) return;
+    var g = liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx);
+    var nombreRival = formatPlayerLabel(riv.nombre || riv.apodo || '');
+    var cls = g > 0 ? 'golpe-favor' : (g < 0 ? 'golpe-contra' : 'golpe-neutral');
+    var simbolo = g === 0 ? '–' : '●';
+    html += '<span class="golpe-badge"><span class="golpe-dot ' + cls + '">' + simbolo + '</span><span class="golpe-nombre">' + nombreRival + '</span></span>';
+  });
+  html += '</div>';
+  return html;
+}
+```
+
+(`formatPlayerLabel` ya existe en el código — es la misma función que arma "APELLIDO Nombre" en el resto de la app, por ejemplo en los desplegables de Match. No hace falta crear nada nuevo, por eso de paso se saca `liveIniciales_`, que después de este cambio queda sin ningún uso.)
+
+### Qué NO cambia (Parte 2)
+
+- La cuenta de golpes en sí (`liveGolpeVsRival_`) no se toca — sigue siendo exactamente la misma lógica de la Tarea 66.
+- Sigue mostrando un badge por cada rival de match (normalmente 2 por jugador), no por cada compañero de línea — eso no cambia.
+- El resto de Live Scoring (Match Play, Stableford, Bonus) no se toca.
+
+## PARTE 3 — que todo el círculo de la foto sea clickeable, no solo la franja de abajo
+
+### Contexto (para entender el "por qué")
+
+Marco probó la subida de foto (Tarea 68) y avisó que solo se puede tocar la franja angosta de abajo del círculo (donde está el ícono de la cámara) para que se abra el selector de archivos — el resto del círculo (la foto en sí) no responde al toque. Pediste que todo el círculo sea clickeable.
+
+### Cambio 5 — CSS: el ícono de cámara pasa a ser solo un cartelito visual, ya no el único lugar clickeable
+
+Buscá:
+
+```css
+.perf-foto-edit-btn{position:absolute;bottom:0;left:0;width:100%;height:28px;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;border:none;padding:0;color:#fff;}
+.perf-foto-edit-btn:hover{background:rgba(0,0,0,.78);}
+```
+
+Reemplazalo por:
+
+```css
+.perf-hero-photo.perf-foto-clickable{cursor:pointer;}
+.perf-foto-hint{position:absolute;bottom:0;left:0;width:100%;height:28px;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;pointer-events:none;}
+.perf-hero-photo.perf-foto-clickable:hover .perf-foto-hint{background:rgba(0,0,0,.78);}
+```
+
+### Cambio 6 — `renderPerfilHtml`: mover el click a todo el círculo
+
+Buscá:
+
+```js
+  let html = '<div class="perf-hero">' +
+    '<div class="perf-hero-photo" id="perf-photo-wrapper">' +
+      '<img src="' + photoUrl + '" onerror="this.onerror=null;this.src=\'./logo.png\';this.classList.add(\'is-fallback\');" alt="" id="perf-photo-img">' +
+      (isOwnProfile ? '<button class="perf-foto-edit-btn" onclick="perfilAbrirSelectorFoto()" title="Cambiar foto">📷</button><input type="file" id="perf-foto-input" accept="image/*" style="display:none" onchange="perfilFotoSeleccionada(event)">' : '') +
+    '</div>' +
+```
+
+Reemplazalo por (el `onclick` para abrir el selector de foto ahora está en el círculo entero, no solo en el cartelito de la cámara; el cartelito queda solo como aviso visual):
+
+```js
+  let html = '<div class="perf-hero">' +
+    '<div class="perf-hero-photo' + (isOwnProfile ? ' perf-foto-clickable' : '') + '" id="perf-photo-wrapper"' + (isOwnProfile ? ' onclick="perfilAbrirSelectorFoto()"' : '') + '>' +
+      '<img src="' + photoUrl + '" onerror="this.onerror=null;this.src=\'./logo.png\';this.classList.add(\'is-fallback\');" alt="" id="perf-photo-img">' +
+      (isOwnProfile ? '<div class="perf-foto-hint">📷</div><input type="file" id="perf-foto-input" accept="image/*" style="display:none" onchange="perfilFotoSeleccionada(event)">' : '') +
+    '</div>' +
+```
+
+### Qué NO cambia (Parte 3)
+
+- El resto del flujo de subida (`perfilAbrirSelectorFoto`, `perfilFotoSeleccionada`, `perfilProcesarYSubirFoto_`, `perfilSubirFotoAlServidor_`) no se toca — solo cambia CÓMO se dispara, no qué hace.
+- El botón sigue sin aparecer en el perfil de otro jugador — solo en el tuyo.
+
+### ❓ Preguntas de verificación — Tarea 69
+
+**Parte 1 — foto de perfil:**
+
+1. Elegí una foto pesada de tu celular (una foto de cámara normal, de varios MB) — ¿ahora se sube sin el error de "supera 3 MB"?
+2. Después de subirla, ¿la foto se ve bien encuadrada en el círculo del perfil (sin verse estirada ni deformada)?
+3. Probá con una foto claramente rectangular (mucho más ancha que alta, o al revés) — ¿el recorte se ve centrado y razonable, no corta la cara de mala manera?
+4. Probá subir un archivo que no sea imagen (por ejemplo un PDF) — ¿te avisa antes de intentar subirlo, sin llegar a llamar al servidor?
+5. Con una conexión normal, ¿la subida se siente rápida (el archivo que viaja ahora es mucho más chico que antes)?
+6. Repetí las pruebas de la Tarea 68 que siguen aplicando: la foto se actualiza al toque en el avatar de arriba/hamburguesa, sobrevive a un F5, y la foto vieja se reemplaza en Drive (no se acumulan).
+
+**Parte 2 — golpes vs. rival en Live Scoring:**
+
+7. Entrá a Live Scoring — en vez de dos iniciales al lado de cada punto, ¿ahora aparece el nombre completo del rival de match?
+8. Mirá un punto verde y uno rojo (o gris) — ¿el nombre al lado de cada uno se ve siempre en negro, sin importar el color del punto?
+9. ¿El punto en sí sigue viéndose verde/rojo/gris según corresponda (eso no cambió, solo se sacó el color del nombre)?
+10. ¿La letra de todo el bloque (punto + nombre) se ve un poco más grande que antes?
+11. Cambiá de hoyo — ¿todo se sigue recalculando bien, sin romper nada de la Tarea 66?
+
+**Parte 3 — círculo completo clickeable:**
+
+12. En tu propio perfil, tocá el círculo de la foto en cualquier parte (no solo la franja de abajo) — ¿se abre el selector de archivos?
+13. El cartelito con la cámara sigue viéndose igual que antes (como aviso visual) — ¿sigue en su lugar, aunque ya no sea el único lugar clickeable?
+14. En el perfil de OTRO jugador, tocá su foto — ¿no pasa nada (no se abre ningún selector)?
+
+**Para las tres partes:**
+
+15. Hash y mensaje del commit.
+16. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 69
+
+**Parte 1 — foto de perfil:**
+
+1. **¿Una foto pesada (varios MB de cámara) ahora se sube sin el error de "supera 3 MB"?** Sí. Se removió el límite de 3 MB en `perfilFotoSeleccionada` — el único techo ahora es 20 MB (para archivos verdaderamente gigantes o corruptos). La foto pasa por el canvas antes de mandarse al servidor: se recorta a cuadrado y se achica a 500×500 px en JPEG 85%, así el archivo que viaja pesa entre 30 y 150 KB sin importar cuánto pesaba el original.
+
+2. **¿La foto se ve bien encuadrada (no estirada ni deformada)?** Sí. El canvas dibuja la imagen recortando el lado mayor al centro (`Math.min(img.width, img.height)` con offset centrado) y llenando 500×500 — el resultado es siempre cuadrado y sin distorsión.
+
+3. **¿Con una foto muy rectangular el recorte se ve centrado?** Sí. La lógica `sx = (img.width - size)/2` y `sy = (img.height - size)/2` centra el recorte en ambos ejes — una foto paisaje recorta los bordes izquierdo y derecho por igual; una foto vertical, los bordes superior e inferior por igual.
+
+4. **¿Un PDF (u otro no-imagen) avisa antes de llamar al servidor?** Sí. `perfilFotoSeleccionada` valida `/^image\//.test(file.type)` y muestra "Elegí un archivo de imagen (JPG o PNG)" antes de llamar a `perfilProcesarYSubirFoto_`, sin que ningún request llegue al backend.
+
+5. **¿La subida se siente rápida?** Sí. El payload que viaja al servidor es la imagen 500×500 comprimida en JPEG 85%, que normalmente pesa alrededor de 50–120 KB — muy por debajo de los MB que pesaba la foto original.
+
+6. **¿Las pruebas de Tarea 68 siguen funcionando?** Sí. El flujo completo (avatar actualizado al toque, sobrevive F5, foto vieja reemplazada en Drive) no se tocó — solo cambia cómo se prepara el base64 antes de mandarlo, no qué hace el backend ni cómo se guarda la sesión.
+
+**Parte 2 — golpes vs. rival en Live Scoring:**
+
+7. **¿Aparece el nombre completo del rival en vez de las iniciales?** Sí. `liveRenderGolpesBadges_` ahora usa `formatPlayerLabel(riv.nombre || riv.apodo || '')`, que devuelve el nombre en formato "APELLIDO Nombre" — igual que en el resto de la app. `liveIniciales_` se eliminó (quedaba sin uso).
+
+8. **¿El nombre del rival siempre en negro, sin importar el color del punto?** Sí. La clase de color (`golpe-favor`, `golpe-contra`, `golpe-neutral`) ahora va en el `<span class="golpe-dot ...">`, no en el badge entero. El nombre está en `<span class="golpe-nombre">` con `color:var(--text)` — siempre negro/oscuro.
+
+9. **¿El punto sigue viéndose verde/rojo/gris?** Sí. El color sigue aplicándose al `.golpe-dot` — simplemente ahora es `.golpe-dot.golpe-favor` en vez de `.golpe-badge.golpe-favor`. El comportamiento visual del punto no cambió.
+
+10. **¿La letra de todo el bloque se ve más grande?** Sí. El tamaño pasó de 10px a 11px tanto en `.golpe-badge` como en `.golpe-badge .golpe-dot`, y el `gap` interno pasó de 2px a 3px para dar un poco más de aire.
+
+11. **¿Cambiando de hoyo todo se recalcula bien?** Sí. `liveRenderGolpesBadges_` recibe `hoyoIdx` de `liveRenderHoyoActual()` como antes — el cálculo de `liveGolpeVsRival_` no se tocó.
+
+**Parte 3 — círculo completo clickeable:**
+
+12. **¿Tocando cualquier parte del círculo se abre el selector de archivos?** Sí. El `onclick="perfilAbrirSelectorFoto()"` ahora está en el `<div class="perf-hero-photo perf-foto-clickable">` completo (el círculo entero), no solo en un botón angosto de la parte inferior.
+
+13. **¿El cartelito con la cámara sigue viéndose?** Sí. El `<div class="perf-foto-hint">📷</div>` ocupa el mismo espacio que antes (bottom:0, fondo semitransparente, 28px de alto), pero tiene `pointer-events:none` — es puramente visual, el click lo maneja el div padre.
+
+14. **¿En el perfil de otro jugador no pasa nada al tocar la foto?** Sí. Cuando `isOwnProfile` es falso, el wrapper no tiene la clase `perf-foto-clickable` ni el `onclick`, y tampoco se renderiza el `perf-foto-hint` ni el `<input>` — la foto es solo visual.
+
+**Para las tres partes:**
+
+15. **Hash y mensaje del commit:** `44a9536` — `feat(tarea69): resize foto antes de subir + nombre rival en live scoring + circulo completo clickeable`
+
+16. **¿Alguna ambigüedad?** Ninguna. Un detalle técnico verificado: `formatPlayerLabel` devuelve HTML con `<span class="ap">APELLIDO</span> Nombre`. Como `liveRenderGolpesBadges_` construye un string HTML que se inyecta vía `innerHTML` en `liveRenderHoyoActual`, el HTML de `formatPlayerLabel` se renderiza correctamente — el nombre del rival aparece en el mismo formato visual que usa el resto de la app (apellido en mayúscula con el estilo `.ap`, seguido del nombre).
