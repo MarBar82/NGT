@@ -2,7 +2,7 @@
 
 function getFotoUrl_(fotoId) {
   if (!fotoId) return '';
-  return 'https://lh3.googleusercontent.com/d/' + fotoId + '=s400';
+  return 'https://drive.google.com/thumbnail?id=' + fotoId + '&sz=w400';
 }
 
 function getOrCrearCarpetaFotos_() {
