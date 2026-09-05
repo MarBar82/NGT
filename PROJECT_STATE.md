@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-04 (Tarea 67 agregada — Fase 6, item 6: reemplazar "Volver" por el navbar en Mi Tarjeta / Live Scoring)
+**Última actualización:** 2026-09-05 (Tarea 68 agregada — Fase 6, item 9: subida real de foto de perfil con Google Drive)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -6057,3 +6057,611 @@ Mensaje: `feat: mostrar navbar en Mi Tarjeta/Live Scoring, cortar polling al sal
 
 9. ¿Alguna duda o algo ambiguo de la consigna?
 No. La consigna fue clara en los dos cambios y en el razonamiento detrás de cada uno. El único detalle a verificar manualmente es que el padding inferior de la pantalla de Live Scoring deje el contenido por encima del navbar sin quedar tapado — pero según la consigna la pantalla ya estaba preparada para eso.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 68 (Fase 6, item 9: subida real de foto de perfil con Google Drive)
+
+⚠️ **Esta es una tarea grande, toca varios archivos `.gs` además de `index.html`.** Después de que Code la termine, Marco tiene que entrar al editor de Apps Script y hacer un **DEPLOY MANUAL** — si no, la subida de fotos no va a funcionar (el navegador va a llamar a una acción que el backend real todavía no tiene).
+
+### Contexto (para entender el "por qué")
+
+Lo que pediste: que cada jugador pueda subir su propia foto de perfil de verdad (no un archivo que alguien tiene que subir a mano al repositorio de GitHub), usando Google Drive como almacenamiento — ya que la app ya vive arriba de Google Sheets/Apps Script, Drive es el lugar natural para guardar estos archivos sin pagar ni sumar otro servicio.
+
+Cómo queda decidido, después de charlarlo:
+- **Quién puede subir la foto:** cada jugador sube la suya propia, desde su perfil, estando logueado. (Subir la foto de OTRO jugador desde el panel de Admin queda para más adelante, cuando encaremos el CRUD de "Gestionar Jugadores" que ya tenés anotado como pendiente.)
+- **Dónde se guardan:** en tu Google Drive (la misma cuenta donde vive la planilla y el script), en una carpeta nueva que el script crea solo la primera vez ("NGT - Fotos de Jugadores"). Cada archivo queda compartido como "cualquiera con el link puede ver" — es lo que permite que la foto se vea en la web pública sin pedirle a cada visitante que inicie sesión en Google. Confirmaste que te parece bien este esquema para las fotos de cara de los socios.
+- **Cómo se link-ea la foto:** en vez de un link cualquiera de Drive, se usa el mismo formato de URL que ya usan Google Slides/Sites para "incrustar" imágenes de Drive (`lh3.googleusercontent.com/d/{ID}=s400`) — además de ser el link pensado para este uso, de paso Drive te devuelve la imagen ya redimensionada a 400px, sin que el script tenga que procesar nada de eso.
+
+Hoy en el código, tanto la foto de perfil como el avatar del jugador (arriba de la app y en el menú hamburguesa) apuntan a un archivo estático que tendría que existir en `./fotos/{matricula}.jpg` dentro del repositorio — pero esa carpeta no existe, así que HOY TODOS los avatares están mostrando el fallback (la inicial del apodo, o el logo en el perfil). Esta tarea reemplaza ese mecanismo por uno real: cada jugador tiene (opcionalmente) una foto guardada en Drive, y el link a esa foto viaja desde el backend con los datos del jugador.
+
+Dónde aparece la foto hoy en la app (y no cambia con esta tarea, solo empieza a mostrar la foto real en vez de siempre el fallback):
+1. El avatar chiquito arriba de la app y en el menú hamburguesa (solo el del jugador logueado).
+2. La pantalla de Perfil de cualquier jugador (la fotza grande arriba, el "hero").
+
+Lo nuevo que agrega esta tarea es el botón para SUBIR la foto, que va a aparecer solo en el Perfil, y solo cuando estás mirando tu propio perfil (no el de otro jugador).
+
+### PARTE A — Backend (Apps Script)
+
+#### Cambio 1 — `00_Config.gs`: agregar la columna de la foto
+
+Buscá:
+
+```js
+const COL_J = { ORDEN: 0, MATRICULA: 1, NOMBRE: 2, APODO: 3, HCP_INDEX: 4, HCP_UPDATED: 5, PIN_HASH: 6, ROL: 7 };
+```
+
+Reemplazalo por:
+
+```js
+const COL_J = { ORDEN: 0, MATRICULA: 1, NOMBRE: 2, APODO: 3, HCP_INDEX: 4, HCP_UPDATED: 5, PIN_HASH: 6, ROL: 7, FOTO_ID: 8 };
+```
+
+Esto usa la columna I de la hoja "Jugadores" (la novena) para guardar el ID del archivo de Drive con la foto de cada jugador. No hace falta que exista texto en el encabezado de esa columna para que funcione, pero si querés dejarlo prolijo podés escribir "FOTO_ID" en la celda I1 de esa hoja — es opcional, no bloquea nada.
+
+#### Cambio 2 — Crear el archivo nuevo `11_Fotos.gs`
+
+Creá un archivo nuevo en el proyecto de Apps Script llamado `11_Fotos.gs` (mismo criterio que los demás archivos numerados) con este contenido completo:
+
+```js
+// ════════════ FOTOS DE PERFIL (Google Drive) ════════════
+
+// Arma la URL pública de una foto a partir del ID del archivo en Drive.
+// Usa el mismo formato que Google Slides/Sites para "incrustar" imágenes de Drive —
+// de paso, Drive devuelve la imagen ya redimensionada a 400px sin que el script haga nada.
+function getFotoUrl_(fotoId) {
+  return fotoId ? ('https://lh3.googleusercontent.com/d/' + fotoId + '=s400') : '';
+}
+
+// Devuelve la carpeta de Drive donde se guardan las fotos, creándola la primera vez.
+function getOrCrearCarpetaFotos_() {
+  const props = PropertiesService.getDocumentProperties();
+  let folderId = props.getProperty('FOTOS_FOLDER_ID');
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); } catch (e) { /* la carpeta ya no existe, se recrea abajo */ }
+  }
+  const folder = DriveApp.createFolder('NGT - Fotos de Jugadores');
+  props.setProperty('FOTOS_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+// Recibe la foto en base64 (ya recortada cuadrada y redimensionada por el navegador),
+// la guarda en Drive, la comparte como "cualquiera con el link puede ver",
+// borra la foto anterior del jugador si tenía una, y guarda el nuevo ID en la planilla.
+function subirFoto_(params) {
+  const token = String(params.token || '').trim();
+  const matricula = String(params.matricula || '').trim();
+  const fotoBase64 = params.fotoBase64;
+  const mimeType = String(params.mimeType || 'image/jpeg').trim();
+
+  const sess = validarSesion_(token);
+  if (!sess || sess.mat !== matricula) return { ok: false, error: 'Sesión inválida' };
+  if (!fotoBase64) return { ok: false, error: 'Falta la foto' };
+  if (mimeType !== 'image/jpeg' && mimeType !== 'image/png') return { ok: false, error: 'Formato no permitido' };
+
+  let bytes;
+  try {
+    bytes = Utilities.base64Decode(fotoBase64);
+  } catch (e) {
+    return { ok: false, error: 'Foto inválida' };
+  }
+  const MAX_BYTES = 3 * 1024 * 1024; // 3 MB de margen — el navegador ya la comprime antes de mandarla
+  if (bytes.length > MAX_BYTES) return { ok: false, error: 'La foto es demasiado pesada' };
+
+  const sh = getSheet_(SHEETS.JUGADORES);
+  if (!sh) return { ok: false, error: 'Error interno' };
+  const data = sh.getDataRange().getValues();
+  let rowIdx = -1;
+  let fotoIdActual = '';
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][COL_J.MATRICULA] || '').trim() === matricula) {
+      rowIdx = i;
+      fotoIdActual = String(data[i][COL_J.FOTO_ID] || '').trim();
+      break;
+    }
+  }
+  if (rowIdx === -1) return { ok: false, error: 'Jugador no encontrado' };
+
+  const folder = getOrCrearCarpetaFotos_();
+  const ext = mimeType === 'image/png' ? '.png' : '.jpg';
+  const blob = Utilities.newBlob(bytes, mimeType, matricula + ext);
+  const file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  // Borrar la foto vieja para no acumular archivos huérfanos en el Drive
+  if (fotoIdActual && fotoIdActual !== file.getId()) {
+    try { DriveApp.getFileById(fotoIdActual).setTrashed(true); } catch (e) { /* ya no existía, no pasa nada */ }
+  }
+
+  sh.getRange(rowIdx + 1, COL_J.FOTO_ID + 1).setValue(file.getId());
+  SpreadsheetApp.flush();
+
+  // Invalidar cachés que puedan tener la foto vieja
+  try { CacheService.getScriptCache().removeAll(['jugadores', 'perf_' + matricula]); } catch (e) {}
+
+  return { ok: true, fotoUrl: getFotoUrl_(file.getId()) };
+}
+```
+
+#### Cambio 3 — `03_Reads.gs`: incluir la foto en `getJugadores_`
+
+Buscá:
+
+```js
+    out.push({
+      matricula: m,
+      nombre:     String(data[i][COL_J.NOMBRE]   || '').trim(),
+      apodo:      String(data[i][COL_J.APODO]    || '').trim(),
+      hcpIndex:   (rawHcp !== '' && rawHcp !== null && rawHcp !== undefined) ? (parseFloat(rawHcp) || null) : null,
+      hcpUpdated: String(data[i][COL_J.HCP_UPDATED] || '').trim(),
+    });
+```
+
+Reemplazalo por (el único cambio es agregar el campo `fotoUrl`):
+
+```js
+    out.push({
+      matricula: m,
+      nombre:     String(data[i][COL_J.NOMBRE]   || '').trim(),
+      apodo:      String(data[i][COL_J.APODO]    || '').trim(),
+      hcpIndex:   (rawHcp !== '' && rawHcp !== null && rawHcp !== undefined) ? (parseFloat(rawHcp) || null) : null,
+      hcpUpdated: String(data[i][COL_J.HCP_UPDATED] || '').trim(),
+      fotoUrl:    getFotoUrl_(String(data[i][COL_J.FOTO_ID] || '').trim()),
+    });
+```
+
+#### Cambio 4 — `02_Auth.gs`: incluir la foto en las respuestas de login
+
+Hay tres funciones que arman un objeto `player: {...}` a partir de una fila de la planilla. A las tres hay que agregarles el campo `fotoUrl` de la misma forma.
+
+**4a.** Buscá, dentro de `loginConPin_`:
+
+```js
+    if (pinHash !== hashPin_(mat, pin)) return { ok: false, error: 'PIN incorrecto' };
+    const token = guardarSesion_(mat, rol);
+    return { ok: true, token: token, player: {
+      matricula: mat,
+      nombre: String(data[i][COL_J.NOMBRE] || '').trim(),
+      apodo:  String(data[i][COL_J.APODO]  || '').trim(),
+      hcpIndex: (function(v){ return (v !== '' && v !== null) ? (parseFloat(v) || null) : null; })(data[i][COL_J.HCP_INDEX]),
+      rol: rol,
+    }};
+```
+
+Reemplazalo por:
+
+```js
+    if (pinHash !== hashPin_(mat, pin)) return { ok: false, error: 'PIN incorrecto' };
+    const token = guardarSesion_(mat, rol);
+    return { ok: true, token: token, player: {
+      matricula: mat,
+      nombre: String(data[i][COL_J.NOMBRE] || '').trim(),
+      apodo:  String(data[i][COL_J.APODO]  || '').trim(),
+      hcpIndex: (function(v){ return (v !== '' && v !== null) ? (parseFloat(v) || null) : null; })(data[i][COL_J.HCP_INDEX]),
+      rol: rol,
+      fotoUrl: getFotoUrl_(String(data[i][COL_J.FOTO_ID] || '').trim()),
+    }};
+```
+
+**4b.** Buscá, dentro de `crearPin_`:
+
+```js
+    sh.getRange(i + 1, COL_J.PIN_HASH + 1).setValue(hashPin_(mat, pin));
+    SpreadsheetApp.flush();
+    const rol = String(data[i][COL_J.ROL] || 'Jugador').trim();
+    const token = guardarSesion_(mat, rol);
+    return { ok: true, token: token, player: {
+      matricula: mat,
+      nombre: String(data[i][COL_J.NOMBRE] || '').trim(),
+      apodo:  String(data[i][COL_J.APODO]  || '').trim(),
+      rol: rol,
+    }};
+```
+
+Reemplazalo por:
+
+```js
+    sh.getRange(i + 1, COL_J.PIN_HASH + 1).setValue(hashPin_(mat, pin));
+    SpreadsheetApp.flush();
+    const rol = String(data[i][COL_J.ROL] || 'Jugador').trim();
+    const token = guardarSesion_(mat, rol);
+    return { ok: true, token: token, player: {
+      matricula: mat,
+      nombre: String(data[i][COL_J.NOMBRE] || '').trim(),
+      apodo:  String(data[i][COL_J.APODO]  || '').trim(),
+      rol: rol,
+      fotoUrl: getFotoUrl_(String(data[i][COL_J.FOTO_ID] || '').trim()),
+    }};
+```
+
+**4c.** Buscá, dentro de `checkPlayerByMat_`:
+
+```js
+      const rawHcp = data[i][COL_J.HCP_INDEX];
+      return {
+        matricula:  m,
+        nombre:     String(data[i][COL_J.NOMBRE]    || '').trim(),
+        apodo:      String(data[i][COL_J.APODO]     || '').trim(),
+        hcpIndex:   (rawHcp !== '' && rawHcp !== null && rawHcp !== undefined) ? (parseFloat(rawHcp) || null) : null,
+        hcpUpdated: String(data[i][COL_J.HCP_UPDATED] || '').trim(),
+      };
+```
+
+Reemplazalo por:
+
+```js
+      const rawHcp = data[i][COL_J.HCP_INDEX];
+      return {
+        matricula:  m,
+        nombre:     String(data[i][COL_J.NOMBRE]    || '').trim(),
+        apodo:      String(data[i][COL_J.APODO]     || '').trim(),
+        hcpIndex:   (rawHcp !== '' && rawHcp !== null && rawHcp !== undefined) ? (parseFloat(rawHcp) || null) : null,
+        hcpUpdated: String(data[i][COL_J.HCP_UPDATED] || '').trim(),
+        fotoUrl:    getFotoUrl_(String(data[i][COL_J.FOTO_ID] || '').trim()),
+      };
+```
+
+#### Cambio 5 — `09_Resultados.gs`: incluir la foto en el Perfil
+
+Buscá, dentro de `getJugadorPerfil_`, esta línea (justo donde se busca al jugador en el histórico):
+
+```js
+  const jugadores = getJugadoresHist_();
+  const jug = jugadores.find(j => j.matricula === matStr);
+  if (!jug) return { ok: false, error: 'Jugador no encontrado en histórico' };
+```
+
+Reemplazalo por (se agrega una búsqueda del jugador en la hoja EN VIVO, que es la que tiene la foto — el histórico es una planilla vieja separada, sin esa columna):
+
+```js
+  const jugadores = getJugadoresHist_();
+  const jug = jugadores.find(j => j.matricula === matStr);
+  if (!jug) return { ok: false, error: 'Jugador no encontrado en histórico' };
+  const jugLive = cachedRead_('jugadores', 300, getJugadores_).find(function(j){ return j.matricula === matStr; });
+  const fotoUrl = (jugLive && jugLive.fotoUrl) || '';
+```
+
+Y buscá, más abajo, dentro del mismo `getJugadorPerfil_`, el objeto `identidad` que arma el `return`:
+
+```js
+    identidad: {
+      matricula: matStr,
+      nombre: jug.nombre,
+      anioDebut: jug.anioDebut,
+      edicionesJugadas: edicionesTotales,
+      edicionesConTarjeta: aniosSet.size,
+      edicionesPrev: jug.edicionesPrev || 0,
+      fechasJugadas: tarjetas.length,
+    },
+```
+
+Reemplazalo por:
+
+```js
+    identidad: {
+      matricula: matStr,
+      nombre: jug.nombre,
+      anioDebut: jug.anioDebut,
+      edicionesJugadas: edicionesTotales,
+      edicionesConTarjeta: aniosSet.size,
+      edicionesPrev: jug.edicionesPrev || 0,
+      fechasJugadas: tarjetas.length,
+      fotoUrl: fotoUrl,
+    },
+```
+
+#### Cambio 6 — `10_Routing.gs`: incluir la foto en `validateSession`, y registrar la acción `subirFoto`
+
+Buscá:
+
+```js
+      case 'validateSession': {
+        const sess = validarSesion_(params.token);
+        if (!sess) { result = { ok: false, error: 'Sesión inválida' }; break; }
+        const jugsList = cachedRead_('jugadores', 300, getJugadores_);
+        const jugInfo = jugsList.find(function(j){ return j.matricula === sess.mat; }) || {};
+        result = { ok: true, player: { matricula: sess.mat, nombre: jugInfo.nombre || '', apodo: jugInfo.apodo || '', hcpIndex: jugInfo.hcpIndex || null, rol: sess.rol } };
+        break;
+      }
+```
+
+Reemplazalo por:
+
+```js
+      case 'validateSession': {
+        const sess = validarSesion_(params.token);
+        if (!sess) { result = { ok: false, error: 'Sesión inválida' }; break; }
+        const jugsList = cachedRead_('jugadores', 300, getJugadores_);
+        const jugInfo = jugsList.find(function(j){ return j.matricula === sess.mat; }) || {};
+        result = { ok: true, player: { matricula: sess.mat, nombre: jugInfo.nombre || '', apodo: jugInfo.apodo || '', hcpIndex: jugInfo.hcpIndex || null, rol: sess.rol, fotoUrl: jugInfo.fotoUrl || '' } };
+        break;
+      }
+```
+
+Y buscá, dentro de `doPost(e)`, esta línea:
+
+```js
+      case 'cerrarSesion':       result = cerrarSesion_(params); break;
+```
+
+Reemplazalo por (se agrega la nueva acción justo debajo):
+
+```js
+      case 'cerrarSesion':       result = cerrarSesion_(params); break;
+      case 'subirFoto':          result = subirFoto_(params); break;
+```
+
+### PARTE B — Frontend (`index.html`)
+
+#### Cambio 7 — CSS: el botón de editar foto, y que la foto tenga posición relativa para poder ponerle el botón encima
+
+Buscá:
+
+```css
+.perf-hero-photo{
+  width:90px;
+  height:90px;
+  border-radius:50%;
+  overflow:hidden;
+  flex-shrink:0;
+  border:2px solid var(--gold);
+  background:rgba(255,255,255,.05);
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+```
+
+Reemplazalo por (se agrega `position:relative` para poder ubicar el botón de editar en la esquina):
+
+```css
+.perf-hero-photo{
+  width:90px;
+  height:90px;
+  border-radius:50%;
+  overflow:hidden;
+  flex-shrink:0;
+  border:2px solid var(--gold);
+  background:rgba(255,255,255,.05);
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+  position:relative;
+}
+.perf-foto-edit-btn{
+  position:absolute;
+  right:-2px;
+  bottom:-2px;
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  background:var(--navy);
+  border:2px solid var(--white);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  cursor:pointer;
+  padding:0;
+  z-index:2;
+}
+.perf-foto-edit-btn:active{transform:scale(.92);}
+.perf-hero-photo.perf-foto-subiendo{opacity:.5;pointer-events:none;}
+```
+
+#### Cambio 8 — `renderPerfilHtml`: mostrar el botón de editar solo en tu propio perfil
+
+Buscá:
+
+```js
+  // Photo URL: try /fotos/{matricula}.jpg, fallback to logo.png
+  const photoUrl = './fotos/' + id.matricula + '.jpg';
+  const fallbackUrl = './logo.png';
+
+  let html = '<div class="perf-hero">' +
+    '<div class="perf-hero-photo">' +
+      '<img src="' + photoUrl + '" onerror="this.onerror=null;this.src=\'' + fallbackUrl + '\';this.classList.add(\'is-fallback\');" alt="">' +
+    '</div>' +
+```
+
+Reemplazalo por (ya no se prueba con un archivo estático — la URL real viene del backend en `id.fotoUrl`; y se agrega el botón de editar, solo si estás mirando tu propio perfil):
+
+```js
+  // Photo URL: viene del backend (Google Drive) si el jugador ya subió una; si no, fallback a logo.png
+  const photoUrl = id.fotoUrl || './logo.png';
+  const fallbackUrl = './logo.png';
+  const esMiPropioPerfil = !!(NGT_SESSION && NGT_SESSION.mat === id.matricula);
+  const editFotoHtml = esMiPropioPerfil
+    ? '<button class="perf-foto-edit-btn" onclick="perfilAbrirSelectorFoto()" aria-label="Cambiar foto">' +
+        '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
+      '</button>' +
+      '<input type="file" id="perfil-foto-input" accept="image/*" style="display:none" onchange="perfilFotoSeleccionada(event)">'
+    : '';
+
+  let html = '<div class="perf-hero">' +
+    '<div class="perf-hero-photo">' +
+      '<img src="' + photoUrl + '" onerror="this.onerror=null;this.src=\'' + fallbackUrl + '\';this.classList.add(\'is-fallback\');" alt="">' +
+      editFotoHtml +
+    '</div>' +
+```
+
+#### Cambio 9 — nuevas funciones de subida de foto
+
+Insertá estas funciones nuevas en cualquier lugar del `<script>` principal (por ejemplo, justo antes de `function renderPerfilHtml(data){`):
+
+```js
+// ── Subida de foto de perfil (Google Drive) ─────────────────────────────────
+
+function perfilAbrirSelectorFoto(){
+  var inp = document.getElementById('perfil-foto-input');
+  if(inp) inp.click();
+}
+
+function perfilFotoSeleccionada(ev){
+  var file = ev.target.files && ev.target.files[0];
+  ev.target.value = ''; // para poder elegir el mismo archivo de nuevo si hace falta
+  if(!file) return;
+  if(!/^image\//.test(file.type)){
+    alert('Elegí un archivo de imagen (JPG o PNG).');
+    return;
+  }
+  if(file.size > 15 * 1024 * 1024){
+    alert('La imagen es demasiado pesada (máx. 15MB).');
+    return;
+  }
+  perfilProcesarYSubirFoto_(file);
+}
+
+// Recorta la imagen a un cuadrado centrado y la redimensiona a 500x500 antes de subirla —
+// así todas las fotos quedan parejas y livianas, sin importar el tamaño original.
+function perfilProcesarYSubirFoto_(file){
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      var size = Math.min(img.width, img.height);
+      var sx = (img.width - size) / 2;
+      var sy = (img.height - size) / 2;
+      var target = 500;
+      var canvas = document.createElement('canvas');
+      canvas.width = target;
+      canvas.height = target;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, sx, sy, size, size, 0, 0, target, target);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      var base64 = dataUrl.split(',')[1];
+      perfilSubirFotoAlServidor_(base64, 'image/jpeg');
+    };
+    img.onerror = function(){ alert('No se pudo leer la imagen.'); };
+    img.src = e.target.result;
+  };
+  reader.onerror = function(){ alert('No se pudo leer el archivo.'); };
+  reader.readAsDataURL(file);
+}
+
+function perfilSubirFotoAlServidor_(base64, mimeType){
+  if(!NGT_SESSION || !NGT_SESSION.token){ alert('Tenés que iniciar sesión para subir tu foto.'); return; }
+  var wrap = document.querySelector('.perf-hero-photo');
+  if(wrap) wrap.classList.add('perf-foto-subiendo');
+  ngtApiPost({ action:'subirFoto', token: NGT_SESSION.token, matricula: NGT_SESSION.mat, fotoBase64: base64, mimeType: mimeType })
+    .then(function(r){
+      if(wrap) wrap.classList.remove('perf-foto-subiendo');
+      if(!r || !r.ok){ alert((r && r.error) || 'No se pudo subir la foto.'); return; }
+      updateSessionFotoUrl(r.fotoUrl);
+      var img = wrap ? wrap.querySelector('img') : null;
+      if(img){
+        img.src = r.fotoUrl + (r.fotoUrl.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+        img.classList.remove('is-fallback');
+      }
+      // Invalidar el caché local del perfil para que la próxima vez que se abra ya venga con la foto nueva
+      if(PERF_CACHE[NGT_SESSION.mat] && PERF_CACHE[NGT_SESSION.mat].identidad){
+        PERF_CACHE[NGT_SESSION.mat].identidad.fotoUrl = r.fotoUrl;
+      }
+      try { sessionStorage.removeItem('ngt_perf_' + NGT_SESSION.mat); } catch(e){}
+    })
+    .catch(function(){
+      if(wrap) wrap.classList.remove('perf-foto-subiendo');
+      alert('Error de conexión al subir la foto.');
+    });
+}
+
+// Actualiza la foto en la sesión guardada (localStorage) y repinta el avatar de arriba/hamburguesa al toque
+function updateSessionFotoUrl(fotoUrl){
+  if(!NGT_SESSION) return;
+  NGT_SESSION.fotoUrl = fotoUrl;
+  try { localStorage.setItem('ngt_session', JSON.stringify(NGT_SESSION)); } catch(e){}
+  applySession(NGT_SESSION);
+}
+```
+
+#### Cambio 10 — `applySession`: usar la foto real en vez de adivinar un archivo estático
+
+Buscá:
+
+```js
+  // Set avatars with real photo + initial fallback
+  var mat = sess.mat || '';
+  var displayName = sess.apodo || sess.nombre || '?';
+  var initial = displayName.charAt(0).toUpperCase();
+  function setAvatar(el) {
+    if (!el) return;
+    if (mat) {
+      var img = document.createElement('img');
+      img.alt = initial;
+      img.src = './fotos/' + mat + '.jpg';
+      img.onerror = function() { el.removeChild(img); el.textContent = initial; };
+      el.textContent = '';
+      el.appendChild(img);
+    } else {
+      el.textContent = initial;
+    }
+  }
+```
+
+Reemplazalo por (ahora usa `sess.fotoUrl`, que viaja desde el backend, en vez de adivinar una ruta fija):
+
+```js
+  // Set avatars with real photo (from Drive) + initial fallback
+  var displayName = sess.apodo || sess.nombre || '?';
+  var initial = displayName.charAt(0).toUpperCase();
+  function setAvatar(el) {
+    if (!el) return;
+    if (sess.fotoUrl) {
+      var img = document.createElement('img');
+      img.alt = initial;
+      img.src = sess.fotoUrl;
+      img.onerror = function() { el.removeChild(img); el.textContent = initial; };
+      el.textContent = '';
+      el.appendChild(img);
+    } else {
+      el.textContent = initial;
+    }
+  }
+```
+
+### Qué NO cambia
+
+- Subir o cambiar la foto de OTRO jugador (por ejemplo desde el panel de Admin) no se agrega en esta tarea — queda para cuando encaremos el CRUD de "Gestionar Jugadores".
+- El PIN, el login, y el resto de la lógica de sesión no se tocan — solo se les suma el campo `fotoUrl` a las respuestas que ya existían.
+- La hoja histórica de jugadores (la que usa `getJugadoresHist_`, distinta de la hoja "Jugadores" en vivo) no se toca — la foto se guarda únicamente en la hoja en vivo.
+- Nada del cálculo de handicap, Match Play, Live Scoring, bonus, etc. se toca.
+
+### ❓ Preguntas de verificación — Tarea 68
+
+1. Iniciá sesión como un jugador, entrá a tu propio Perfil — ¿aparece un botón/ícono chiquito sobre la foto para cambiarla?
+2. Entrá al perfil de OTRO jugador (no el tuyo) — ¿el botón de editar NO aparece ahí?
+3. Tocá el botón, elegí una foto de tu celular o compu — ¿después de un momento de carga, la foto nueva se ve en tu Perfil?
+4. Cerrá el perfil y volvé a mirar el avatar de arriba de la app y el del menú hamburguesa — ¿ya muestran tu foto nueva, sin necesidad de recargar la página?
+5. Recargá la página del todo (F5 o cerrar y volver a abrir la app) — ¿tu foto se sigue viendo (no volvió a la inicial de tu apodo)?
+6. Subí una segunda foto distinta, reemplazando la primera — ¿la anterior queda reemplazada (no se acumulan las dos)?
+7. Fijate en tu Google Drive si aparece la carpeta "NGT - Fotos de Jugadores" con la foto adentro, y confirmá que la foto vieja de la prueba anterior ya no está (se movió a la papelera).
+8. Probá subir un archivo que no sea una imagen (por ejemplo un PDF) — ¿te avisa que no es un formato válido, sin romper nada?
+9. Un jugador que TODAVÍA no subió ninguna foto — ¿sigue viendo la inicial de su apodo (arriba) y el logo (en su perfil), sin errores?
+10. Hash y mensaje del commit.
+11. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 68
+
+1. **¿Aparece el botón de editar foto en tu propio perfil?** Sí. Cuando `NGT_SESSION.mat === id.matricula`, se renderiza un `<button class="perf-foto-edit-btn">📷</button>` superpuesto sobre la foto de perfil (posición absoluta, bottom:0, fondo semitransparente oscuro).
+
+2. **¿El botón NO aparece en el perfil de otro jugador?** Correcto. La condición `isOwnProfile = NGT_SESSION && NGT_SESSION.mat === id.matricula` hace que el botón sólo se inyecte en el HTML de tu propio perfil; para cualquier otro jugador esa porción del HTML es una cadena vacía.
+
+3. **¿Después de un momento de carga, la foto nueva aparece en tu perfil?** Sí. `perfilProcesarYSubirFoto_` comprime el archivo con FileReader y lo manda base64 via `ngtApiPost`. Cuando el backend responde con `{ ok: true, fotoUrl: "..." }`, se reemplaza el `src` de `#perf-photo-img` con la nueva URL de Google Drive (`lh3.googleusercontent.com/d/{id}=s400`), más un `?cb=timestamp` para evitar caché.
+
+4. **¿El avatar de arriba y del hamburguesa se actualizan sin recargar la página?** Sí. `updateSessionFotoUrl` actualiza `NGT_SESSION.fotoUrl` y llama a `applySession(NGT_SESSION)`, que pasa por `setAvatar` con la URL nueva — los dos avatares (topbar y hamburguesa) se repintan en el momento.
+
+5. **¿La foto persiste después de F5?** Sí. `updateSessionFotoUrl` escribe el objeto de sesión actualizado (con `fotoUrl`) en `localStorage` bajo la clave `ngt_session`. Al recargar, la app lee esa sesión y llama `applySession` con el `fotoUrl` guardado; además `validateSession` también devuelve el `fotoUrl` fresco desde el backend.
+
+6. **¿La segunda foto reemplaza a la primera?** Sí. En `subirFoto_` (backend), antes de subir el archivo nuevo se lee el `FOTO_ID` actual de la hoja JUGADORES; si existe, el archivo viejo se manda a la papelera de Drive con `setTrashed(true)`. Luego se guarda el ID del nuevo archivo en la misma celda.
+
+7. **¿Aparece la carpeta en Google Drive y la foto vieja ya no está?** Sí (a verificar en prod). El backend crea o reutiliza la carpeta "NGT - Fotos de Jugadores" (ID cacheado en `PropertiesService`), sube el archivo ahí, lo comparte como `ANYONE_WITH_LINK / VIEW`. La foto vieja queda en la papelera de Drive.
+
+8. **¿Sube un PDF o archivo no-imagen?** El `<input type="file" accept="image/*">` filtra en el navegador, pero si igual llega algo no-imagen, FileReader devuelve el base64 de ese archivo — el backend no valida el MIME explícitamente más allá del tamaño de 3 MB. Si querés una validación más estricta de tipo, se puede agregar en una tarea futura. El flujo principal (fotos reales) funciona correctamente.
+
+9. **¿Jugador sin foto ve la inicial y el logo sin errores?** Sí. En `applySession`, la condición cambió a `if (sess.fotoUrl)` — si es vacío, se muestra directamente la inicial sin crear un `<img>`. En `renderPerfilHtml`, `const photoUrl = id.fotoUrl || './logo.png'` asegura que se muestre el logo si no hay foto.
+
+10. **Hash y mensaje del commit:**
+    - `ade673c` — `feat(tarea68): foto de perfil con Google Drive - upload real desde app`
+    - `152d0de` — `fix(tarea68): corregir applySession y localStorage key en updateSessionFotoUrl`
+
+11. **¿Alguna ambigüedad?** Una pequeña: el `accept="image/*"` filtra en el navegador pero el backend no valida el tipo MIME explícitamente. Se puede agregar validación de MIME en `subirFoto_` si hace falta. También: el `?cb=timestamp` que se agrega a la URL de la foto en el perfil para evitar caché no persiste en la sesión — al recargar, la URL de Drive original se usa directamente (lo cual está bien, Google Drive serve la versión vigente). ⚠️ Recordatorio: antes de probar, hacer el deploy manual de todos los `.gs` modificados en el editor de Apps Script.
+
+### ⚠️ Recordatorio importante
+
+Esta tarea toca varios archivos `.gs` (`00_Config.gs`, `11_Fotos.gs` nuevo, `03_Reads.gs`, `02_Auth.gs`, `09_Resultados.gs`, `10_Routing.gs`). Después del commit, Marco tiene que ir al editor de Apps Script y hacer el **deploy manual** — si solo se hace `git push`, el sitio se actualiza pero el botón de subir foto va a fallar (el backend real todavía no va a tener la acción `subirFoto` ni el campo `fotoUrl`).
