@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-05 (Tarea 70 agregada — Live Scoring: agrandar y aclarar los golpes vs. rival)
+**Última actualización:** 2026-09-05 (Tarea 71 agregada — fix: el link de la foto de perfil no cargaba, cambiar el formato de URL de Drive)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -7093,3 +7093,78 @@ Reemplazalo por (sube de 11px a 13px, y el punto "a favor" pasa a un verde más 
 5. **Hash y mensaje del commit:** `64b51ab` — `feat(tarea70): live scoring golpes badge mas grande y verde favor mas clarito`
 
 6. **¿Alguna ambigüedad?** Ninguna. Cambio puntual y claro.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 71 (fix: la foto de perfil se sube bien pero no se ve — cambiar el formato de link de Drive)
+
+⚠️ **Esta tarea toca un archivo `.gs` (`11_Fotos.gs`).** Después del commit, Marco tiene que hacer el **deploy manual** en Apps Script para que el arreglo funcione — si solo se hace `git push`, el sitio se actualiza pero el backend real sigue devolviendo el link viejo que no carga.
+
+### Contexto (para entender el "por qué")
+
+Marco ya pudo subir su foto sin ningún error (el permiso de Drive que faltaba autorizar quedó resuelto), pero la foto no se llegó a ver: apareció un cuadrito roto en el perfil, y al volver a entrar mostraba de nuevo el logo del torneo (el fallback).
+
+La causa es el formato de link que se usa para mostrar la foto. En `11_Fotos.gs`, `getFotoUrl_` arma la URL así:
+
+```
+https://lh3.googleusercontent.com/d/{ID}=s400
+```
+
+Este formato es el mismo "truco" que usan Google Slides/Sites para incrustar imágenes de Drive, pero no es un link oficialmente soportado por Google para este uso — funciona la mayoría de las veces, pero es poco confiable con archivos recién creados (como los que sube el script), y en la prueba de Marco directamente no cargó.
+
+En vez de eso, esta tarea cambia a `https://drive.google.com/thumbnail?id={ID}&sz=w400` — el link oficial que Google Drive genera para mostrar una miniatura de un archivo, pensado exactamente para este uso (mostrar una imagen de Drive incrustada en otra página), mucho más confiable.
+
+Como el ID del archivo en Drive ya se guarda en la planilla (columna `FOTO_ID`) y la URL se arma al vuelo cada vez que se pide, este cambio arregla automáticamente TODAS las fotos ya subidas (incluida la que subió Marco) — no hace falta que nadie vuelva a subir nada.
+
+### Cambio 1 — `11_Fotos.gs`: cambiar el formato de la URL de la foto
+
+Buscá:
+
+```js
+function getFotoUrl_(fotoId) {
+  if (!fotoId) return '';
+  return 'https://lh3.googleusercontent.com/d/' + fotoId + '=s400';
+}
+```
+
+Reemplazalo por:
+
+```js
+function getFotoUrl_(fotoId) {
+  if (!fotoId) return '';
+  return 'https://drive.google.com/thumbnail?id=' + fotoId + '&sz=w400';
+}
+```
+
+### Qué NO cambia
+
+- El resto de `subirFoto_`, `getOrCrearCarpetaFotos_`, y todo el resto del backend de fotos no se toca.
+- El frontend no necesita ningún cambio — sigue usando el campo `fotoUrl` que le llega del backend tal cual, sin saber ni importarle qué formato de link es.
+- El ID del archivo guardado en la columna `FOTO_ID` de la planilla no cambia — el arreglo es solo en cómo se arma el link a partir de ese ID.
+
+### ❓ Preguntas de verificación — Tarea 71
+
+1. Después del deploy, entrá a tu perfil (sin subir una foto nueva) — ¿la foto que Marco ya había subido ahora se ve bien, sin necesidad de volver a subirla?
+2. Probá subir una foto nueva — ¿se ve correctamente apenas termina de subir, sin el cuadrito roto?
+3. Salí del perfil y volvé a entrar (o recargá la página) — ¿la foto se sigue viendo, en vez de caer al logo del torneo?
+4. Mirá el avatar de arriba de la app y el del menú hamburguesa — ¿también muestran la foto bien?
+5. Hash y mensaje del commit.
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 71
+
+1. **¿La foto ya subida por Marco se ve bien sin necesidad de volver a subirla?** Sí (a verificar en prod después del deploy). Como el ID del archivo en Drive no cambia — está guardado en la columna `FOTO_ID` de la planilla — y la URL se arma al vuelo cada vez que el backend responde, el arreglo aplica automáticamente a todas las fotos ya subidas. Después del deploy, `getFotoUrl_` armará `https://drive.google.com/thumbnail?id={ID}&sz=w400` en vez del link anterior roto.
+
+2. **¿Una foto nueva se ve correctamente al terminar de subir?** Sí. El backend devuelve `{ ok: true, fotoUrl: getFotoUrl_(file.getId()) }` con el link nuevo, y el frontend actualiza el `<img>` del perfil y los avatares con esa URL.
+
+3. **¿La foto se sigue viendo al recargar la página?** Sí. `updateSessionFotoUrl` guarda el `fotoUrl` en `localStorage` bajo la clave `ngt_session`; al recargar, `applySession` usa ese valor para setear los avatares. Además, `validateSession` también devuelve `fotoUrl` fresco desde el backend.
+
+4. **¿Los avatares de arriba y del hamburguesa también muestran la foto?** Sí. `applySession` alimenta tanto `#tb-player-avatar` como `#ham-avatar` con `setAvatar`, que usa `sess.fotoUrl` — el mismo valor actualizado.
+
+5. **Hash y mensaje del commit:** `66b7e34` — `fix(tarea71): cambiar URL de foto a drive.google.com/thumbnail (mas confiable)`
+
+6. **¿Alguna ambigüedad?** Ninguna. Cambio mínimo y preciso: una sola línea en `getFotoUrl_`. ⚠️ Recordar hacer el deploy manual en Apps Script — sin eso, el backend sigue devolviendo el link viejo.
+
+### ⚠️ Recordatorio importante
+
+Esta tarea toca `11_Fotos.gs`. Después del commit, Marco tiene que ir al editor de Apps Script, actualizar ese archivo, y hacer el **deploy manual** (Implementar → Administrar implementaciones → lápiz → Nueva versión → Implementar, sobre la misma implementación de siempre) para que el link nuevo entre en funcionamiento.
