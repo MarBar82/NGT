@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-05 (Tarea 69 agregada — achicar la foto antes de subirla + nombre del rival en negro en Live Scoring + todo el círculo de la foto clickeable)
+**Última actualización:** 2026-09-05 (Tarea 70 agregada — Live Scoring: agrandar y aclarar los golpes vs. rival)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -7023,3 +7023,73 @@ Reemplazalo por (el `onclick` para abrir el selector de foto ahora está en el c
 15. **Hash y mensaje del commit:** `44a9536` — `feat(tarea69): resize foto antes de subir + nombre rival en live scoring + circulo completo clickeable`
 
 16. **¿Alguna ambigüedad?** Ninguna. Un detalle técnico verificado: `formatPlayerLabel` devuelve HTML con `<span class="ap">APELLIDO</span> Nombre`. Como `liveRenderGolpesBadges_` construye un string HTML que se inyecta vía `innerHTML` en `liveRenderHoyoActual`, el HTML de `formatPlayerLabel` se renderiza correctamente — el nombre del rival aparece en el mismo formato visual que usa el resto de la app (apellido en mayúscula con el estilo `.ap`, seguido del nombre).
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 70 (Live Scoring: agrandar y aclarar los golpes vs. rival)
+
+✅ Esta tarea es 100% CSS, dentro de `index.html`. No toca ningún archivo `.gs` — no hace falta ningún deploy manual.
+
+### Contexto (para entender el "por qué")
+
+Después de ver la Tarea 69 en uso, pediste dos ajustes finos sobre el bloque de golpes vs. rival en Live Scoring (el que quedó con el punto de color + el nombre del rival en negro):
+1. Un poco más grande, para que se lea mejor.
+2. El verde del punto "a favor", más clarito — el verde oscuro actual (`#1f7a3d`, el mismo verde institucional que se usa en otras partes de la app) cuesta un poco de ver en un puntito tan chico.
+
+Importante: el verde oscuro (`--green`) se usa en otros lugares de la app (por ejemplo la fichita de "Completa" en el panel de Admin, y el encabezado de la sección Bonus) — esos NO se tocan. Esta tarea agrega un verde más clarito, pero SOLO para el punto de golpe a favor en Live Scoring, sin cambiar el verde institucional en el resto de la app.
+
+### Cambio 1 — CSS: letra más grande, y verde más clarito solo para el punto
+
+Buscá:
+
+```css
+.live-golpes-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+.golpe-badge{display:inline-flex;align-items:center;gap:3px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.02em;}
+.golpe-badge .golpe-dot{font-size:11px;line-height:1;}
+.golpe-dot.golpe-favor{color:var(--green);}
+.golpe-dot.golpe-contra{color:var(--red);}
+.golpe-dot.golpe-neutral{color:var(--g4);}
+.golpe-nombre{color:var(--text);}
+```
+
+Reemplazalo por (sube de 11px a 13px, y el punto "a favor" pasa a un verde más clarito y vivo en vez del verde institucional oscuro):
+
+```css
+.live-golpes-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+.golpe-badge{display:inline-flex;align-items:center;gap:4px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.02em;}
+.golpe-badge .golpe-dot{font-size:13px;line-height:1;}
+.golpe-dot.golpe-favor{color:#4CAF50;}
+.golpe-dot.golpe-contra{color:var(--red);}
+.golpe-dot.golpe-neutral{color:var(--g4);}
+.golpe-nombre{color:var(--text);}
+```
+
+### Qué NO cambia
+
+- El verde institucional (`--green`, `#1f7a3d`) no se toca en ningún otro lado de la app — la fichita "Completa" del panel de Admin y el encabezado de la sección Bonus siguen exactamente igual.
+- El punto "en contra" (rojo) y "neutral" (gris) no cambian de color, solo de tamaño (van a 13px junto con el resto del bloque).
+- El nombre del rival sigue en negro (`var(--text)`), sin cambios de color — solo crece de tamaño junto con el resto del badge.
+- Nada de la lógica de cálculo de golpes (`liveGolpeVsRival_`) se toca — esto es puramente visual.
+
+### ❓ Preguntas de verificación — Tarea 70
+
+1. Entrá a Live Scoring — ¿el bloque de golpes vs. rival (punto + nombre) se ve notoriamente más grande que antes?
+2. Un punto "a favor" (verde) — ¿se ve de un verde más clarito/vivo, más fácil de distinguir que antes?
+3. Anda al panel de Admin y mirá una fecha marcada "Completa", y también la sección Bonus — ¿esos verdes institucionales siguen exactamente igual que siempre (no se aclararon)?
+4. El punto "en contra" (rojo) y el "neutral" (gris) — ¿mantienen su color de siempre, solo más grandes?
+5. Hash y mensaje del commit.
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 70
+
+1. **¿El bloque de golpes vs. rival se ve más grande?** Sí. El tamaño de letra pasó de 11px a 13px en `.golpe-badge` y `.golpe-badge .golpe-dot`, y el `gap` interno pasó de 3px a 4px — el bloque completo (punto + nombre del rival) se ve notoriamente más grande.
+
+2. **¿El punto "a favor" se ve de un verde más clarito?** Sí. El color del punto a favor pasó de `var(--green)` (`#1f7a3d`, verde institucional oscuro) a `#4CAF50` (verde Material Design, más clarito y vivo), mucho más fácil de distinguir en un punto pequeño.
+
+3. **¿Los verdes institucionales del Admin y Bonus no cambiaron?** Sí. El cambio es exclusivamente en `.golpe-dot.golpe-favor` — la variable `--green` sigue valiendo `#1f7a3d` en el resto de la app (fichita "Completa", encabezado Bonus, etc.).
+
+4. **¿El punto "en contra" (rojo) y "neutral" (gris) mantienen su color?** Sí. `.golpe-dot.golpe-contra` sigue usando `var(--red)` y `.golpe-dot.golpe-neutral` sigue usando `var(--g4)` — solo crecen de tamaño junto con el resto del badge.
+
+5. **Hash y mensaje del commit:** `64b51ab` — `feat(tarea70): live scoring golpes badge mas grande y verde favor mas clarito`
+
+6. **¿Alguna ambigüedad?** Ninguna. Cambio puntual y claro.
