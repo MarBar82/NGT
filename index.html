@@ -5425,16 +5425,15 @@ function applySession(sess) {
   const apodoEl = document.getElementById('tb-player-apodo');
   if (chip) chip.style.display = 'flex';
   if (apodoEl) apodoEl.textContent = sess.apodo || sess.nombre || sess.mat;
-  // Set avatars with real photo + initial fallback
-  var mat = sess.mat || '';
+  // Set avatars with real photo (from Drive) + initial fallback
   var displayName = sess.apodo || sess.nombre || '?';
   var initial = displayName.charAt(0).toUpperCase();
   function setAvatar(el) {
     if (!el) return;
-    if (mat) {
+    if (sess.fotoUrl) {
       var img = document.createElement('img');
       img.alt = initial;
-      img.src = sess.fotoUrl || '';
+      img.src = sess.fotoUrl;
       img.onerror = function() { el.removeChild(img); el.textContent = initial; };
       el.textContent = '';
       el.appendChild(img);
@@ -7775,7 +7774,7 @@ function perfilSubirFotoAlServidor_(base64, mimeType) {
 function updateSessionFotoUrl(fotoUrl) {
   if (!NGT_SESSION) return;
   NGT_SESSION.fotoUrl = fotoUrl;
-  try { localStorage.setItem('NGT_SESSION', JSON.stringify(NGT_SESSION)); } catch(e) {}
+  try { localStorage.setItem('ngt_session', JSON.stringify(NGT_SESSION)); } catch(e) {}
   applySession(NGT_SESSION);
 }
 
