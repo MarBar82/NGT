@@ -729,11 +729,12 @@ select.adm-input:disabled{opacity:.55;cursor:not-allowed;background-color:var(--
 .live-player-apodo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;text-transform:uppercase;letter-spacing:.03em;color:var(--navy);}
 .live-player-hcp{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
 .live-golpes-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
-.golpe-badge{display:inline-flex;align-items:center;gap:2px;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.02em;}
-.golpe-badge .golpe-dot{font-size:10px;line-height:1;}
-.golpe-badge.golpe-favor{color:var(--green);}
-.golpe-badge.golpe-contra{color:var(--red);}
-.golpe-badge.golpe-neutral{color:var(--g4);}
+.golpe-badge{display:inline-flex;align-items:center;gap:3px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.02em;}
+.golpe-badge .golpe-dot{font-size:11px;line-height:1;}
+.golpe-dot.golpe-favor{color:var(--green);}
+.golpe-dot.golpe-contra{color:var(--red);}
+.golpe-dot.golpe-neutral{color:var(--g4);}
+.golpe-nombre{color:var(--text);}
 .live-cargado-por{font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--g4);margin-top:2px;letter-spacing:.02em;}
 .live-hole-wrap{display:flex;align-items:center;gap:8px;}
 .live-stb-badge{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);min-width:28px;text-align:center;line-height:1;}
@@ -1194,8 +1195,9 @@ select.adm-input:disabled{opacity:.55;cursor:not-allowed;background-color:var(--
   background:rgba(255,255,255,.05);
   box-shadow:0 4px 14px rgba(0,0,0,.3);
 }
-.perf-foto-edit-btn{position:absolute;bottom:0;left:0;width:100%;height:28px;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;border:none;padding:0;color:#fff;}
-.perf-foto-edit-btn:hover{background:rgba(0,0,0,.78);}
+.perf-hero-photo.perf-foto-clickable{cursor:pointer;}
+.perf-foto-hint{position:absolute;bottom:0;left:0;width:100%;height:28px;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;pointer-events:none;}
+.perf-hero-photo.perf-foto-clickable:hover .perf-foto-hint{background:rgba(0,0,0,.78);}
 .perf-hero-photo.perf-foto-subiendo{opacity:.6;pointer-events:none;}
 .perf-hero-photo img{
   width:100%;
@@ -6423,25 +6425,6 @@ function liveGolpeVsRival_(hcpA, hcpB, indiceHoyo){
 // Iniciales "Nombre Apellido" a partir del nombre completo guardado (que se guarda
 // como "APELLIDO Nombre", con algunos apellidos compuestos — misma lista que ya usa
 // formatPlayerLabel/fmtNameForAdm para no cortar mal esos casos).
-function liveIniciales_(nombreCompleto){
-  var COMPOUND = ['LAVALLE COBO','MARTINEZ FANO','RODRIGUEZ NAZAR','DE SAINT LEGER'];
-  var n = (nombreCompleto || '').trim();
-  var up = n.toUpperCase();
-  var comp = COMPOUND.find(function(c){ return up.indexOf(c) === 0; });
-  var ap, nm;
-  if(comp){
-    ap = comp;
-    nm = n.slice(comp.length).trim();
-  } else {
-    var parts = n.split(' ');
-    ap = parts[0] || '';
-    nm = parts.slice(1).join(' ');
-  }
-  var apInit = ap ? ap.trim().charAt(0).toUpperCase() : '';
-  var nmInit = nm ? nm.trim().charAt(0).toUpperCase() : '';
-  return (nmInit + apInit) || '?';
-}
-
 // Arma la fila de "puntos" de golpes a favor/en contra de un jugador contra
 // CADA UNO DE SUS RIVALES DE MATCH (los que arma el admin al crear la fecha,
 // normalmente 2 por jugador) — no contra todos los compañeros de línea.
@@ -6459,10 +6442,10 @@ function liveRenderGolpesBadges_(jug, hoyoIdx){
     var riv = jugMap[rivalMat];
     if(!riv) return;
     var g = liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx);
-    var ini = liveIniciales_(riv.nombre || riv.apodo || '');
+    var nombreRival = formatPlayerLabel(riv.nombre || riv.apodo || '');
     var cls = g > 0 ? 'golpe-favor' : (g < 0 ? 'golpe-contra' : 'golpe-neutral');
     var simbolo = g === 0 ? '–' : '●';
-    html += '<span class="golpe-badge ' + cls + '"><span class="golpe-dot">' + simbolo + '</span>' + ini + '</span>';
+    html += '<span class="golpe-badge"><span class="golpe-dot ' + cls + '">' + simbolo + '</span><span class="golpe-nombre">' + nombreRival + '</span></span>';
   });
   html += '</div>';
   return html;
@@ -7733,21 +7716,44 @@ function perfilAbrirSelectorFoto() {
 
 function perfilFotoSeleccionada(ev) {
   var file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
   if (!file) return;
-  if (file.size > 3 * 1024 * 1024) { alert('La foto no puede superar 3 MB.'); return; }
+  if (!/^image\//.test(file.type)) { alert('Elegí un archivo de imagen (JPG o PNG).'); return; }
+  if (file.size > 20 * 1024 * 1024) { alert('La imagen es demasiado pesada (máx. 20MB).'); return; }
   perfilProcesarYSubirFoto_(file);
 }
 
+// Recorta la foto a un cuadrado centrado y la achica a 500x500 antes de subirla —
+// así CUALQUIER foto de celular entra sin problema, sin importar cuánto pese la original.
 function perfilProcesarYSubirFoto_(file) {
   var wrapper = document.getElementById('perf-photo-wrapper');
   if (wrapper) wrapper.classList.add('perf-foto-subiendo');
   var reader = new FileReader();
   reader.onload = function(e) {
-    var dataUrl = e.target.result;
-    var comma = dataUrl.indexOf(',');
-    var base64 = dataUrl.substring(comma + 1);
-    var mimeType = file.type || 'image/jpeg';
-    perfilSubirFotoAlServidor_(base64, mimeType);
+    var img = new Image();
+    img.onload = function() {
+      var size = Math.min(img.width, img.height);
+      var sx = (img.width - size) / 2;
+      var sy = (img.height - size) / 2;
+      var target = 500;
+      var canvas = document.createElement('canvas');
+      canvas.width = target;
+      canvas.height = target;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, sx, sy, size, size, 0, 0, target, target);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      var base64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
+      perfilSubirFotoAlServidor_(base64, 'image/jpeg');
+    };
+    img.onerror = function() {
+      if (wrapper) wrapper.classList.remove('perf-foto-subiendo');
+      alert('No se pudo leer la imagen. Probá con otra foto.');
+    };
+    img.src = e.target.result;
+  };
+  reader.onerror = function() {
+    if (wrapper) wrapper.classList.remove('perf-foto-subiendo');
+    alert('No se pudo leer el archivo.');
   };
   reader.readAsDataURL(file);
 }
@@ -7802,9 +7808,9 @@ function renderPerfilHtml(data){
   const isOwnProfile = NGT_SESSION && NGT_SESSION.mat === id.matricula;
 
   let html = '<div class="perf-hero">' +
-    '<div class="perf-hero-photo" id="perf-photo-wrapper">' +
+    '<div class="perf-hero-photo' + (isOwnProfile ? ' perf-foto-clickable' : '') + '" id="perf-photo-wrapper"' + (isOwnProfile ? ' onclick="perfilAbrirSelectorFoto()"' : '') + '>' +
       '<img src="' + photoUrl + '" onerror="this.onerror=null;this.src=\'./logo.png\';this.classList.add(\'is-fallback\');" alt="" id="perf-photo-img">' +
-      (isOwnProfile ? '<button class="perf-foto-edit-btn" onclick="perfilAbrirSelectorFoto()" title="Cambiar foto">📷</button><input type="file" id="perf-foto-input" accept="image/*" style="display:none" onchange="perfilFotoSeleccionada(event)">' : '') +
+      (isOwnProfile ? '<div class="perf-foto-hint">📷</div><input type="file" id="perf-foto-input" accept="image/*" style="display:none" onchange="perfilFotoSeleccionada(event)">' : '') +
     '</div>' +
     '<div class="perf-hero-info">' +
       '<div class="perf-hero-apo">' + (apo || id.nombre) + '</div>' +
