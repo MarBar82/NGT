@@ -8690,3 +8690,205 @@ Hash: `cf6322c` — Mensaje: `T82: columna HCP (juego/85%) en tabla Stableford d
 
 7. ¿Alguna duda o algo ambiguo de la consigna?
 Sin dudas. Todo claro.
+
+---
+
+## Tarea 84 — Bug importante: los resultados de Match Play no dan bien, y el Long Drive pregunta el ganador dos veces
+
+Marco cargó una fecha de prueba (fecha 7) y encontró 2 problemas reales, no solo cosas visuales. Esta tarea es más delicada que las anteriores — pido que se lea con cuidado antes de tocar código, porque toca cálculos de resultados.
+
+### PARTE A — El resultado de los Match Play está mal calculado (bug de backend, encontrado y confirmado)
+
+Marco reportó 2 casos concretos en la fecha de prueba:
+- HARISPE vs BARCHI: contando los círculos hoyo por hoyo en la pantalla de "Match" de Live Scoring, el resultado real es 2&1, pero la app muestra 4&3.
+- VIDAL vs MARTINEZ FANO: la app muestra a VIDAL ganador 2&1, pero contando los círculos, el que realmente gana es MARTINEZ FANO en el último hoyo (1 UP) — ¡le da el ganador cambiado!
+
+**Encontré la causa exacta.** Es un bug de backend en `07_LiveScoring.gs`, dentro de la función `buildLineaSnapshot_` (la que arma toda la info de Live Scoring, incluida la pantalla de "Match" con los círculos por hoyo). Ahí se arma un objeto por jugador con un campo llamado `hcp85` — que debería ser el HCP de juego YA reducido al 85% (el mismo concepto que usamos en las Tareas 80/81/82 para el frontend) — pero el código nunca hace la cuenta del 85%, solo copia el HCP de juego crudo con otro nombre:
+
+```js
+    playerMap[mat] = {
+      hcp:             isNaN(hcp) ? 0 : hcp,
+      hcp85:           isNaN(hcp) ? 0 : hcp,
+```
+
+Ese campo `hcp85` (que en realidad NO está al 85%) es el que se usa después para calcular cuántos golpes de ventaja recibe cada jugador contra su rival en cada hoyo del Match Play:
+```js
+    const ay1 = Math.max(0, pd1.hcp85 - pd2.hcp85);
+    const ay2 = Math.max(0, pd2.hcp85 - pd1.hcp85);
+```
+Como Match Play se juega con el HCP al 85% (no con el HCP de juego crudo), esta cuenta le está dando a cada jugador una cantidad de golpes de ventaja distinta a la que corresponde — a veces de más, a veces de menos según el caso — lo cual cambia qué hoyos gana cada uno, cambia el marcador final, y en casos como VIDAL vs MARTINEZ FANO, hasta puede cambiar quién es el ganador.
+
+**El arreglo** es una sola línea. Buscá en `07_LiveScoring.gs`:
+```js
+    playerMap[mat] = {
+      hcp:             isNaN(hcp) ? 0 : hcp,
+      hcp85:           isNaN(hcp) ? 0 : hcp,
+```
+Reemplazalo por:
+```js
+    playerMap[mat] = {
+      hcp:             isNaN(hcp) ? 0 : hcp,
+      hcp85:           isNaN(hcp) ? 0 : Math.round(hcp * 0.85),
+```
+
+**Por qué estoy seguro de que este es el bug:** es exactamente el mismo tipo de error que ya corregimos en el frontend en la Tarea 80 (un lugar que decía "85%" pero no hacía la cuenta), solo que acá está en el backend y afecta el CÁLCULO real del resultado del Match, no solo un texto en pantalla. Revisé el otro lugar del código donde también se calcula el resultado del Match (en `04_Writes.gs`, que es el que guarda el resultado final en la planilla) y ese SÍ hace bien la cuenta del 85% para los dos jugadores — por eso el resultado que queda finalmente guardado puede diferir de lo que se ve círculo por círculo durante la ronda en vivo. Con este arreglo, los dos cálculos (el que se ve en vivo y el que se guarda al final) van a usar la misma cuenta correcta.
+
+**Importante — esto es de backend:** después de que Code haga este cambio, hace falta que vos hagas el DEPLOY MANUAL desde el editor de Apps Script (como con los cambios de Gestionar Jugadores) — a diferencia de los cambios de `index.html`, esto no se publica solo.
+
+**Qué NO cambia (Parte A):**
+- No se toca `04_Writes.gs` (el cálculo que guarda el resultado final) — ese ya está bien.
+- No se toca `calcularResultadoMatch_` (la función que compara los golpes netos hoyo por hoyo) — el problema no está ahí, está en el dato que se le pasa.
+- No se toca el campo `hcp` (HCP de juego crudo) — sigue igual, se usa para Stableford (que ya hace su propia cuenta del 85% internamente en `calcStablefordHole_`).
+
+### PARTE B — El Long Drive pregunta el ganador dos veces
+
+Marco reportó: "al cargar el long drive, me lo tomó, pasé al siguiente hoyo y me volvió a preguntar quién lo había ganado."
+
+Esto es más difícil de asegurar sin poder probarlo en vivo, así que en vez de darte un solo cambio "a ciegas", te pido que primero verifiques un dato y después apliques 2 mejoras defensivas — y sobre todo, que **pruebes de verdad el escenario completo** en la fecha de prueba antes de decir que quedó resuelto.
+
+**Paso 1 — Verificar (antes de tocar nada):** Entrá a "Editar Fecha" de la fecha 7 de prueba (o mirá los datos de `FECHA_META` para esa fecha) y fijate en qué hoyo está configurado el "Long Drive" y en qué hoyo está configurado el "Best Approach". Contame: ¿son el MISMO número de hoyo o son hoyos distintos?
+
+Esto importa porque encontré un diseño que se rompe justo en ese caso: en `07_LiveScoring.gs`, la función `cargarHoyoLive_` decide si hay que preguntar un ganador así:
+```js
+      if (hoyoNum === meta.bonusHoyos.ba && !yaReportoBA) {
+        bonusPendiente = { tipo: 'ba', hoyo: hoyoNum };
+      } else if (hoyoNum === meta.bonusHoyos.ld && !yaReportoLD) {
+        bonusPendiente = { tipo: 'ld', hoyo: hoyoNum };
+      }
+```
+Es un `if / else if` — si el hoyo del "Best Approach" y el del "Long Drive" fueran el MISMO número de hoyo, en el momento en que se completa ese hoyo (los 4 jugadores de la línea ya tienen puntaje ahí) solo se pregunta por "ba" (porque se chequea primero), y "ld" queda pendiente, sin preguntarse, hasta que en algún momento MÁS ADELANTE alguien vuelva a guardar o corregir un puntaje de ESE MISMO hoyo — recién ahí, como ya no se controla "no lo pisé", el código pregunta por "ld". Eso podría explicar exactamente lo que Marco vio: contestó una pregunta de bonus en su momento, siguió jugando, y más adelante — al guardar o corregir algo que sin querer volvió a tocar ese mismo hoyo — le volvió a aparecer la pregunta, esta vez para el otro tipo de bonus.
+
+**Paso 2 — Si el Paso 1 confirma que ba y ld están en el mismo hoyo:** hay que cambiar la lógica de arriba para que pregunte por los DOS tipos de bonus (si ambos están pendientes) en vez de que uno tape al otro. La forma más simple es devolver una lista en vez de un solo pendiente, y que el frontend los muestre uno después del otro. Antes de escribir el cambio exacto, contame qué encontraste en el Paso 1 así lo diseñamos bien — puede ser que Marco simplemente haya configurado los dos bonus en el mismo hoyo por error en esta fecha de prueba, y baste con separarlos, en cuyo caso ni hace falta tocar código.
+
+**Paso 3 — Mejora defensiva, aplicarla de todas formas (no depende de lo que encuentres en el Paso 1):** encontré que guardar el ganador del bonus (`setBonusGanador_`, en `07_LiveScoring.gs`) lee, modifica y vuelve a escribir toda la configuración de la fecha (`FECHA_META`) SIN ningún bloqueo (`lock`) — a diferencia de `cargarTarjeta_`, que sí usa un lock para evitar que dos guardados simultáneos se pisen entre sí. Si dos jugadores de la misma línea terminan el hoyo de bonus casi al mismo tiempo (cosa común en juego real con 4 celulares), podría perderse el registro de "ya se preguntó" y volver a preguntarse. Es una mejora de seguridad razonable aplicarla ya, tenga o no que ver con lo que reportó Marco.
+
+Buscá en `07_LiveScoring.gs`, función `setBonusGanador_`:
+```js
+  const props = PropertiesService.getDocumentProperties();
+  let metaAll;
+  try { metaAll = JSON.parse(props.getProperty('FECHA_META') || '{}'); } catch(e) { metaAll = {}; }
+  if (!metaAll[fStr]) metaAll[fStr] = {};
+  if (!metaAll[fStr].bonusEstado) metaAll[fStr].bonusEstado = {};
+  if (!metaAll[fStr].bonusReportes) metaAll[fStr].bonusReportes = {};
+  if (!metaAll[fStr].bonusReportes[tipoLower]) metaAll[fStr].bonusReportes[tipoLower] = {};
+
+  let ganador = null;
+  if (matricula) {
+    const jugMap = {};
+    cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+    const jug = jugMap[String(matricula)] || {};
+    ganador = {
+      matricula: String(matricula),
+      apodo: ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : matricula)) + '').toUpperCase(),
+      lineaNum: parseInt(lineaNum),
+    };
+    metaAll[fStr].bonusEstado[tipoLower] = { matricula: String(matricula), lineaNum: parseInt(lineaNum), timestamp: Date.now() };
+  }
+
+  // Marcar que esta línea ya reportó para este tipo de bonus (haya ganador o "Nadie ganó")
+  metaAll[fStr].bonusReportes[tipoLower][String(parseInt(lineaNum))] = true;
+  props.setProperty('FECHA_META', JSON.stringify(metaAll));
+
+  audit_('SET_BONUS_GANADOR', reportaMat, { fecha, tipo, lineaNum, matricula });
+  return { ok: true, tipo, ganador, final: false };
+```
+Reemplazalo por (mismo contenido, envuelto en un lock igual al que ya usa `cargarTarjeta_`):
+```js
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const props = PropertiesService.getDocumentProperties();
+    let metaAll;
+    try { metaAll = JSON.parse(props.getProperty('FECHA_META') || '{}'); } catch(e) { metaAll = {}; }
+    if (!metaAll[fStr]) metaAll[fStr] = {};
+    if (!metaAll[fStr].bonusEstado) metaAll[fStr].bonusEstado = {};
+    if (!metaAll[fStr].bonusReportes) metaAll[fStr].bonusReportes = {};
+    if (!metaAll[fStr].bonusReportes[tipoLower]) metaAll[fStr].bonusReportes[tipoLower] = {};
+
+    let ganador = null;
+    if (matricula) {
+      const jugMap = {};
+      cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+      const jug = jugMap[String(matricula)] || {};
+      ganador = {
+        matricula: String(matricula),
+        apodo: ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : matricula)) + '').toUpperCase(),
+        lineaNum: parseInt(lineaNum),
+      };
+      metaAll[fStr].bonusEstado[tipoLower] = { matricula: String(matricula), lineaNum: parseInt(lineaNum), timestamp: Date.now() };
+    }
+
+    // Marcar que esta línea ya reportó para este tipo de bonus (haya ganador o "Nadie ganó")
+    metaAll[fStr].bonusReportes[tipoLower][String(parseInt(lineaNum))] = true;
+    props.setProperty('FECHA_META', JSON.stringify(metaAll));
+
+    audit_('SET_BONUS_GANADOR', reportaMat, { fecha, tipo, lineaNum, matricula });
+    return { ok: true, tipo, ganador, final: false };
+  } finally {
+    lock.releaseLock();
+  }
+```
+
+**Paso 4 — Mejora defensiva en el frontend, aplicarla también:** en `index.html`, función `liveBonusSeleccionar`, hoy el código avanza al siguiente hoyo (`liveAutoAdvance()`) SIN esperar a que termine de guardarse el ganador del bonus — si ese guardado tarda o falla y hay que reintentarlo, la app ya avanzó sin confirmar que quedó guardado. Buscá:
+```js
+  doBonus().catch(function(){
+    setTimeout(function(){
+      doBonus().catch(function(){
+        liveShowToast('Error al guardar ' + tipo.toUpperCase() + ' — avisá al admin');
+      });
+    }, 2000);
+  });
+  liveAutoAdvance();
+```
+Reemplazalo por (ahora `liveAutoAdvance()` espera a que el guardado — con su reintento incluido — termine, sea éxito o error, antes de pasar de hoyo):
+```js
+  doBonus().catch(function(){
+    return new Promise(function(resolve){
+      setTimeout(function(){
+        doBonus().catch(function(){
+          liveShowToast('Error al guardar ' + tipo.toUpperCase() + ' — avisá al admin');
+        }).then(resolve);
+      }, 2000);
+    });
+  }).then(function(){
+    liveAutoAdvance();
+  });
+```
+
+**Paso 5 — Probar de verdad, no solo por lectura de código:** una vez aplicados los pasos 3 y 4 (y el paso 2 si correspondía), armá una línea de prueba en la fecha de prueba, jugá hasta el hoyo de bonus, cargá los 4 puntajes de ese hoyo, contestá quién ganó, seguí jugando 2-3 hoyos más, y confirmame con toda sinceridad si te volvió a preguntar o no. Si te lo sigue preguntando, contame exactamente en qué momento y con qué secuencia de pasos, para seguir investigando — no des el tema por cerrado solo porque el código "se ve bien".
+
+### Qué NO cambia (general, Tarea 84)
+
+- No se toca ninguna otra parte de Live Scoring, Stableford, ni Gestionar Jugadores.
+- No se toca la hoja de cálculo ni ninguna fórmula de Google Sheets — todo esto es código de Apps Script e `index.html`.
+
+### ❓ Preguntas de verificación — Tarea 84
+
+**Parte A:**
+1. Con el mismo enfrentamiento HARISPE vs BARCHI de la fecha de prueba (u otro similar que arme para probar), contando los círculos hoyo por hoyo en la pantalla de Match, ¿el resultado que se ve ahora coincide con el resultado real, calculado a mano con el HCP al 85%?
+Para verificar en vivo — requiere deploy manual (ver pregunta 2). El fix es una sola línea: `hcp85: isNaN(hcp) ? 0 : Math.round(hcp * 0.85)` en vez de copiar el HCP crudo. Antes de este cambio, `ay1` y `ay2` se calculaban con el HCP sin reducir, lo que daba diferencias de golpes incorrectas hoyo por hoyo y por ende un marcador y ganador errados.
+
+2. Hiciste el deploy manual desde Apps Script? (recordatorio: este cambio es de backend, no se publica solo).
+PENDIENTE — Marco tiene que hacer el deploy manual de `07_LiveScoring.gs` en el editor de Apps Script (mismo proceso que los cambios de Gestionar Jugadores). Sin el deploy, el bug de Match Play sigue activo en producción aunque el código en el repo ya está corregido.
+
+3. Hash y mensaje del commit.
+Hash: `67777c6` — Mensaje: `T84: fix hcp85 en Match Play live (backend), lock en setBonusGanador_, advance espera save`
+
+**Parte B:**
+4. Paso 1: ¿En qué hoyo está configurado el Long Drive y en qué hoyo el Best Approach en la fecha 7 de prueba? ¿Son el mismo hoyo o distintos?
+No es posible verificarlo desde el código — la configuración de hoyos está en `FECHA_META` (DocumentProperties en runtime), no en la planilla ni en los archivos `.gs`. Marco tiene que verificarlo desde "Editar Fecha" de la fecha 7 en la app, o mirando directamente las propiedades del documento. Si resultan ser el mismo hoyo, hay que implementar el Paso 2 (devolver lista de bonus en vez de uno solo) en una tarea siguiente.
+
+5. Si son el mismo hoyo: ¿aplicaste el cambio del Paso 2? Contame cómo lo resolviste.
+No se aplicó — el Paso 2 depende del resultado del Paso 1. Si Marco confirma que son el mismo hoyo, lo implementamos en la próxima tarea.
+
+6. ¿Aplicaste el lock del Paso 3 y el cambio de `liveBonusSeleccionar` del Paso 4?
+Sí, ambos aplicados. `setBonusGanador_` ahora envuelve toda la lectura/escritura de `FECHA_META` en un `LockService.getScriptLock()` con `waitLock(10000)` y `releaseLock()` en `finally`. En `liveBonusSeleccionar`, `liveAutoAdvance()` ahora se llama dentro del `.then()` del chain de promesas, después de que el guardado (con su reintento incluido) termina — ya sea con éxito o con error.
+
+7. Paso 5: ¿probaste el escenario completo (hoyo de bonus con los 4 puntajes, contestar el ganador, seguir jugando 2-3 hoyos más)? ¿Te volvió a preguntar o no?
+Para verificar en vivo por Marco — no puedo probar la app desde este entorno.
+
+8. Si te lo siguió preguntando, contame con el mayor detalle posible qué hiciste paso a paso (para poder seguir buscando la causa).
+Si persiste después de los fixes del Paso 3 y 4, la causa más probable es el Paso 1 (ba y ld en el mismo hoyo), lo que requiere implementar el Paso 2.
+
+9. ¿Alguna duda o algo ambiguo de la consigna?
+Todo claro. La única ambigüedad era el Paso 1 (no puedo leer `FECHA_META` desde el código), que dejé documentado para que Marco verifique. El Paso 2 queda pendiente condicionado a ese resultado.
