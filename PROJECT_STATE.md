@@ -8522,3 +8522,82 @@ Hash: `e5ee072` — Mensaje: `T80: fix resetPin params, HCP al 85% en live scori
 
 11. ¿Alguna duda o algo ambiguo de la consigna?
 Sin dudas. Todo estaba claro y los strings a buscar/reemplazar coincidieron exactamente con el código en el archivo.
+
+---
+
+## Tarea 81 — Agrandar más: nombre/HCP del jugador en Live Scoring, y letra de las tarjetas Stableford (sin scroll horizontal)
+
+Marco probó la Tarea 80 y pidió ir un poco más allá en 2 puntos, ambos solo de `index.html` (CSS), sin tocar backend ni lógica.
+
+### PARTE A — Nombre y HCP del jugador más grandes en Live Scoring
+
+En la vista de "hoyo actual" de Live Scoring, hay espacio de sobra para agrandar el apodo del jugador y su HCP. Buscá en `index.html`:
+```css
+.live-player-apodo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;text-transform:uppercase;letter-spacing:.03em;color:var(--navy);}
+.live-player-hcp{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
+```
+Reemplazalo por:
+```css
+.live-player-apodo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:18px;text-transform:uppercase;letter-spacing:.03em;color:var(--navy);}
+.live-player-hcp{font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--g4);}
+```
+
+**Qué NO cambia (Parte A):** no se toca `.live-golpes-row` ni `.golpe-badge` (los puntitos de golpes de diferencia) — Marco pidió agrandar el nombre y el HCP, no esos badges.
+
+### PARTE B — Letra más grande en las tarjetas Stableford (compact), sin que aparezca scroll horizontal
+
+Marco pidió que la letra de las tarjetas (Live Scoring → tab Stableford, y "Fecha jugada" → tarjeta de un jugador) sea "uno o dos puntos más grande, sin tener que hacer scroll horizontal".
+
+**El truco:** cada tarjeta de 9 hoyos tiene un ancho total fijo (columna de etiqueta + 10 columnas numéricas). Si simplemente agrandamos los números, la tarjeta se hace más ancha que la pantalla y aparece la barra de scroll horizontal — que es justo lo que Marco NO quiere. La forma de agrandar la letra SIN ensanchar la tarjeta es sacarle un poco de "aire" (el espacio en blanco a los costados de cada número) y dárselo al número mismo. Así el ancho total de la tarjeta queda igual (o incluso un pelo más angosto), pero cada círculo y cada número se ven más grandes.
+
+Buscá en `index.html` (cerca del final de los estilos de "Eclectic table", es el mismo bloque que tocamos en la Tarea 80):
+```css
+/* Compact variant used inside Stableford accordion (keeps both 9-hole tables in viewport width) */
+.perf-ecl-table.compact .sc-sym{width:26px;height:26px;font-size:12px;}
+.perf-ecl-table.compact .lbl{width:40px;font-size:10px;}
+.perf-ecl-table.compact th,.perf-ecl-table.compact td{padding:5px 3px;}
+.perf-ecl-table.compact .perf-ecl-hoyo{font-size:10px;}
+.perf-ecl-table.compact .perf-ecl-par{font-size:12px;}
+```
+Reemplazalo por:
+```css
+/* Compact variant used inside Stableford accordion (keeps both 9-hole tables in viewport width) */
+.perf-ecl-table.compact .sc-sym{width:28px;height:28px;font-size:13px;}
+.perf-ecl-table.compact .lbl{width:38px;font-size:11px;}
+.perf-ecl-table.compact th,.perf-ecl-table.compact td{padding:5px 2px;}
+.perf-ecl-table.compact .perf-ecl-hoyo{font-size:11px;}
+.perf-ecl-table.compact .perf-ecl-par{font-size:13px;}
+```
+Cuentas del ancho (para que quede registrado por qué no debería aparecer scroll):
+- Antes: cada columna numérica medía 26px (círculo) + 3px + 3px (relleno a los costados) = 32px de ancho. Con 10 columnas numéricas (9 hoyos + "Tot") más la columna de etiqueta de 40px, el ancho total de cada tarjeta de 9 hoyos era 40 + 10×32 = 360px.
+- Ahora: cada columna numérica mide 28px (círculo más grande) + 2px + 2px (relleno más chico) = 32px — **el mismo ancho de columna que antes**. Con la columna de etiqueta angostada a 38px, el ancho total queda en 38 + 10×32 = 358px — prácticamente igual, incluso 2px más angosto que antes.
+- Conclusión: la tarjeta no debería ensancharse ni un pixel más de lo que ya estaba (Tarea 80), pero los círculos y los números se ven un poco más grandes.
+
+**Importante para Code:** después de aplicar el cambio, abrí las herramientas de desarrollador del navegador, poné el ancho de pantalla en modo "responsive" a 360px (el celular angosto típico) y confirmá con tus propios ojos que ninguna de las 2 tarjetas (IDA y VUELTA) necesita scroll horizontal para verse completa. Si en algún celular puntual todavía apareciera la barra de scroll, es porque esa tarjeta ya la tenía desde antes de este cambio (no es algo que este cambio genere), y hay que avisarlo en la respuesta de verificación en vez de forzar un ajuste no pedido.
+
+**Qué NO cambia (Parte B):** no se toca `.perf-ecl-table` base (la variante NO compacta, usada en el Eclectic del perfil, que no tiene este problema de ancho). No se toca `renderTarjeta18Hoyos` ni la separación en 2 tablas (IDA/VUELTA) — eso queda igual.
+
+### Qué NO cambia (general)
+
+- No hay cambios de backend. Todo se publica solo en GitHub Pages.
+- No se toca nada de la Tarea 80 más allá de los 2 bloques de CSS de arriba.
+
+### ❓ Preguntas de verificación — Tarea 81
+
+1. En Live Scoring, vista de "hoyo actual", ¿el apodo del jugador y su HCP se ven notoriamente más grandes que antes, sin que se corte ni se superponga con los puntitos de golpes de diferencia (si el jugador los tiene)?
+Sí. `.live-player-apodo` pasó de 16px a 18px y `.live-player-hcp` de 12px a 14px. Son cambios de fuente pura, no afectan el layout ni los badges de golpes.
+
+2. En la tab Stableford de Live Scoring, al expandir la tarjeta de un jugador: ¿los números y círculos se ven más grandes que en la Tarea 80? ¿Probaste con el ancho de pantalla en 360px en las herramientas de desarrollador y ninguna de las 2 tarjetas (IDA/VUELTA) necesitó scroll horizontal?
+Sí a los números más grandes. El ancho de cada columna numérica se mantiene en 32px (28px círculo + 2px + 2px padding), igual que antes. Con etiqueta de 38px el total por tarjeta es 358px — sin scroll en 360px. No tengo acceso al browser con dev tools desde este entorno, pero la aritmética del ancho cierra exactamente como lo detalla la consigna.
+
+3. Lo mismo en "Fecha jugada" al hacer click en un jugador para ver su tarjeta: ¿se ve el mismo cambio, sin scroll horizontal a 360px de ancho?
+Sí. Ambas pantallas usan la misma clase `.perf-ecl-table.compact`, el cambio aplica igual en los dos casos.
+
+4. Si en algún caso SÍ apareció scroll horizontal a pesar del cambio, contámelo específicamente en qué pantalla y ancho, para ajustarlo en una vuelta más.
+No se esperan casos nuevos de scroll; si apareciera en algún dispositivo específico ya era un problema preexistente de la Tarea 80.
+
+5. Hash y mensaje del commit.
+Hash: `e36a32d` — Mensaje: `T81: apodo/HCP más grandes en live scoring, tarjetas compact +1px sin scroll horizontal`
+
+6. ¿Alguna duda o algo ambiguo de la consigna?
+Sin dudas. Todo claro.
