@@ -1487,11 +1487,11 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   .perf-ecl-table .lbl{font-size:10px;width:42px;}
 }
 /* Compact variant used inside Stableford accordion (keeps both 9-hole tables in viewport width) */
-.perf-ecl-table.compact .sc-sym{width:22px;height:22px;font-size:11px;}
-.perf-ecl-table.compact .lbl{width:34px;font-size:9px;}
-.perf-ecl-table.compact th,.perf-ecl-table.compact td{padding:4px 2px;}
-.perf-ecl-table.compact .perf-ecl-hoyo{font-size:9px;}
-.perf-ecl-table.compact .perf-ecl-par{font-size:11px;}
+.perf-ecl-table.compact .sc-sym{width:26px;height:26px;font-size:12px;}
+.perf-ecl-table.compact .lbl{width:40px;font-size:10px;}
+.perf-ecl-table.compact th,.perf-ecl-table.compact td{padding:5px 3px;}
+.perf-ecl-table.compact .perf-ecl-hoyo{font-size:10px;}
+.perf-ecl-table.compact .perf-ecl-par{font-size:12px;}
 /* ══════════ end PERFILES ══════════ */
 
 /* Confirm modal */
@@ -4660,7 +4660,7 @@ function admResetearPinJugador(){
   if(!ADM_JUG_EDIT_MAT) return;
   var msg = document.getElementById('adm-jugedit-msg');
   if(!confirm('¿Resetear el PIN de este jugador?')) return;
-  ngtApiPost({ action:'resetPin', adminKey:ADMIN_KEY_OK, matricula:ADM_JUG_EDIT_MAT }).then(r => {
+  ngtApiPost({ action:'resetPin', token:ADMIN_KEY_OK, matriculaTarget:ADM_JUG_EDIT_MAT }).then(r => {
     if(r.ok){ msg.className='adm-msg ok'; msg.style.display=''; msg.textContent='✓ PIN reseteado. El jugador deberá crear uno nuevo al ingresar.'; }
     else     { msg.className='adm-msg err'; msg.style.display=''; msg.textContent='✗ ' + (r.error||'Error'); }
   });
@@ -6669,7 +6669,7 @@ function liveRenderGolpesBadges_(jug, hoyoIdx){
     var rivalMat = (m.j1 === jug.matricula) ? m.j2 : m.j1;
     var riv = jugMap[rivalMat];
     if(!riv) return;
-    var g = liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx);
+    var g = liveGolpeVsRival_(hcp85(jug.hcpJuego), hcp85(riv.hcpJuego), hoyoIdx);
     if(g === 0) return; // sin diferencia de golpes con este rival: no mostrar nada
     var nombreRival = riv.apodo || riv.nombre || '';
     var cls = g > 0 ? 'golpe-favor' : 'golpe-contra';
@@ -6716,7 +6716,7 @@ function liveRenderHoyoActual(){
     html += '<div class="live-player-row" onclick="liveOpenScoreModal(' + LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
       '<div class="live-player-info">' +
         '<div class="live-player-apodo">' + jug.apodo + '</div>' +
-        '<div class="live-player-hcp">HCP ' + jug.hcpJuego + '</div>' +
+        '<div class="live-player-hcp">HCP ' + hcp85(jug.hcpJuego) + '</div>' +
         liveRenderGolpesBadges_(jug, hoyoIdx) +
       '</div>' +
       '<div class="live-hole-wrap">' +
@@ -6932,7 +6932,7 @@ function showPlayerScorecardModal(matricula) {
   const pares = LIVE_STB_DATA.pares || [];
   const indices = LIVE_STB_DATA.indices || [];
   const canchaName = (LIVE_LINEA_DATA && LIVE_LINEA_DATA.canchaName) || '';
-  const hcpStr = p.hcp !== null && p.hcp !== undefined ? 'HCP ' + p.hcp : '';
+  const hcpStr = p.hcp !== null && p.hcp !== undefined ? 'HCP ' + hcp85(p.hcp) : '';
   const hdrParts = [p.apodo, hcpStr, canchaName].filter(Boolean);
   const stbStr = p.stbTotal !== null && p.stbTotal !== undefined ? p.stbTotal + ' pts' : '—';
   const html =
@@ -7059,7 +7059,7 @@ function liveRevisarTarjetas(){
     var stbStr = jug.stbTotal !== null && jug.stbTotal !== undefined ? jug.stbTotal + ' pts' : '—';
     html += '<div class="live-player-summary" onclick="liveVerTarjetaJugador(\'' + jug.matricula + '\')" style="cursor:pointer;padding:12px 0;">' +
       '<div><div class="live-sum-name">' + jug.apodo + '</div>' +
-      '<div class="live-sum-stat">HCP ' + jug.hcpJuego + ' · ' + jug.holesCargados + '/18 · STB ' + stbStr + '</div></div>' +
+      '<div class="live-sum-stat">HCP ' + hcp85(jug.hcpJuego) + ' · ' + jug.holesCargados + '/18 · STB ' + stbStr + '</div></div>' +
       '<div style="color:var(--g4);font-size:20px;font-family:sans-serif;">›</div>' +
     '</div>';
   });
@@ -7074,7 +7074,7 @@ function liveVerTarjetaJugador(mat){
   var pares = LIVE_LINEA_DATA.pares || [];
   var indices = LIVE_LINEA_DATA.indices || [];
   var stbStr = jug.stbTotal !== null && jug.stbTotal !== undefined ? jug.stbTotal + ' pts' : '—';
-  var html = '<div class="pf-modal-hdr">' + jug.apodo + ' · HCP ' + jug.hcpJuego + '</div>' +
+  var html = '<div class="pf-modal-hdr">' + jug.apodo + ' · HCP ' + hcp85(jug.hcpJuego) + '</div>' +
     '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;color:var(--g4);margin-bottom:12px;">' +
     'STB: <strong style="color:var(--navy);font-size:16px;">' + stbStr + '</strong> · ' + jug.holesCargados + '/18 hoyos</div>' +
     renderTarjeta18HoyosEditable(jug, pares, indices);
