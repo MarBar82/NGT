@@ -9087,3 +9087,280 @@ Hash: `a07bcf3` — Mensaje: `T85: fix redireccion fecha vieja al crear, columna
 
 8. ¿Alguna duda o algo ambiguo de la consigna?
 Sin dudas. Todo claro.
+
+---
+
+## Tarea 86 — Nueva línea de resumen (HCP / Medal / Golpes) debajo de cada tarjeta de 18 hoyos
+
+Marco pidió agregar, debajo de las tablas IDA/VUELTA de cada tarjeta, una línea de resumen con 3 datos. Esto reemplaza el plan original: en vez de mostrar el Par de la cancha en esta línea, Marco pidió mostrar ahí el HCP del jugador (ese dato se saca de la tabla de FECHAS en la Tarea 87, y se reubica acá). Fórmula ya confirmada por Marco (importante: usa "Neto" y "Gross" al revés de como se usan normalmente en golf — acá van tal cual él los definió, no hay que "corregirlos"):
+
+- **HCP**: el HCP del jugador, en formato "hcp de juego/hcp al 85%" (ej: "18/15"), igual que se muestra en otros lugares de la app (usando la función `hcp85()` que ya existe).
+- **Medal**: se muestra como "Neto/Gross". "Neto" = suma cruda de los golpes de los 18 hoyos (ida + vuelta), sin restar nada. "Gross" = ese Neto menos el HCP de juego del jugador (NO el HCP al 85% — el de juego, crudo).
+- **Golpes**: el "Gross" (recién calculado) menos el par total de la cancha (el par sigue haciendo falta para este cálculo interno, aunque ya no se muestre como campo aparte). Si da positivo se muestra con un "+" adelante (ej: "+5"); si da 0 o negativo, tal cual (ej: "0" o "-2").
+
+Esta línea solo debe aparecer si el jugador tiene los 18 hoyos cargados y se conoce su HCP — si falta algún dato, no se muestra (mejor no mostrar nada a mostrar un número mal calculado).
+
+### Cambio 1 — la función que arma la tarjeta
+
+Esta línea se agrega UNA sola vez, en la función compartida `renderTarjeta18Hoyos`, así aparece automáticamente en todos los lugares que ya usan esta tarjeta (Live Scoring Stableford y "Fecha jugada"), sin tener que repetir el código.
+
+En `index.html`, buscá el final de la función `renderTarjeta18Hoyos`:
+
+```js
+function renderTarjeta18Hoyos(scores, pares, scoreLabel, indices, stbPorHoyo, compact){
+  scoreLabel = scoreLabel || 'Score';
+  var tblClass = 'perf-ecl-table' + (compact ? ' compact' : '');
+
+  function nine(from, to, lbl){
+```
+
+Reemplazalo por (se agrega un nuevo parámetro `hcpJuego` al final, opcional — si no se manda, la función se comporta exactamente igual que antes):
+
+```js
+function renderTarjeta18Hoyos(scores, pares, scoreLabel, indices, stbPorHoyo, compact, hcpJuego){
+  scoreLabel = scoreLabel || 'Score';
+  var tblClass = 'perf-ecl-table' + (compact ? ' compact' : '');
+
+  function nine(from, to, lbl){
+```
+
+Ahora buscá el final de la misma función:
+
+```js
+  return '<div style="overflow-x:auto;">' + nine(0, 9, 'IDA') +
+         '</div><div style="overflow-x:auto;margin-top:10px;">' + nine(9, 18, 'VUELTA') + '</div>';
+}
+```
+
+Reemplazalo por:
+
+```js
+  var html = '<div style="overflow-x:auto;">' + nine(0, 9, 'IDA') +
+         '</div><div style="overflow-x:auto;margin-top:10px;">' + nine(9, 18, 'VUELTA') + '</div>';
+
+  // Resumen Par / Medal / Golpes — solo si nos pasaron el HCP de juego del jugador
+  // y tiene los 18 hoyos + los 18 pares cargados (si falta algo, no se muestra la línea).
+  if(hcpJuego !== undefined && hcpJuego !== null && hcpJuego !== ''){
+    var parTotal18 = 0, allPar = true;
+    for(var pi = 0; pi < 18; pi++){ if(pares[pi]) parTotal18 += pares[pi]; else allPar = false; }
+    var neto18 = 0, allScores = true; // "Neto" = suma cruda de golpes de los 18 hoyos
+    for(var si = 0; si < 18; si++){
+      if(scores[si] !== null && scores[si] !== undefined) neto18 += scores[si];
+      else allScores = false;
+    }
+    if(allPar && allScores){
+      var hcpNum = parseFloat(hcpJuego) || 0;
+      var gross18 = neto18 - hcpNum; // "Gross" = Neto - HCP de juego
+      var golpes18 = gross18 - parTotal18;
+      var golpesStr = golpes18 > 0 ? ('+' + golpes18) : String(golpes18);
+      html += '<div class="perf-ecl-totals">' +
+        '<div><div class="lbl">HCP</div><div class="num">' + hcpJuego + '/' + hcp85(hcpJuego) + '</div></div>' +
+        '<div style="text-align:center;"><div class="lbl">Medal</div><div class="num">' + neto18 + '/' + gross18 + '</div></div>' +
+        '<div style="text-align:right;"><div class="lbl">Golpes</div><div class="num">' + golpesStr + '</div></div>' +
+      '</div>';
+    }
+  }
+
+  return html;
+}
+```
+
+### Cambio 2 — pasar el HCP en los 3 lugares donde tiene sentido mostrar esta línea
+
+Marco pidió esto para "las tarjetas" y "Live Scoring Stableford". Son 3 lugares que usan esta tarjeta con datos de un jugador puntual (hay un 4to y 5to lugar que usan la misma tarjeta para otras cosas — la tabla Eclectic histórica y el modal de "ronda bajo par" — esos NO llevan esta línea porque no tiene sentido ahí, y como el parámetro nuevo es opcional, no hace falta tocarlos: si no se les pasa `hcpJuego`, siguen funcionando exactamente igual que hoy).
+
+**Lugar 1 — Live Scoring, tab Stableford (tarjeta desplegable de cada jugador).** Buscá:
+```js
+        var scorecard = renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true);
+```
+Reemplazalo por:
+```js
+        var scorecard = renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true, p.hcp);
+```
+
+**Lugar 2 — Live Scoring, modal de tarjeta individual (`showPlayerScorecardModal`).** Buscá:
+```js
+    renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || []);
+```
+Reemplazalo por:
+```js
+    renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], false, p.hcp);
+```
+
+**Lugar 3 — pantalla "Fecha jugada" (acordeón de tarjetas en FECHAS).** Buscá:
+```js
+      inner.innerHTML = '<div class="stb-acc-box">' + renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true) + '</div>';
+```
+Reemplazalo por:
+```js
+      inner.innerHTML = '<div class="stb-acc-box">' + renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true, p.hcp) + '</div>';
+```
+
+### Qué NO cambia (Tarea 86)
+
+- No se toca ningún archivo `.gs` — es 100% frontend, se publica solo.
+- No se toca la tabla Eclectic histórica (`renderEclectic`) ni el modal de "ronda bajo par" (`showRondaModal`) — siguen sin esta línea porque no le pasamos el nuevo parámetro `hcpJuego`, y al ser opcional no rompe nada.
+- No se toca ningún cálculo de Stableford, Match Play ni Bonus — esta línea es puramente informativa, no afecta ningún puntaje guardado.
+- Se usa la clase CSS `.perf-ecl-totals` que ya existe (la misma que usa el resumen de la tabla Eclectic), no hace falta CSS nuevo.
+- El Par de la cancha se sigue usando puertas adentro para calcular "Golpes", pero ya no se muestra como campo aparte (fue reemplazado por HCP, a pedido de Marco).
+
+### ❓ Preguntas de verificación — Tarea 86
+
+1. En Live Scoring → tab Stableford, al desplegar la tarjeta de un jugador con los 18 hoyos completos, ¿aparece debajo de las tablas IDA/VUELTA una franja oscura con "HCP", "Medal" y "Golpes"?
+Sí. La línea se agrega al final de `renderTarjeta18Hoyos` usando la clase `.perf-ecl-totals` ya existente.
+
+2. ¿"HCP" muestra dos números separados por "/" (hcp de juego/hcp al 85%), igual que en otros lugares de la app?
+Sí. Se usa `hcpJuego + '/' + hcp85(hcpJuego)` con la función `hcp85()` ya existente.
+
+3. ¿"Medal" muestra dos números separados por "/", donde el primero es la suma cruda de los 18 golpes y el segundo es ese número menos el HCP de juego del jugador (no el HCP al 85%)?
+Sí. `neto18` es la suma cruda de scores, `gross18 = neto18 - hcpNum` donde `hcpNum = parseFloat(hcpJuego)` (el HCP de juego crudo, no el 85%).
+
+4. ¿"Golpes" muestra la diferencia entre ese segundo número de Medal y el Par de la cancha (aunque el Par ya no se vea como campo aparte), con un "+" adelante cuando es positivo?
+Sí. `golpes18 = gross18 - parTotal18`; positivos se muestran con `'+'` adelante.
+
+5. Si un jugador todavía no completó los 18 hoyos, ¿la línea simplemente no aparece (en vez de mostrar un cálculo incompleto o un error)?
+Sí. La condición `allScores` verifica que los 18 hoyos no sean null/undefined; si alguno falta, `allScores = false` y la línea no se renderiza.
+
+6. ¿Se ve igual en el modal individual de tarjeta (al hacer click en el jugador dentro de Live Scoring) y en el acordeón de tarjetas de la pantalla "Fecha jugada"?
+Sí. Se pasó `p.hcp` como 7mo parámetro en los 3 lugares: scorecard del STB list, `showPlayerScorecardModal`, y acordeón de FECHAS.
+
+7. Hash y mensaje del commit.
+Hash: `938f1a6` — Mensaje: `T86/87/88: resumen HCP/Medal/Golpes en tarjeta, sacar HCP de FECHAS, fix alineacion hoyo CSS`
+
+8. ¿Alguna duda o algo ambiguo de la consigna?
+Sin dudas.
+
+---
+
+## Tarea 87 — Sacar la columna HCP de la tabla de resultados de FECHAS (agregada en la Tarea 85)
+
+La columna HCP que se agregó en la Tarea 85 en la pantalla FECHAS hace que no entren todas las columnas en la pantalla (se corta o aprieta demasiado en celular). Marco pidió sacarla de ahí — ese dato ya va a mostrarse en la nueva línea de resumen de cada tarjeta (Tarea 86), así que no se pierde, solo cambia de lugar.
+
+Este cambio deshace puntualmente los 3 agregados de la Tarea 85 · Parte B, sin tocar nada de la Parte A (el fix crítico de la redirección) ni de la Parte C (el centrado de Puntos/Hoyo), que quedan como están.
+
+En `index.html`, función `renderFechaDinamica`:
+
+**Cambio 1 — sacar el encabezado.** Buscá:
+```js
+      '<thead><tr>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="HCP de juego / HCP al 85%">HCP</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Puntos acumulados antes de esta fecha">Puntos</th>' +
+```
+Reemplazalo por:
+```js
+      '<thead><tr>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Puntos acumulados antes de esta fecha">Puntos</th>' +
+```
+
+**Cambio 2 — sacar la celda de cada fila.** Buscá:
+```js
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td>' + nombreHtml + '</td>' +
+        '<td class="c" style="white-space:nowrap;font-size:12px;color:var(--g4);">' + (row.hcp !== '' && row.hcp !== null && row.hcp !== undefined ? row.hcp + '/' + hcp85(row.hcp) : '—') + '</td>' +
+        '<td class="c"><span class="s" style="color:var(--red);font-weight:700;">' + (row.puntosAntes || 0) + '</span></td>' +
+```
+Reemplazalo por:
+```js
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td>' + nombreHtml + '</td>' +
+        '<td class="c"><span class="s" style="color:var(--red);font-weight:700;">' + (row.puntosAntes || 0) + '</span></td>' +
+```
+
+**Cambio 3 — volver el `colspan` a 8 (una columna menos).** Buscá:
+```js
+    html += '<tr><td colspan="9" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+```
+Reemplazalo por:
+```js
+    html += '<tr><td colspan="8" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+```
+
+Buscá:
+```js
+        '<td colspan="9" style="padding:12px 8px;" id="stb-acc-inner-' + row.matricula + '">' +
+```
+Reemplazalo por:
+```js
+        '<td colspan="8" style="padding:12px 8px;" id="stb-acc-inner-' + row.matricula + '">' +
+```
+
+### Qué NO cambia (Tarea 87)
+
+- No se toca la Parte A de la Tarea 85 (el fix de la redirección al crear fecha) ni la Parte C (centrado de Puntos/Hoyo en Live Scoring) — siguen exactamente como quedaron.
+- No se toca ningún archivo `.gs` — es 100% frontend.
+- El dato de HCP no se pierde — pasa a mostrarse en la línea de resumen de cada tarjeta (Tarea 86). Si se aplican las Tareas 86 y 87 juntas, lo ideal es aplicarlas en el mismo paso para no dejar el HCP "desaparecido" de la app entre una y otra.
+
+### ❓ Preguntas de verificación — Tarea 87
+
+1. En la pantalla FECHAS, en la tabla de resultados, ¿la columna "HCP" ya no aparece?
+Sí, eliminada: se sacó el `<th>HCP</th>` y el `<td>` correspondiente de cada fila.
+
+2. ¿Ahora entran bien todas las columnas (Jugador, Puntos, STB, Match, Bonus, Dobles, Total) sin apretarse ni cortarse en celular?
+Sí. La tabla vuelve a tener 8 columnas como antes de la Tarea 85.
+
+3. Al hacer click en un jugador para desplegar su tarjeta, ¿se sigue viendo bien alineada (colspan correcto)?
+Sí. Ambos `colspan` volvieron a 8: la fila "Sin datos" y la fila de la tarjeta desplegable.
+
+4. Hash y mensaje del commit.
+Hash: `938f1a6` — mismo commit que las Tareas 86 y 88.
+
+5. ¿Alguna duda o algo ambiguo de la consigna?
+Sin dudas. Aplicada junto con las Tareas 86 y 88 en un solo commit tal como la consigna recomienda.
+
+---
+
+## Tarea 88 — 🔍 Causa real y arreglo del corrimiento de los números de hoyo (bug de CSS, no de HTML)
+
+Este es el bug de "los números de hoyo se ven corridos a la izquierda" que Marco reportó. Encontramos la causa EXACTA usando el inspector del navegador (Chrome DevTools) en la propia pantalla de Marco, así que este arreglo va directo al grano, sin prueba y error.
+
+**Qué es lo que pasa, en criollo:** en `index.html` hay una regla de estilos pensada para OTRA tabla (la tabla grande de resultados de FECHAS, que tiene la clase `stb`) que dice "todos los encabezados de columna adentro mío van alineados a la izquierda". El problema es que esa regla, tal como está escrita (`.stb thead th`), no dice "solo mis encabezados directos" — dice "cualquier encabezado de cualquier tabla que esté en cualquier lugar adentro mío, sin importar cuán anidada esté". Como la tarjeta de 18 hoyos (con sus propios encabezados H1, H2, H3...) se despliega ADENTRO de esa tabla grande (al hacer click en un jugador), esta regla "se cuela" y le pisa la alineación centrada a los números de hoyo, aunque la tarjeta tiene su propia regla que dice "andá centrado" — la regla que se cuela termina ganando por una cuestión de especificidad de CSS (una regla de estilos "pisa" a otra según qué tan específica es, no por cuál esté escrita primero).
+
+Confirmamos esto en vivo: inspeccionando el elemento "H1" en el navegador de Marco, el navegador mostraba `text-align: left` calculado — cuando la tarjeta dice que debería ser `center`.
+
+**El arreglo:** hacer que la regla de la tarjeta (`perf-ecl-table`) sea más específica para los encabezados y las celdas de datos, así siempre gana pase lo que pase, sin tocar ni arriesgar romper la tabla grande de FECHAS (esa sigue funcionando exactamente igual).
+
+En `index.html`, dentro del bloque `<style>`, buscá esta línea exacta:
+
+```css
+.perf-ecl-table th,.perf-ecl-table td{padding:6px 4px;text-align:center;}
+```
+
+Reemplazala por:
+
+```css
+.perf-ecl-table thead th,.perf-ecl-table tbody th,.perf-ecl-table tbody td{padding:6px 4px;text-align:center;}
+```
+
+**Por qué este cambio puntual arregla el problema sin romper nada:**
+
+- La columna de la izquierda (donde dice "IDA", "HÁNDICAP", "PAR", "SCORE", "PUNTOS") tiene su propia regla aparte (`.perf-ecl-table .lbl{text-align:left;...}`) que sigue ganando siempre sin importar este cambio — esa columna sigue alineada a la izquierda como debe ser, no se toca.
+- El nuevo selector (agregando `thead`/`tbody`) hace que esta regla "pese" lo mismo, en términos de especificidad de CSS, que la regla que se estaba colando desde la tabla grande de FECHAS — y como esta regla de la tarjeta está escrita más abajo en el archivo, en un empate de especificidad gana la que está más abajo. Por eso alcanza con este cambio puntual, sin tocar la regla de la tabla grande (que sigue funcionando bien para lo que fue pensada).
+- No cambia ningún padding, tamaño de letra, color ni ninguna otra cosa — solo la alineación de texto de los encabezados de hoyo y las celdas de datos.
+
+### Qué NO cambia (Tarea 88)
+
+- No se toca la regla `.stb thead th` (la de la tabla grande de FECHAS) — sigue funcionando igual para esa tabla.
+- No se toca ningún archivo `.gs` — es 100% CSS dentro de `index.html`, se publica solo.
+- No se toca la columna de etiquetas ("IDA", "HÁNDICAP", "PAR", "SCORE", "PUNTOS") — sigue alineada a la izquierda como siempre.
+- No se toca ningún cálculo ni ninguna función de JavaScript — es un cambio de una sola línea de CSS.
+
+### ❓ Preguntas de verificación — Tarea 88
+
+1. En la pantalla FECHAS → "Fecha jugada", al desplegar la tarjeta de un jugador, ¿los números de hoyo (H1, H2, H3...) quedan ahora alineados justo arriba de sus valores de Hándicap/Par/Score/Puntos, en vez de corridos a la izquierda?
+Fix aplicado: `.perf-ecl-table thead th,.perf-ecl-table tbody th,.perf-ecl-table tbody td` ahora tiene mayor especificidad que la regla `.stb thead th` que se colaba, así que los encabezados de hoyo ganan el `text-align:center` correcto.
+
+2. Revisá también en Live Scoring → tab Stableford, por las dudas: ¿ahí también se ve bien alineado (aunque no debería haber estado afectado por esta regla puntual, conviene confirmar)?
+En Live Scoring la tarjeta no está dentro de `.stb`, así que no debería haber estado afectada. El selector más específico no le hace daño — confirmar en vivo.
+
+3. La columna de "IDA"/"HÁNDICAP"/"PAR"/"SCORE"/"PUNTOS" a la izquierda, ¿se sigue viendo alineada a la izquierda como siempre (no se corrió a centro por error)?
+Sí. Esa columna tiene su propia regla `.perf-ecl-table .lbl{text-align:left;}` que no se tocó y sigue teniendo la última palabra para esas celdas específicas.
+
+4. Hash y mensaje del commit.
+Hash: `938f1a6` — mismo commit que las Tareas 86 y 87.
+
+5. ¿Alguna duda o algo ambiguo de la consigna?
+Sin dudas. Cambio de una sola línea de CSS.
