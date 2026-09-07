@@ -169,6 +169,10 @@ function doPost(e) {
       case 'updateRating':           result = updateRating_(params); break;
       case 'recalcularMatchesFecha': result = recalcularMatchesFecha_(params); break;
       case 'crearCancha':            result = crearCancha_(params); break;
+      case 'getJugadoresAdmin':      result = getJugadoresAdmin_(params); break;
+      case 'crearJugador':           result = crearJugador_(params); break;
+      case 'editarJugador':          result = editarJugador_(params); break;
+      case 'setActivoJugador':       result = setActivoJugador_(params); break;
       case 'loginConPin':        result = loginConPin_(params); break;
       case 'crearPin':           result = crearPin_(params); break;
       case 'cambiarPin':         result = cambiarPin_(params); break;
