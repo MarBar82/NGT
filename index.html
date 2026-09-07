@@ -54,9 +54,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 #pg-historia-hub .adm-tab:active{transform:scale(.96);}
 #historia-body{background:var(--white);border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);overflow:hidden;}
 #pg-mit .adm-card{border-radius:16px;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
-.lb-refresh{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;color:var(--g4);cursor:pointer;padding:5px 14px;border:1px solid var(--g3);border-radius:999px;background:none;transition:.12s;}
+.lb-refresh{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:600;color:var(--g4);cursor:pointer;width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--g3);border-radius:50%;background:var(--white);box-shadow:0 1px 3px rgba(0,35,75,.1);transition:.12s;}
 .lb-refresh:hover{color:var(--navy);border-color:var(--navy);}
-.lb-refresh:active{transform:scale(.95);}
+.lb-refresh:active{transform:scale(.9);}
 .fecha-refresh-btn:active{transform:scale(.93);}
 .fecha-row-click:active td{background:var(--g1);}
 .lb-topbar{display:flex;align-items:flex-end;justify-content:flex-end;padding:6px 0;gap:12px;flex-wrap:wrap;}
@@ -579,11 +579,11 @@ select.adm-input:disabled{opacity:.55;cursor:not-allowed;background-color:var(--
 .adm-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
 .adm-btn-secondary{background:none;color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;padding:6px 12px;border:1px solid var(--navy);border-radius:3px;cursor:pointer;margin-top:8px;}
 .adm-btn-secondary:hover{background:var(--navy);color:#fff;}
-.btn-back{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;color:var(--g4);background:none;border:1px solid var(--g3);border-radius:999px;padding:7px 14px;cursor:pointer;transition:.12s;}
+.btn-back{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--g4);background:var(--white);border:1px solid var(--g3);border-radius:50%;width:34px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:.12s;box-shadow:0 1px 3px rgba(0,35,75,.1);}
 .btn-back:hover{border-color:var(--navy);color:var(--navy);}
-.btn-back:active{transform:scale(.95);}
-.adm-card-hdr .btn-back{color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.25);}
-.adm-card-hdr .btn-back:hover{color:#fff;border-color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);}
+.btn-back:active{transform:scale(.9);}
+.adm-card-hdr .btn-back{color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.08);}
+.adm-card-hdr .btn-back:hover{color:#fff;border-color:rgba(255,255,255,.7);background:rgba(255,255,255,.16);}
 .btn-cancel{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);background:none;border:none;padding:6px 10px;cursor:pointer;transition:.12s;}
 .btn-cancel:hover{color:var(--navy);}
 .adm-btn-destructive{width:100%;background:#b91c1c;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:11px;border:none;border-radius:3px;cursor:pointer;transition:.12s;}
@@ -1761,7 +1761,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <div class="wrap" style="padding:0 16px 16px 16px;">
   <div class="lb-topbar">
     <div class="sync-time" id="sync-time"></div>
-    <button class="lb-refresh" onclick="loadLB()">↻ Actualizar</button>
+    <button class="lb-refresh" onclick="loadLB()">↻</button>
   </div>
   <div class="lb-wrap">
     <div id="lb-body"><div class="lb-status"><div class="spinner"></div>Conectando con Google Sheets...</div></div>
@@ -1784,7 +1784,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
     <div class="lb-topbar">
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);">Ranking Histórico</div>
       <div class="sync-time" id="historia-sync" style="margin-left:auto;"></div>
-      <button class="lb-refresh" onclick="loadHistoria()">↻ Actualizar</button>
+      <button class="lb-refresh" onclick="loadHistoria()">↻</button>
     </div>
     <div id="historia-body"><div class="lb-status"><div class="spinner"></div>Cargando ranking...</div></div>
   </div>
@@ -1799,7 +1799,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         </select>
       </div>
       <div class="sync-time" id="hist-sync" style="margin-left:auto;"></div>
-      <button class="lb-refresh" onclick="loadHist()">↻ Actualizar</button>
+      <button class="lb-refresh" onclick="loadHist()">↻</button>
     </div>
     <div class="lb-wrap">
       <div id="hist-body"><div class="lb-status"><div class="spinner"></div>Cargando historia del tour...</div></div>
@@ -1857,7 +1857,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   <div id="mit-score" style="display:none;">
     <div class="adm-card">
       <div class="adm-card-hdr" style="display:flex;align-items:center;gap:10px;">
-        <button class="btn-back" onclick="mitBackToFechas()">← Volver</button>
+        <button class="btn-back" onclick="mitBackToFechas()">←</button>
         <span id="mit-score-title" style="flex:1;text-align:right;">Tarjeta</span>
       </div>
       <div class="adm-card-body">
@@ -2106,7 +2106,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <div class="wrap" style="max-width:680px;padding:16px;">
 
       <div class="adm-sec-back">
-        <button class="btn-back" onclick="pg('admin',null)">← Volver</button>
+        <button class="btn-back" onclick="pg('admin',null)">←</button>
         <span class="adm-sec-title">Crear Fecha</span>
       </div>
 
@@ -2200,7 +2200,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div id="adm-jugadores-list" class="adm-jugs">Cargando...</div>
 
             <div class="adm-btn-row" style="margin-top:18px;">
-              <button class="btn-back" onclick="wizPaso1aBack()">← Volver</button>
+              <button class="btn-back" onclick="wizPaso1aBack()">←</button>
               <button class="adm-btn-primary" id="wiz-armar-btn" onclick="wizArmarLineas()">⚡ Armar Líneas →</button>
             </div>
             <div id="adm-crear-msg" class="adm-msg" style="display:none;"></div>
@@ -2216,7 +2216,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           <div class="adm-s2-summary" id="adm-s2-summary"></div>
           <div id="adm-s2-lineas-preview" style="display:none;margin:10px 0 6px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
           <div class="adm-btn-row">
-            <button class="btn-back" onclick="wizPaso1Back()">← Volver</button>
+            <button class="btn-back" onclick="wizPaso1Back()">←</button>
             <button class="adm-btn-primary" id="wiz-crear-btn" onclick="wizCrearTodo()">🏌 Comenzar Partida</button>
           </div>
           <div id="adm-s2-msg" class="adm-msg" style="display:none;"></div>
@@ -2231,7 +2231,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <div class="wrap" style="max-width:680px;padding:16px;">
 
       <div class="adm-sec-back">
-        <button class="btn-back" onclick="pg('admin',null)">← Volver</button>
+        <button class="btn-back" onclick="pg('admin',null)">←</button>
         <span class="adm-sec-title">Gestionar Fechas</span>
       </div>
 
@@ -2248,7 +2248,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <div class="wrap" style="max-width:680px;padding:16px;">
 
       <div class="adm-sec-back">
-        <button class="btn-back" onclick="cerrarEditPanel();pg('admin-editar',null);">← Volver</button>
+        <button class="btn-back" onclick="cerrarEditPanel();pg('admin-editar',null);">←</button>
         <span class="adm-sec-title">Editando Fecha <span id="adm-edit-panel-num"></span></span>
       </div>
 
@@ -2419,7 +2419,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <div class="wrap" style="max-width:680px;padding:16px;">
 
       <div class="adm-sec-back">
-        <button class="btn-back" onclick="pg('admin',null)">← Volver</button>
+        <button class="btn-back" onclick="pg('admin',null)">←</button>
         <span class="adm-sec-title">Gestionar Canchas</span>
       </div>
 
@@ -2442,7 +2442,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 <div class="wrap" style="max-width:680px;padding:16px;">
 
       <div class="adm-sec-back">
-        <button class="btn-back" onclick="pg('admin-canchas',null)">← Volver</button>
+        <button class="btn-back" onclick="pg('admin-canchas',null)">←</button>
         <span class="adm-sec-title">Editando Cancha — <span id="adm-cancha-edit-nombre"></span></span>
       </div>
 
@@ -2530,7 +2530,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       </select>
     </div>
     <div class="filter-group" style="margin-left:auto;align-self:flex-end;">
-      <button class="lb-refresh" onclick="loadMatch()">↻ Actualizar</button>
+      <button class="lb-refresh" onclick="loadMatch()">↻</button>
     </div>
   </div>
   <div class="lb-wrap">
@@ -6360,7 +6360,7 @@ function livePoll(){
           document.getElementById('live-loading').innerHTML =
             '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
             '<p style="color:var(--red);font-size:14px;">' + (r && r.error ? r.error : 'Error de conexión') + '</p>' +
-            '<button class="btn-back" onclick="pg(\'lb\',null)" style="margin-top:8px;">← Volver</button></div>';
+            '<button class="btn-back" onclick="pg(\'lb\',null)" style="margin-top:8px;">←</button></div>';
         } else if(offEl){
           offEl.textContent = r && r.error ? r.error : 'Error al actualizar';
           offEl.style.display = 'block';
@@ -6373,7 +6373,7 @@ function livePoll(){
         document.getElementById('live-loading').innerHTML =
           '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
           '<p style="color:var(--red);font-size:14px;">Sin conexión</p>' +
-          '<button class="btn-back" onclick="pg(\'lb\',null)" style="margin-top:8px;">← Volver</button></div>';
+          '<button class="btn-back" onclick="pg(\'lb\',null)" style="margin-top:8px;">←</button></div>';
       } else if(offEl){
         offEl.textContent = 'Sin conexión · reintentando...';
         offEl.style.display = 'block';
@@ -7404,7 +7404,7 @@ function renderFechaDinamica(data){
   // ─── HEADER: info card ───
   const canchaName = data.cancha || 'Sin cancha';
   let html = '<div style="margin-bottom:14px;">' +
-    '<button class="btn-back" onclick="pg(\'fechas\',null)">← Volver</button>' +
+    '<button class="btn-back" onclick="pg(\'fechas\',null)">←</button>' +
   '</div>' +
   '<div class="f2-info-card">' +
     '<div class="f2-info-item">' +
@@ -7449,12 +7449,13 @@ function renderFechaDinamica(data){
   html += '<div class="card" style="margin-bottom:14px;">' +
     '<div class="card-hdr" style="display:flex;align-items:center;justify-content:space-between;">' +
       '<div class="card-hdr-title">Resultados Fecha ' + fechaNum + '</div>' +
-      '<button class="fecha-refresh-btn" onclick="refreshFecha(' + fechaNum + ')" style="' +
-        'background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:999px;' +
-        'padding:3px 14px;font-size:11px;font-weight:700;' +
+      '<button class="fecha-refresh-btn" onclick="refreshFecha(' + fechaNum + ')" title="Actualizar" style="' +
+        'background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:50%;' +
+        'width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;' +
+        'font-size:15px;font-weight:700;' +
         'font-family:\'Barlow Condensed\',sans-serif;' +
-        'color:#fff;cursor:pointer;letter-spacing:.06em;' +
-      '">↻ Actualizar</button>' +
+        'color:#fff;cursor:pointer;' +
+      '">↻</button>' +
     '</div>' +
     '<div class="stb-scroll">' +
     '<table class="stb">' +
