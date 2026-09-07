@@ -7615,6 +7615,16 @@ Y agregá este CSS nuevo (por ejemplo cerca de `.perf-hero-photo`):
 6. Hash y mensaje del commit (si hiciste algún cambio).
 7. ¿Este archivo modificado (si lo hay) es `.gs`? Si es así, recordame avisarle a Marco que necesita hacer el deploy manual en Apps Script.
 
+### Respuestas de verificación
+
+1. No hice una prueba contra la planilla real (no tengo acceso a Google Sheets). En cambio hice análisis exhaustivo del código.
+2. No aplica (no tuve acceso a la planilla). Lo que sí puedo decir: el código escribe `Math.round(hcpDeJuego × 0.85)` en la col C de la hoja STB — que es lo que Marco llama "columna E" (hay desplazamiento: la hoja STB tiene A=fecha, B=mat, y los datos de STB empiezan en col C).
+3. El resultado de Match Play SÍ usa el HCP con el 85% aplicado, según el código. En `cargarTarjeta_()`, `hcp85val = stbBreak.e = Math.round(hcpNum × 0.85)` y `oppHcp85 = Math.round(oppHcpNum × 0.85)`. El cálculo de golpes de diferencia opera sobre esos valores reducidos.
+4. No encontré ningún bug de código. El 85% se aplica correctamente en `cargarTarjeta_()` tanto para STB como para Match Play.
+5. **Posible explicación de lo que vio Marco:** cuando el admin cambia un HCP manualmente y después presiona el botón "🔄 Recalcular Fecha", la función `admRecalcularFecha()` llama primero a `recalcularHcpFecha_()` (en `05_HCP.gs`) que **sobreescribe** el HCP de todos los jugadores de esa fecha calculando `hcpIndex × slope / 113` desde el índice WHS. Eso revierte el cambio manual. Si Marco observó el valor incorrecto después de recalcular, eso explicaría el reporte. Le recomendaría verificar: ¿el problema aparece solo después de presionar "Recalcular Fecha"? Si es así, el flujo correcto es: cambiar el HCP manualmente → guardar tarjeta → **no** presionar Recalcular (o solo presionar Stableford y Matches por separado sin el paso de HCP).
+6. Sin commit (sin cambio de código).
+7. No aplica.
+
 ---
 
 ## Tarea 76 — Ítem 6: botones "Volver" y "Actualizar" como íconos chicos y consistentes
@@ -7699,6 +7709,16 @@ Reemplazalo por:
 5. ¿Los botones siguen funcionando igual que antes (Volver te lleva a la pantalla anterior, Actualizar recarga los datos)?
 6. Hash y mensaje del commit.
 7. ¿Alguna duda o algo ambiguo de la consigna?
+
+### Respuestas de verificación
+
+1. Sí. Todos los botones `.btn-back` quedaron como círculos de 34px con solo `←`. El CSS pasa de `border-radius:999px;padding:7px 14px` a `border-radius:50%;width:34px;height:34px;padding:0;display:inline-flex`. Cubrió ~11 pantallas distintas con un solo cambio de clase.
+2. Sí. Los 4 botones con clase `.lb-refresh` (Posiciones, Historia Rankings, Historia Ecléctico, Match) quedaron como círculos de 32px con solo `↻`.
+3. Sí. El botón `fecha-refresh-btn` de "Resultados Fecha X" también quedó como círculo de 30px con solo `↻`. Se le agregó `title="Actualizar"` para accesibilidad.
+4. Sí. Los dos botones "↻ Reintentar" (en `lb-error` de Posiciones y de Ecléctico) no se tocaron — tienen estilos en línea distintos y el texto `Reintentar` quedó intacto.
+5. Sí. Ningún `onclick` fue modificado. Solo cambiaron la presentación visual (CSS y texto) de los botones.
+6. Hash: `fdc143a` — Mensaje: `feat(tarea76): botones Volver y Actualizar como iconos circulares`
+7. Sin ambigüedad. La única decisión discrecional fue agregar `title="Actualizar"` al `fecha-refresh-btn` (para que el tooltip indique la acción al no tener texto visible). Los botones `↻ Rearmar` que aparecen en el asistente de armado de líneas no fueron tocados — tienen estilos propios y no forman parte de este ítem.
 
 ---
 
