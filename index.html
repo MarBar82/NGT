@@ -4219,19 +4219,27 @@ function finalizarWizard(rFecha, rMatches, lineasParam){
     wizResetWizardCompleto_();
     // Limpiar caches y refrescar home con la nueva fecha
     try { localStorage.removeItem('ngt_fechaActiva'); } catch(e){}
-    ngtInitData(); // recarga home con el nuevo botón FECHA
-    // Refresh admin data
+    // Refresh admin data (esto no necesita esperar)
     loadAdminData();
     // Si el admin logueado también juega esta fecha, lo llevamos directo a su Live Scoring
     var misMat = (NGT_SESSION && NGT_SESSION.mat) ? String(NGT_SESSION.mat) : null;
     var soyJugador = misMat && lineasParam && lineasParam.some(function(linea){
       return linea.some(function(m){ return String(m) === misMat; });
     });
-    if(soyJugador){
-      pg('mit', null);
-    } else {
-      pg('lb', null);
+    function irALaFechaCorrecta(){
+      if(soyJugador){
+        pg('mit', null);
+      } else {
+        pg('lb', null);
+      }
     }
+    // IMPORTANTE: esperamos a que ngtInitData() actualice HOME_FECHA_ACTIVA con la fecha
+    // recién creada ANTES de navegar. Si navegamos antes de que la respuesta llegue, la
+    // app usa el valor viejo de HOME_FECHA_ACTIVA (la fecha activa anterior a esta) y abre
+    // el Live Scoring de la fecha equivocada — esto es exactamente lo que le pasó a Marco.
+    // .then(fn, fn) hace que se navegue tanto si la consulta funcionó como si falló, para
+    // no dejar a nadie trabado en la pantalla de "Fecha creada" sin poder avanzar.
+    ngtInitData().then(irALaFechaCorrecta, irALaFechaCorrecta);
   }, 1800);
 }
 
@@ -6889,8 +6897,8 @@ function liveLoadStableford(){
         '<th style="padding:6px 8px;text-align:left;width:30px;">#</th>' +
         '<th style="padding:6px 8px;text-align:left;">Jugador</th>' +
         '<th style="padding:6px 4px;text-align:center;width:52px;">HCP</th>' +
-        '<th style="padding:6px 8px;text-align:right;">Puntos</th>' +
-        '<th style="padding:6px 8px;text-align:right;min-width:40px;">Hoyo</th>' +
+        '<th style="padding:6px 8px;text-align:center;">Puntos</th>' +
+        '<th style="padding:6px 8px;text-align:center;min-width:40px;">Hoyo</th>' +
         '</tr></thead><tbody>';
       r.data.forEach(function(p, i){
         var isMe = MIT_PLAYER && String(p.matricula) === String(MIT_PLAYER.matricula);
@@ -6906,8 +6914,8 @@ function liveLoadStableford(){
           '<td style="padding:8px 8px;font-size:13px;color:var(--g4);">' + posStr + '</td>' +
           '<td style="padding:8px 8px;font-size:15px;">' + p.apodo + '</td>' +
           '<td style="padding:8px 4px;text-align:center;font-size:12px;color:var(--g4);white-space:nowrap;">' + (p.hcp !== null && p.hcp !== undefined ? p.hcp + '/' + hcp85(p.hcp) : '—') + '</td>' +
-          '<td style="padding:8px 8px;text-align:right;font-size:18px;color:var(--navy);">' + (p.stbTotal !== null ? p.stbTotal : '–') + '</td>' +
-          '<td style="padding:8px 8px;text-align:right;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
+          '<td style="padding:8px 8px;text-align:center;font-size:18px;color:var(--navy);">' + (p.stbTotal !== null ? p.stbTotal : '–') + '</td>' +
+          '<td style="padding:8px 8px;text-align:center;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
         '</tr>' +
         '<tr id="stb-acc-' + mat + '" style="display:none;border-bottom:1px solid var(--border);">' +
           '<td colspan="5" style="padding:8px;"><div class="stb-acc-box">' + scorecard + '</div></td>' +
@@ -7691,6 +7699,7 @@ function renderFechaDinamica(data){
       '<thead><tr>' +
         '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
         '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="HCP de juego / HCP al 85%">HCP</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;" title="Puntos acumulados antes de esta fecha">Puntos</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;" title="Stableford de la fecha">STB</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;" title="Puntos de Match Play">Match</th>' +
@@ -7701,7 +7710,7 @@ function renderFechaDinamica(data){
       '<tbody>';
 
   if(!stb.length){
-    html += '<tr><td colspan="8" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+    html += '<tr><td colspan="9" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
   } else {
     stb.forEach((row, i) => {
       const pos = i + 1;
@@ -7720,6 +7729,7 @@ function renderFechaDinamica(data){
       html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="liveStbToggle(\'' + row.matricula + '\')">' +
         '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
         '<td>' + nombreHtml + '</td>' +
+        '<td class="c" style="white-space:nowrap;font-size:12px;color:var(--g4);">' + (row.hcp !== '' && row.hcp !== null && row.hcp !== undefined ? row.hcp + '/' + hcp85(row.hcp) : '—') + '</td>' +
         '<td class="c"><span class="s" style="color:var(--red);font-weight:700;">' + (row.puntosAntes || 0) + '</span></td>' +
         '<td class="c"><span class="s big">' + row.stb + '</span></td>' +
         '<td class="c"><span class="s" style="color:' + (ma > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (ma > 0 ? '+'+ma : '—') + '</span></td>' +
@@ -7728,7 +7738,7 @@ function renderFechaDinamica(data){
         '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + tot + '</span></td>' +
       '</tr>' +
       '<tr id="stb-acc-' + row.matricula + '" style="display:none;border-bottom:1px solid var(--border);">' +
-        '<td colspan="8" style="padding:12px 8px;" id="stb-acc-inner-' + row.matricula + '">' +
+        '<td colspan="9" style="padding:12px 8px;" id="stb-acc-inner-' + row.matricula + '">' +
           '<div style="color:var(--g4);font-size:13px;font-family:\'Barlow Condensed\',sans-serif;">Cargando tarjeta...</div>' +
         '</td>' +
       '</tr>';
