@@ -6447,7 +6447,7 @@ function liveRenderGolpesBadges_(jug, hoyoIdx){
     if(!riv) return;
     var g = liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx);
     if(g === 0) return; // sin diferencia de golpes con este rival: no mostrar nada
-    var nombreRival = formatPlayerLabel(riv.nombre || riv.apodo || '');
+    var nombreRival = riv.apodo || riv.nombre || '';
     var cls = g > 0 ? 'golpe-favor' : 'golpe-contra';
     html += '<span class="golpe-badge"><span class="golpe-nombre">' + nombreRival + '</span><span class="golpe-dot ' + cls + '">●</span></span>';
   });
