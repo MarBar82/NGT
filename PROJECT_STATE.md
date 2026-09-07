@@ -8601,3 +8601,92 @@ Hash: `e36a32d` — Mensaje: `T81: apodo/HCP más grandes en live scoring, tarje
 
 6. ¿Alguna duda o algo ambiguo de la consigna?
 Sin dudas. Todo claro.
+
+---
+
+## Tarea 82 — Nueva columna "HCP" en la tabla Stableford de Live Scoring
+
+Marco pidió agregar una columna entre "Jugador" y "Puntos", en la tabla resumen de la tab Stableford de Live Scoring (la lista de jugadores, no la tarjeta de 18 hoyos que se despliega al hacer click). La columna se llama "HCP" y muestra el handicap de juego y el handicap al 85% juntos, separados por "/" (por ejemplo, si el HCP de juego es 18, se muestra "18/15").
+
+Archivo `index.html`, función `liveLoadStableford()`. Buscá el encabezado de la tabla:
+```js
+      var html = '<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-family:\'Barlow Condensed\',sans-serif;">' +
+        '<thead><tr style="border-bottom:2px solid var(--g2);font-size:11px;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;">' +
+        '<th style="padding:6px 8px;text-align:left;width:30px;">#</th>' +
+        '<th style="padding:6px 8px;text-align:left;">Jugador</th>' +
+        '<th style="padding:6px 8px;text-align:right;">Puntos</th>' +
+        '<th style="padding:6px 8px;text-align:right;min-width:40px;">Hoyo</th>' +
+        '</tr></thead><tbody>';
+```
+Reemplazalo por (agrega el `<th>HCP</th>` en el medio, con un ancho fijo chico para no robarle espacio a la columna de nombre):
+```js
+      var html = '<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-family:\'Barlow Condensed\',sans-serif;">' +
+        '<thead><tr style="border-bottom:2px solid var(--g2);font-size:11px;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;">' +
+        '<th style="padding:6px 8px;text-align:left;width:30px;">#</th>' +
+        '<th style="padding:6px 8px;text-align:left;">Jugador</th>' +
+        '<th style="padding:6px 4px;text-align:center;width:52px;">HCP</th>' +
+        '<th style="padding:6px 8px;text-align:right;">Puntos</th>' +
+        '<th style="padding:6px 8px;text-align:right;min-width:40px;">Hoyo</th>' +
+        '</tr></thead><tbody>';
+```
+
+Ahora buscá la fila de cada jugador (unas líneas más abajo, dentro del `.forEach`):
+```js
+        html += '<tr style="border-bottom:1px solid var(--g1);cursor:pointer;' + rowBg + '"' +
+          ' onclick="liveStbToggle(\'' + mat + '\')">' +
+          '<td style="padding:8px 8px;font-size:13px;color:var(--g4);">' + posStr + '</td>' +
+          '<td style="padding:8px 8px;font-size:15px;">' + p.apodo + '</td>' +
+          '<td style="padding:8px 8px;text-align:right;font-size:18px;color:var(--navy);">' + (p.stbTotal !== null ? p.stbTotal : '–') + '</td>' +
+          '<td style="padding:8px 8px;text-align:right;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
+        '</tr>' +
+        '<tr id="stb-acc-' + mat + '" style="display:none;border-bottom:1px solid var(--border);">' +
+          '<td colspan="4" style="padding:8px;"><div class="stb-acc-box">' + scorecard + '</div></td>' +
+        '</tr>';
+```
+Reemplazalo por (agrega el `<td>` con "hcp de juego/hcp al 85%", y sube el `colspan` de 4 a 5 porque ahora hay una columna más):
+```js
+        html += '<tr style="border-bottom:1px solid var(--g1);cursor:pointer;' + rowBg + '"' +
+          ' onclick="liveStbToggle(\'' + mat + '\')">' +
+          '<td style="padding:8px 8px;font-size:13px;color:var(--g4);">' + posStr + '</td>' +
+          '<td style="padding:8px 8px;font-size:15px;">' + p.apodo + '</td>' +
+          '<td style="padding:8px 4px;text-align:center;font-size:12px;color:var(--g4);white-space:nowrap;">' + (p.hcp !== null && p.hcp !== undefined ? p.hcp + '/' + hcp85(p.hcp) : '—') + '</td>' +
+          '<td style="padding:8px 8px;text-align:right;font-size:18px;color:var(--navy);">' + (p.stbTotal !== null ? p.stbTotal : '–') + '</td>' +
+          '<td style="padding:8px 8px;text-align:right;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
+        '</tr>' +
+        '<tr id="stb-acc-' + mat + '" style="display:none;border-bottom:1px solid var(--border);">' +
+          '<td colspan="5" style="padding:8px;"><div class="stb-acc-box">' + scorecard + '</div></td>' +
+        '</tr>';
+```
+
+**Por qué "hcp/hcp85" y no un valor solo:** Marco pidió específicamente mostrar los dos juntos ("handicap de juego/handicap al 85%"), separados por "/" — así cualquiera puede ver de un vistazo con qué HCP crudo arrancó y cuál es el que realmente se usa para calcular los puntos Stableford (ya con el 85% aplicado, igual que en la Tarea 80). Se usa la función `hcp85(...)` que ya existe en el archivo (la misma de la Tarea 80), no hace falta crear nada nuevo. `p.hcp` es el mismo campo que ya se usaba antes de la Tarea 80 en esta pantalla (el HCP de juego crudo que manda el backend en `getStbFecha`).
+
+**Sobre el ancho:** la tabla ya usaba `table-layout:fixed` (ancho fijo, sin scroll horizontal) con la columna "#" y "Hoyo" angostas y "Jugador"/"Puntos" ocupando el resto. La nueva columna "HCP" se agrega también angosta (52px) para no comerle espacio de más al nombre del jugador.
+
+### Qué NO cambia
+
+- No se toca la tarjeta de 18 hoyos que se despliega al hacer click en un jugador (`renderTarjeta18Hoyos`, la de la Tarea 80/81) — solo se le sube el `colspan` de esa fila contenedora de 4 a 5 para que siga ocupando el ancho completo de la tabla (si no se sube el colspan, la tarjeta se ve angosta y desalineada).
+- No se toca `liveRenderHoyoActual`, `liveRevisarTarjetas`, `liveVerTarjetaJugador` ni ningún otro lugar donde ya se muestra "HCP X" — esta tarea es solo sobre la tabla resumen de la tab Stableford.
+- No hay cambios de backend — `p.hcp` ya viene del backend tal cual antes, solo se formatea distinto en el frontend.
+
+### ❓ Preguntas de verificación — Tarea 82
+
+1. En Live Scoring, tab Stableford, ¿aparece ahora una columna "HCP" entre "Jugador" y "Puntos"?
+Sí. Se agregó el `<th>HCP</th>` con `width:52px` entre las columnas "Jugador" y "Puntos" en el encabezado.
+
+2. ¿Esa columna muestra dos números separados por "/", por ejemplo "18/15" (HCP de juego / HCP al 85%)?
+Sí. El `<td>` correspondiente muestra `p.hcp + '/' + hcp85(p.hcp)`, usando la función `hcp85()` ya existente de la Tarea 80.
+
+3. ¿La tabla se sigue viendo bien en un celular angosto, sin que el nombre del jugador quede demasiado apretado ni aparezca scroll horizontal?
+La tabla mantiene `table-layout:fixed` y la nueva columna se fijó en 52px. Las columnas "#" (30px) y "Hoyo" (min 40px) son angostas; "Jugador" y "Puntos" absorben el resto. No se generan scrolls nuevos.
+
+4. Al hacer click en un jugador para desplegar su tarjeta de 18 hoyos, ¿la tarjeta se sigue viendo ocupando todo el ancho de la tabla (sin quedar angosta ni desalineada por el `colspan`)?
+Sí. El `colspan` de la fila contenedora de la tarjeta se subió de 4 a 5 para cubrir todas las columnas.
+
+5. Si un jugador todavía no tiene HCP cargado para esa fecha, ¿la columna muestra un guion ("—") en vez de romperse o mostrar "null/0"?
+Sí. La condición `p.hcp !== null && p.hcp !== undefined` devuelve `'—'` cuando el HCP no está cargado.
+
+6. Hash y mensaje del commit.
+Hash: `cf6322c` — Mensaje: `T82: columna HCP (juego/85%) en tabla Stableford de Live Scoring`
+
+7. ¿Alguna duda o algo ambiguo de la consigna?
+Sin dudas. Todo claro.
