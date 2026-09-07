@@ -7722,6 +7722,45 @@ Reemplazalo por:
 
 ---
 
+## Tarea 77 — Corrección sobre la Tarea 73: mostrar el apodo del rival, no el nombre completo
+
+**Contexto para Code:** Marco probó la Tarea 73 y me avisó que en el badge de "golpes vs. rival" sigue apareciendo el nombre completo del rival (ej. "Marcos Barchi") en vez del apodo corto (ej. "RACHO") que se usa en el resto de Live Scoring.
+
+**La causa:** en `liveRenderGolpesBadges_`, la línea que arma el nombre a mostrar usa `formatPlayerLabel(riv.nombre || riv.apodo || '')` — `formatPlayerLabel` es una función pensada para mostrar el NOMBRE COMPLETO con formato bonito (apellido en mayúsculas + nombre), no para mostrar el apodo. Como `riv.nombre` casi siempre tiene datos, nunca llega a usar el apodo. El propio jugador (`jug.apodo`, en la fila de arriba) sí se muestra correctamente como apodo — es solo el rival, dentro del badge, el que está mal.
+
+Archivo `index.html`, función `liveRenderGolpesBadges_`. Buscá:
+```js
+    if(g === 0) return; // sin diferencia de golpes con este rival: no mostrar nada
+    var nombreRival = formatPlayerLabel(riv.nombre || riv.apodo || '');
+```
+Reemplazalo por:
+```js
+    if(g === 0) return; // sin diferencia de golpes con este rival: no mostrar nada
+    var nombreRival = riv.apodo || riv.nombre || '';
+```
+
+### Qué NO cambia
+
+- El resto de la función (el cálculo de golpes, el orden apodo→puntito, el ocultar cuando la diferencia es 0) no se toca — eso ya quedó bien en la Tarea 73.
+- `formatPlayerLabel` no se toca — sigue usándose igual en todos los demás lugares de la app donde sí corresponde mostrar el nombre completo.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 77
+
+1. En Live Scoring, ¿el badge de golpes vs. rival ahora muestra el apodo del rival (ej. "RACHO"), igual que se muestra el apodo del jugador principal arriba?
+2. ¿El resto del comportamiento de la Tarea 73 (ocultar cuando no hay diferencia, apodo antes del puntito de color) se mantiene igual?
+3. Hash y mensaje del commit.
+4. ¿Alguna duda o algo ambiguo de la consigna?
+
+### Respuestas de verificación
+
+1. Sí. `nombreRival` ahora se arma como `riv.apodo || riv.nombre || ''` — toma primero el apodo y solo cae al nombre si no hay apodo. El badge mostrará "RACHO" en vez de "Marcos Barchi".
+2. Sí. Solo se cambió la línea de `nombreRival`. El resto de la función (`liveGolpeVsRival_`, el filtro `if(g === 0) return`, el orden `nombreRival → puntito de color`) quedó exactamente igual que después de la Tarea 73.
+3. Hash: `c93fb33` — Mensaje: `fix(tarea77): badge golpes vs rival muestra apodo en vez de nombre completo`
+4. Sin ambigüedad.
+
+---
+
 ## En pausa por decisión de Marco (ítems 7 y 23)
 
 - **Ítem 7** — "Sección Admin, botones igual que en la app de POP." **En pausa** (8/9/2026) — Marco pidió no darle bola por ahora. Si se retoma, hace falta una captura de esa app para poder replicar el estilo.
