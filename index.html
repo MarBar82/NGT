@@ -1453,7 +1453,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   width:100%;border-collapse:collapse;
   font-family:'Barlow Condensed',sans-serif;
 }
-.perf-ecl-table th,.perf-ecl-table td{padding:6px 4px;text-align:center;}
+.perf-ecl-table thead th,.perf-ecl-table tbody th,.perf-ecl-table tbody td{padding:6px 4px;text-align:center;}
 .perf-ecl-table th{
   font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   color:var(--g4);background:var(--off);border-bottom:2px solid var(--g2);
@@ -6904,7 +6904,7 @@ function liveLoadStableford(){
         var isMe = MIT_PLAYER && String(p.matricula) === String(MIT_PLAYER.matricula);
         var rowBg = isMe ? 'background:rgba(var(--navy-rgb,30,58,138),.08);font-weight:700;' : '';
         var mat = p.matricula;
-        var scorecard = renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true);
+        var scorecard = renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true, p.hcp);
         var pos = 1;
         for(var pi = 0; pi < r.data.length; pi++){ if(r.data[pi].stbTotal > p.stbTotal) pos++; }
         var isTied = r.data.filter(function(x){ return x.stbTotal === p.stbTotal; }).length > 1;
@@ -6951,7 +6951,7 @@ function showPlayerScorecardModal(matricula) {
       'STB: <strong style="color:var(--navy);font-size:16px;">' + stbStr + '</strong>' +
       ' · ' + p.holesCargados + '/18 hoyos' +
     '</div>' +
-    renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || []);
+    renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], false, p.hcp);
   openFloatingModal(html);
 }
 
@@ -7699,7 +7699,6 @@ function renderFechaDinamica(data){
       '<thead><tr>' +
         '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
         '<th>Jugador</th>' +
-        '<th class="c" style="width:1%;white-space:nowrap;" title="HCP de juego / HCP al 85%">HCP</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;" title="Puntos acumulados antes de esta fecha">Puntos</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;" title="Stableford de la fecha">STB</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;" title="Puntos de Match Play">Match</th>' +
@@ -7710,7 +7709,7 @@ function renderFechaDinamica(data){
       '<tbody>';
 
   if(!stb.length){
-    html += '<tr><td colspan="9" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+    html += '<tr><td colspan="8" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
   } else {
     stb.forEach((row, i) => {
       const pos = i + 1;
@@ -7729,7 +7728,6 @@ function renderFechaDinamica(data){
       html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="liveStbToggle(\'' + row.matricula + '\')">' +
         '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
         '<td>' + nombreHtml + '</td>' +
-        '<td class="c" style="white-space:nowrap;font-size:12px;color:var(--g4);">' + (row.hcp !== '' && row.hcp !== null && row.hcp !== undefined ? row.hcp + '/' + hcp85(row.hcp) : '—') + '</td>' +
         '<td class="c"><span class="s" style="color:var(--red);font-weight:700;">' + (row.puntosAntes || 0) + '</span></td>' +
         '<td class="c"><span class="s big">' + row.stb + '</span></td>' +
         '<td class="c"><span class="s" style="color:' + (ma > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (ma > 0 ? '+'+ma : '—') + '</span></td>' +
@@ -7738,7 +7736,7 @@ function renderFechaDinamica(data){
         '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + tot + '</span></td>' +
       '</tr>' +
       '<tr id="stb-acc-' + row.matricula + '" style="display:none;border-bottom:1px solid var(--border);">' +
-        '<td colspan="9" style="padding:12px 8px;" id="stb-acc-inner-' + row.matricula + '">' +
+        '<td colspan="8" style="padding:12px 8px;" id="stb-acc-inner-' + row.matricula + '">' +
           '<div style="color:var(--g4);font-size:13px;font-family:\'Barlow Condensed\',sans-serif;">Cargando tarjeta...</div>' +
         '</td>' +
       '</tr>';
@@ -7798,7 +7796,7 @@ function loadFechaStbAccordion(fecha){
     r.data.forEach(function(p){
       var inner = document.getElementById('stb-acc-inner-' + p.matricula);
       if(!inner) return;
-      inner.innerHTML = '<div class="stb-acc-box">' + renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true) + '</div>';
+      inner.innerHTML = '<div class="stb-acc-box">' + renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true, p.hcp) + '</div>';
     });
   }).catch(function(){});
 }
@@ -8319,7 +8317,7 @@ function renderEclectic(data){
  *   - Bogey (+1): cuadrado simple
  *   - Doble bogey o más (+2 o más): doble cuadrado
  */
-function renderTarjeta18Hoyos(scores, pares, scoreLabel, indices, stbPorHoyo, compact){
+function renderTarjeta18Hoyos(scores, pares, scoreLabel, indices, stbPorHoyo, compact, hcpJuego){
   scoreLabel = scoreLabel || 'Score';
   var tblClass = 'perf-ecl-table' + (compact ? ' compact' : '');
 
@@ -8370,8 +8368,31 @@ function renderTarjeta18Hoyos(scores, pares, scoreLabel, indices, stbPorHoyo, co
     return h;
   }
 
-  return '<div style="overflow-x:auto;">' + nine(0, 9, 'IDA') +
+  var html = '<div style="overflow-x:auto;">' + nine(0, 9, 'IDA') +
          '</div><div style="overflow-x:auto;margin-top:10px;">' + nine(9, 18, 'VUELTA') + '</div>';
+
+  if(hcpJuego !== undefined && hcpJuego !== null && hcpJuego !== ''){
+    var parTotal18 = 0, allPar = true;
+    for(var pi = 0; pi < 18; pi++){ if(pares[pi]) parTotal18 += pares[pi]; else allPar = false; }
+    var neto18 = 0, allScores = true;
+    for(var si = 0; si < 18; si++){
+      if(scores[si] !== null && scores[si] !== undefined) neto18 += scores[si];
+      else allScores = false;
+    }
+    if(allPar && allScores){
+      var hcpNum = parseFloat(hcpJuego) || 0;
+      var gross18 = neto18 - hcpNum;
+      var golpes18 = gross18 - parTotal18;
+      var golpesStr = golpes18 > 0 ? ('+' + golpes18) : String(golpes18);
+      html += '<div class="perf-ecl-totals">' +
+        '<div><div class="lbl">HCP</div><div class="num">' + hcpJuego + '/' + hcp85(hcpJuego) + '</div></div>' +
+        '<div style="text-align:center;"><div class="lbl">Medal</div><div class="num">' + neto18 + '/' + gross18 + '</div></div>' +
+        '<div style="text-align:right;"><div class="lbl">Golpes</div><div class="num">' + golpesStr + '</div></div>' +
+      '</div>';
+    }
+  }
+
+  return html;
 }
 
 /**
