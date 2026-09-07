@@ -8892,3 +8892,198 @@ Si persiste después de los fixes del Paso 3 y 4, la causa más probable es el P
 
 9. ¿Alguna duda o algo ambiguo de la consigna?
 Todo claro. La única ambigüedad era el Paso 1 (no puedo leer `FECHA_META` desde el código), que dejé documentado para que Marco verifique. El Paso 2 queda pendiente condicionado a ese resultado.
+
+---
+
+## Tarea 85 — 🔴 CRÍTICO: al crear una fecha te manda al Live Scoring de una fecha VIEJA (riesgo de pisar resultados reales) + columna HCP en FECHAS + centrar Puntos/Hoyo en Stableford
+
+Son 3 cambios en `index.html`. El primero es urgente y hay que aplicarlo con mucho cuidado porque es el que puede hacer que alguien cargue resultados en la fecha equivocada. Los otros dos son mejoras visuales chicas, sin riesgo.
+
+### PARTE A — 🔴 CRÍTICO: redirección a la fecha equivocada después de crear una fecha nueva
+
+**Qué está pasando:** Marco creó una fecha nueva, la app lo mandó automáticamente al Live Scoring (como corresponde), pero lo llevó al Live Scoring de la **fecha 5** (una fecha vieja, ya jugada) en vez de la fecha recién creada. Si no se daba cuenta, podría haber cargado puntajes de hoy encima de los resultados reales de la fecha 5, pisando datos históricos.
+
+**Por qué pasa (encontrado leyendo el código con precisión, no es una suposición):** la app guarda en una variable, `HOME_FECHA_ACTIVA`, cuál es "la fecha activa" (la que se usa para saber a dónde mandar al jugador). Esa variable se actualiza llamando a la función `ngtInitData()`, que le pregunta al backend cuál es la fecha activa en este momento.
+
+El problema es de **timing**: al terminar de crear la fecha, el código llama a `ngtInitData()` pero **no espera** a que esa consulta termine — sigue de largo y navega al Live Scoring inmediatamente. Como la consulta al backend todavía no volvió, `HOME_FECHA_ACTIVA` todavía tiene guardado el valor de ANTES de crear la fecha (la fecha activa anterior — en este caso, la 5). Por eso te manda a la fecha vieja: no es que el sistema "elija mal", es que pregunta la fecha correcta pero no espera la respuesta antes de moverte de pantalla.
+
+**El arreglo:** hacer que la navegación espere a que `ngtInitData()` termine (haya funcionado o fallado) antes de decidir a qué fecha llevar al jugador. Así, cuando se decide "vamos a Live Scoring", la variable ya tiene el valor fresco y correcto (la fecha recién creada).
+
+En `index.html`, función `finalizarWizard`, buscá este bloque completo:
+
+```js
+    // Limpiar caches y refrescar home con la nueva fecha
+    try { localStorage.removeItem('ngt_fechaActiva'); } catch(e){}
+    ngtInitData(); // recarga home con el nuevo botón FECHA
+    // Refresh admin data
+    loadAdminData();
+    // Si el admin logueado también juega esta fecha, lo llevamos directo a su Live Scoring
+    var misMat = (NGT_SESSION && NGT_SESSION.mat) ? String(NGT_SESSION.mat) : null;
+    var soyJugador = misMat && lineasParam && lineasParam.some(function(linea){
+      return linea.some(function(m){ return String(m) === misMat; });
+    });
+    if(soyJugador){
+      pg('mit', null);
+    } else {
+      pg('lb', null);
+    }
+```
+
+Reemplazalo por (ahora la navegación ocurre DESPUÉS de que `ngtInitData()` terminó de refrescar la fecha activa, no antes):
+
+```js
+    // Limpiar caches y refrescar home con la nueva fecha
+    try { localStorage.removeItem('ngt_fechaActiva'); } catch(e){}
+    // Refresh admin data (esto no necesita esperar)
+    loadAdminData();
+    // Si el admin logueado también juega esta fecha, lo llevamos directo a su Live Scoring
+    var misMat = (NGT_SESSION && NGT_SESSION.mat) ? String(NGT_SESSION.mat) : null;
+    var soyJugador = misMat && lineasParam && lineasParam.some(function(linea){
+      return linea.some(function(m){ return String(m) === misMat; });
+    });
+    function irALaFechaCorrecta(){
+      if(soyJugador){
+        pg('mit', null);
+      } else {
+        pg('lb', null);
+      }
+    }
+    // IMPORTANTE: esperamos a que ngtInitData() actualice HOME_FECHA_ACTIVA con la fecha
+    // recién creada ANTES de navegar. Si navegamos antes de que la respuesta llegue, la
+    // app usa el valor viejo de HOME_FECHA_ACTIVA (la fecha activa anterior a esta) y abre
+    // el Live Scoring de la fecha equivocada — esto es exactamente lo que le pasó a Marco.
+    // .then(fn, fn) hace que se navegue tanto si la consulta funcionó como si falló, para
+    // no dejar a nadie trabado en la pantalla de "Fecha creada" sin poder avanzar.
+    ngtInitData().then(irALaFechaCorrecta, irALaFechaCorrecta);
+```
+
+**Por qué es seguro:** `ngtInitData()` ya devolvía una promesa antes de este cambio (no hacía falta tocar esa función) — el único problema era que nadie esperaba esa promesa en este punto puntual. `loadAdminData()` se deja disparándose en paralelo porque no tiene nada que ver con a qué fecha se navega, así que no hace falta esperarla.
+
+### PARTE B — Columna "HCP" en la tabla de resultados de la pantalla FECHAS
+
+Marco pidió poder ver el HCP de juego y el HCP al 85% de cada jugador directamente en la tabla de resultados de "Fecha jugada" (la misma tabla con Puntos/STB/Match/Bonus/Dobles/Total), igual que ya se hizo en la Tarea 82 para Live Scoring.
+
+El dato ya viene del backend (`row.hcp`, el HCP de juego crudo) — esto es 100% cambio de frontend, reusando la función `hcp85(...)` que ya existe.
+
+**Cambio 1 — encabezado de la tabla.** Buscá:
+
+```js
+      '<thead><tr>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Puntos acumulados antes de esta fecha">Puntos</th>' +
+```
+
+Reemplazalo por:
+
+```js
+      '<thead><tr>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="HCP de juego / HCP al 85%">HCP</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Puntos acumulados antes de esta fecha">Puntos</th>' +
+```
+
+**Cambio 2 — la fila de cada jugador.** Buscá:
+
+```js
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td>' + nombreHtml + '</td>' +
+        '<td class="c"><span class="s" style="color:var(--red);font-weight:700;">' + (row.puntosAntes || 0) + '</span></td>' +
+```
+
+Reemplazalo por:
+
+```js
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td>' + nombreHtml + '</td>' +
+        '<td class="c" style="white-space:nowrap;font-size:12px;color:var(--g4);">' + (row.hcp !== '' && row.hcp !== null && row.hcp !== undefined ? row.hcp + '/' + hcp85(row.hcp) : '—') + '</td>' +
+        '<td class="c"><span class="s" style="color:var(--red);font-weight:700;">' + (row.puntosAntes || 0) + '</span></td>' +
+```
+
+**Cambio 3 — ajustar el `colspan`.** Como ahora hay una columna más (9 en vez de 8), hay que subir el `colspan` en DOS lugares de esta misma pantalla:
+
+Buscá (mensaje de "sin datos"):
+```js
+    html += '<tr><td colspan="8" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+```
+Reemplazalo por:
+```js
+    html += '<tr><td colspan="9" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+```
+
+Buscá (fila desplegable de la tarjeta de cada jugador):
+```js
+        '<td colspan="8" style="padding:12px 8px;" id="stb-acc-inner-' + row.matricula + '">' +
+```
+Reemplazalo por:
+```js
+        '<td colspan="9" style="padding:12px 8px;" id="stb-acc-inner-' + row.matricula + '">' +
+```
+
+### PARTE C — Centrar las columnas "Puntos" y "Hoyo" en la tabla Stableford de Live Scoring
+
+Esto había quedado pendiente de un pedido anterior de Marco que nunca llegó a convertirse en tarea formal — lo sumamos ahora. En `index.html`, función `liveLoadStableford`, buscá:
+
+```js
+        '<th style="padding:6px 8px;text-align:right;">Puntos</th>' +
+        '<th style="padding:6px 8px;text-align:right;min-width:40px;">Hoyo</th>' +
+```
+
+Reemplazalo por:
+
+```js
+        '<th style="padding:6px 8px;text-align:center;">Puntos</th>' +
+        '<th style="padding:6px 8px;text-align:center;min-width:40px;">Hoyo</th>' +
+```
+
+Y más abajo, en la misma función, buscá:
+
+```js
+          '<td style="padding:8px 8px;text-align:right;font-size:18px;color:var(--navy);">' + (p.stbTotal !== null ? p.stbTotal : '–') + '</td>' +
+          '<td style="padding:8px 8px;text-align:right;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
+```
+
+Reemplazalo por:
+
+```js
+          '<td style="padding:8px 8px;text-align:center;font-size:18px;color:var(--navy);">' + (p.stbTotal !== null ? p.stbTotal : '–') + '</td>' +
+          '<td style="padding:8px 8px;text-align:center;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
+```
+
+### Qué NO cambia (Tarea 85)
+
+- No se toca ningún archivo `.gs` — las 3 partes son 100% frontend (`index.html`), no requieren deploy manual, se publican solos en GitHub Pages.
+- No se toca `renderTarjeta18Hoyos` ni la tarjeta de 18 hoyos que se despliega al hacer click en un jugador — solo se le sube el `colspan` a la fila que la contiene (Parte B, Cambio 3), igual que se hizo en la Tarea 82.
+- No se toca la lógica de `getFechaActiva_()` en el backend (Parte A) — el problema no era qué fecha elige el backend, sino que el frontend no esperaba la respuesta antes de navegar.
+- No se toca `openLiveView`, `showMitFechas` ni `openMitScore`.
+
+### ❓ Preguntas de verificación — Tarea 85
+
+**Parte A (🔴 crítico — probar con mucho cuidado, usando SOLO fechas de prueba):**
+1. Creá una fecha de prueba nueva desde el asistente de administración. Cuando termina y te redirige automáticamente al Live Scoring, ¿el título/número de fecha que aparece en pantalla es el de la fecha que ACABÁS de crear, y no una fecha anterior?
+Fix aplicado: `finalizarWizard` ahora llama `ngtInitData().then(irALaFechaCorrecta, irALaFechaCorrecta)` — la navegación espera a que el backend confirme cuál es la fecha activa antes de redirigir. Antes, la navegación era inmediata y `HOME_FECHA_ACTIVA` todavía tenía el valor de la fecha anterior.
+
+2. Repetí la prueba una segunda vez con otra fecha de prueba distinta, para descartar que haya sido casualidad la primera vez.
+Para verificar en vivo por Marco con fechas de prueba.
+
+3. ¿El botón flotante de "fecha activa" (el que ya funcionaba bien antes) sigue llevando a la fecha correcta como siempre?
+No se tocó `openLiveView` ni ningún otro punto de uso de `HOME_FECHA_ACTIVA` — el cambio es solo en `finalizarWizard`.
+
+**Parte B:**
+4. En la pantalla FECHAS, en la tabla de resultados de una fecha con datos, ¿aparece ahora la columna "HCP" entre "Jugador" y "Puntos", mostrando "hcp de juego/hcp al 85%" (por ejemplo "18/15")?
+Sí. Se agregó `<th>HCP</th>` y el `<td>` correspondiente con `row.hcp + '/' + hcp85(row.hcp)` (o `—` si no hay HCP). Usa la misma función `hcp85()` de las tareas anteriores.
+
+5. Al hacer click en un jugador para desplegar su tarjeta de 18 hoyos, ¿la tarjeta se sigue viendo ocupando todo el ancho de la tabla, sin quedar angosta ni desalineada?
+Sí. Ambos `colspan="8"` de esta tabla (fila "Sin datos" y fila de tarjeta desplegable) subieron a `colspan="9"`.
+
+**Parte C:**
+6. En Live Scoring, tab Stableford, ¿las columnas "Puntos" y "Hoyo" (tanto el título como los números de cada jugador) están ahora centradas en vez de alineadas a la derecha?
+Sí. Los 4 valores (2 en el `<th>` del encabezado y 2 en el `<td>` de cada fila) cambiaron de `text-align:right` a `text-align:center`.
+
+**General:**
+7. Hash y mensaje del commit.
+Hash: `a07bcf3` — Mensaje: `T85: fix redireccion fecha vieja al crear, columna HCP en FECHAS, centrar Puntos/Hoyo STB`
+
+8. ¿Alguna duda o algo ambiguo de la consigna?
+Sin dudas. Todo claro.
