@@ -514,6 +514,18 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-fecha-tile-badge.completa{background:rgba(31,122,61,.12);color:var(--green);}
 .adm-fecha-tile-badge.pendiente{background:rgba(0,35,75,.08);color:var(--navy);}
 .adm-fecha-tile-btns{display:flex;gap:6px;justify-content:center;}
+.adm-jug-row{display:flex;align-items:center;gap:10px;background:var(--white);border:var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,35,75,.06);transition:.12s;}
+.adm-jug-row:hover{background:var(--off);}
+.adm-jug-row:active{transform:scale(.98);}
+.adm-jug-row.inactivo{opacity:.55;}
+.adm-jug-row-info{flex:1;min-width:0;}
+.adm-jug-row-apodo{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;color:var(--navy);text-transform:uppercase;}
+.adm-jug-row-nombre{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
+.adm-jug-row-badges{display:flex;gap:6px;flex-shrink:0;}
+.adm-jug-badge{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:10px;}
+.adm-jug-badge.activo{background:rgba(31,122,61,.12);color:var(--green);}
+.adm-jug-badge.inactivo{background:rgba(138,135,128,.15);color:var(--g4);}
+.adm-jug-badge.sinpin{background:#fef3c7;color:#92400e;}
 .adm-fecha-tile-btn{flex:1;background:none;border:1px solid var(--g3);border-radius:8px;padding:6px 4px;cursor:pointer;font-size:15px;transition:.12s;}
 .adm-fecha-tile-btn:hover{background:var(--off);}
 .adm-fecha-tile-btn:active{transform:scale(.92);}
@@ -2094,6 +2106,9 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <button class="adm-big-btn" onclick="pg('admin-canchas',null)">
           <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Gestionar Canchas
         </button>
+        <button class="adm-big-btn" onclick="pg('admin-jugadores',null)">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Gestionar Jugadores
+        </button>
       </div>
     </div>
 
@@ -2466,6 +2481,99 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         </div>
         <button class="adm-btn-secondary" onclick="admGuardarHoyos()" style="width:100%;background:var(--navy);color:#fff;border-color:var(--navy);margin-top:4px;">💾 Guardar Hoyos</button>
         <div id="adm-cancha-holes-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+
+</div>
+</div>
+
+<!-- ════ ADMIN — GESTIONAR JUGADORES ════ -->
+<div class="pg" id="pg-admin-jugadores">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="pg('admin',null)">←</button>
+        <span class="adm-sec-title">Gestionar Jugadores</span>
+      </div>
+
+      <div class="adm-card">
+        <div class="adm-card-body" style="padding-bottom:12px;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="adm-jug-buscar" class="adm-input" placeholder="Buscar por nombre o apodo..." oninput="admFiltrarJugadores_()" style="flex:1;">
+            <button class="adm-btn-secondary" onclick="admMostrarNuevoJugador()" style="white-space:nowrap;">+ Nuevo</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="adm-jug-lista">Cargando...</div>
+
+</div>
+</div>
+
+<!-- ════ ADMIN — NUEVO JUGADOR ════ -->
+<div class="pg" id="pg-admin-jugadores-nuevo">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="pg('admin-jugadores',null)">←</button>
+        <span class="adm-sec-title">Nuevo Jugador</span>
+      </div>
+
+      <div class="adm-card">
+        <div class="adm-card-body">
+          <label class="adm-label">Matrícula</label>
+          <input type="text" id="adm-jugnew-matricula" class="adm-input" placeholder="Ej: 60803" style="margin-bottom:14px;">
+          <label class="adm-label">Nombre completo</label>
+          <input type="text" id="adm-jugnew-nombre" class="adm-input" placeholder="Ej: BARCHI Marcos" style="margin-bottom:14px;">
+          <label class="adm-label">Apodo</label>
+          <input type="text" id="adm-jugnew-apodo" class="adm-input" placeholder="Ej: RACHO" style="margin-bottom:14px;">
+          <label class="adm-label">Rol</label>
+          <select id="adm-jugnew-rol" class="adm-input">
+            <option value="Jugador">Jugador</option>
+            <option value="Admin">Admin</option>
+          </select>
+          <button class="adm-btn-primary" onclick="admCrearJugador()" style="margin-top:18px;">Crear Jugador</button>
+          <div id="adm-jugnew-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+
+</div>
+</div>
+
+<!-- ════ ADMIN — EDITAR JUGADOR ════ -->
+<div class="pg" id="pg-admin-jugadores-detalle">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="pg('admin-jugadores',null)">←</button>
+        <span class="adm-sec-title">Editando — <span id="adm-jugedit-titulo"></span></span>
+      </div>
+
+      <div class="adm-card">
+        <div class="adm-card-body">
+          <label class="adm-label">Nombre completo</label>
+          <input type="text" id="adm-jugedit-nombre" class="adm-input" style="margin-bottom:14px;">
+          <label class="adm-label">Apodo</label>
+          <input type="text" id="adm-jugedit-apodo" class="adm-input" style="margin-bottom:14px;">
+          <label class="adm-label">Rol</label>
+          <select id="adm-jugedit-rol" class="adm-input" style="margin-bottom:14px;">
+            <option value="Jugador">Jugador</option>
+            <option value="Admin">Admin</option>
+          </select>
+          <label class="adm-jug-item" style="padding:6px 0;">
+            <input type="checkbox" id="adm-jugedit-activo">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--text);">Activo (aparece para elegir al armar una fecha nueva)</span>
+          </label>
+          <button class="adm-btn-primary" onclick="admGuardarJugador()" style="margin-top:14px;">Guardar Cambios</button>
+          <div id="adm-jugedit-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+
+      <div class="adm-card">
+        <div class="adm-card-body">
+          <div class="adm-label" style="margin-bottom:8px;">Seguridad</div>
+          <button class="adm-btn-secondary" onclick="admResetearPinJugador()" style="width:100%;">🔑 Resetear PIN</button>
+          <div class="s dim" style="margin-top:6px;font-size:12px;">La próxima vez que este jugador entre con su matrícula, la app le va a pedir crear un PIN nuevo.</div>
+        </div>
+      </div>
 
 </div>
 </div>
@@ -3510,6 +3618,7 @@ function pg(id,btn){
   if(id==='admin-crear') wizAutoFecha_();
   if(id==='admin-editar') renderFechasGrid();
   if(id==='admin-canchas') admLoadCanchas();
+  if(id==='admin-jugadores') admLoadJugadores();
   if(id==='fechas') loadFechasScreen();
   if(fechaNum) loadFechaDinamica(fechaNum);
   // Show/hide fecha activa strip — hidden inside Live Scoring (pg-mit), visible elsewhere
@@ -3632,7 +3741,7 @@ function applyAdminResults_(jugadores, canchas, fechas, doblesDisponibles){
     if(jl){
       const prevChecked = new Set([...jl.querySelectorAll('input:checked')].map(i => i.value));
       let jugHtml = '';
-      ADM_JUGADORES.forEach(j => {
+      ADM_JUGADORES.filter(j => j.activo !== false).forEach(j => {
         const lbl = formatPlayerLabel(j.nombre);
         jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
       });
@@ -3650,7 +3759,7 @@ function applyAdminResults_(jugadores, canchas, fechas, doblesDisponibles){
       if(!doblesDisponibles.length){
         dobHtml = '<div class="s dim" style="padding:10px;">Todos los jugadores ya usaron sus puntos dobles</div>';
       } else {
-        ADM_JUGADORES.forEach(j => {
+        ADM_JUGADORES.filter(j => j.activo !== false).forEach(j => {
           if(doblesDisponibles.indexOf(String(j.matricula)) < 0) return;
           const lbl = formatPlayerLabel(j.nombre);
           dobHtml += '<div class="adm-jug-item"><input type="checkbox" id="dob-' + j.matricula + '" value="' + j.matricula + '"><label for="dob-' + j.matricula + '">' + lbl + '</label></div>';
@@ -4442,6 +4551,121 @@ function admRecalcularFecha(){
     });
 }
 
+/* ── Gestionar Jugadores ── */
+var ADM_JUG_DATA = [];
+var ADM_JUG_EDIT_MAT = null;
+
+function admLoadJugadores(){
+  document.getElementById('adm-jug-lista').textContent = 'Cargando...';
+  ngtApiPost({ action:'getJugadoresAdmin', adminKey: ADMIN_KEY_OK }).then(r => {
+    if(!r.ok){ document.getElementById('adm-jug-lista').textContent = '✗ ' + (r.error||'Error'); return; }
+    ADM_JUG_DATA = r.data || [];
+    document.getElementById('adm-jug-buscar').value = '';
+    admRenderJugadoresLista_();
+  });
+}
+
+function admFiltrarJugadores_(){
+  admRenderJugadoresLista_();
+}
+
+function admRenderJugadoresLista_(){
+  const q = (document.getElementById('adm-jug-buscar').value || '').toLowerCase().trim();
+  const lista = document.getElementById('adm-jug-lista');
+  const items = ADM_JUG_DATA.filter(function(j){
+    if(!q) return true;
+    return (j.nombre||'').toLowerCase().indexOf(q)>=0 || (j.apodo||'').toLowerCase().indexOf(q)>=0;
+  });
+  if(!items.length){ lista.innerHTML='<div class="adm-msg" style="text-align:center;padding:20px;">Sin resultados</div>'; return; }
+  lista.innerHTML = items.map(function(j){
+    var badges = '<span class="adm-jug-badge ' + (j.activo?'activo':'inactivo') + '">' + (j.activo?'Activo':'Inactivo') + '</span>';
+    if(!j.tienePin) badges += ' <span class="adm-jug-badge sinpin">Sin PIN</span>';
+    return '<div class="adm-jug-row' + (j.activo?'':' inactivo') + '" onclick="admAbrirEditarJugador(\'' + j.matricula + '\')">'
+      + '<div class="adm-jug-row-info">'
+      + '<div class="adm-jug-row-apodo">' + (j.apodo||j.matricula) + '</div>'
+      + '<div class="adm-jug-row-nombre">' + j.nombre + ' · Mat. ' + j.matricula + (j.hcpIndex!=null?' · HCP '+j.hcpIndex:'') + '</div>'
+      + '</div>'
+      + '<div class="adm-jug-row-badges">' + badges + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function admMostrarNuevoJugador(){
+  document.getElementById('adm-jugnew-matricula').value = '';
+  document.getElementById('adm-jugnew-nombre').value = '';
+  document.getElementById('adm-jugnew-apodo').value = '';
+  document.getElementById('adm-jugnew-rol').value = 'Jugador';
+  var msg = document.getElementById('adm-jugnew-msg');
+  msg.style.display='none'; msg.textContent='';
+  pg('admin-jugadores-nuevo', null);
+}
+
+function admCrearJugador(){
+  var matricula = document.getElementById('adm-jugnew-matricula').value.trim();
+  var nombre    = document.getElementById('adm-jugnew-nombre').value.trim();
+  var apodo     = document.getElementById('adm-jugnew-apodo').value.trim();
+  var rol       = document.getElementById('adm-jugnew-rol').value;
+  var msg       = document.getElementById('adm-jugnew-msg');
+  if(!matricula||!nombre||!apodo){ msg.className='adm-msg err'; msg.style.display=''; msg.textContent='Completá matrícula, nombre y apodo.'; return; }
+  msg.style.display='none';
+  ngtApiPost({ action:'crearJugador', adminKey:ADMIN_KEY_OK, matricula:matricula, nombre:nombre, apodo:apodo, rol:rol }).then(r => {
+    if(r.ok){
+      msg.className='adm-msg ok'; msg.style.display=''; msg.textContent='✓ Jugador creado.';
+      admLoadJugadores();
+      setTimeout(function(){ pg('admin-jugadores',null); }, 1200);
+    } else {
+      msg.className='adm-msg err'; msg.style.display=''; msg.textContent='✗ ' + (r.error||'Error');
+    }
+  });
+}
+
+function admAbrirEditarJugador(matricula){
+  var j = ADM_JUG_DATA.find(function(x){ return String(x.matricula)===String(matricula); });
+  if(!j) return;
+  ADM_JUG_EDIT_MAT = matricula;
+  document.getElementById('adm-jugedit-titulo').textContent = j.apodo || j.nombre;
+  document.getElementById('adm-jugedit-nombre').value = j.nombre || '';
+  document.getElementById('adm-jugedit-apodo').value  = j.apodo  || '';
+  document.getElementById('adm-jugedit-rol').value    = j.rol    || 'Jugador';
+  document.getElementById('adm-jugedit-activo').checked = !!j.activo;
+  var msg = document.getElementById('adm-jugedit-msg');
+  msg.style.display='none'; msg.textContent='';
+  pg('admin-jugadores-detalle', null);
+}
+
+function admGuardarJugador(){
+  if(!ADM_JUG_EDIT_MAT) return;
+  var nombre  = document.getElementById('adm-jugedit-nombre').value.trim();
+  var apodo   = document.getElementById('adm-jugedit-apodo').value.trim();
+  var rol     = document.getElementById('adm-jugedit-rol').value;
+  var activo  = document.getElementById('adm-jugedit-activo').checked;
+  var msg     = document.getElementById('adm-jugedit-msg');
+  if(!nombre||!apodo){ msg.className='adm-msg err'; msg.style.display=''; msg.textContent='Nombre y apodo son obligatorios.'; return; }
+  msg.style.display='none';
+  var editPromise = ngtApiPost({ action:'editarJugador', adminKey:ADMIN_KEY_OK, matricula:ADM_JUG_EDIT_MAT, nombre:nombre, apodo:apodo, rol:rol });
+  var activoPromise = ngtApiPost({ action:'setActivoJugador', adminKey:ADMIN_KEY_OK, matricula:ADM_JUG_EDIT_MAT, activo:activo });
+  Promise.all([editPromise, activoPromise]).then(function(results){
+    var r1=results[0], r2=results[1];
+    if(r1.ok && r2.ok){
+      msg.className='adm-msg ok'; msg.style.display=''; msg.textContent='✓ Guardado.';
+      admLoadJugadores();
+      setTimeout(function(){ pg('admin-jugadores',null); }, 1000);
+    } else {
+      msg.className='adm-msg err'; msg.style.display=''; msg.textContent='✗ ' + ((!r1.ok&&r1.error)||(!r2.ok&&r2.error)||'Error');
+    }
+  });
+}
+
+function admResetearPinJugador(){
+  if(!ADM_JUG_EDIT_MAT) return;
+  var msg = document.getElementById('adm-jugedit-msg');
+  if(!confirm('¿Resetear el PIN de este jugador?')) return;
+  ngtApiPost({ action:'resetPin', adminKey:ADMIN_KEY_OK, matricula:ADM_JUG_EDIT_MAT }).then(r => {
+    if(r.ok){ msg.className='adm-msg ok'; msg.style.display=''; msg.textContent='✓ PIN reseteado. El jugador deberá crear uno nuevo al ingresar.'; }
+    else     { msg.className='adm-msg err'; msg.style.display=''; msg.textContent='✗ ' + (r.error||'Error'); }
+  });
+}
+
 /* ── Gestionar Canchas ── */
 var ADM_CANCHAS_DATA = [];
 var ADM_NP_TARGET = null; // { el, hoyo, field, page }
@@ -5026,7 +5250,7 @@ function abrirEditPanel(fecha){
     // Render jugadores checkboxes with current selection checked
     const jl = document.getElementById('adm-edit-jugs');
     let jugHtml = '';
-    jugadores.forEach(j => {
+    jugadores.filter(j => j.activo !== false || curMatriculas.indexOf(String(j.matricula)) >= 0).forEach(j => {
       const checked = curMatriculas.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
       const lbl = formatPlayerLabel(j.nombre);
       jugHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-jug" value="' + j.matricula + '" id="ejug-' + j.matricula + '" ' + checked + ' onchange="admUpdateJugCount_()"><label for="ejug-' + j.matricula + '">' + lbl + '</label></div>';
