@@ -7765,3 +7765,563 @@ Reemplazalo por:
 
 - **Ítem 7** — "Sección Admin, botones igual que en la app de POP." **En pausa** (8/9/2026) — Marco pidió no darle bola por ahora. Si se retoma, hace falta una captura de esa app para poder replicar el estilo.
 - **Ítem 23** — "Anotación online para cada fecha." **En pausa** (8/9/2026) — Marco decidió no hacerlo por ahora. Queda anotado por si se retoma más adelante.
+
+---
+
+# FASE 7 — Gestionar Jugadores (7/9/2026)
+
+Hasta ahora, para dar de alta un jugador nuevo o corregir su nombre/apodo, Marco lo hacía a mano directamente en la planilla de Google Sheets. Esta fase agrega una pantalla de Admin — "Gestionar Jugadores" — para hacer todo eso desde la app, igual que ya existe "Gestionar Fechas" y "Gestionar Canchas".
+
+**Decisiones ya tomadas con Marco:**
+- Alta de jugador: matrícula, nombre, apodo y rol (Jugador/Admin). El HCP de juego queda vacío al crear — se completa solo después, como ya pasa hoy.
+- Se agrega un interruptor "Activo/Inactivo" — hoy no existe ningún campo así, los jugadores que no juegan (CACO, BEBE, JAVATA) simplemente no se tildan al armar líneas. Un jugador "Inactivo" deja de aparecer para elegir en fechas nuevas, pero conserva todo su historial y se puede reactivar en cualquier momento.
+- Se agrega un botón "Resetear PIN" — **buena noticia: la función de backend para esto (`resetPin_`) ya existe en el código desde hace tiempo, pero nunca se conectó a ningún botón de la app.** Solo hace falta el botón en la pantalla nueva, no hay que tocar el backend para esta parte.
+- "Eliminar" un jugador en realidad es desactivarlo — nunca se borra la fila de la planilla (la matrícula queda enlazada a años de historial, tarjetas y resultados; borrarla de verdad rompería esas referencias).
+
+Se divide en 2 tareas: primero el backend (Apps Script — requiere deploy manual), después el frontend (se publica solo).
+
+## Tarea 78 — Backend: alta, edición y activar/desactivar jugadores
+
+**Contexto para Code:** Archivos `00_Config.gs`, `03_Reads.gs`, `10_Routing.gs`, y un archivo nuevo `12_Jugadores.gs` (mismo criterio que `11_Fotos.gs`: un archivo por funcionalidad). Como toca archivos `.gs`, esta tarea **requiere que Marco haga el deploy manual en Apps Script** después del commit — avisale explícitamente en tu resumen.
+
+### PARTE A — Agregar la columna ACTIVO
+
+Buscá en `00_Config.gs`:
+```js
+const COL_J = { ORDEN: 0, MATRICULA: 1, NOMBRE: 2, APODO: 3, HCP_INDEX: 4, HCP_UPDATED: 5, PIN_HASH: 6, ROL: 7, FOTO_ID: 8 };
+```
+Reemplazalo por:
+```js
+const COL_J = { ORDEN: 0, MATRICULA: 1, NOMBRE: 2, APODO: 3, HCP_INDEX: 4, HCP_UPDATED: 5, PIN_HASH: 6, ROL: 7, FOTO_ID: 8, ACTIVO: 9 };
+```
+**Importante:** esto usa la columna J de la hoja JUGADORES. No hace falta que Marco agregue nada a mano en la planilla — Apps Script escribe ahí directamente la primera vez que se crea o edita un jugador desde la app. Si Marco quiere, puede (opcional, solo para su propia referencia visual) escribir "ACTIVO" como título en la celda J1 de la hoja JUGADORES — pero el código funciona igual sin eso.
+
+**Criterio de "activo por defecto":** un jugador sin nada cargado todavía en la columna ACTIVO (celda vacía) cuenta como **activo** — así los 18 jugadores que ya existen hoy en la planilla no se ven afectados por este cambio, siguen apareciendo normalmente. Solo se considera "inactivo" cuando el valor guardado es explícitamente `false`.
+
+### PARTE B — Nuevo archivo `12_Jugadores.gs`
+
+Creá el archivo con este contenido:
+```js
+// ════════════ JUGADORES (Gestionar Jugadores) ════════════
+
+// Lee un valor de la columna ACTIVO y decide si el jugador cuenta como activo.
+// Vacío/sin cargar = activo (compatibilidad con los jugadores ya existentes).
+function jugadorEstaActivo_(rawValue) {
+  return rawValue !== false && String(rawValue).trim().toUpperCase() !== 'FALSE';
+}
+
+// Lista completa de jugadores para la pantalla de Admin — incluye activos e inactivos,
+// y un booleano "tienePin" en vez del hash real (nunca se expone el PIN_HASH al cliente).
+function getJugadoresAdmin_(params) {
+  const adminKey = params && params.adminKey;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const sh = getSheet_(SHEETS.JUGADORES);
+  if (!sh) return { ok: false, error: 'Hoja JUGADORES no encontrada' };
+  const data = sh.getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < data.length; i++) {
+    const mat = String(data[i][COL_J.MATRICULA] || '').trim();
+    if (!mat) continue;
+    out.push({
+      matricula: mat,
+      nombre:    String(data[i][COL_J.NOMBRE] || '').trim(),
+      apodo:     String(data[i][COL_J.APODO]  || '').trim(),
+      rol:       String(data[i][COL_J.ROL]    || 'Jugador').trim(),
+      hcpIndex:  (data[i][COL_J.HCP_INDEX] !== '' && data[i][COL_J.HCP_INDEX] != null) ? parseFloat(data[i][COL_J.HCP_INDEX]) : null,
+      activo:    jugadorEstaActivo_(data[i][COL_J.ACTIVO]),
+      tienePin:  !!String(data[i][COL_J.PIN_HASH] || '').trim(),
+    });
+  }
+  out.sort(function(a, b){ return a.nombre.localeCompare(b.nombre); });
+  return { ok: true, data: out };
+}
+
+// Alta de un jugador nuevo. El HCP de juego queda vacío — se completa solo
+// después (primera actualización de HCP o primera ronda), igual que hoy.
+function crearJugador_(params) {
+  const adminKey = params && params.adminKey;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const matricula = String(params.matricula || '').trim();
+  const nombre    = String(params.nombre    || '').trim();
+  const apodo     = String(params.apodo     || '').trim();
+  const rol       = (String(params.rol || '').trim() === 'Admin') ? 'Admin' : 'Jugador';
+  if (!matricula || !nombre || !apodo) return { ok: false, error: 'Faltan datos (matrícula, nombre y apodo son obligatorios)' };
+
+  const sh = getSheet_(SHEETS.JUGADORES);
+  if (!sh) return { ok: false, error: 'Hoja JUGADORES no encontrada' };
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][COL_J.MATRICULA] || '').trim() === matricula) {
+      return { ok: false, error: 'Ya existe un jugador con esa matrícula' };
+    }
+  }
+  // Fila: ORDEN(vacío), MATRICULA, NOMBRE, APODO, HCP_INDEX(vacío), HCP_UPDATED(vacío), PIN_HASH(vacío), ROL, FOTO_ID(vacío), ACTIVO
+  const row = ['', matricula, nombre, apodo, '', '', '', rol, '', true];
+  sh.getRange(sh.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+  SpreadsheetApp.flush();
+  try { CacheService.getScriptCache().removeAll(['jugadores', 'jugadoresHist']); } catch(e) {}
+  return { ok: true, matricula: matricula };
+}
+
+// Edita nombre/apodo/rol de un jugador existente. La matrícula NO se puede
+// cambiar acá a propósito — está referenciada en años de historial, tarjetas
+// y resultados; cambiarla rompería esas referencias.
+function editarJugador_(params) {
+  const adminKey = params && params.adminKey;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const matricula = String(params.matricula || '').trim();
+  const nombre    = String(params.nombre    || '').trim();
+  const apodo     = String(params.apodo     || '').trim();
+  const rol       = (String(params.rol || '').trim() === 'Admin') ? 'Admin' : 'Jugador';
+  if (!matricula || !nombre || !apodo) return { ok: false, error: 'Faltan datos' };
+
+  const sh = getSheet_(SHEETS.JUGADORES);
+  if (!sh) return { ok: false, error: 'Hoja JUGADORES no encontrada' };
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][COL_J.MATRICULA] || '').trim() !== matricula) continue;
+    sh.getRange(i + 1, COL_J.NOMBRE + 1, 1, 3).setValues([[nombre, apodo, rol]]);
+    SpreadsheetApp.flush();
+    try { CacheService.getScriptCache().removeAll(['jugadores', 'jugadoresHist']); } catch(e) {}
+    return { ok: true };
+  }
+  return { ok: false, error: 'Jugador no encontrado' };
+}
+
+// Activa o desactiva un jugador (nunca se borra la fila).
+function setActivoJugador_(params) {
+  const adminKey = params && params.adminKey;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const matricula = String(params.matricula || '').trim();
+  const activo = !!params.activo;
+  if (!matricula) return { ok: false, error: 'Falta matrícula' };
+
+  const sh = getSheet_(SHEETS.JUGADORES);
+  if (!sh) return { ok: false, error: 'Hoja JUGADORES no encontrada' };
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][COL_J.MATRICULA] || '').trim() !== matricula) continue;
+    sh.getRange(i + 1, COL_J.ACTIVO + 1).setValue(activo);
+    SpreadsheetApp.flush();
+    try { CacheService.getScriptCache().removeAll(['jugadores', 'jugadoresHist']); } catch(e) {}
+    return { ok: true };
+  }
+  return { ok: false, error: 'Jugador no encontrado' };
+}
+```
+
+**Nota sobre "Resetear PIN":** no hace falta escribir nada nuevo para esto — ya existe `resetPin_` en `02_Auth.gs` y ya está registrado en el `doPost` (acción `resetPin`, recibe `{ token, matriculaTarget }`, valida que el token sea de un Admin). Se conecta desde el frontend en la Tarea 79.
+
+### PARTE C — Exponer "activo" en la lectura pública de jugadores
+
+Esto es para que, más adelante (Tarea 79), se pueda filtrar jugadores inactivos al armar una fecha nueva. Buscá en `03_Reads.gs`:
+```js
+    out.push({
+      matricula: m,
+      nombre:     String(data[i][COL_J.NOMBRE]   || '').trim(),
+      apodo:      String(data[i][COL_J.APODO]    || '').trim(),
+      hcpIndex:   (rawHcp !== '' && rawHcp !== null && rawHcp !== undefined) ? (parseFloat(rawHcp) || null) : null,
+      hcpUpdated: String(data[i][COL_J.HCP_UPDATED] || '').trim(),
+      fotoUrl:    getFotoUrl_(String(data[i][COL_J.FOTO_ID] || '').trim()),
+    });
+```
+Reemplazalo por (agrega una sola línea, `activo`):
+```js
+    out.push({
+      matricula: m,
+      nombre:     String(data[i][COL_J.NOMBRE]   || '').trim(),
+      apodo:      String(data[i][COL_J.APODO]    || '').trim(),
+      hcpIndex:   (rawHcp !== '' && rawHcp !== null && rawHcp !== undefined) ? (parseFloat(rawHcp) || null) : null,
+      hcpUpdated: String(data[i][COL_J.HCP_UPDATED] || '').trim(),
+      fotoUrl:    getFotoUrl_(String(data[i][COL_J.FOTO_ID] || '').trim()),
+      activo:     jugadorEstaActivo_(data[i][COL_J.ACTIVO]),
+    });
+```
+**Importante:** esta función (`getJugadores_`) se usa en un montón de lugares de la app (Leaderboard, Historia, Live Scoring...) — a propósito NO le sacamos a nadie de esta lista por estar inactivo, solo le agregamos el dato. Ocultar jugadores inactivos de las pantallas donde corresponde (elegir jugadores para una fecha nueva) se hace en la Tarea 79, solo en esas pantallas puntuales — así nadie desaparece de su propio historial o de los rankings por quedar inactivo.
+
+### PARTE D — Registrar las acciones nuevas en el routing
+
+Buscá en `10_Routing.gs`, dentro de `doPost`, la línea:
+```js
+      case 'crearCancha':            result = crearCancha_(params); break;
+```
+Y agregá estas 4 líneas nuevas justo debajo (en cualquier lugar del switch de `doPost` funciona, pero para mantener orden las ponemos cerca de las otras acciones de jugadores):
+```js
+      case 'getJugadoresAdmin':      result = getJugadoresAdmin_(params); break;
+      case 'crearJugador':           result = crearJugador_(params); break;
+      case 'editarJugador':          result = editarJugador_(params); break;
+      case 'setActivoJugador':       result = setActivoJugador_(params); break;
+```
+
+### Qué NO cambia
+
+- `getJugadores_()` se sigue usando exactamente igual en todos los lugares que ya la usan — solo gana un campo nuevo (`activo`) que nadie más lee todavía.
+- El PIN_HASH nunca se devuelve al cliente en ninguna función nueva — solo un booleano `tienePin`.
+- La matrícula de un jugador existente no se puede editar desde estas funciones — es intencional.
+- `resetPin_` no se toca — ya funciona, solo falta conectarle un botón (Tarea 79).
+- No se borra ninguna fila de la planilla en ningún caso.
+
+### ❓ Preguntas de verificación — Tarea 78
+
+1. ¿Agregaste `ACTIVO: 9` a `COL_J` en `00_Config.gs`?
+2. ¿Creaste `12_Jugadores.gs` con las 4 funciones (`jugadorEstaActivo_`, `getJugadoresAdmin_`, `crearJugador_`, `editarJugador_`, `setActivoJugador_`) tal cual el código de la consigna?
+3. Probá `getJugadoresAdmin_` (podés hacerlo con una llamada de prueba, o pedime confirmación de que compila sin errores en el editor de Apps Script): ¿devuelve la lista completa de jugadores existentes, con `tienePin: true` para los que ya tienen PIN configurado, y sin exponer el hash del PIN en ningún campo?
+4. ¿`crearJugador_` rechaza correctamente una matrícula que ya existe, con el mensaje "Ya existe un jugador con esa matrícula"?
+5. ¿`getJugadores_()` (la función que ya existía) ahora también devuelve el campo `activo`, sin haber sacado ni cambiado ningún otro campo?
+6. ¿Registraste las 4 acciones nuevas (`getJugadoresAdmin`, `crearJugador`, `editarJugador`, `setActivoJugador`) en el `doPost`?
+7. Hash y mensaje del commit.
+8. ¿Alguna duda o algo ambiguo de la consigna?
+
+### Respuestas de verificación
+
+1. Sí. `00_Config.gs` ahora tiene `ACTIVO: 9` al final de `COL_J`.
+2. Sí. `12_Jugadores.gs` fue creado con exactamente las 5 funciones del enunciado: `jugadorEstaActivo_`, `getJugadoresAdmin_`, `crearJugador_`, `editarJugador_`, `setActivoJugador_`.
+3. `getJugadoresAdmin_` devuelve para cada jugador: `matricula`, `nombre`, `apodo`, `rol`, `hcpIndex`, `activo`, `tienePin` (booleano derivado de `!!String(PIN_HASH).trim()`). El `PIN_HASH` real nunca aparece en el objeto devuelto.
+4. Sí. `crearJugador_` recorre la hoja y retorna `{ ok: false, error: 'Ya existe un jugador con esa matrícula' }` si encuentra una fila con la misma matrícula antes de escribir.
+5. Sí. `getJugadores_` en `03_Reads.gs` recibe una sola línea nueva: `activo: jugadorEstaActivo_(data[i][COL_J.ACTIVO])`. Todos los demás campos quedan idénticos.
+6. Sí. Las 4 acciones nuevas están en el `doPost` de `10_Routing.gs`, justo debajo de `crearCancha`.
+7. Hash: `fc19fcc` — Mensaje: `feat(tarea78): backend gestionar jugadores - alta, edicion y activar/desactivar`
+8. Sin ambigüedad. Una decisión menor: la consigna cuenta 4 funciones en la pregunta 2 pero el código tiene 5 (incluye `jugadorEstaActivo_` además de las 4 de negocio). Las implementé todas tal cual el enunciado.
+
+### ⚠️ Recordatorio importante
+
+Esta tarea toca `00_Config.gs`, `03_Reads.gs`, `10_Routing.gs` y agrega `12_Jugadores.gs` — todos archivos de Apps Script. Marco tiene que actualizar los 3 archivos existentes y crear el archivo nuevo en el editor de Apps Script, y hacer el **deploy manual** (Implementar → Administrar implementaciones → lápiz → Nueva versión → Implementar, sobre la misma implementación de siempre) antes de que la Tarea 79 (frontend) pueda funcionar de punta a punta.
+
+---
+
+## Tarea 79 — Frontend: pantalla "Gestionar Jugadores"
+
+**Contexto para Code:** Archivo `index.html`. Esta tarea da por hecho que la Tarea 78 (backend) ya está deployada — las llamadas nuevas (`getJugadoresAdmin`, `crearJugador`, `editarJugador`, `setActivoJugador`, y la ya existente `resetPin`) tienen que estar disponibles en el backend antes de probar esto en vivo.
+
+Se agregan 3 pantallas nuevas dentro del panel de Admin, siguiendo el mismo patrón visual que ya usa "Gestionar Canchas" (`.adm-sec-back`, `.adm-card`, `.adm-input`, `.adm-btn-primary`, `.adm-msg`):
+1. **Lista** — todos los jugadores, con buscador, badge de activo/inactivo, y toque para editar.
+2. **Nuevo jugador** — formulario de alta.
+3. **Editar jugador** — formulario de edición + activar/desactivar + resetear PIN.
+
+### PARTE A — Botón nuevo en el Home de Admin
+
+Buscá:
+```html
+        <button class="adm-big-btn" onclick="pg('admin-canchas',null)">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Gestionar Canchas
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ════ ADMIN — CREAR FECHA ════ -->
+```
+Reemplazalo por (agrega el 5to botón; el grid ya es `1fr 1fr` así que se acomoda solo debajo):
+```html
+        <button class="adm-big-btn" onclick="pg('admin-canchas',null)">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Gestionar Canchas
+        </button>
+        <button class="adm-big-btn" onclick="pg('admin-jugadores',null)">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Gestionar Jugadores
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ════ ADMIN — CREAR FECHA ════ -->
+```
+
+### PARTE B — Pantallas nuevas (HTML)
+
+Buscá el final del bloque de "Gestionar Canchas" (justo después de esto, que ya existe):
+```html
+        <button class="adm-btn-secondary" onclick="admGuardarHoyos()" style="width:100%;background:var(--navy);color:#fff;border-color:var(--navy);margin-top:4px;">💾 Guardar Hoyos</button>
+        <div id="adm-cancha-holes-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+
+</div>
+</div>
+```
+Agregá inmediatamente después (mismo nivel, 3 pantallas nuevas):
+```html
+
+<!-- ════ ADMIN — GESTIONAR JUGADORES ════ -->
+<div class="pg" id="pg-admin-jugadores">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="pg('admin',null)">←</button>
+        <span class="adm-sec-title">Gestionar Jugadores</span>
+      </div>
+
+      <div class="adm-card">
+        <div class="adm-card-body" style="padding-bottom:12px;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="adm-jug-buscar" class="adm-input" placeholder="Buscar por nombre o apodo..." oninput="admFiltrarJugadores_()" style="flex:1;">
+            <button class="adm-btn-secondary" onclick="admMostrarNuevoJugador()" style="white-space:nowrap;">+ Nuevo</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="adm-jug-lista">Cargando...</div>
+
+</div>
+</div>
+
+<!-- ════ ADMIN — NUEVO JUGADOR ════ -->
+<div class="pg" id="pg-admin-jugadores-nuevo">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="pg('admin-jugadores',null)">←</button>
+        <span class="adm-sec-title">Nuevo Jugador</span>
+      </div>
+
+      <div class="adm-card">
+        <div class="adm-card-body">
+          <label class="adm-label">Matrícula</label>
+          <input type="text" id="adm-jugnew-matricula" class="adm-input" placeholder="Ej: 60803" style="margin-bottom:14px;">
+          <label class="adm-label">Nombre completo</label>
+          <input type="text" id="adm-jugnew-nombre" class="adm-input" placeholder="Ej: BARCHI Marcos" style="margin-bottom:14px;">
+          <label class="adm-label">Apodo</label>
+          <input type="text" id="adm-jugnew-apodo" class="adm-input" placeholder="Ej: RACHO" style="margin-bottom:14px;">
+          <label class="adm-label">Rol</label>
+          <select id="adm-jugnew-rol" class="adm-input">
+            <option value="Jugador">Jugador</option>
+            <option value="Admin">Admin</option>
+          </select>
+          <button class="adm-btn-primary" onclick="admCrearJugador()" style="margin-top:18px;">Crear Jugador</button>
+          <div id="adm-jugnew-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+
+</div>
+</div>
+
+<!-- ════ ADMIN — EDITAR JUGADOR ════ -->
+<div class="pg" id="pg-admin-jugadores-detalle">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="pg('admin-jugadores',null)">←</button>
+        <span class="adm-sec-title">Editando — <span id="adm-jugedit-titulo"></span></span>
+      </div>
+
+      <div class="adm-card">
+        <div class="adm-card-body">
+          <label class="adm-label">Nombre completo</label>
+          <input type="text" id="adm-jugedit-nombre" class="adm-input" style="margin-bottom:14px;">
+          <label class="adm-label">Apodo</label>
+          <input type="text" id="adm-jugedit-apodo" class="adm-input" style="margin-bottom:14px;">
+          <label class="adm-label">Rol</label>
+          <select id="adm-jugedit-rol" class="adm-input" style="margin-bottom:14px;">
+            <option value="Jugador">Jugador</option>
+            <option value="Admin">Admin</option>
+          </select>
+          <label class="adm-jug-item" style="padding:6px 0;">
+            <input type="checkbox" id="adm-jugedit-activo">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--text);">Activo (aparece para elegir al armar una fecha nueva)</span>
+          </label>
+          <button class="adm-btn-primary" onclick="admGuardarJugador()" style="margin-top:14px;">Guardar Cambios</button>
+          <div id="adm-jugedit-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+
+      <div class="adm-card">
+        <div class="adm-card-body">
+          <div class="adm-label" style="margin-bottom:8px;">Seguridad</div>
+          <button class="adm-btn-secondary" onclick="admResetearPinJugador()" style="width:100%;">🔑 Resetear PIN</button>
+          <div class="s dim" style="margin-top:6px;font-size:12px;">La próxima vez que este jugador entre con su matrícula, la app le va a pedir crear un PIN nuevo.</div>
+        </div>
+      </div>
+
+</div>
+</div>
+```
+
+### PARTE C — CSS nuevo (badge activo/inactivo + fila de la lista)
+
+Agregá este CSS cerca de `.adm-fecha-tile` (mismo criterio visual — reutiliza `--green`/`--red`/`--g4` ya existentes):
+```css
+.adm-jug-row{display:flex;align-items:center;gap:10px;background:var(--white);border:var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,35,75,.06);transition:.12s;}
+.adm-jug-row:hover{background:var(--off);}
+.adm-jug-row:active{transform:scale(.98);}
+.adm-jug-row.inactivo{opacity:.55;}
+.adm-jug-row-info{flex:1;min-width:0;}
+.adm-jug-row-apodo{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;color:var(--navy);text-transform:uppercase;}
+.adm-jug-row-nombre{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);}
+.adm-jug-row-badges{display:flex;gap:6px;flex-shrink:0;}
+.adm-jug-badge{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:10px;}
+.adm-jug-badge.activo{background:rgba(31,122,61,.12);color:var(--green);}
+.adm-jug-badge.inactivo{background:rgba(138,135,128,.15);color:var(--g4);}
+.adm-jug-badge.sinpin{background:#fef3c7;color:#92400e;}
+```
+
+### PARTE D — JavaScript
+
+Agregá estas funciones (por ejemplo cerca de las funciones de `admLoadCanchas`/Gestionar Canchas):
+```js
+/* ══ ADMIN — Gestionar Jugadores ══ */
+var ADM_JUG_DATA = [];
+var ADM_JUG_EDIT_MAT = null;
+
+function admLoadJugadores() {
+  const lista = document.getElementById('adm-jug-lista');
+  lista.innerHTML = 'Cargando...';
+  ngtApiPost({ action: 'getJugadoresAdmin', adminKey: ADMIN_KEY_OK }).then(function(r) {
+    if (!r.ok) { lista.innerHTML = '<div class="adm-msg err">' + (r.error || 'Error') + '</div>'; return; }
+    ADM_JUG_DATA = r.data;
+    admRenderJugadoresLista_();
+  }).catch(function(e) {
+    lista.innerHTML = '<div class="adm-msg err">Error: ' + e.message + '</div>';
+  });
+}
+
+function admFiltrarJugadores_() { admRenderJugadoresLista_(); }
+
+function admRenderJugadoresLista_() {
+  const lista = document.getElementById('adm-jug-lista');
+  const q = (document.getElementById('adm-jug-buscar').value || '').trim().toUpperCase();
+  const filtrados = ADM_JUG_DATA.filter(function(j) {
+    if (!q) return true;
+    return (j.nombre || '').toUpperCase().indexOf(q) >= 0 || (j.apodo || '').toUpperCase().indexOf(q) >= 0;
+  });
+  if (!filtrados.length) { lista.innerHTML = '<div class="lb-status">Sin resultados.</div>'; return; }
+  let html = '';
+  filtrados.forEach(function(j) {
+    html += '<div class="adm-jug-row' + (j.activo ? '' : ' inactivo') + '" onclick="admAbrirEditarJugador(\'' + j.matricula + '\')">' +
+      '<div class="adm-jug-row-info">' +
+        '<div class="adm-jug-row-apodo">' + j.apodo + '</div>' +
+        '<div class="adm-jug-row-nombre">' + j.nombre + ' · Matrícula ' + j.matricula + '</div>' +
+      '</div>' +
+      '<div class="adm-jug-row-badges">' +
+        (j.activo ? '<span class="adm-jug-badge activo">Activo</span>' : '<span class="adm-jug-badge inactivo">Inactivo</span>') +
+        (j.tienePin ? '' : '<span class="adm-jug-badge sinpin">Sin PIN</span>') +
+      '</div>' +
+    '</div>';
+  });
+  lista.innerHTML = html;
+}
+
+function admMostrarNuevoJugador() {
+  document.getElementById('adm-jugnew-matricula').value = '';
+  document.getElementById('adm-jugnew-nombre').value = '';
+  document.getElementById('adm-jugnew-apodo').value = '';
+  document.getElementById('adm-jugnew-rol').value = 'Jugador';
+  document.getElementById('adm-jugnew-msg').style.display = 'none';
+  pg('admin-jugadores-nuevo', null);
+}
+
+function admCrearJugador() {
+  const msg = document.getElementById('adm-jugnew-msg');
+  const matricula = document.getElementById('adm-jugnew-matricula').value.trim();
+  const nombre    = document.getElementById('adm-jugnew-nombre').value.trim();
+  const apodo     = document.getElementById('adm-jugnew-apodo').value.trim();
+  const rol       = document.getElementById('adm-jugnew-rol').value;
+  if (!matricula || !nombre || !apodo) {
+    msg.className = 'adm-msg err'; msg.textContent = 'Completá matrícula, nombre y apodo'; msg.style.display = 'block'; return;
+  }
+  msg.className = 'adm-msg'; msg.textContent = 'Creando...'; msg.style.display = 'block';
+  ngtApiPost({ action: 'crearJugador', adminKey: ADMIN_KEY_OK, matricula: matricula, nombre: nombre, apodo: apodo, rol: rol }).then(function(r) {
+    if (!r.ok) { msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error'); return; }
+    msg.className = 'adm-msg ok'; msg.textContent = '✓ Jugador creado';
+    setTimeout(function() { pg('admin-jugadores', null); admLoadJugadores(); }, 700);
+  }).catch(function(e) {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+function admAbrirEditarJugador(matricula) {
+  const j = ADM_JUG_DATA.find(function(x) { return x.matricula === matricula; });
+  if (!j) return;
+  ADM_JUG_EDIT_MAT = matricula;
+  document.getElementById('adm-jugedit-titulo').textContent = j.apodo;
+  document.getElementById('adm-jugedit-nombre').value = j.nombre;
+  document.getElementById('adm-jugedit-apodo').value = j.apodo;
+  document.getElementById('adm-jugedit-rol').value = j.rol === 'Admin' ? 'Admin' : 'Jugador';
+  document.getElementById('adm-jugedit-activo').checked = !!j.activo;
+  document.getElementById('adm-jugedit-msg').style.display = 'none';
+  pg('admin-jugadores-detalle', null);
+}
+
+function admGuardarJugador() {
+  if (!ADM_JUG_EDIT_MAT) return;
+  const msg = document.getElementById('adm-jugedit-msg');
+  const nombre = document.getElementById('adm-jugedit-nombre').value.trim();
+  const apodo  = document.getElementById('adm-jugedit-apodo').value.trim();
+  const rol    = document.getElementById('adm-jugedit-rol').value;
+  const activo = document.getElementById('adm-jugedit-activo').checked;
+  if (!nombre || !apodo) {
+    msg.className = 'adm-msg err'; msg.textContent = 'Completá nombre y apodo'; msg.style.display = 'block'; return;
+  }
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+  Promise.all([
+    ngtApiPost({ action: 'editarJugador', adminKey: ADMIN_KEY_OK, matricula: ADM_JUG_EDIT_MAT, nombre: nombre, apodo: apodo, rol: rol }),
+    ngtApiPost({ action: 'setActivoJugador', adminKey: ADMIN_KEY_OK, matricula: ADM_JUG_EDIT_MAT, activo: activo }),
+  ]).then(function(results) {
+    const fail = results.find(function(r) { return !r.ok; });
+    if (fail) { msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (fail.error || 'Error'); return; }
+    msg.className = 'adm-msg ok'; msg.textContent = '✓ Guardado';
+    setTimeout(function() { pg('admin-jugadores', null); admLoadJugadores(); }, 700);
+  }).catch(function(e) {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+function admResetearPinJugador() {
+  if (!ADM_JUG_EDIT_MAT) return;
+  if (!confirm('¿Resetear el PIN de este jugador? La próxima vez que entre, va a tener que crear uno nuevo.')) return;
+  const msg = document.getElementById('adm-jugedit-msg');
+  msg.className = 'adm-msg'; msg.textContent = 'Reseteando PIN...'; msg.style.display = 'block';
+  ngtApiPost({ action: 'resetPin', token: ADMIN_KEY_OK, matriculaTarget: ADM_JUG_EDIT_MAT }).then(function(r) {
+    if (!r.ok) { msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error'); return; }
+    msg.className = 'adm-msg ok'; msg.textContent = '✓ PIN reseteado';
+  }).catch(function(e) {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+```
+
+**Falta un detalle: cargar la lista al entrar a la pantalla.** Buscá la función `pg(...)` (la que cambia de pantalla) y buscá cómo otras pantallas de Admin disparan su propia carga al entrar (por ejemplo cómo "Gestionar Canchas" llama a `admLoadCanchas()` al navegar ahí — puede ser un `if` agregado directamente en `pg()`, o un `onclick` que llama a la función de carga antes de cambiar de pantalla, revisá cuál de los dos patrones ya usa el resto de la app y seguí el mismo). Conectá `admLoadJugadores()` de la misma forma para `admin-jugadores`.
+
+### PARTE E — Ocultar jugadores inactivos al armar una fecha nueva
+
+Esto es lo que hace que "Activo/Inactivo" sirva para algo en la práctica. Hay 2 lugares en Crear Fecha que arman una lista de checkboxes de TODOS los jugadores (`ADM_JUGADORES`) — hay que sacarles los inactivos. Buscá:
+```js
+      let jugHtml = '';
+      ADM_JUGADORES.forEach(j => {
+        const lbl = formatPlayerLabel(j.nombre);
+        jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
+      });
+```
+Reemplazalo por (agrega el filtro `j.activo !== false` antes de armar el HTML):
+```js
+      let jugHtml = '';
+      ADM_JUGADORES.filter(j => j.activo !== false).forEach(j => {
+        const lbl = formatPlayerLabel(j.nombre);
+        jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
+      });
+```
+Buscá también el bloque muy parecido, un poco más abajo, para la lista de "dobles" (usa `dobHtml` en vez de `jugHtml`) y aplicale el mismo filtro `ADM_JUGADORES.filter(j => j.activo !== false).forEach(...)`.
+
+**Ojo con "Editar Fecha" (una fecha que ya existe):** ahí hay una lista parecida (`adm-edit-jugs`) que arma los checkboxes a partir de una variable `jugadores` (no `ADM_JUGADORES`) y marca como tildados a los que ya estaban en la fecha (`curMatriculas`). Ahí el filtro tiene que ser más cuidadoso: **nunca ocultes a un jugador que ya estaba tildado en esa fecha** (podría ser alguien que jugó y después quedó inactivo — no tiene que desaparecer de una fecha vieja), pero sí ocultá de la lista a los inactivos que NO estaban tildados (no tiene sentido ofrecer agregar a alguien inactivo a una fecha nueva). Buscá la lógica de `jugadores.forEach` en esa función y agregale ese filtro (`j.activo !== false || curMatriculas.indexOf(String(j.matricula)) >= 0`) antes de generar cada fila.
+
+### Qué NO cambia
+
+- `resetPin_` (backend) no se toca — ya funciona, esta tarea solo la conecta a un botón.
+- Ningún jugador se borra de la planilla en ningún flujo — "Eliminar" no existe como opción, solo "Activar/Desactivar".
+- Las pantallas de Leaderboard, Historia, Perfiles y Live Scoring no cambian — siguen mostrando a todos los jugadores (activos e inactivos) para no romper el historial.
+- No se toca el flujo de login de los jugadores ni `crearPin_`/`cambiarPin_`.
+
+### ❓ Preguntas de verificación — Tarea 79
+
+1. Desde el Home de Admin, ¿aparece el botón "Gestionar Jugadores" (5to botón, con ícono de personas)?
+2. ¿La lista muestra todos los jugadores existentes, con su apodo y nombre, y el badge "Inactivo" o "Sin PIN" cuando corresponde?
+3. ¿El buscador filtra correctamente por nombre o apodo a medida que se escribe?
+4. Al crear un jugador nuevo con una matrícula que ya existe, ¿aparece el error correspondiente sin crear un duplicado?
+5. Al editar un jugador (nombre, apodo, rol, o desmarcar "Activo") y guardar, ¿los cambios se reflejan al volver a la lista?
+6. Al tocar "Resetear PIN" y confirmar, ¿la próxima vez que ese jugador intente entrar con su matrícula la app le pide crear un PIN nuevo (como la primera vez)?
+7. En Crear Fecha (una fecha nueva), ¿los jugadores marcados como "Inactivo" ya NO aparecen en la lista para tildar?
+8. En Editar Fecha, sobre una fecha que ya tiene cargado a un jugador que ahora está inactivo, ¿ese jugador se sigue viendo (tildado) en la lista de esa fecha en particular, en vez de desaparecer?
+9. Hash y mensaje del commit.
+10. ¿Alguna duda o algo ambiguo de la consigna?
