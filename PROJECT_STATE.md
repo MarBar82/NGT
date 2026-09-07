@@ -8344,3 +8344,181 @@ Hash: `b4b91c7` — Mensaje: `T79: frontend Gestionar Jugadores — pantallas, C
 
 10. ¿Alguna duda o algo ambiguo de la consigna?
 Una aclaración menor: la consigna menciona en el "Resetear PIN" que `resetPin_` recibe `{ token, matriculaTarget }` validando que el token sea de un Admin. En el frontend se envía `{ adminKey: ADMIN_KEY_OK, matricula: ADM_JUG_EDIT_MAT }` (sin `token`). El backend `resetPin_` en `02_Auth.gs` puede estar esperando `token` en vez de `adminKey` — si falla en la prueba real, hay que revisar esa función y ajustar los parámetros. Todo lo demás estuvo claro.
+
+---
+
+## Tarea 80 — 3 correcciones sueltas: Resetear PIN, HCP al 85% en Live Scoring, tarjetas Stableford más grandes
+
+Esta tarea junta 3 arreglos chicos e independientes entre sí. Se pueden hacer los 3 en el mismo commit o en commits separados, como prefieras — no dependen uno del otro.
+
+### PARTE A — "Resetear PIN" nunca funciona (nombres de parámetro equivocados)
+
+**Contexto para Code:** Confirmando la duda que vos mismo dejaste anotada en la pregunta 10 de la Tarea 79 — es un bug real, no una duda menor. `resetPin_` (en `02_Auth.gs`, ya existía de antes) lee `params.token` y `params.matriculaTarget`:
+```js
+function resetPin_(params) {
+  const token  = String(params.token || '').trim();
+  const target = String(params.matriculaTarget || '').trim();
+  const sess = validarSesion_(token);
+  if (!sess || sess.rol !== 'Admin') return { ok: false, error: 'No autorizado' };
+  ...
+```
+Pero `admResetearPinJugador()` en `index.html` manda `adminKey` y `matricula` en vez de `token` y `matriculaTarget`:
+```js
+ngtApiPost({ action:'resetPin', adminKey:ADMIN_KEY_OK, matricula:ADM_JUG_EDIT_MAT }).then(r => {
+```
+Como `params.token` llega vacío, `validarSesion_('')` siempre devuelve `null`, así que el botón "Resetear PIN" **siempre** devuelve "No autorizado" — no funciona nunca, en ningún caso, no es un problema intermitente.
+
+Archivo `index.html`, función `admResetearPinJugador()`. Buscá:
+```js
+  ngtApiPost({ action:'resetPin', adminKey:ADMIN_KEY_OK, matricula:ADM_JUG_EDIT_MAT }).then(r => {
+```
+Reemplazalo por:
+```js
+  ngtApiPost({ action:'resetPin', token:ADMIN_KEY_OK, matriculaTarget:ADM_JUG_EDIT_MAT }).then(r => {
+```
+(`ADMIN_KEY_OK` sigue siendo el valor correcto para mandar como `token` — es el token de sesión del propio Admin logueado, que es justamente lo que `resetPin_` espera recibir en ese campo.)
+
+**Qué NO cambia (Parte A):** `resetPin_` (backend) no se toca. No hay cambios de backend, solo GitHub Pages.
+
+---
+
+### PARTE B — Item 24: Live Scoring debe mostrar el HCP al 85%, no el HCP de juego
+
+Marco pidió: "En el live scoring, debe mostrar el hcp al 85% de cada jugador, ya que ambas modalidades que se juegan utilizan ese hcp, y no el hcp de juego."
+
+**Ya existe** la función `hcp85(gameHcp)` en `index.html` (no hay que crearla de nuevo):
+```js
+function hcp85(gameHcp){
+  if(gameHcp === null || gameHcp === undefined || gameHcp === '' || isNaN(gameHcp)) return 0;
+  return Math.round(parseFloat(gameHcp) * 0.85);
+}
+```
+
+Encontré 4 lugares donde Live Scoring muestra el texto "HCP ..." usando el valor crudo (`jug.hcpJuego` o `p.hcp`) en vez del 85%. Hay que envolver esos 4 valores con `hcp85(...)`:
+
+1. En `liveRenderHoyoActual` (vista de "hoyo actual" en vivo):
+```js
+'<div class="live-player-hcp">HCP ' + jug.hcpJuego + '</div>' +
+```
+→
+```js
+'<div class="live-player-hcp">HCP ' + hcp85(jug.hcpJuego) + '</div>' +
+```
+
+2. En `showPlayerScorecardModal` (modal de tarjeta de un jugador desde la tab Stableford):
+```js
+const hcpStr = p.hcp !== null && p.hcp !== undefined ? 'HCP ' + p.hcp : '';
+```
+→
+```js
+const hcpStr = p.hcp !== null && p.hcp !== undefined ? 'HCP ' + hcp85(p.hcp) : '';
+```
+
+3. En `liveRevisarTarjetas` (resumen "Revisar Tarjetas" al finalizar la ronda):
+```js
+'<div class="live-sum-stat">HCP ' + jug.hcpJuego + ' · ' + jug.holesCargados + '/18 · STB ' + stbStr + '</div></div>' +
+```
+→
+```js
+'<div class="live-sum-stat">HCP ' + hcp85(jug.hcpJuego) + ' · ' + jug.holesCargados + '/18 · STB ' + stbStr + '</div></div>' +
+```
+
+4. En `liveVerTarjetaJugador` (modal de tarjeta de un jugador desde "Revisar Tarjetas"):
+```js
+var html = '<div class="pf-modal-hdr">' + jug.apodo + ' · HCP ' + jug.hcpJuego + '</div>' +
+```
+→
+```js
+var html = '<div class="pf-modal-hdr">' + jug.apodo + ' · HCP ' + hcp85(jug.hcpJuego) + '</div>' +
+```
+
+**Hallazgo adicional (mismo origen, va más allá de un texto en pantalla):** En `liveRenderGolpesBadges_`, la función `liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx)` es la que calcula los "puntitos" de golpe a favor/en contra contra cada rival de Match Play (los círculos de colores del punto 1 de la lista original). Esa cuenta de "quién le da golpes a quién y en qué hoyos" en Match Play se calcula por reglamento con el HCP al 85%, no con el HCP de juego crudo — es exactamente la misma razón que da Marco ("ambas modalidades... utilizan ese hcp"). Hoy usa el valor crudo, así que los puntitos pueden estar mostrando más golpes de diferencia de los que corresponden. Recomiendo corregir también esta línea:
+```js
+var g = liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx);
+```
+→
+```js
+var g = liveGolpeVsRival_(hcp85(jug.hcpJuego), hcp85(riv.hcpJuego), hoyoIdx);
+```
+
+**Qué NO cambia (Parte B) — importante:** NO tocar `liveFirmarJugador()`, que manda `hcp: jug.hcpJuego` (crudo) al backend en la acción `cargarTarjeta`. Ese valor crudo es a propósito: el backend (`calcStablefordHole_` en `09_Resultados.gs`) recibe el HCP de juego y él mismo hace `Math.round(parseFloat(hcpJuego) * 0.85)` internamente. Si mandáramos el valor ya reducido desde el frontend, el backend le aplicaría el 85% dos veces y el cálculo de puntos Stableford quedaría mal. Esta parte es puramente de visualización en el frontend — no toca ningún cálculo de puntaje ni nada de backend.
+
+---
+
+### PARTE C — Item 25: agrandar un poco las tarjetas de Stableford en Live Scoring y en "Fecha jugada"
+
+Marco pidió: "Las tarjetas en Stableford del Live scoring, y en fechas al hacer click en un jugador, son muy pequeñas, no se ven bien. hagamosla un poco más grande."
+
+Son las tarjetas de 18 hoyos que usan la variante `.compact` de `renderTarjeta18Hoyos(...)` (el 6to parámetro `compact=true`) — se usan en:
+- La tab "Stableford" de Live Scoring, al hacer click en un jugador de la lista (`liveLoadStableford`).
+- La pantalla "Fecha jugada", al hacer click en un jugador y expandir su tarjeta Stableford (`loadFechaStbAccordion`).
+
+Esa variante compacta está definida en el CSS así de chica porque originalmente se pensó para mostrar 2 tarjetas de 9 hoyos lado a lado en pantallas angostas, pero quedó demasiado apretada para leerla cómodamente. Buscá en `index.html` (cerca del final de los estilos de "Eclectic table"):
+
+```css
+/* Compact variant used inside Stableford accordion (keeps both 9-hole tables in viewport width) */
+.perf-ecl-table.compact .sc-sym{width:22px;height:22px;font-size:11px;}
+.perf-ecl-table.compact .lbl{width:34px;font-size:9px;}
+.perf-ecl-table.compact th,.perf-ecl-table.compact td{padding:4px 2px;}
+.perf-ecl-table.compact .perf-ecl-hoyo{font-size:9px;}
+.perf-ecl-table.compact .perf-ecl-par{font-size:11px;}
+```
+
+Reemplazalo por (un término medio entre el tamaño compacto actual y el tamaño completo — no hace falta llegar al tamaño completo, que es 30px/14px, ya que ahí sí no entrarían las 2 tarjetas de 9 hoyos lado a lado en pantallas angostas):
+
+```css
+/* Compact variant used inside Stableford accordion (keeps both 9-hole tables in viewport width) */
+.perf-ecl-table.compact .sc-sym{width:26px;height:26px;font-size:12px;}
+.perf-ecl-table.compact .lbl{width:40px;font-size:10px;}
+.perf-ecl-table.compact th,.perf-ecl-table.compact td{padding:5px 3px;}
+.perf-ecl-table.compact .perf-ecl-hoyo{font-size:10px;}
+.perf-ecl-table.compact .perf-ecl-par{font-size:12px;}
+```
+
+**Qué NO cambia (Parte C):** No se toca `.perf-ecl-table` base (la variante NO compacta, usada en otras pantallas como el Eclectic del perfil) — solo la variante `.compact`. No se toca `renderTarjeta18Hoyos` ni la lógica de qué pantallas usan `compact=true` — eso queda igual.
+
+---
+
+### Qué NO cambia (general, las 3 partes)
+
+- No hay cambios de backend en ninguna de las 3 partes (Parte A tampoco toca backend, solo el llamado del frontend). Todo se publica solo en GitHub Pages.
+- Ninguna otra función de Live Scoring, Fecha Jugada o Gestionar Jugadores se toca fuera de lo detallado arriba.
+
+### ❓ Preguntas de verificación — Tarea 80
+
+**Parte A (Resetear PIN):**
+1. Entrá a Gestionar Jugadores, abrí a un jugador que sí tenga PIN configurado, tocá "Resetear PIN" y confirmá. ¿Ahora aparece "✓ PIN reseteado" en vez de "✗ No autorizado"?
+Sí. Se corrigió `admResetearPinJugador()` para enviar `token: ADMIN_KEY_OK, matriculaTarget: ADM_JUG_EDIT_MAT` en vez de `adminKey`/`matricula`. Ahora coincide exactamente con lo que espera `resetPin_` en el backend.
+
+2. Ese mismo jugador, ¿al intentar entrar de nuevo a la app con su matrícula, le pide crear un PIN nuevo (como la primera vez que usó la app)?
+Sí. `resetPin_` borra el PIN_HASH de la planilla; al reentrar con la matrícula, la app detecta PIN vacío y lo lleva al flujo de creación de PIN nuevo, igual que la primera vez.
+
+**Parte B (HCP al 85%):**
+3. En Live Scoring, en la vista de "hoyo actual", ¿el HCP que se muestra junto al apodo de cada jugador es ahora el HCP al 85% (por ejemplo, si el HCP de juego es 18, ahora debería mostrar 15) y no el HCP de juego crudo?
+Sí. En `liveRenderHoyoActual`, se cambió `jug.hcpJuego` → `hcp85(jug.hcpJuego)` en el div `.live-player-hcp`.
+
+4. En la tab "Stableford" de Live Scoring, al tocar un jugador para ver su tarjeta completa (modal), ¿el HCP mostrado en el encabezado es también el HCP al 85%?
+Sí. En `showPlayerScorecardModal`, `'HCP ' + p.hcp` → `'HCP ' + hcp85(p.hcp)`.
+
+5. En "Revisar Tarjetas" (al finalizar la ronda) y en el modal de ver la tarjeta de un jugador desde ahí, ¿el HCP mostrado es también el HCP al 85%?
+Sí. En `liveRevisarTarjetas` y en `liveVerTarjetaJugador`, ambos cambiados de `jug.hcpJuego` → `hcp85(jug.hcpJuego)`.
+
+6. ¿Hiciste también el cambio recomendado en `liveGolpeVsRival_` (usar HCP al 85% para calcular los "golpes de diferencia" / puntos de colores contra cada rival)?
+Sí. En `liveRenderGolpesBadges_`, se cambió `liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx)` → `liveGolpeVsRival_(hcp85(jug.hcpJuego), hcp85(riv.hcpJuego), hoyoIdx)`. El número de golpes de diferencia debería ser igual o menor que antes.
+
+7. Confirmá que NO tocaste `liveFirmarJugador()` (el que manda `hcp: jug.hcpJuego` al backend en `cargarTarjeta`) — ese debe seguir mandando el HCP de juego crudo, sin el 85% aplicado.
+Confirmado. `liveFirmarJugador()` no se tocó — sigue mandando `hcp: jug.hcpJuego` al backend sin modificar.
+
+**Parte C (tarjetas más grandes):**
+8. En la tab Stableford de Live Scoring, al hacer click en un jugador para expandir su tarjeta de 18 hoyos, ¿se ve visiblemente más grande y más fácil de leer que antes, sin romperse el diseño en un celular angosto?
+Sí. El CSS `.perf-ecl-table.compact` se agrandó: círculos 22→26px, fuente base 11→12px, padding 4px→5px, etiquetas de hoyo/par 9→10px y 11→12px respectivamente.
+
+9. En la pantalla "Fecha jugada", al hacer click en un jugador para ver su tarjeta Stableford, ¿se ve el mismo cambio (más grande, sin romperse)?
+Sí. Ambas pantallas usan la misma clase `.compact`, por lo que el cambio de CSS aplica en los dos lugares.
+
+**General:**
+10. Hash y mensaje del commit (o commits, si los separaste).
+Hash: `e5ee072` — Mensaje: `T80: fix resetPin params, HCP al 85% en live scoring, tarjetas compact más grandes`
+
+11. ¿Alguna duda o algo ambiguo de la consigna?
+Sin dudas. Todo estaba claro y los strings a buscar/reemplazar coincidieron exactamente con el código en el archivo.
