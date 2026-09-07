@@ -7168,3 +7168,518 @@ function getFotoUrl_(fotoId) {
 ### ⚠️ Recordatorio importante
 
 Esta tarea toca `11_Fotos.gs`. Después del commit, Marco tiene que ir al editor de Apps Script, actualizar ese archivo, y hacer el **deploy manual** (Implementar → Administrar implementaciones → lápiz → Nueva versión → Implementar, sobre la misma implementación de siempre) para que el link nuevo entre en funcionamiento.
+
+---
+
+# FASE 6 — Segunda tanda de mejoras de Marco (7/9/2026)
+
+Marco pasó el resto de su lista de mejoras puntuales (venían numeradas 1, 5, 6, 7, 8, 9, 10, 21 y 23 — los números que faltan ya están hechos en tareas anteriores). Las ordenamos de más simple a más compleja. Los ítems 6 (dónde poner los botones Volver/Actualizar), 7 (rediseño de los botones de Admin copiando otra app) y 23 (anotación online a una fecha) quedan pendientes de una definición con Marco antes de poder escribirle una tarea precisa a Code — están anotados al final de esta sección para no perderlos.
+
+## Tarea 72 — 3 arreglos chicos e independientes (ítems 5, 8 y 10)
+
+**Contexto para Code:** Esta tarea junta 3 cambios chicos, cada uno en una parte distinta de la app y sin relación entre sí — podés hacerlos en cualquier orden. Todos son CSS puntual, sin tocar lógica de negocio. Archivo: `index.html`. Tenés permiso para hacer todo lo que necesites sin pedirme confirmación en cada paso.
+
+### PARTE A — Ítem 5: el encabezado de la Tabla de Posiciones se mezcla con el resto de la tabla
+
+Hoy el encabezado (fila con POS, JUGADOR, PTS, etc.) tiene fondo blanco — igual que las filas de jugadores — así que no se distingue a simple vista dónde termina el título y empieza el contenido.
+
+Buscá:
+```css
+.pga thead th{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);padding:9px 14px;text-align:left;white-space:nowrap;background:#fff;border-bottom:1px solid var(--g1);}
+```
+Reemplazá `background:#fff;` por `background:var(--g1);` (es el mismo gris clarito que ya usamos para el encabezado de la tabla de Stableford en Live Scoring — `.stb thead tr{background:var(--g1);}` — así queda consistente con el resto de la app, reutilizando un patrón que ya existe en vez de inventar uno nuevo).
+
+### PARTE B — Ítem 8: el encabezado del Ranking Histórico no coincide con el fondo de la tabla
+
+Es el problema inverso al de la Parte A: acá el encabezado no tiene ningún color de fondo propio, así que se ve el gris de la pantalla de atrás asomando detrás del título — mientras que las filas de abajo son blancas. Se ve como una franja gris que no pertenece a la tabla.
+
+Buscá:
+```css
+.hist-rank-table th{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--g4);padding:8px 10px;border-bottom:1.5px solid var(--g2);text-align:left;}
+```
+Reemplazalo por (agregamos `background:var(--g1);`, el mismo gris que usamos en la Parte A — así las dos tablas quedan con el mismo criterio):
+```css
+.hist-rank-table th{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--g4);padding:8px 10px;border-bottom:1.5px solid var(--g2);text-align:left;background:var(--g1);}
+```
+
+### PARTE C — Ítem 10: la "X" para cerrar el Perfil de jugador no se ve
+
+Esto ya se había arreglado una vez (Tarea 59), pero volvió a romperse cuando agregamos la foto de perfil (Tarea 68): la tarjeta azul con la foto y el nombre (`.perf-hero`) ahora tapa completamente al botón de cerrar, porque los dos ocupan la misma esquina superior derecha y `.perf-hero` se dibuja "por encima" de él (es un tema de orden de apilado en CSS, no de que el botón haya desaparecido). Pasa solo en el Perfil de jugador — en el modal de "ronda bajo par" no pasa porque ese modal no tiene una tarjeta que llegue hasta la esquina.
+
+Buscá:
+```css
+.ronda-modal-close{
+  position:absolute;top:10px;right:10px;background:var(--white);border:none;
+  width:32px;height:32px;border-radius:50%;font-size:20px;color:var(--navy);
+  cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 1px 4px rgba(0,35,75,.18);
+}
+```
+Reemplazalo por (agrega una sola línea, `z-index:5;`, que obliga al botón a dibujarse siempre por encima de cualquier tarjeta que tenga debajo):
+```css
+.ronda-modal-close{
+  position:absolute;top:10px;right:10px;background:var(--white);border:none;
+  width:32px;height:32px;border-radius:50%;font-size:20px;color:var(--navy);
+  cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 1px 4px rgba(0,35,75,.18);
+  z-index:5;
+}
+```
+
+### Qué NO cambia
+
+- Ninguna función de JavaScript se toca — las 3 partes son puramente CSS.
+- `var(--g1)` ya existe como variable de color en la app (gris clarito) — no se crea ningún color nuevo.
+- El `onclick` de cada botón de cerrar no cambia — solo se agrega la propiedad `z-index`.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 72
+
+1. En la Tabla de Posiciones, ¿el encabezado (POS, JUGADOR, PTS...) ahora se distingue con un fondo gris clarito, separado de las filas blancas de abajo?
+2. En Historia → Ranking Campeones, ¿el encabezado de la tabla ahora tiene el mismo tratamiento (fondo gris clarito) y ya no se ve una franja gris "suelta" detrás del título?
+3. Abrí el Perfil de un jugador (Historia → Perfiles). ¿Ahora se ve claramente el círculo blanco con la "X" en la esquina superior derecha, sin que la tarjeta de la foto lo tape?
+4. Por las dudas, abrí también el modal de "ronda bajo par" — ¿la X ahí se sigue viendo bien como antes?
+5. Hash y mensaje del commit.
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 72
+
+1. **¿El encabezado de la Tabla de Posiciones se distingue con fondo gris clarito?** Sí. Se cambió `background:#fff` a `background:var(--g1)` en la regla base `.pga thead th`. También se actualizaron las 4 reglas de sticky columns del header (`.pga thead th.lb-col-pos/mov/name/num:nth-child(4)`) de `#fff` a `var(--g1)` — sin esos cambios, esas celdas habrían sobreescrito la regla base y seguido blancas mientras el resto del header era gris.
+
+2. **¿El encabezado del Ranking Campeones ahora tiene fondo gris clarito?** Sí. Se agregó `background:var(--g1);` a la regla `.hist-rank-table th` — el mismo gris que la Parte A, criterio visual consistente.
+
+3. **¿La "X" del Perfil de jugador se ve encima de la tarjeta de la foto?** Sí. Se agregó `z-index:5;` a `.ronda-modal-close` — el mismo valor que ya tienen las sticky columns del header, suficiente para quedar por encima de la tarjeta `.perf-hero` que la tapaba.
+
+4. **¿La X del modal de "ronda bajo par" sigue igual?** Sí. Ambas usan la clase `.ronda-modal-close` — el `z-index:5` aplica a las dos, y en el modal de ronda bajo par no hay ninguna tarjeta que compita, así que se sigue viendo igual que antes.
+
+5. **Hash y mensaje del commit:** `407d1eb` — `feat(tarea72): encabezados tabla posiciones y ranking con fondo gris clarito, X perfil visible`
+
+6. **¿Alguna ambigüedad?** Ninguna en las 3 partes. Detalle extra aplicado: las reglas de sticky columns del header también se actualizaron a `var(--g1)` para que no sobreescriban la regla base — el spec no lo mencionaba explícitamente pero era necesario para que el resultado fuera consistente.
+
+---
+
+## Tarea 73 — Ítem 1: pulir los "golpes vs. rival" en Live Scoring
+
+**Contexto para Code:** Archivo `index.html`, función `liveRenderGolpesBadges_` (la que arma, debajo del nombre y HCP de cada jugador en Live Scoring, un puntito de color por cada rival de match indicando si tiene golpes a favor o en contra). Dos ajustes puntuales, sin tocar el cálculo de golpes en sí (`liveGolpeVsRival_`, que queda intacto):
+
+1. **Si un jugador no tiene ninguna diferencia de golpes con un rival puntual (0 golpes), no mostrar nada para ese rival** — ni su apodo ni el puntito. Hoy se muestra igual, con un puntito gris y el símbolo "–", lo cual es ruido visual innecesario.
+2. **Orden dentro de cada badge:** primero el apodo del rival, después el puntito de color (hoy está al revés: puntito primero, apodo después).
+
+Buscá:
+```js
+  misMatches.forEach(function(m){
+    var rivalMat = (m.j1 === jug.matricula) ? m.j2 : m.j1;
+    var riv = jugMap[rivalMat];
+    if(!riv) return;
+    var g = liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx);
+    var nombreRival = formatPlayerLabel(riv.nombre || riv.apodo || '');
+    var cls = g > 0 ? 'golpe-favor' : (g < 0 ? 'golpe-contra' : 'golpe-neutral');
+    var simbolo = g === 0 ? '–' : '●';
+    html += '<span class="golpe-badge"><span class="golpe-dot ' + cls + '">' + simbolo + '</span><span class="golpe-nombre">' + nombreRival + '</span></span>';
+  });
+```
+Reemplazalo por:
+```js
+  misMatches.forEach(function(m){
+    var rivalMat = (m.j1 === jug.matricula) ? m.j2 : m.j1;
+    var riv = jugMap[rivalMat];
+    if(!riv) return;
+    var g = liveGolpeVsRival_(jug.hcpJuego, riv.hcpJuego, hoyoIdx);
+    if(g === 0) return; // sin diferencia de golpes con este rival: no mostrar nada
+    var nombreRival = formatPlayerLabel(riv.nombre || riv.apodo || '');
+    var cls = g > 0 ? 'golpe-favor' : 'golpe-contra';
+    html += '<span class="golpe-badge"><span class="golpe-nombre">' + nombreRival + '</span><span class="golpe-dot ' + cls + '">●</span></span>';
+  });
+```
+
+Notá que como ahora nunca se llega al caso `g === 0` dentro del `forEach` (se corta antes con el `return`), la clase `golpe-neutral` y el símbolo "–" dejan de usarse — está bien, no hace falta borrar la regla CSS `.golpe-dot.golpe-neutral{color:var(--g4);}`, simplemente queda sin uso (no rompe nada dejarla).
+
+### Qué NO cambia
+
+- `liveGolpeVsRival_` (el cálculo de golpes de diferencia en sí) no se toca — sigue devolviendo lo mismo que antes.
+- Si un jugador no tiene NINGÚN rival con diferencia de golpes, ya no se muestra ningún badge — la función puede devolver un `<div class="live-golpes-row"></div>' vacío, que no ocupa espacio visible (comportamiento normal de un div vacío, sin necesidad de un chequeo extra).
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 73
+
+1. Buscá (o simulá) un jugador que tenga 1 o más golpes de diferencia con uno de sus rivales y 0 con el otro. ¿Aparece el badge solo para el rival con diferencia, y no aparece nada (ni apodo ni puntito) para el rival sin diferencia?
+2. En el badge que sí aparece, ¿el orden ahora es "Apodo" primero y el puntito de color después (al revés que antes)?
+3. ¿El apodo del rival se sigue viendo en negro/oscuro y el puntito con su color (verde a favor, rojo en contra) como ya estaba?
+4. Hash y mensaje del commit.
+5. ¿Alguna duda o algo ambiguo de la consigna?
+
+---
+
+## Tarea 74 — Ítem 9: foto de perfil más grande + recorte manual al subir
+
+**Contexto para Code:** Archivo `index.html`. Dos problemas hoy con la foto de perfil:
+
+1. **El círculo es chico** (90px en escritorio, 72px en celular) y además el ícono de la cámara (el aviso "tocá para cambiar la foto") es una franja que tapa la parte de abajo de la cara en la foto.
+2. **El recorte es automático y no se puede ajustar**: hoy, al elegir una foto, el código automáticamente recorta un cuadrado del centro de la imagen sin dejarle al usuario mover ni acercar/alejar para elegir qué parte de la foto usar — si la cara no queda centrada en la foto original, sale mal encuadrada y no hay forma de corregirlo.
+
+### PARTE A — Círculo más grande + ícono de cámara como insignia (no como franja)
+
+Buscá:
+```css
+.perf-hero-photo{
+  position:relative;
+  width:90px;
+  height:90px;
+  border-radius:50%;
+  overflow:hidden;
+  flex-shrink:0;
+  border:2px solid var(--gold);
+  background:rgba(255,255,255,.05);
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+.perf-hero-photo.perf-foto-clickable{cursor:pointer;}
+.perf-foto-hint{position:absolute;bottom:0;left:0;width:100%;height:28px;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;pointer-events:none;}
+.perf-hero-photo.perf-foto-clickable:hover .perf-foto-hint{background:rgba(0,0,0,.78);}
+.perf-hero-photo.perf-foto-subiendo{opacity:.6;pointer-events:none;}
+```
+Reemplazalo por (círculo más grande, y el aviso de "tocá para cambiar" pasa de ser una franja horizontal a una insignia circular chica en la esquina inferior derecha, que no tapa la cara):
+```css
+.perf-hero-photo{
+  position:relative;
+  width:116px;
+  height:116px;
+  border-radius:50%;
+  overflow:hidden;
+  flex-shrink:0;
+  border:2px solid var(--gold);
+  background:rgba(255,255,255,.05);
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+.perf-hero-photo.perf-foto-clickable{cursor:pointer;}
+.perf-foto-hint{position:absolute;bottom:2px;right:2px;width:30px;height:30px;border-radius:50%;background:rgba(0,35,75,.85);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.3);}
+.perf-hero-photo.perf-foto-clickable:hover .perf-foto-hint{background:var(--red);}
+.perf-hero-photo.perf-foto-subiendo{opacity:.6;pointer-events:none;}
+```
+
+Y en la media query de celular, buscá:
+```css
+  .perf-hero-photo{width:72px;height:72px;}
+```
+Reemplazala por:
+```css
+  .perf-hero-photo{width:96px;height:96px;}
+```
+
+### PARTE B — Recorte manual (mover y acercar/alejar antes de subir)
+
+Hoy `perfilFotoSeleccionada` llama directo a `perfilProcesarYSubirFoto_(file)`, que recorta el centro automáticamente y sube. Lo cambiamos por un paso intermedio: un modal simple donde la foto elegida se ve grande dentro de un círculo, el usuario puede **arrastrar** la imagen para centrarla y usar un **control deslizante para acercar/alejar** (zoom), y recién al tocar "Usar esta foto" se recorta con esos ajustes y se sube — igual que como se recorta la foto de perfil en Instagram o WhatsApp.
+
+Buscá:
+```js
+function perfilFotoSeleccionada(ev) {
+  var file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { alert('Elegí un archivo de imagen (JPG o PNG).'); return; }
+  if (file.size > 20 * 1024 * 1024) { alert('La imagen es demasiado pesada (máx. 20MB).'); return; }
+  perfilProcesarYSubirFoto_(file);
+}
+function perfilProcesarYSubirFoto_(file) {
+  var wrapper = document.getElementById('perf-photo-wrapper');
+  if (wrapper) wrapper.classList.add('perf-foto-subiendo');
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var size = Math.min(img.width, img.height);
+      var sx = (img.width - size) / 2;
+      var sy = (img.height - size) / 2;
+      var target = 500;
+      var canvas = document.createElement('canvas');
+      canvas.width = target; canvas.height = target;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, sx, sy, size, size, 0, 0, target, target);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      var base64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
+      perfilSubirFotoAlServidor_(base64, 'image/jpeg');
+    };
+    img.onerror = function() {
+      if (wrapper) wrapper.classList.remove('perf-foto-subiendo');
+      alert('No se pudo leer la imagen. Probá con otra foto.');
+    };
+    img.src = e.target.result;
+  };
+  reader.onerror = function() {
+    if (wrapper) wrapper.classList.remove('perf-foto-subiendo');
+    alert('No se pudo leer el archivo.');
+  };
+  reader.readAsDataURL(file);
+}
+```
+Reemplazalo por:
+```js
+var PERF_CROP_IMG = null;      // Image cargada, pendiente de recortar
+var PERF_CROP_SCALE = 1;       // zoom actual (1 = foto ajustada al círculo)
+var PERF_CROP_MINSCALE = 1;    // zoom mínimo (foto cubre todo el círculo)
+var PERF_CROP_OFFX = 0;        // desplazamiento actual en px (sobre el canvas de preview)
+var PERF_CROP_OFFY = 0;
+var PERF_CROP_SIZE = 280;      // tamaño del canvas de preview (cuadrado)
+var PERF_CROP_DRAG = null;     // {startX, startY, offX, offY} mientras se arrastra
+
+function perfilFotoSeleccionada(ev) {
+  var file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { alert('Elegí un archivo de imagen (JPG o PNG).'); return; }
+  if (file.size > 20 * 1024 * 1024) { alert('La imagen es demasiado pesada (máx. 20MB).'); return; }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() { perfilAbrirModalRecorte_(img); };
+    img.onerror = function() { alert('No se pudo leer la imagen. Probá con otra foto.'); };
+    img.src = e.target.result;
+  };
+  reader.onerror = function() { alert('No se pudo leer el archivo.'); };
+  reader.readAsDataURL(file);
+}
+
+function perfilAbrirModalRecorte_(img) {
+  PERF_CROP_IMG = img;
+  PERF_CROP_MINSCALE = 1;
+  PERF_CROP_SCALE = 1;
+  PERF_CROP_OFFX = 0;
+  PERF_CROP_OFFY = 0;
+  var html =
+    '<div class="perf-crop-wrap">' +
+      '<div class="perf-crop-circle" id="perf-crop-circle">' +
+        '<canvas id="perf-crop-canvas" width="' + PERF_CROP_SIZE + '" height="' + PERF_CROP_SIZE + '"></canvas>' +
+      '</div>' +
+      '<div class="s dim" style="text-align:center;margin:10px 0 4px;">Arrastrá para mover · usá el control para acercar</div>' +
+      '<input type="range" id="perf-crop-zoom" min="100" max="300" value="100" style="width:100%;margin:8px 0 16px;" oninput="perfilCropZoomCambio_(this.value)">' +
+      '<button class="adm-btn-primary" style="width:100%;" onclick="perfilCropConfirmar_()">Usar esta foto</button>' +
+    '</div>';
+  openFloatingModal(html);
+  setTimeout(perfilCropInit_, 20); // esperar a que el modal termine de insertarse en el DOM
+}
+
+function perfilCropInit_() {
+  var canvas = document.getElementById('perf-crop-canvas');
+  if (!canvas || !PERF_CROP_IMG) return;
+  var img = PERF_CROP_IMG;
+  // Escala mínima: la foto cubre todo el círculo sin dejar bordes vacíos.
+  PERF_CROP_MINSCALE = PERF_CROP_SIZE / Math.min(img.width, img.height);
+  PERF_CROP_SCALE = PERF_CROP_MINSCALE;
+  PERF_CROP_OFFX = 0;
+  PERF_CROP_OFFY = 0;
+  perfilCropRedibujar_();
+
+  var dragging = false, startX = 0, startY = 0, startOffX = 0, startOffY = 0;
+  function pos(ev) {
+    var t = (ev.touches && ev.touches[0]) || ev;
+    return { x: t.clientX, y: t.clientY };
+  }
+  function down(ev) {
+    dragging = true;
+    var p = pos(ev);
+    startX = p.x; startY = p.y;
+    startOffX = PERF_CROP_OFFX; startOffY = PERF_CROP_OFFY;
+  }
+  function move(ev) {
+    if (!dragging) return;
+    ev.preventDefault();
+    var p = pos(ev);
+    PERF_CROP_OFFX = startOffX + (p.x - startX);
+    PERF_CROP_OFFY = startOffY + (p.y - startY);
+    perfilCropRedibujar_();
+  }
+  function up() { dragging = false; }
+  canvas.onmousedown = down; canvas.ontouchstart = down;
+  window.onmousemove = move; canvas.ontouchmove = move;
+  window.onmouseup = up; canvas.ontouchend = up;
+}
+
+function perfilCropZoomCambio_(val) {
+  PERF_CROP_SCALE = PERF_CROP_MINSCALE * (parseInt(val) / 100);
+  perfilCropRedibujar_();
+}
+
+function perfilCropRedibujar_() {
+  var canvas = document.getElementById('perf-crop-canvas');
+  if (!canvas || !PERF_CROP_IMG) return;
+  var ctx = canvas.getContext('2d');
+  var img = PERF_CROP_IMG;
+  var w = img.width * PERF_CROP_SCALE;
+  var h = img.height * PERF_CROP_SCALE;
+  // Límite de arrastre: no dejar bordes vacíos dentro del círculo.
+  var maxOffX = Math.max(0, (w - PERF_CROP_SIZE) / 2);
+  var maxOffY = Math.max(0, (h - PERF_CROP_SIZE) / 2);
+  PERF_CROP_OFFX = Math.max(-maxOffX, Math.min(maxOffX, PERF_CROP_OFFX));
+  PERF_CROP_OFFY = Math.max(-maxOffY, Math.min(maxOffY, PERF_CROP_OFFY));
+  ctx.clearRect(0, 0, PERF_CROP_SIZE, PERF_CROP_SIZE);
+  var x = (PERF_CROP_SIZE - w) / 2 + PERF_CROP_OFFX;
+  var y = (PERF_CROP_SIZE - h) / 2 + PERF_CROP_OFFY;
+  ctx.drawImage(img, x, y, w, h);
+}
+
+function perfilCropConfirmar_() {
+  var img = PERF_CROP_IMG;
+  if (!img) return;
+  var wrapper = document.getElementById('perf-photo-wrapper');
+  closeFloatingModal();
+  if (wrapper) wrapper.classList.add('perf-foto-subiendo');
+  // Recorte final a resolución fija (500x500), usando la misma escala/offset del preview.
+  var target = 500;
+  var factor = target / PERF_CROP_SIZE;
+  var w = img.width * PERF_CROP_SCALE * factor;
+  var h = img.height * PERF_CROP_SCALE * factor;
+  var x = (target - w) / 2 + PERF_CROP_OFFX * factor;
+  var y = (target - h) / 2 + PERF_CROP_OFFY * factor;
+  var canvas = document.createElement('canvas');
+  canvas.width = target; canvas.height = target;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(img, x, y, w, h);
+  var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  var base64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
+  perfilSubirFotoAlServidor_(base64, 'image/jpeg');
+}
+```
+
+Y agregá este CSS nuevo (por ejemplo cerca de `.perf-hero-photo`):
+```css
+.perf-crop-wrap{padding:4px 2px;}
+.perf-crop-circle{width:280px;height:280px;max-width:100%;margin:0 auto;border-radius:50%;overflow:hidden;background:var(--g1);box-shadow:0 0 0 3px var(--gold);touch-action:none;}
+.perf-crop-circle canvas{display:block;cursor:grab;}
+```
+
+**Nota técnica para vos, Code:** `perfilProcesarYSubirFoto_` deja de usarse (queda reemplazada por `perfilCropConfirmar_`) — está bien borrarla si ya no queda ninguna referencia, o dejarla sin uso, lo que prefieras. `perfilSubirFotoAlServidor_` (la función que efectivamente sube la foto al backend) no se toca, se seguía llamando igual que antes, solo que ahora recibe el recorte elegido por el usuario en vez del recorte automático.
+
+### Qué NO cambia
+
+- El backend (`subirFoto_` en `11_Fotos.gs`) no se toca — sigue recibiendo un JPG base64 de 500×500, igual que antes.
+- `perfilSubirFotoAlServidor_` y todo lo que pasa después de subir la foto (actualizar sesión, avatares, etc.) no cambia.
+- El límite de 20MB y la validación de que sea una imagen siguen igual.
+- No hay cambios de backend nuevos. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 74
+
+1. En el Perfil propio, ¿el círculo de la foto ahora se ve más grande que antes?
+2. ¿El aviso de "tocar para cambiar la foto" ahora es una insignia chica (con ícono de cámara) en la esquina inferior derecha del círculo, en vez de una franja que tapa parte de la foto?
+3. Al tocar el círculo para cambiar la foto y elegir una imagen, ¿se abre una ventana con la foto dentro de un círculo, un control para acercar/alejar, y un botón "Usar esta foto"?
+4. ¿Se puede arrastrar la foto dentro del círculo para centrar la parte que se quiere usar?
+5. ¿El control de acercar/alejar funciona sin dejar bordes vacíos (blancos) dentro del círculo?
+6. Al tocar "Usar esta foto", ¿se sube correctamente y se ve reflejada de inmediato en el perfil, igual que antes?
+7. Hash y mensaje del commit.
+8. ¿Alguna duda o algo ambiguo de la consigna?
+
+---
+
+## Tarea 75 — Investigar y corregir: al cambiar el HCP de un jugador en Gestionar Fechas no se aplica el 85% (ítem 21)
+
+**Contexto para Code:** Esta es una tarea de investigación + arreglo, no tengo el diagnóstico 100% cerrado como en las tareas anteriores — necesito que la investigues vos con el código real y las planillas.
+
+**Lo que reporta Marco:** en Gestionar Fechas, cuando el admin le cambia el HCP a un jugador (pantalla de editar tarjeta, campo "HCP de juego", `admTarjetaGuardar()` en `index.html`, que llama a la acción `cargarTarjeta` → `cargarTarjeta_()` en `04_Writes.gs`), el resultado de Match Play y Stableford para ese jugador no aplica el 85% sobre el HCP — usa directamente el número que el admin escribió.
+
+**Lo que encontré leyendo el código (y por qué no cierra del todo):** en `cargarTarjeta_()`, tanto el cálculo de Stableford (`calcStbBreakdown_`) como el de Match Play (más abajo en la misma función, usando `stbBreak.e` y `oppHcp85 = Math.round(oppHcpNum * 0.85)`) sí multiplican por 0.85 antes de calcular — este es el mismo camino que usa la firma normal de tarjeta desde Live Scoring, donde el 85% sí funciona bien. En el papel, este código debería aplicar el 85% también cuando lo guarda el admin desde Gestionar Fechas, porque es la misma función. Por eso necesito que lo pruebes en la práctica, no solo leyendo el código:
+
+1. Elegí una fecha de prueba (o pedime que te indique una) donde puedas cambiarle el HCP a un jugador desde Gestionar Fechas → Editar Tarjeta.
+2. Guardá con un HCP de juego distinto al que tenía antes (anotá el valor que pusiste).
+3. Revisá en la planilla STB (columna E, "HCP al 85%") y en la planilla MATCH (los golpes de diferencia usados para el resultado) si el valor que quedó guardado es el HCP que escribiste multiplicado por 0.85 (redondeado), o si quedó el HCP tal cual lo escribiste, sin el 85%.
+4. Si confirmás que el 85% NO se está aplicando, buscá la causa real (puede ser que exista otro lugar del código, distinto al que yo encontré, que sobrescriba ese cálculo después — por ejemplo algo relacionado a `recalcularHcpFecha` o a cómo se lee el HCP para mostrar el resultado en el Match — revisalo) y corregila ahí.
+5. Si en cambio confirmás que el 85% SÍ se aplica correctamente y no encontrás el bug, decímelo con el detalle de qué probaste — puede ser que el problema esté en otro flujo distinto al que ambos pensamos (por ejemplo, en cómo se ve reflejado el cambio en el Leaderboard o en la pantalla de "Fecha jugada", sin que el cálculo en sí esté mal). No hace falta commit si no hay nada para corregir, pero sí quiero el detalle de la prueba que hiciste.
+
+### ❓ Preguntas de verificación — Tarea 75
+
+1. ¿Qué prueba concreta hiciste (fecha, jugador, HCP anterior, HCP nuevo que escribiste)?
+2. ¿Qué valor quedó guardado en la planilla STB (columna E) para ese jugador después de guardar?
+3. ¿El resultado de Match Play de ese jugador usó el HCP con el 85% aplicado, o el HCP tal cual se escribió?
+4. Si encontraste la causa del bug: ¿dónde estaba exactamente, y qué cambiaste para corregirla?
+5. Si NO encontraste ningún bug (el 85% se aplica bien): ¿qué me recomendás revisar con Marco para entender mejor qué fue lo que vio?
+6. Hash y mensaje del commit (si hiciste algún cambio).
+7. ¿Este archivo modificado (si lo hay) es `.gs`? Si es así, recordame avisarle a Marco que necesita hacer el deploy manual en Apps Script.
+
+---
+
+## Tarea 76 — Ítem 6: botones "Volver" y "Actualizar" como íconos chicos y consistentes
+
+**Definición de Marco:** se quedan donde están hoy (dentro de cada tarjeta/sección, no se agrega ninguna barra nueva), pero pasan a ser solo el ícono (sin la palabra al lado) y con un estilo chico, circular y consistente en toda la app — hoy cada uno es una píldora con texto, de tamaños ligeramente distintos según la pantalla.
+
+**Contexto para Code:** Archivo `index.html`. Hay 3 partes — cubre los 2 estilos compartidos (`.btn-back` para "Volver", que se usa en ~11 pantallas distintas, y `.lb-refresh` para "Actualizar", que se usa en 4) más un botón suelto con estilo propio (`.fecha-refresh-btn` en la pantalla de Fecha jugada). Como `.btn-back` y `.lb-refresh` son clases CSS compartidas, con cambiar la definición una sola vez alcanza para todas las pantallas que las usan — no hace falta tocar cada pantalla por separado.
+
+### PARTE A — Botón "← Volver" → ícono circular
+
+Buscá:
+```css
+.btn-back{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.05em;color:var(--g4);background:none;border:1px solid var(--g3);border-radius:999px;padding:7px 14px;cursor:pointer;transition:.12s;}
+.btn-back:hover{border-color:var(--navy);color:var(--navy);}
+.btn-back:active{transform:scale(.95);}
+.adm-card-hdr .btn-back{color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.25);}
+.adm-card-hdr .btn-back:hover{color:#fff;border-color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);}
+```
+Reemplazalo por:
+```css
+.btn-back{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--g4);background:var(--white);border:1px solid var(--g3);border-radius:50%;width:34px;height:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:.12s;box-shadow:0 1px 3px rgba(0,35,75,.1);}
+.btn-back:hover{border-color:var(--navy);color:var(--navy);}
+.btn-back:active{transform:scale(.9);}
+.adm-card-hdr .btn-back{color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.08);}
+.adm-card-hdr .btn-back:hover{color:#fff;border-color:rgba(255,255,255,.7);background:rgba(255,255,255,.16);}
+```
+
+Después, buscá todas las apariciones del texto `← Volver` (aparece muchas veces, siempre dentro de un `<button class="btn-back" ...>`) y reemplazalas TODAS (`replace_all: true`) por `←` (sin la palabra "Volver" — el ícono solo ya es suficientemente claro, es una flecha hacia atrás).
+
+### PARTE B — Botón "↻ Actualizar" (el compartido, `.lb-refresh`) → ícono circular
+
+Buscá:
+```css
+.lb-refresh{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;color:var(--g4);cursor:pointer;padding:5px 14px;border:1px solid var(--g3);border-radius:999px;background:none;transition:.12s;}
+.lb-refresh:hover{color:var(--navy);border-color:var(--navy);}
+.lb-refresh:active{transform:scale(.95);}
+```
+Reemplazalo por:
+```css
+.lb-refresh{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:600;color:var(--g4);cursor:pointer;width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--g3);border-radius:50%;background:var(--white);box-shadow:0 1px 3px rgba(0,35,75,.1);transition:.12s;}
+.lb-refresh:hover{color:var(--navy);border-color:var(--navy);}
+.lb-refresh:active{transform:scale(.9);}
+```
+
+Después, buscá todas las apariciones del texto `↻ Actualizar` que estén dentro de un `<button class="lb-refresh" ...>` (hay 4) y reemplazalas TODAS por `↻` (sin la palabra). **Ojo:** no toques los botones de "↻ Reintentar" que aparecen en pantallas de error — esos tienen otro texto distinto y no forman parte de este cambio.
+
+### PARTE C — Botón "↻ Actualizar" propio de la pantalla "Fecha jugada" (`fecha-refresh-btn`)
+
+Este botón no usa la clase `.lb-refresh` — tiene su propio estilo en línea, dentro de la función `renderFechaDinamica`. Buscá:
+```
+      '<button class="fecha-refresh-btn" onclick="refreshFecha(' + fechaNum + ')" style="' +
+        'background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:999px;' +
+        'padding:3px 14px;font-size:11px;font-weight:700;' +
+        'font-family:\'Barlow Condensed\',sans-serif;' +
+        'color:#fff;cursor:pointer;letter-spacing:.06em;' +
+      '">↻ Actualizar</button>' +
+```
+Reemplazalo por:
+```
+      '<button class="fecha-refresh-btn" onclick="refreshFecha(' + fechaNum + ')" title="Actualizar" style="' +
+        'background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:50%;' +
+        'width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;' +
+        'font-size:15px;font-weight:700;' +
+        'font-family:\'Barlow Condensed\',sans-serif;' +
+        'color:#fff;cursor:pointer;' +
+      '">↻</button>' +
+```
+
+### Qué NO cambia
+
+- Ningún `onclick` cambia — los botones siguen disparando exactamente las mismas funciones que antes, solo cambia cómo se ven.
+- La lógica de qué pantalla se muestra al volver, o qué se recarga al actualizar, no se toca.
+- Los botones "↻ Reintentar" de las pantallas de error quedan como están — no forman parte de este cambio.
+- No hay cambios de backend. Se publica solo en GitHub Pages.
+
+### ❓ Preguntas de verificación — Tarea 76
+
+1. Elegí 3 o 4 pantallas distintas que tengan botón "Volver" (por ejemplo Mi Tarjeta, Gestionar Fechas, el Perfil de Admin). ¿En todas se ve ahora como un círculo chico con solo la flecha "←", sin la palabra "Volver"?
+2. En Posiciones, Historia y Match, ¿el botón "Actualizar" ahora es un círculo chico con solo "↻", sin la palabra "Actualizar"?
+3. En la pantalla de una Fecha jugada (dentro de "Resultados Fecha X"), ¿el botón de actualizar ahí también quedó como círculo chico con solo el ícono?
+4. ¿Los botones "↻ Reintentar" que aparecen cuando falla la conexión siguen mostrando el texto completo, sin cambios?
+5. ¿Los botones siguen funcionando igual que antes (Volver te lleva a la pantalla anterior, Actualizar recarga los datos)?
+6. Hash y mensaje del commit.
+7. ¿Alguna duda o algo ambiguo de la consigna?
+
+---
+
+## En pausa por decisión de Marco (ítems 7 y 23)
+
+- **Ítem 7** — "Sección Admin, botones igual que en la app de POP." **En pausa** (8/9/2026) — Marco pidió no darle bola por ahora. Si se retoma, hace falta una captura de esa app para poder replicar el estilo.
+- **Ítem 23** — "Anotación online para cada fecha." **En pausa** (8/9/2026) — Marco decidió no hacerlo por ahora. Queda anotado por si se retoma más adelante.
