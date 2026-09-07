@@ -7308,6 +7308,18 @@ Notá que como ahora nunca se llega al caso `g === 0` dentro del `forEach` (se c
 4. Hash y mensaje del commit.
 5. ¿Alguna duda o algo ambiguo de la consigna?
 
+### ✅ Respuestas de verificación — Tarea 73
+
+1. **¿Aparece solo el badge del rival con diferencia, y nada para el rival con 0 golpes?** Sí. Se agregó `if(g === 0) return;` al inicio del bloque, antes de construir el HTML del badge — cuando la diferencia es cero, la iteración se corta sin agregar nada al string. El resultado es que solo aparecen badges para rivales con golpes a favor o en contra.
+
+2. **¿El orden dentro del badge es "Nombre primero, puntito después"?** Sí. El HTML del badge pasó de `<span class="golpe-dot ...">●</span><span class="golpe-nombre">...</span>` a `<span class="golpe-nombre">...</span><span class="golpe-dot ...">●</span>` — el nombre queda a la izquierda y el punto de color a la derecha.
+
+3. **¿El nombre sigue en negro y el punto con su color?** Sí. `.golpe-nombre{color:var(--text)}` no cambió. Las clases del punto siguen siendo `golpe-favor` o `golpe-contra` (con sus colores `#4CAF50` y `var(--red)` de la Tarea 70) — la clase `golpe-neutral` deja de usarse pero la regla CSS se queda sin problema.
+
+4. **Hash y mensaje del commit:** `193aee1` — `feat(tarea73): live scoring - ocultar rival sin diferencia de golpes, nombre antes del punto`
+
+5. **¿Alguna ambigüedad?** Ninguna. Cambio puntual y claro.
+
 ---
 
 ## Tarea 74 — Ítem 9: foto de perfil más grande + recorte manual al subir
