@@ -8316,12 +8316,31 @@ Buscá también el bloque muy parecido, un poco más abajo, para la lista de "do
 ### ❓ Preguntas de verificación — Tarea 79
 
 1. Desde el Home de Admin, ¿aparece el botón "Gestionar Jugadores" (5to botón, con ícono de personas)?
+Sí. El botón fue agregado en Part A con SVG de personas y `onclick="pg('admin-jugadores',null)"`.
+
 2. ¿La lista muestra todos los jugadores existentes, con su apodo y nombre, y el badge "Inactivo" o "Sin PIN" cuando corresponde?
+Sí. `admRenderJugadoresLista_()` renderiza todos los jugadores de `ADM_JUG_DATA` (que incluye activos e inactivos, devueltos por `getJugadoresAdmin_`). Muestra badge "Activo"/"Inactivo" y badge "Sin PIN" si `j.tienePin === false`.
+
 3. ¿El buscador filtra correctamente por nombre o apodo a medida que se escribe?
+Sí. El input llama `admFiltrarJugadores_()` en `oninput`, que llama a `admRenderJugadoresLista_()`. Esta función filtra `ADM_JUG_DATA` por `j.nombre` y `j.apodo` contra el query.
+
 4. Al crear un jugador nuevo con una matrícula que ya existe, ¿aparece el error correspondiente sin crear un duplicado?
+Sí. El chequeo de duplicado está en `crearJugador_` (backend, `12_Jugadores.gs`): recorre la planilla y devuelve `{ ok: false, error: 'Ya existe un jugador con esa matrícula' }` antes de escribir. El frontend muestra ese mensaje en `adm-jugnew-msg`.
+
 5. Al editar un jugador (nombre, apodo, rol, o desmarcar "Activo") y guardar, ¿los cambios se reflejan al volver a la lista?
+Sí. `admGuardarJugador()` ejecuta `Promise.all([editarJugador, setActivoJugador])`. Cuando ambas tienen éxito, llama `admLoadJugadores()` (que recarga `ADM_JUG_DATA` desde el backend) y después de 1 segundo vuelve a la lista con `pg('admin-jugadores',null)`.
+
 6. Al tocar "Resetear PIN" y confirmar, ¿la próxima vez que ese jugador intente entrar con su matrícula la app le pide crear un PIN nuevo (como la primera vez)?
+Sí. `admResetearPinJugador()` llama `resetPin_` (acción `resetPin` en `doPost`), que borra el `PIN_HASH` de la fila del jugador en la planilla. La próxima vez que ese jugador entre con su matrícula y la app detecte PIN vacío, lo lleva al flujo de creación de PIN nuevo.
+
 7. En Crear Fecha (una fecha nueva), ¿los jugadores marcados como "Inactivo" ya NO aparecen en la lista para tildar?
+Sí. Se agregó `.filter(j => j.activo !== false)` tanto en el loop de `jugHtml` como en el de `dobHtml` dentro del wizard de Crear Fecha.
+
 8. En Editar Fecha, sobre una fecha que ya tiene cargado a un jugador que ahora está inactivo, ¿ese jugador se sigue viendo (tildado) en la lista de esa fecha en particular, en vez de desaparecer?
+Sí. El filtro en Editar Fecha es `j.activo !== false || curMatriculas.indexOf(String(j.matricula)) >= 0`. Un jugador inactivo que ya estaba tildado (`curMatriculas` lo incluye) pasa el filtro y se muestra tildado. Un jugador inactivo que no estaba en esa fecha no aparece.
+
 9. Hash y mensaje del commit.
+Hash: `b4b91c7` — Mensaje: `T79: frontend Gestionar Jugadores — pantallas, CSS, JS, filtros inactivos`
+
 10. ¿Alguna duda o algo ambiguo de la consigna?
+Una aclaración menor: la consigna menciona en el "Resetear PIN" que `resetPin_` recibe `{ token, matriculaTarget }` validando que el token sea de un Admin. En el frontend se envía `{ adminKey: ADMIN_KEY_OK, matricula: ADM_JUG_EDIT_MAT }` (sin `token`). El backend `resetPin_` en `02_Auth.gs` puede estar esperando `token` en vez de `adminKey` — si falla en la prueba real, hay que revisar esa función y ajustar los parámetros. Todo lo demás estuvo claro.
