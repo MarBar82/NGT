@@ -6888,6 +6888,7 @@ function liveLoadStableford(){
         '<thead><tr style="border-bottom:2px solid var(--g2);font-size:11px;color:var(--g4);text-transform:uppercase;letter-spacing:.5px;">' +
         '<th style="padding:6px 8px;text-align:left;width:30px;">#</th>' +
         '<th style="padding:6px 8px;text-align:left;">Jugador</th>' +
+        '<th style="padding:6px 4px;text-align:center;width:52px;">HCP</th>' +
         '<th style="padding:6px 8px;text-align:right;">Puntos</th>' +
         '<th style="padding:6px 8px;text-align:right;min-width:40px;">Hoyo</th>' +
         '</tr></thead><tbody>';
@@ -6904,11 +6905,12 @@ function liveLoadStableford(){
           ' onclick="liveStbToggle(\'' + mat + '\')">' +
           '<td style="padding:8px 8px;font-size:13px;color:var(--g4);">' + posStr + '</td>' +
           '<td style="padding:8px 8px;font-size:15px;">' + p.apodo + '</td>' +
+          '<td style="padding:8px 4px;text-align:center;font-size:12px;color:var(--g4);white-space:nowrap;">' + (p.hcp !== null && p.hcp !== undefined ? p.hcp + '/' + hcp85(p.hcp) : '—') + '</td>' +
           '<td style="padding:8px 8px;text-align:right;font-size:18px;color:var(--navy);">' + (p.stbTotal !== null ? p.stbTotal : '–') + '</td>' +
           '<td style="padding:8px 8px;text-align:right;font-size:13px;color:var(--g4);">' + p.holesCargados + '</td>' +
         '</tr>' +
         '<tr id="stb-acc-' + mat + '" style="display:none;border-bottom:1px solid var(--border);">' +
-          '<td colspan="4" style="padding:8px;"><div class="stb-acc-box">' + scorecard + '</div></td>' +
+          '<td colspan="5" style="padding:8px;"><div class="stb-acc-box">' + scorecard + '</div></td>' +
         '</tr>';
       });
       html += '</tbody></table>';
