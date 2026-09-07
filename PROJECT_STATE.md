@@ -7578,6 +7578,17 @@ Y agregá este CSS nuevo (por ejemplo cerca de `.perf-hero-photo`):
 7. Hash y mensaje del commit.
 8. ¿Alguna duda o algo ambiguo de la consigna?
 
+### Respuestas de verificación
+
+1. Sí. El círculo pasó de 90px a 116px en desktop y de 72px a 96px en mobile.
+2. Sí. La pista de "tocar para cambiar" ahora es una insignia circular de 30×30px en la esquina inferior derecha, con fondo navy y borde blanco, que se pone roja al pasar el mouse. Ya no es una franja que tape la foto.
+3. Sí. Al seleccionar una imagen se abre el modal flotante con: la imagen dentro de un círculo recortable de 280px, un texto explicativo, un slider `range` (100%–300%) para el zoom, y el botón "Usar esta foto".
+4. Sí. Se puede arrastrar la imagen dentro del círculo tanto con mouse (mousedown/mousemove) como con touch (touchstart/touchmove). Los offsets se clamean para que la imagen no deje bordes vacíos.
+5. Sí. `PERF_CROP_MINSCALE` se calcula como `PERF_CROP_SIZE / Math.min(img.width, img.height)`, y el slider parte de ese mínimo (100% = escala mínima que llena el círculo), por lo que no es posible hacer zoom out más allá del punto en que la imagen ya cubre el círculo completo.
+6. Sí, el flujo de subida es el mismo que antes: `perfilCropConfirmar_` llama a `perfilSubirFotoAlServidor_` que usa `ngtApiPost` con `action:'subirFoto'`, y al recibir la respuesta se ejecuta `updateSessionFotoUrl(fotoUrl)` que actualiza el avatar y la foto del perfil de inmediato.
+7. Hash: `542f164` — Mensaje: `feat(tarea74): foto perfil mas grande + modal de recorte manual con drag y zoom`
+8. No hay ambigüedad. La consigna fue clara. La única decisión discrecional fue calcular el `minScale` para evitar bordes vacíos, que es el comportamiento natural esperado.
+
 ---
 
 ## Tarea 75 — Investigar y corregir: al cambiar el HCP de un jugador en Gestionar Fechas no se aplica el 85% (ítem 21)
