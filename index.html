@@ -7343,13 +7343,16 @@ function liveBonusSeleccionar(tipo, matricula){
     });
   }
   doBonus().catch(function(){
-    setTimeout(function(){
-      doBonus().catch(function(){
-        liveShowToast('Error al guardar ' + tipo.toUpperCase() + ' — avisá al admin');
-      });
-    }, 2000);
+    return new Promise(function(resolve){
+      setTimeout(function(){
+        doBonus().catch(function(){
+          liveShowToast('Error al guardar ' + tipo.toUpperCase() + ' — avisá al admin');
+        }).then(resolve);
+      }, 2000);
+    });
+  }).then(function(){
+    liveAutoAdvance();
   });
-  liveAutoAdvance();
 }
 
 

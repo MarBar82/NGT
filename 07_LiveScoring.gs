@@ -81,7 +81,7 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
                         && bonusEst.ba.lineaNum === lineaNum;
     playerMap[mat] = {
       hcp:             isNaN(hcp) ? 0 : hcp,
-      hcp85:           isNaN(hcp) ? 0 : hcp,
+      hcp85:           isNaN(hcp) ? 0 : Math.round(hcp * 0.85),
       scores:          scores,
       ld:              ldFromSheet || ldFromBonus,
       ba:              baFromSheet || baFromBonus,
@@ -436,33 +436,39 @@ function setBonusGanador_(params) {
       return { ok: false, error: 'No autorizado' };
   }
 
-  const props = PropertiesService.getDocumentProperties();
-  let metaAll;
-  try { metaAll = JSON.parse(props.getProperty('FECHA_META') || '{}'); } catch(e) { metaAll = {}; }
-  if (!metaAll[fStr]) metaAll[fStr] = {};
-  if (!metaAll[fStr].bonusEstado) metaAll[fStr].bonusEstado = {};
-  if (!metaAll[fStr].bonusReportes) metaAll[fStr].bonusReportes = {};
-  if (!metaAll[fStr].bonusReportes[tipoLower]) metaAll[fStr].bonusReportes[tipoLower] = {};
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const props = PropertiesService.getDocumentProperties();
+    let metaAll;
+    try { metaAll = JSON.parse(props.getProperty('FECHA_META') || '{}'); } catch(e) { metaAll = {}; }
+    if (!metaAll[fStr]) metaAll[fStr] = {};
+    if (!metaAll[fStr].bonusEstado) metaAll[fStr].bonusEstado = {};
+    if (!metaAll[fStr].bonusReportes) metaAll[fStr].bonusReportes = {};
+    if (!metaAll[fStr].bonusReportes[tipoLower]) metaAll[fStr].bonusReportes[tipoLower] = {};
 
-  let ganador = null;
-  if (matricula) {
-    const jugMap = {};
-    cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
-    const jug = jugMap[String(matricula)] || {};
-    ganador = {
-      matricula: String(matricula),
-      apodo: ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : matricula)) + '').toUpperCase(),
-      lineaNum: parseInt(lineaNum),
-    };
-    metaAll[fStr].bonusEstado[tipoLower] = { matricula: String(matricula), lineaNum: parseInt(lineaNum), timestamp: Date.now() };
+    let ganador = null;
+    if (matricula) {
+      const jugMap = {};
+      cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+      const jug = jugMap[String(matricula)] || {};
+      ganador = {
+        matricula: String(matricula),
+        apodo: ((jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : matricula)) + '').toUpperCase(),
+        lineaNum: parseInt(lineaNum),
+      };
+      metaAll[fStr].bonusEstado[tipoLower] = { matricula: String(matricula), lineaNum: parseInt(lineaNum), timestamp: Date.now() };
+    }
+
+    // Marcar que esta línea ya reportó para este tipo de bonus (haya ganador o "Nadie ganó")
+    metaAll[fStr].bonusReportes[tipoLower][String(parseInt(lineaNum))] = true;
+    props.setProperty('FECHA_META', JSON.stringify(metaAll));
+
+    audit_('SET_BONUS_GANADOR', reportaMat, { fecha, tipo, lineaNum, matricula });
+    return { ok: true, tipo, ganador, final: false };
+  } finally {
+    lock.releaseLock();
   }
-
-  // Marcar que esta línea ya reportó para este tipo de bonus (haya ganador o "Nadie ganó")
-  metaAll[fStr].bonusReportes[tipoLower][String(parseInt(lineaNum))] = true;
-  props.setProperty('FECHA_META', JSON.stringify(metaAll));
-
-  audit_('SET_BONUS_GANADOR', reportaMat, { fecha, tipo, lineaNum, matricula });
-  return { ok: true, tipo, ganador, final: false };
 }
 
 /**
