@@ -1023,6 +1023,51 @@ select.adm-input:disabled{opacity:.55;cursor:not-allowed;background-color:var(--
 .fca-pill.fca-pill-db{border-left-color:#c9a84c;}
 .fca-pill .fca-db-badge{font-size:9px;font-weight:800;color:#8a6d1a;background:#fdf3d8;border-radius:3px;padding:1px 4px;margin-left:4px;letter-spacing:.04em;}
 
+/* ── Gestionar Fecha: secciones sin card/header azul (Tarea 94) ── */
+.gf-section{margin-bottom:30px;}
+.gf-section-title{font-family:'Roboto Slab',serif;font-size:19px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.02em;padding-bottom:9px;margin-bottom:16px;border-bottom:3px solid var(--red);}
+.gf-hint{font-size:12px;color:var(--g4);margin-bottom:14px;line-height:1.5;}
+.gf-field{margin-bottom:18px;}
+.gf-label{display:block;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);margin-bottom:7px;}
+.gf-input{width:100%;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--navy);padding:13px 16px;border:1px solid var(--g3);border-radius:8px;background:var(--white);box-sizing:border-box;}
+.gf-input:focus{outline:none;border-color:var(--navy);}
+select.gf-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;padding-right:38px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a8780' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;background-size:14px 9px;}
+.gf-btn-primary{width:100%;background:var(--red);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:14px;border:none;border-radius:8px;cursor:pointer;transition:.12s;}
+.gf-btn-primary:hover{background:#a30c25;}
+.gf-rearmar-btn{appearance:none;-webkit-appearance:none;width:100%;background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:14px;border:none;border-radius:10px;cursor:pointer;margin:10px 0 4px;transition:.12s;}
+.gf-rearmar-btn:hover{background:#001d3f;}
+.gf-rearmar-btn:disabled{opacity:.5;cursor:not-allowed;}
+
+.gf-lin-linea{margin-bottom:20px;}
+.gf-lin-hdr{font-family:'Roboto Slab',serif;font-size:15px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;}
+.gf-lin-players{display:flex;flex-direction:column;gap:8px;}
+.gf-lin-pill{appearance:none;-webkit-appearance:none;margin:0;display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 16px;background:var(--white);border:1px solid var(--g1);border-radius:12px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+.gf-lin-pill:hover{background:var(--off);}
+.gf-lin-pill:active{background:var(--off);transform:scale(.98);}
+.gf-lin-pname{font-size:15px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--navy);}
+.gf-lin-phcp{font-size:13px;font-weight:700;color:var(--g5);white-space:nowrap;}
+.gf-lin-phcp .gf-lin-p85{font-weight:800;color:var(--red);}
+.gf-lin-db{font-size:10px;font-weight:800;color:#8a6d1a;background:#fdf3d8;border-radius:4px;padding:2px 6px;margin-left:6px;letter-spacing:.04em;}
+.gf-lin-pill-db{border-left:3px solid #c9a84c;}
+.gf-lin-pill-empty{justify-content:center;border:1.5px dashed var(--g3);background:var(--off);color:var(--g4);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;box-shadow:none;}
+.gf-lin-pill-empty:hover{background:var(--g1);}
+.adm-btn-danger-ghost{appearance:none;-webkit-appearance:none;width:100%;background:#fff;color:#c8102e;border:1px solid #c8102e;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.04em;padding:11px;border-radius:6px;cursor:pointer;transition:.12s;}
+.adm-btn-danger-ghost:hover{background:#fee;}
+.gf-tar-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+@media(max-width:380px){.gf-tar-grid{grid-template-columns:1fr;}}
+.gf-tar-pill{appearance:none;-webkit-appearance:none;margin:0;display:flex;flex-direction:column;gap:3px;width:100%;padding:12px 14px;background:var(--white);border:1px solid var(--g1);border-radius:12px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+.gf-tar-pill:hover{background:var(--off);}
+.gf-tar-pill:active{background:var(--off);transform:scale(.98);}
+.gf-tar-pname{font-size:14px;font-weight:800;letter-spacing:.02em;color:var(--navy);}
+.gf-tar-pstat{font-size:11px;font-weight:700;}
+.gf-jug-toggle{display:flex;align-items:center;padding:9px 14px;border:1.5px solid var(--g2);border-radius:20px;cursor:pointer;background:var(--white);transition:.12s;}
+.gf-jug-toggle input{position:absolute;opacity:0;width:1px;height:1px;margin:-1px;}
+.gf-jug-toggle span{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--text);}
+.gf-jug-toggle span .ap{font-weight:800;text-transform:uppercase;}
+.gf-jug-toggle:hover{border-color:var(--navy);}
+.gf-jug-toggle.on{background:var(--navy);border-color:var(--navy);}
+.gf-jug-toggle.on span{color:#fff;}
+
 @media(max-width:480px){
   .home-fecha-card{padding:18px 16px 14px;max-width:none;}
   .hfc-num{font-size:26px;}
@@ -2326,139 +2371,91 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       </div>
 
       <div id="edtab-panel-cancha">
-        <!-- DATOS: cancha / jugadores / dobles -->
-        <div class="adm-card" id="adm-edit-data-card">
-          <div class="adm-card-hdr">👥 Datos de la Fecha</div>
-          <div class="adm-card-body">
-            <div class="adm-row">
-              <div class="adm-field">
-                <label class="adm-label">Cancha</label>
-                <select id="adm-edit-cancha" class="adm-input" onchange="loadColoresCanchaEdit()"></select>
-              </div>
-            </div>
+        <div class="gf-section">
+          <div class="gf-section-title">Datos de la Fecha</div>
 
-            <div class="adm-row">
-              <div class="adm-field">
-                <label class="adm-label">Color de Salidas</label>
-                <select id="adm-edit-color-tee" class="adm-input">
-                  <option value="BLANCAS">Blancas (default)</option>
-                </select>
-                <div class="adm-hint" id="adm-edit-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
-              </div>
-            </div>
-
-            <label class="adm-label">Jugadores que disputan</label>
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-              <input type="text" id="adm-edit-jugs-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="filterAdmEditJugs()" style="flex:1;">
-              <span id="adm-edit-jugs-count" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--g4);white-space:nowrap;"></span>
-            </div>
-            <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
-
-            <div class="adm-row" style="margin-top:6px;">
-              <div class="adm-field">
-                <label class="adm-label">Hoyo de salida</label>
-                <select id="adm-edit-hoyo-salida" class="adm-input">
-                  <option value="1">Hoyo 1</option>
-                  <option value="10">Hoyo 10</option>
-                </select>
-              </div>
-            </div>
-
-            <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Datos</button>
-            <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
+          <div class="gf-field">
+            <label class="gf-label">Cancha</label>
+            <select id="adm-edit-cancha" class="gf-input" onchange="loadColoresCanchaEdit()"></select>
           </div>
+
+          <div class="gf-field">
+            <label class="gf-label">Color de Salidas</label>
+            <select id="adm-edit-color-tee" class="gf-input">
+              <option value="BLANCAS">Blancas (default)</option>
+            </select>
+            <div class="adm-hint" id="adm-edit-color-hint" style="font-size:11px;color:var(--g4);margin-top:5px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+          </div>
+
+          <div class="gf-field">
+            <label class="gf-label">Hoyo de salida</label>
+            <select id="adm-edit-hoyo-salida" class="gf-input">
+              <option value="1">Hoyo 1</option>
+              <option value="10">Hoyo 10</option>
+            </select>
+          </div>
+
+          <button class="gf-btn-primary" onclick="adminEditarFecha()" style="margin-top:8px;">Guardar Datos</button>
+          <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
         </div>
       </div>
 
       <div id="edtab-panel-jugadores" style="display:none;">
-        <!-- JUGADORES Y LÍNEAS -->
-        <div class="adm-card">
-          <div class="adm-card-hdr">👥 Jugadores y Líneas</div>
-          <div class="adm-card-body">
-            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Tocá un jugador para modificarle el HCP de juego o si suma doble en esta fecha.</div>
-            <div id="adm-jug-grid">Cargando...</div>
-            <div id="adm-jug-editor" style="display:none;margin-top:14px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;">
-              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;">
-                ✏ Editando: <span id="adm-jug-nombre"></span>
-              </div>
-              <div class="adm-row">
-                <div class="adm-field">
-                  <label class="adm-label">HCP de juego</label>
-                  <input type="number" id="adm-jug-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP">
-                </div>
-              </div>
-              <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px;">
-                <input type="checkbox" id="adm-jug-doble"> ✌ Suma doble en esta fecha
-              </label>
-              <div id="adm-jug-doble-hint" style="font-size:11px;color:var(--g4);margin-top:4px;display:none;"></div>
-              <div style="display:flex;gap:8px;margin-top:14px;">
-                <button class="adm-btn-primary" onclick="admLinGuardarEditor()" style="flex:2;">Guardar</button>
-                <button class="btn-cancel" onclick="admLinCerrarEditor()" style="flex:1;">Cancelar</button>
-              </div>
-              <div id="adm-jug-msg" class="adm-msg" style="display:none;"></div>
-            </div>
-          </div>
+        <div class="gf-section">
+          <div class="gf-section-title">Jugadores y Líneas</div>
+          <div class="gf-hint">Tocá un jugador para modificarle el HCP de juego o si suma doble en esta fecha. Tocá un casillero vacío para sumar a alguien. Para sacar a alguien de la línea, abrí su ficha y tocá "Sacar de la línea".</div>
+          <div id="adm-jug-grid">Cargando...</div>
+          <button class="gf-rearmar-btn" id="adm-armar-lineas-btn" onclick="admMostrarPrioridad()">↻ Rearmar líneas</button>
+          <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
         </div>
 
-        <!-- MATCHES -->
-        <div class="adm-card" id="adm-edit-matches-card">
-          <div class="adm-card-hdr">⚔ Matches de la Fecha</div>
-          <div class="adm-card-body">
-            <div id="adm-mgr-matches-list"></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
-              <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
-              <button class="adm-btn-secondary" id="adm-armar-lineas-btn" onclick="admMostrarPrioridad()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚡ Armar líneas</button>
-            </div>
-            <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
-            <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
-            <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
+        <div class="gf-section" id="adm-edit-matches-card">
+          <div class="gf-section-title">Matches de la Fecha</div>
+          <div id="adm-mgr-matches-list"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+            <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
           </div>
+          <button class="gf-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
+          <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
         </div>
       </div>
 
       <div id="edtab-panel-tarjetas" style="display:none;">
-        <!-- TARJETAS: editar por jugador -->
-        <div class="adm-card" id="adm-edit-tarjetas-card">
-          <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
-          <div class="adm-card-body">
-            <div id="adm-tar-list" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
-            <p class="s dim" style="margin-top:8px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);">Tocá un jugador para abrir su tarjeta y editar los golpes hoyo por hoyo.</p>
-          </div>
+        <div class="gf-section">
+          <div class="gf-section-title">Tarjetas de Jugadores</div>
+          <div class="gf-hint">Tocá un jugador para abrir su tarjeta y editar los golpes hoyo por hoyo.</div>
+          <div id="adm-tar-list" class="gf-tar-grid" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
         </div>
       </div>
 
       <div id="edtab-panel-bonus" style="display:none;">
-        <!-- LD / BA -->
-        <div class="adm-card" id="adm-edit-ldba-card">
-          <div class="adm-card-hdr">🏆 Long Drive / Best Approach</div>
-          <div class="adm-card-body">
-            <div class="adm-row">
-              <div class="adm-field">
-                <label class="adm-label">💪 Long Drive — Hoyo de bonus</label>
-                <select id="adm-bonus-hoyo-ld" class="adm-input"></select>
-              </div>
-              <div class="adm-field">
-                <label class="adm-label">🎯 Best Approach — Hoyo de bonus</label>
-                <select id="adm-bonus-hoyo-ba" class="adm-input"></select>
-              </div>
-            </div>
-            <button class="adm-btn-ghost" onclick="adminSetBonusHoyo()" style="margin-top:8px;">Cambiar hoyo de bonus</button>
-            <div id="adm-bonus-hoyo-msg" class="adm-msg" style="display:none;"></div>
-            <div style="font-size:11px;color:var(--g4);margin-top:8px;">Usá esto solo si nadie ganó en el hoyo original y decidiste jugarlo en otro hoyo. Al cambiar el hoyo se borra el seguimiento en vivo de ese bonus (arranca de cero en el hoyo nuevo).</div>
-
-            <div class="adm-row" style="margin-top:16px;">
-              <div class="adm-field">
-                <label class="adm-label">💪 Long Drive — Ganador</label>
-                <select id="adm-ldba-ld" class="adm-input"></select>
-              </div>
-              <div class="adm-field">
-                <label class="adm-label">🎯 Best Approach — Ganador</label>
-                <select id="adm-ldba-ba" class="adm-input"></select>
-              </div>
-            </div>
-            <button class="adm-btn-primary" onclick="adminSetBonusWinners()" style="margin-top:12px;">Guardar LD/BA</button>
-            <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
+        <div class="gf-section">
+          <div class="gf-section-title">Cambiar Hoyo de Bonus</div>
+          <div class="gf-hint">Usá esto solo si nadie ganó en el hoyo original y decidiste jugarlo en otro hoyo. Al cambiar el hoyo se borra el seguimiento en vivo de ese bonus (arranca de cero en el hoyo nuevo).</div>
+          <div class="gf-field">
+            <label class="gf-label">💪 Long Drive — Hoyo de bonus</label>
+            <select id="adm-bonus-hoyo-ld" class="gf-input"></select>
           </div>
+          <div class="gf-field">
+            <label class="gf-label">🎯 Best Approach — Hoyo de bonus</label>
+            <select id="adm-bonus-hoyo-ba" class="gf-input"></select>
+          </div>
+          <button class="gf-btn-primary" onclick="adminSetBonusHoyo()">Cambiar hoyo de bonus</button>
+          <div id="adm-bonus-hoyo-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+
+        <div class="gf-section">
+          <div class="gf-section-title">Ganadores</div>
+          <div class="gf-field">
+            <label class="gf-label">💪 Long Drive — Ganador</label>
+            <select id="adm-ldba-ld" class="gf-input"></select>
+          </div>
+          <div class="gf-field">
+            <label class="gf-label">🎯 Best Approach — Ganador</label>
+            <select id="adm-ldba-ba" class="gf-input"></select>
+          </div>
+          <button class="gf-btn-primary" onclick="adminSetBonusWinners()">Guardar Ganadores</button>
+          <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
         </div>
       </div>
 
@@ -3804,12 +3801,12 @@ function applyAdminResults_(jugadores, canchas, fechas, doblesDisponibles){
       let jugHtml = '';
       ADM_JUGADORES.filter(j => j.activo !== false).forEach(j => {
         const lbl = formatPlayerLabel(j.nombre);
-        jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
+        jugHtml += '<label class="gf-jug-toggle" for="jug-' + j.matricula + '"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '" onchange="this.closest(\'.gf-jug-toggle\').classList.toggle(\'on\', this.checked)"><span>' + lbl + '</span></label>';
       });
       jl.innerHTML = jugHtml;
       prevChecked.forEach(mat => {
         const el = document.getElementById('jug-' + mat);
-        if(el) el.checked = true;
+        if(el){ el.checked = true; const w = el.closest('.gf-jug-toggle'); if(w) w.classList.add('on'); }
       });
     }
 
@@ -4275,7 +4272,7 @@ function finalizarWizard(rFecha, rMatches, lineasParam){
   // Reset wizard
   setTimeout(function(){
     document.getElementById('adm-fecha').value = '';
-    document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
+    document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => { i.checked = false; const w = i.closest('.gf-jug-toggle'); if(w) w.classList.remove('on'); });
     WIZ_PASO1_DATA = null;
     wizResetWizardCompleto_();
     // Limpiar caches y refrescar home con la nueva fecha
@@ -5113,7 +5110,7 @@ function admArmarLineas(prioridades, seed){
   if(preview){ preview.style.display = 'none'; preview.innerHTML = ''; }
 
   ngtApiPost({ action: 'armarLineas', adminKey: ADMIN_KEY_OK, fecha: fecha, prioridades: prioridades, seed: seed }).then(r => {
-    if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar líneas'; }
+    if(btn){ btn.disabled = false; btn.textContent = '↻ Rearmar líneas'; }
     if(!r || !r.ok){
       alert('Error: ' + (r && r.error ? r.error : 'desconocido'));
       return;
@@ -5146,7 +5143,7 @@ function admArmarLineas(prioridades, seed){
       preview.style.display = 'block';
     }
   }).catch(e => {
-    if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar líneas'; }
+    if(btn){ btn.disabled = false; btn.textContent = '↻ Rearmar líneas'; }
     alert('Error de red: ' + e.message);
   });
 }
@@ -5221,6 +5218,8 @@ let ADM_LIN_DOBLE_DISPONIBLES = [];
 let ADM_LIN_DOBLE_ENFECHA = [];
 let ADM_LIN_EDIT_MAT = null;
 let ADM_LIN_EDIT_TARJETA = null;
+let ADM_LIN_PICKER_LINEA = null;
+let ADM_LIN_PICKER_SLOT = null;
 
 function loadAdmLineasGrid(fecha){
   const cont = document.getElementById('adm-jug-grid');
@@ -5249,23 +5248,22 @@ function renderAdmLineasGrid_(){
     cont.innerHTML = '<div class="s dim">Todavía no hay líneas armadas para esta fecha. Usá "⚡ Armar líneas" más abajo.</div>';
     return;
   }
-  let html = '<div class="fca-wrap" style="padding:0;">';
+  let html = '';
   data.lineas.forEach(function(l){
-    html += '<div class="fca-linea"><div class="fca-linea-hdr"><span class="fca-lnum">Línea ' + l.lineNum + '</span></div><div class="fca-players">';
+    html += '<div class="gf-lin-linea"><div class="gf-lin-hdr">Línea ' + l.lineNum + '</div><div class="gf-lin-players">';
     for(let i = 0; i < 4; i++){
       const p = l.players[i];
-      if(p){
+      if(p && p.matricula){
         const esDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(String(p.matricula)) >= 0;
-        html += '<div class="fca-pill clickable' + (esDoble ? ' fca-pill-db' : '') + '" onclick="admLinAbrirEditor(\'' + p.matricula + '\')">' +
-          '<span class="fca-pname">' + p.apodo + (esDoble ? ' <span class="fca-db-badge">✌x2</span>' : '') + '</span>' +
-          '<span class="fca-phcp">' + p.hcp + ' → <span class="fca-p85">' + hcp85(p.hcp) + '</span></span></div>';
+        html += '<button type="button" class="gf-lin-pill' + (esDoble ? ' gf-lin-pill-db' : '') + '" onclick="admLinAbrirEditor(\'' + p.matricula + '\')">' +
+          '<span class="gf-lin-pname">' + p.apodo + (esDoble ? ' <span class="gf-lin-db">✌x2</span>' : '') + '</span>' +
+          '<span class="gf-lin-phcp">' + p.hcp + ' → <span class="gf-lin-p85">' + hcp85(p.hcp) + '</span></span></button>';
       } else {
-        html += '<div class="fca-pill-empty"></div>';
+        html += '<button type="button" class="gf-lin-pill gf-lin-pill-empty" onclick="admLinAbrirPicker(' + l.lineNum + ', ' + i + ')">+ Sumar jugador</button>';
       }
     }
     html += '</div></div>';
   });
-  html += '</div>';
   cont.innerHTML = html;
 }
 
@@ -5273,42 +5271,123 @@ function admLinAbrirEditor(matricula){
   const data = ADM_LIN_DATA;
   let player = null;
   if(data && data.lineas){
-    data.lineas.forEach(function(l){ l.players.forEach(function(p){ if(String(p.matricula) === String(matricula)) player = p; }); });
+    data.lineas.forEach(function(l){ l.players.forEach(function(p){ if(p && String(p.matricula) === String(matricula)) player = p; }); });
   }
   if(!player) return;
   ADM_LIN_EDIT_MAT = String(matricula);
   ADM_LIN_EDIT_TARJETA = null;
-  document.getElementById('adm-jug-editor').style.display = 'block';
-  document.getElementById('adm-jug-nombre').textContent = fmtNameForAdm(player.nombre || player.apodo);
-  document.getElementById('adm-jug-hcp').value = player.hcp;
-  document.getElementById('adm-jug-msg').style.display = 'none';
 
   const esDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(ADM_LIN_EDIT_MAT) >= 0;
   const elegible = esDoble || ADM_LIN_DOBLE_DISPONIBLES.indexOf(ADM_LIN_EDIT_MAT) >= 0;
-  const chk = document.getElementById('adm-jug-doble');
-  const hint = document.getElementById('adm-jug-doble-hint');
-  chk.checked = esDoble;
-  chk.disabled = !elegible;
-  if(!elegible){
-    hint.style.display = 'block';
-    hint.textContent = 'Este jugador ya usó su doble en otra fecha esta temporada.';
-  } else {
-    hint.style.display = 'none';
-  }
+  openFloatingModal(admLinEditorHtml_(player, esDoble, elegible));
 
   ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }).then(r => {
     const tarjetas = (r && r.ok && r.data) || [];
     ADM_LIN_EDIT_TARJETA = tarjetas.find(t => String(t.matricula) === ADM_LIN_EDIT_MAT) || null;
   });
+}
 
-  document.getElementById('adm-jug-editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+function admLinEditorHtml_(player, esDoble, elegible){
+  return '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">✏ ' + fmtNameForAdm(player.nombre || player.apodo) + '</div>' +
+    '<div class="adm-row">' +
+      '<div class="adm-field">' +
+        '<label class="adm-label">HCP de juego</label>' +
+        '<input type="number" id="adm-jug-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" value="' + player.hcp + '">' +
+      '</div>' +
+    '</div>' +
+    '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px;">' +
+      '<input type="checkbox" id="adm-jug-doble"' + (esDoble ? ' checked' : '') + (elegible ? '' : ' disabled') + '> ✌ Suma doble en esta fecha' +
+    '</label>' +
+    (elegible ? '' : '<div style="font-size:11px;color:var(--g4);margin-top:4px;">Este jugador ya usó su doble en otra fecha esta temporada.</div>') +
+    '<div style="display:flex;gap:8px;margin-top:16px;">' +
+      '<button class="adm-btn-primary" onclick="admLinGuardarEditor()" style="flex:2;">Guardar</button>' +
+      '<button class="btn-cancel" onclick="closeFloatingModal()" style="flex:1;">Cancelar</button>' +
+    '</div>' +
+    '<button class="adm-btn-danger-ghost" onclick="admLinQuitarJugador()" style="margin-top:10px;">🗑 Sacar de la línea</button>' +
+    '<div id="adm-jug-msg" class="adm-msg" style="display:none;"></div>';
 }
 
 function admLinCerrarEditor(){
   ADM_LIN_EDIT_MAT = null;
   ADM_LIN_EDIT_TARJETA = null;
-  const ed = document.getElementById('adm-jug-editor');
-  if(ed) ed.style.display = 'none';
+}
+
+function admLinQuitarJugador(){
+  const mat = ADM_LIN_EDIT_MAT;
+  if(!mat) return;
+  if(!confirm('¿Sacar a este jugador de la línea? Se borra su tarjeta y sus matches de esta fecha.')) return;
+  const fecha = ADM_EDIT_FECHA;
+  const msg = document.getElementById('adm-jug-msg');
+  if(msg){ msg.className = 'adm-msg'; msg.textContent = 'Sacando...'; msg.style.display = 'block'; }
+  ngtApiPost({ action: 'quitarJugadorDeLinea', adminKey: ADMIN_KEY_OK, fecha: fecha, matricula: mat }).then(r => {
+    if(r && r.ok){
+      closeFloatingModal();
+      loadAdmLineasGrid(fecha);
+      loadAdmTarjetas(fecha);
+    } else if(msg){
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => {
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message; }
+  });
+}
+
+function admLinAbrirPicker(lineNum, slotIndex){
+  ADM_LIN_PICKER_LINEA = lineNum;
+  ADM_LIN_PICKER_SLOT = slotIndex;
+  const asignados = {};
+  ((ADM_LIN_DATA && ADM_LIN_DATA.lineas) || []).forEach(function(l){
+    l.players.forEach(function(p){ if(p && p.matricula) asignados[String(p.matricula)] = true; });
+  });
+  const disponibles = (ADM_JUGADORES || [])
+    .filter(function(j){ return j.activo !== false && !asignados[String(j.matricula)]; })
+    .sort(function(a, b){ return (a.nombre || '').localeCompare(b.nombre || ''); });
+
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">Sumar jugador a Línea ' + lineNum + '</div>';
+  if(!disponibles.length){
+    html += '<div class="s dim" style="text-align:center;padding:20px 0;">No quedan jugadores disponibles.</div>';
+  } else {
+    html += '<input type="text" id="adm-lin-picker-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="admLinFiltrarPicker_()" style="margin-bottom:10px;">';
+    html += '<div id="adm-lin-picker-list" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">';
+    disponibles.forEach(function(j){
+      const lbl = formatPlayerLabel(j.nombre);
+      html += '<button type="button" class="gf-lin-pill adm-lin-picker-item" style="padding:10px 14px;" data-nombre="' + (j.nombre || '').toLowerCase() + '" onclick="admLinElegirJugador(\'' + j.matricula + '\')"><span class="gf-lin-pname">' + lbl + '</span></button>';
+    });
+    html += '</div>';
+  }
+  html += '<button class="btn-cancel" onclick="closeFloatingModal()" style="width:100%;margin-top:12px;">Cancelar</button>';
+  html += '<div id="adm-lin-picker-msg" class="adm-msg" style="display:none;"></div>';
+  openFloatingModal(html);
+}
+
+function admLinFiltrarPicker_(){
+  const searchEl = document.getElementById('adm-lin-picker-search');
+  const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
+  document.querySelectorAll('#adm-lin-picker-list .adm-lin-picker-item').forEach(function(item){
+    const nombre = item.getAttribute('data-nombre') || '';
+    item.style.display = (!q || nombre.indexOf(q) >= 0) ? '' : 'none';
+  });
+}
+
+function admLinElegirJugador(matricula){
+  const fecha = ADM_EDIT_FECHA;
+  const lineNum = ADM_LIN_PICKER_LINEA;
+  const slotIndex = ADM_LIN_PICKER_SLOT;
+  const msg = document.getElementById('adm-lin-picker-msg');
+  if(msg){ msg.className = 'adm-msg'; msg.textContent = 'Sumando...'; msg.style.display = 'block'; }
+  ngtApiPost({ action: 'agregarJugadorALinea', adminKey: ADMIN_KEY_OK, fecha: fecha, matricula: matricula, lineNum: lineNum, slotIndex: slotIndex }).then(r => {
+    if(r && r.ok){
+      closeFloatingModal();
+      loadAdmLineasGrid(fecha);
+      loadAdmTarjetas(fecha);
+    } else if(msg){
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => {
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message; }
+  });
 }
 
 function admLinGuardarEditor(){
@@ -5347,7 +5426,7 @@ function admLinGuardarEditor(){
     function terminar(){
       msg.className = 'adm-msg ok';
       msg.textContent = '✓ Guardado';
-      setTimeout(() => loadAdmLineasGrid(fecha), 900);
+      setTimeout(() => { closeFloatingModal(); loadAdmLineasGrid(fecha); }, 900);
     }
     if(nuevoDoble === eraDoble){ terminar(); return; }
     let dobles = ADM_LIN_DOBLE_ENFECHA.slice();
@@ -5368,6 +5447,8 @@ function admLinGuardarEditor(){
 
 // ══ GESTIONAR FECHA — grilla + panel de edición ══
 let ADM_EDIT_FECHA = null;
+let ADM_EDIT_JUGADORES_ACTUALES = [];
+let ADM_EDIT_INVITADOS_ACTUALES = [];
 
 function renderFechasGrid(){
   const grid = document.getElementById('adm-fechas-grid');
@@ -5428,9 +5509,6 @@ function abrirEditPanel(fecha){
   // Reset mensajes
   document.getElementById('adm-edit-msg').style.display = 'none';
   document.getElementById('adm-reset-msg').style.display = 'none';
-  document.getElementById('adm-edit-jugs').innerHTML = 'Cargando...';
-  const _searchEl = document.getElementById('adm-edit-jugs-search');
-  if(_searchEl) _searchEl.value = '';
 
   // Load matches for this fecha
   ADM_LAST_ARMAR_LINEAS = [];
@@ -5463,6 +5541,8 @@ function abrirEditPanel(fecha){
     const curMatriculas = (det.jugadores || []).map(j => String(j.matricula));
     const curDobles = (det.dobles || []).map(String);
     const curCancha = det.cancha || '';
+    ADM_EDIT_JUGADORES_ACTUALES = curMatriculas;
+    ADM_EDIT_INVITADOS_ACTUALES = (det.invitados || []).map(j => j.nombre);
 
     // Populate cancha select
     const cs = document.getElementById('adm-edit-cancha');
@@ -5500,21 +5580,11 @@ function abrirEditPanel(fecha){
       }
     }
 
-    // Render jugadores checkboxes with current selection checked
-    const jl = document.getElementById('adm-edit-jugs');
-    let jugHtml = '';
-    jugadores.filter(j => j.activo !== false || curMatriculas.indexOf(String(j.matricula)) >= 0).forEach(j => {
-      const checked = curMatriculas.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
-      const lbl = formatPlayerLabel(j.nombre);
-      jugHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-jug" value="' + j.matricula + '" id="ejug-' + j.matricula + '" ' + checked + ' onchange="admUpdateJugCount_()"><label for="ejug-' + j.matricula + '">' + lbl + '</label></div>';
-    });
-    jl.innerHTML = jugHtml;
-    admUpdateJugCount_();
-
     document.getElementById('adm-edit-msg').style.display = 'none';
   }).catch(e => {
     console.error('Error abrirEditPanel:', e);
-    document.getElementById('adm-edit-jugs').innerHTML = '<div class="adm-msg err">Error: ' + e.message + '</div>';
+    const msg = document.getElementById('adm-edit-msg');
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = 'Error: ' + e.message; msg.style.display = 'block'; }
   });
 }
 
@@ -5523,7 +5593,7 @@ function adminEditarFecha(){
   const canchaId = document.getElementById('adm-edit-cancha').value;
   const colorEl = document.getElementById('adm-edit-color-tee');
   const colorTee = (colorEl ? colorEl.value.trim() : '') || 'BLANCAS';
-  const jugadores = [...document.querySelectorAll('.edit-jug:checked')].map(i => i.value);
+  const jugadores = ADM_EDIT_JUGADORES_ACTUALES.slice();
   const dobles = [...document.querySelectorAll('.edit-dob:checked')].map(i => i.value);
 
   const msg = document.getElementById('adm-edit-msg');
@@ -5550,6 +5620,7 @@ function adminEditarFecha(){
     canchaId: canchaId || undefined,
     colorTee: colorTee,
     jugadores: jugadores,
+    invitados: ADM_EDIT_INVITADOS_ACTUALES.slice(),
     dobles: dobles,
     hoyoSalida: hoyoSalidaEdit,
   }).then(r => {
@@ -5639,14 +5710,10 @@ function loadAdmTarjetas(fecha) {
       const stat = hasScore ? '✓ HCP ' + t.hcp : '⏳ Pendiente';
       const statColor = hasScore ? '#15803d' : 'var(--g4)';
       const safe = t.nombre.replace(/'/g, "\\'");
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--g2);">
-        <div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">${fmtNameForAdm(t.nombre)}</div>
-          <div style="font-size:11px;color:${statColor};">${stat}</div>
-        </div>
-        <button class="adm-btn-secondary" style="padding:4px 10px;font-size:11px;"
-          onclick="openAdmTarModal('${t.matricula}','${safe}','${t.cancha}','${t.canchaId}')">✏ Editar</button>
-      </div>`;
+      return `<button type="button" class="gf-tar-pill" onclick="openAdmTarModal('${t.matricula}','${safe}','${t.cancha}','${t.canchaId}')">
+        <div class="gf-tar-pname">${fmtNameForAdm(t.nombre)}</div>
+        <div class="gf-tar-pstat" style="color:${statColor};">${stat}</div>
+      </button>`;
     }).join('');
   }).catch(e => {
     listEl.innerHTML = '<div style="color:#c8102e;font-size:13px;">Error: ' + e.message + '</div>';

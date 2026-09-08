@@ -1150,6 +1150,74 @@ function setLineasFecha_(params) {
   return { ok: true };
 }
 
+function quitarJugadorDeLinea_(params) {
+  const { adminKey, fecha, matricula } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha || !matricula) return { ok: false, error: 'Falta fecha o matrícula' };
+  const fStr = String(fecha);
+  const mStr = String(matricula);
+  const meta = getFechaMeta_(fStr);
+  if (!meta || !meta.lineas || !meta.lineas.length) return { ok: false, error: 'Esta fecha no tiene líneas armadas' };
+  const nuevasLineas = meta.lineas.map(function(l) {
+    return (l || []).map(function(m) { return String(m) === mStr ? '' : m; });
+  });
+  const rLin = setLineasFecha_({ adminKey: adminKey, fecha: fStr, lineas: nuevasLineas });
+  if (!rLin.ok) return rLin;
+  const det = getFechaDetalle_(fStr);
+  const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
+  const invitadosActuales = ((det && det.invitados) || []).map(function(j) { return j.nombre; });
+  const doblesActuales    = getDoblesForFecha_(fStr);
+  const targetJugadores = jugadoresActuales.filter(function(m) { return m !== mStr; });
+  const targetDobles    = doblesActuales.filter(function(m) { return String(m) !== mStr; });
+  const rEd = editarFecha_({
+    adminKey: adminKey, fecha: fStr, jugadores: targetJugadores, invitados: invitadosActuales,
+    dobles: targetDobles, canchaId: meta.canchaId || undefined, colorTee: meta.colorTee || undefined,
+  });
+  if (!rEd.ok) return rEd;
+  try { recalcularTotalesScore_(null); } catch(e) {}
+  audit_('QUITAR_JUGADOR_LINEA', 'admin', { fecha: fStr, matricula: mStr });
+  return { ok: true };
+}
+
+function agregarJugadorALinea_(params) {
+  const { adminKey, fecha, matricula, lineNum, slotIndex } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha || !matricula || !lineNum) return { ok: false, error: 'Faltan datos' };
+  const fStr = String(fecha); const mStr = String(matricula);
+  const meta = getFechaMeta_(fStr);
+  if (!meta || !meta.lineas || !meta.lineas.length) return { ok: false, error: 'Esta fecha no tiene líneas armadas' };
+  const yaAsignado = meta.lineas.some(function(l) {
+    return (l || []).some(function(m) { return String(m) === mStr; });
+  });
+  if (yaAsignado) return { ok: false, error: 'Ese jugador ya está en una línea de esta fecha' };
+  const idx = parseInt(lineNum) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= meta.lineas.length) return { ok: false, error: 'Línea inválida' };
+  let colocado = false;
+  const nuevasLineas = meta.lineas.map(function(l, i) {
+    const copia = (l || []).slice();
+    if (i !== idx) return copia;
+    let si = (slotIndex !== undefined && slotIndex !== null && slotIndex !== '') ? parseInt(slotIndex) : -1;
+    if (isNaN(si) || si < 0) si = copia.indexOf('');
+    if (si < 0 || si > 3) return copia;
+    while (copia.length <= si) copia.push('');
+    if (copia[si] && copia[si] !== '') return copia;
+    copia[si] = mStr; colocado = true; return copia;
+  });
+  if (!colocado) return { ok: false, error: 'No hay casillero vacío disponible en esa línea' };
+  const rLin = setLineasFecha_({ adminKey: adminKey, fecha: fStr, lineas: nuevasLineas });
+  if (!rLin.ok) return rLin;
+  const det = getFechaDetalle_(fStr);
+  const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
+  const invitadosActuales = ((det && det.invitados) || []).map(function(j) { return j.nombre; });
+  if (jugadoresActuales.indexOf(mStr) < 0) jugadoresActuales.push(mStr);
+  const rEd = editarFecha_({ adminKey: adminKey, fecha: fStr, jugadores: jugadoresActuales,
+    invitados: invitadosActuales, canchaId: meta.canchaId || undefined, colorTee: meta.colorTee || undefined });
+  if (!rEd.ok) return rEd;
+  try { recalcularTotalesScore_(null); } catch(e) {}
+  audit_('AGREGAR_JUGADOR_LINEA', 'admin', { fecha: fStr, matricula: mStr, lineNum, slotIndex });
+  return { ok: true };
+}
+
 /**
  * Recalcula Stableford hoyo a hoyo para todos los jugadores de una fecha.
  * Útil cuando el HCP de juego fue corregido después de que las tarjetas ya estaban cargadas.

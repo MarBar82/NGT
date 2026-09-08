@@ -185,6 +185,8 @@ function doPost(e) {
       case 'fechaLineas':          result = { ok: true, data: cachedRead_('fl_' + params.fecha, 300, function(){ return getFechaLineas_(params.fecha); }) }; break;
       case 'setDoblesFecha':       result = setDoblesFecha_(params); break;
       case 'setLineasFecha':       result = setLineasFecha_(params); break;
+      case 'quitarJugadorDeLinea': result = quitarJugadorDeLinea_(params); break;
+      case 'agregarJugadorALinea': result = agregarJugadorALinea_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }
