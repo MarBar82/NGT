@@ -12911,3 +12911,12 @@ Reemplazalo por:
 6. ¿Alguna duda o algo ambiguo de la consigna?
 
 **Para Marco, aparte de las preguntas de arriba:** si después de este cambio volvés a probar "sacar/sumar" en una fecha SIN scores todavía y el problema de tarjetas/matches rotos vuelve a aparecer (no debería, pero por las dudas), avisame con el número de fecha — eso me diría que el problema es más profundo que "se usó mientras había scores cargados", y ahí sigo investigando con ese dato puntual.
+
+### ✅ Respuestas de verificación — Tarea 99
+
+1. Sí: `quitarJugadorDeLinea_` llama a `fechaTieneScoresCargados_(fStr)` antes de tocar nada; si devuelve `true`, retorna `{ ok: false, error: 'Ya hay scores cargados...' }` sin modificar líneas ni tarjetas.
+2. Ídem para `agregarJugadorALinea_` — la misma verificación al inicio, mismo mensaje de error.
+3. Si `fechaTieneScoresCargados_` devuelve `false` (ninguna fila de TARJETAS tiene valores en columnas E–V para esa fecha), ambas funciones siguen el flujo normal de la Tarea 94.
+4. Con `&& remaining > 0` en las dos condiciones de `buildLineaSnapshot_` y `calcularResultadoMatch_`, cuando `remaining === 0` (hoyo 18, sin hoyos restantes) el bloque "X&Y" ya no aplica y cae al `else` que muestra "X UP".
+5. Matches cerrados antes del 18 (remaining > 0) no se ven afectados.
+6. Sin dudas. ⚠️ Esta tarea requiere deploy manual de Apps Script (`04_Writes.gs` y `07_LiveScoring.gs`).
