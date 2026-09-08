@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-08 (🚨 Tarea 92 URGENTE agregada — corrige la app en blanco causada por un choque de nombres de variable en la Tarea 91. Solo index.html, no requiere deploy)
+**Última actualización:** 2026-09-08 (Tarea 93 agregada — pestaña TARJETAS de Gestionar Fecha: modal con tarjeta editable + pad numérico por hoyo, igual que en carga de scores en vivo. Solo index.html, no requiere deploy. Con esta tarea se completa la reorganización de "Gestionar Fecha" pedida por Marco)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -10816,3 +10816,587 @@ No. Cambio puntual y claro: 5 nombres de variables (`ADM_JUG_LINEAS_DATA` → `A
 
 ---
 
+
+## 🎯 Tarea para Claude Code — Tarea 93 (pestaña TARJETAS de Gestionar Fecha)
+
+### Contexto
+
+Esta es la última pieza del plan que armamos para reorganizar "Gestionar Fecha" en 5 partes (Cancha, Jugadores, Tarjetas, Bonus, Recalcular/Eliminar). Cancha y Bonus ya estaban. Jugadores se hizo en las Tareas 91-92 (el cuadro 2x2 con líneas). Esta tarea es **Tarjetas**: hoy, cuando el admin entra a la pestaña "Tarjetas" de una fecha y aprieta "✏ Editar" en un jugador, se abre un panel con 18 casilleros numéricos sueltos para tipear el score de cada hoyo — funciona, pero no se parece en nada a la app (ni al resto del sitio, ni a cómo el jugador carga su propio score).
+
+Lo que pide Marco (y lo que hace esta tarea): que al apretar en un jugador se abra **un modal con la tarjeta completa** (la misma tarjeta con los símbolos de colores — águila, birdie, bogey, etc. — que se usa en todos lados de la app), y que al tocar el score de un hoyo aparezca **el mismo pad numérico grande** que usa la carga de scores en vivo. Se elige el número, se cierra el pad, y se vuelve a ver la tarjeta actualizada. Al final, un botón "Guardar Cambios" manda todo al servidor de una sola vez (como ya funciona hoy).
+
+Es 100% cambios de `index.html` — no toca ningún archivo `.gs`, no hace falta ningún deploy nuevo, se publica solo al hacer push.
+
+**Importante — no toca nada de la carga de scores en vivo:** el pad numérico de "Tarjetas" (admin) es un componente nuevo e independiente, con sus propios botones y su propio HTML (`#adm-tar-keypad`). No se toca ni una línea del pad que usan los jugadores para cargar su score en vivo (`#score-modal`) — son dos cosas separadas que por casualidad se ven igual.
+
+### Cambio 1 — Nuevas variables globales
+
+Buscá (cerca de la línea 5600, justo debajo de las 3 variables existentes del editor de tarjetas):
+
+```javascript
+// ══ ADMIN TARJETA EDITOR ══
+let ADM_TAR_PLAYER = null;
+let ADM_TAR_SCORES = new Array(18).fill(null);
+let ADM_TAR_CANCHA_DATA = null;
+```
+
+Reemplazalo por:
+
+```javascript
+// ══ ADMIN TARJETA EDITOR ══
+let ADM_TAR_PLAYER = null;
+let ADM_TAR_SCORES = new Array(18).fill(null);
+let ADM_TAR_CANCHA_DATA = null;
+let ADM_TAR_KEYPAD_HOYO = null;
+let ADM_TAR_MODAL_HCP = '';
+let ADM_TAR_MODAL_LD = false;
+let ADM_TAR_MODAL_BA = false;
+```
+
+### Cambio 2 — HTML: sacar el panel viejo de la pestaña Tarjetas
+
+Buscá este bloque completo (dentro de `#edtab-panel-tarjetas`):
+
+```html
+            <div id="adm-tar-list" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
+            <div id="adm-tar-editor" style="display:none;margin-top:12px;">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);padding:8px 10px;background:var(--off);border-radius:3px;margin-bottom:12px;">
+                ✏ Editando: <span id="adm-tar-nombre"></span>
+              </div>
+              <div class="adm-row">
+                <div class="adm-field">
+                  <label class="adm-label">HCP de juego</label>
+                  <input type="number" id="adm-tar-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" oninput="renderAdmTarHoles()">
+                </div>
+              </div>
+              <label class="adm-label">Golpes por hoyo</label>
+              <div id="adm-tar-holes" class="adm-tar-grid"></div>
+              <div style="display:flex;gap:16px;margin:12px 0 4px;">
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ld"> 💪 Long Drive
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ba"> 🎯 Best Approach
+                </label>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button class="adm-btn-primary" onclick="admTarjetaGuardar()" style="flex:2;">Guardar Tarjeta</button>
+                <button class="btn-cancel" onclick="cerrarAdmTarEditor()" style="flex:1;">Cancelar</button>
+              </div>
+              <div id="adm-tar-msg" class="adm-msg" style="display:none;"></div>
+            </div>
+```
+
+Reemplazalo por (mucho más corto — el panel viejo desaparece, el modal nuevo se abre desde JavaScript):
+
+```html
+            <div id="adm-tar-list" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
+            <p class="s dim" style="margin-top:8px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);">Tocá un jugador para abrir su tarjeta y editar los golpes hoyo por hoyo.</p>
+```
+
+**Ojo:** NO toques las reglas CSS `.adm-tar-grid`, `.adm-tar-hole`, `.adm-tar-hole-num`, `.adm-tar-hole-par`, `.adm-tar-hole-idx`, `.adm-tar-hole-input` (están cerca de la línea 545-568). Aunque el editor viejo de Tarjetas ya no las va a usar, la clase `.adm-tar-hole-input` la sigue usando la tabla de "ratings de cancha" en otra parte del admin — si la borrás, rompés esa pantalla sin querer.
+
+### Cambio 3 — HTML: agregar el modal nuevo del pad numérico
+
+Buscá el cierre del modal `#score-modal` (el pad numérico que usa el jugador para cargar su propio score):
+
+```html
+      <button class="sm-more" onclick="smShowLow()">‹ 1-9</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Bonus hole arrival notice -->
+```
+
+Reemplazalo por (se agrega el modal nuevo `#adm-tar-keypad` justo después, sin tocar nada del que ya existía):
+
+```html
+      <button class="sm-more" onclick="smShowLow()">‹ 1-9</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin tarjeta keypad modal -->
+<div id="adm-tar-keypad" class="sm-overlay" style="display:none;" onclick="admTarCerrarKeypad(event)">
+  <div class="sm-box" onclick="event.stopPropagation()">
+    <div class="sm-hdr">
+      <div class="sm-hoyo" id="adm-tar-keypad-hoyo">Hoyo 1</div>
+      <div class="sm-par" id="adm-tar-keypad-par">Par 4</div>
+    </div>
+    <div class="sm-big" id="adm-tar-keypad-big">–</div>
+    <div class="sm-keypad" id="adm-tar-keypad-low">
+      <button onclick="admTarKeypadSet(1)">1</button>
+      <button onclick="admTarKeypadSet(2)">2</button>
+      <button onclick="admTarKeypadSet(3)">3</button>
+      <button onclick="admTarKeypadSet(4)">4</button>
+      <button onclick="admTarKeypadSet(5)">5</button>
+      <button onclick="admTarKeypadSet(6)">6</button>
+      <button onclick="admTarKeypadSet(7)">7</button>
+      <button onclick="admTarKeypadSet(8)">8</button>
+      <button onclick="admTarKeypadSet(9)">9</button>
+      <button class="sm-clear" onclick="admTarKeypadClear()">✕</button>
+      <button onclick="admTarKeypadSet(0)">0</button>
+      <button class="sm-more" onclick="admTarKeypadShowHigh()">10+</button>
+    </div>
+    <div class="sm-keypad" id="adm-tar-keypad-high" style="display:none;">
+      <button onclick="admTarKeypadSet(10)">10</button>
+      <button onclick="admTarKeypadSet(11)">11</button>
+      <button onclick="admTarKeypadSet(12)">12</button>
+      <button onclick="admTarKeypadSet(13)">13</button>
+      <button onclick="admTarKeypadSet(14)">14</button>
+      <button onclick="admTarKeypadSet(15)">15</button>
+      <button onclick="admTarKeypadSet(16)">16</button>
+      <button onclick="admTarKeypadSet(17)">17</button>
+      <button onclick="admTarKeypadSet(18)">18</button>
+      <button onclick="admTarKeypadSet(19)">19</button>
+      <button onclick="admTarKeypadSet(20)">20</button>
+      <button class="sm-more" onclick="admTarKeypadShowLow()">‹ 1-9</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Bonus hole arrival notice -->
+```
+
+### Cambio 4 — JavaScript: reemplazar toda la lógica de la pestaña Tarjetas
+
+Este es el cambio grande. Buscá el bloque completo que va desde `function loadAdmTarjetas(fecha) {` hasta el cierre de `function admTarjetaGuardar() { ... }` (son varias funciones seguidas: `loadAdmTarjetas`, `openAdmTarEditor`, `renderAdmTarHoles`, `cerrarAdmTarEditor`, `admTarjetaGuardar` — todo ese tramo):
+
+```javascript
+function loadAdmTarjetas(fecha) {
+  const listEl = document.getElementById('adm-tar-list');
+  if(!listEl) return;
+  cerrarAdmTarEditor();
+  listEl.innerHTML = 'Cargando...';
+  ngtApiPost({
+    action: 'getTarjetasForFecha',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+  }).then(r => {
+    const tarjetas = (r && r.ok && r.data) || [];
+    if(!tarjetas.length){
+      listEl.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:8px 0;">No hay tarjetas cargadas aún</div>';
+      return;
+    }
+    listEl.innerHTML = tarjetas.map(t => {
+      const hasScore = t.hcp !== null && t.hcp !== '';
+      const stat = hasScore ? '✓ HCP ' + t.hcp : '⏳ Pendiente';
+      const statColor = hasScore ? '#15803d' : 'var(--g4)';
+      const safe = t.nombre.replace(/'/g, "\\'");
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--g2);">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">${fmtNameForAdm(t.nombre)}</div>
+          <div style="font-size:11px;color:${statColor};">${stat}</div>
+        </div>
+        <button class="adm-btn-secondary" style="padding:4px 10px;font-size:11px;"
+          onclick="openAdmTarEditor('${t.matricula}','${safe}','${t.cancha}','${t.canchaId}')">✏ Editar</button>
+      </div>`;
+    }).join('');
+  }).catch(e => {
+    listEl.innerHTML = '<div style="color:#c8102e;font-size:13px;">Error: ' + e.message + '</div>';
+  });
+}
+
+function openAdmTarEditor(mat, nombre, cancha, canchaId) {
+  ADM_TAR_PLAYER = { matricula: mat, nombre: nombre, cancha: cancha, canchaId: canchaId };
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  document.getElementById('adm-tar-editor').style.display = 'block';
+  document.getElementById('adm-tar-nombre').textContent = fmtNameForAdm(nombre);
+  document.getElementById('adm-tar-hcp').value = '';
+  document.getElementById('adm-tar-ld').checked = false;
+  document.getElementById('adm-tar-ba').checked = false;
+  document.getElementById('adm-tar-msg').style.display = 'none';
+  renderAdmTarHoles();
+
+  Promise.all([
+    ngtApiGet('canchaPares', { cancha: cancha }),
+    ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }),
+  ]).then(results => {
+    ADM_TAR_CANCHA_DATA = (results[0] && results[0].data) || null;
+    const tarjetas = (results[1] && results[1].ok && results[1].data) || [];
+    const myTar = tarjetas.find(t => String(t.matricula) === String(mat));
+    if(myTar){
+      if(myTar.hcp !== null && myTar.hcp !== '') document.getElementById('adm-tar-hcp').value = myTar.hcp;
+      if(Array.isArray(myTar.scores)) ADM_TAR_SCORES = myTar.scores.map(v => v === null ? null : Number(v));
+      document.getElementById('adm-tar-ld').checked = myTar.ld === 1;
+      document.getElementById('adm-tar-ba').checked = myTar.ba === 1;
+    }
+    renderAdmTarHoles();
+    document.getElementById('adm-tar-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+function renderAdmTarHoles() {
+  const pares   = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.pares)   || new Array(18).fill(4);
+  const indices = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.indices) || [];
+  const hcp = parseInt(document.getElementById('adm-tar-hcp').value) || 0;
+  const hcp85val = hcp ? Math.round(hcp * 0.85) : 0;
+  const holesEl = document.getElementById('adm-tar-holes');
+  if(!holesEl) return;
+  let html = '';
+  for(let h = 0; h < 18; h++){
+    const par    = pares[h]   || 4;
+    const indice = indices[h] || null;
+    const score  = ADM_TAR_SCORES[h];
+    const val    = score !== null ? score : '';
+    const extras = (indice && hcp85val) ? Math.floor((hcp85val + 18 - indice) / 18) : 0;
+    const dots   = extras > 0 ? '<span style="color:var(--navy);font-size:8px;">' + '●'.repeat(extras) + '</span>' : '';
+    const idxHtml = indice ? `<div class="adm-tar-hole-idx">Índ ${indice}${dots ? ' '+dots : ''}</div>` : '';
+    html += `<div class="adm-tar-hole">
+      <div class="adm-tar-hole-num">H${h+1}</div>
+      <div class="adm-tar-hole-par">P${par}</div>
+      ${idxHtml}
+      <input type="number" class="adm-tar-hole-input" id="adm-tar-h${h}"
+        value="${val}" min="1" max="15" inputmode="numeric"
+        oninput="ADM_TAR_SCORES[${h}] = this.value !== '' ? (parseInt(this.value)||null) : null">
+    </div>`;
+  }
+  holesEl.innerHTML = html;
+}
+
+function cerrarAdmTarEditor() {
+  ADM_TAR_PLAYER = null;
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  const ed = document.getElementById('adm-tar-editor');
+  if(ed) ed.style.display = 'none';
+  const msg = document.getElementById('adm-tar-msg');
+  if(msg) msg.style.display = 'none';
+}
+
+function admTarjetaGuardar() {
+  if(!ADM_TAR_PLAYER) return;
+  const msg = document.getElementById('adm-tar-msg');
+  const hcp = document.getElementById('adm-tar-hcp').value.trim();
+  const ld  = document.getElementById('adm-tar-ld').checked ? 1 : 0;
+  const ba  = document.getElementById('adm-tar-ba').checked ? 1 : 0;
+  if(!hcp){
+    msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el HCP de juego'; msg.style.display = 'block'; return;
+  }
+  const scores = ADM_TAR_SCORES.map(v => v !== null ? v : '');
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+  ngtApiPost({
+    action: 'cargarTarjeta',
+    adminKey: ADMIN_KEY_OK,
+    matricula: ADM_TAR_PLAYER.matricula,
+    fecha: ADM_EDIT_FECHA,
+    hcp: parseInt(hcp),
+    scores: scores,
+    ld: ld,
+    ba: ba,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok'; msg.textContent = '✓ Tarjeta guardada';
+      setTimeout(() => loadAdmTarjetas(ADM_EDIT_FECHA), 900);
+    } else {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+```
+
+Reemplazalo por todo este bloque nuevo (ojo: es largo, son varias funciones — copialo completo, de punta a punta):
+
+```javascript
+function loadAdmTarjetas(fecha) {
+  const listEl = document.getElementById('adm-tar-list');
+  if(!listEl) return;
+  cerrarAdmTarEditor();
+  closeFloatingModal();
+  listEl.innerHTML = 'Cargando...';
+  ngtApiPost({
+    action: 'getTarjetasForFecha',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+  }).then(r => {
+    const tarjetas = (r && r.ok && r.data) || [];
+    if(!tarjetas.length){
+      listEl.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:8px 0;">No hay tarjetas cargadas aún</div>';
+      return;
+    }
+    listEl.innerHTML = tarjetas.map(t => {
+      const hasScore = t.hcp !== null && t.hcp !== '';
+      const stat = hasScore ? '✓ HCP ' + t.hcp : '⏳ Pendiente';
+      const statColor = hasScore ? '#15803d' : 'var(--g4)';
+      const safe = t.nombre.replace(/'/g, "\\'");
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--g2);">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">${fmtNameForAdm(t.nombre)}</div>
+          <div style="font-size:11px;color:${statColor};">${stat}</div>
+        </div>
+        <button class="adm-btn-secondary" style="padding:4px 10px;font-size:11px;"
+          onclick="openAdmTarModal('${t.matricula}','${safe}','${t.cancha}','${t.canchaId}')">✏ Editar</button>
+      </div>`;
+    }).join('');
+  }).catch(e => {
+    listEl.innerHTML = '<div style="color:#c8102e;font-size:13px;">Error: ' + e.message + '</div>';
+  });
+}
+
+function openAdmTarModal(mat, nombre, cancha, canchaId) {
+  ADM_TAR_PLAYER = { matricula: mat, nombre: nombre, cancha: cancha, canchaId: canchaId };
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  ADM_TAR_MODAL_HCP = '';
+  ADM_TAR_MODAL_LD = false;
+  ADM_TAR_MODAL_BA = false;
+  openFloatingModal('<div style="padding:30px 10px;text-align:center;color:var(--g4);">Cargando...</div>');
+
+  Promise.all([
+    ngtApiGet('canchaPares', { cancha: cancha }),
+    ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }),
+  ]).then(results => {
+    ADM_TAR_CANCHA_DATA = (results[0] && results[0].data) || null;
+    const tarjetas = (results[1] && results[1].ok && results[1].data) || [];
+    const myTar = tarjetas.find(t => String(t.matricula) === String(mat));
+    if(myTar){
+      if(myTar.hcp !== null && myTar.hcp !== '') ADM_TAR_MODAL_HCP = myTar.hcp;
+      if(Array.isArray(myTar.scores)) ADM_TAR_SCORES = myTar.scores.map(v => v === null ? null : Number(v));
+      ADM_TAR_MODAL_LD = myTar.ld === 1;
+      ADM_TAR_MODAL_BA = myTar.ba === 1;
+    }
+    openFloatingModal(admTarModalHtml_());
+    renderAdmTarModalScorecard_();
+  });
+}
+
+function admTarModalHtml_(){
+  const nombre = ADM_TAR_PLAYER ? ADM_TAR_PLAYER.nombre : '';
+  return '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:10px;">✏ ' + fmtNameForAdm(nombre) + '</div>' +
+    '<div class="adm-row">' +
+      '<div class="adm-field">' +
+        '<label class="adm-label">HCP de juego</label>' +
+        '<input type="number" id="adm-tar-modal-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" value="' + ADM_TAR_MODAL_HCP + '">' +
+      '</div>' +
+    '</div>' +
+    '<div id="adm-tar-modal-scorecard" style="margin-top:10px;"></div>' +
+    '<p style="margin:8px 0 0;font-family:\'Barlow Condensed\',sans-serif;font-size:11px;color:var(--g4);text-align:center;letter-spacing:.04em;">TOCÁ UN SCORE PARA EDITARLO</p>' +
+    '<div style="display:flex;gap:16px;margin:16px 0 4px;">' +
+      '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">' +
+        '<input type="checkbox" id="adm-tar-modal-ld"' + (ADM_TAR_MODAL_LD ? ' checked' : '') + '> 💪 Long Drive' +
+      '</label>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">' +
+        '<input type="checkbox" id="adm-tar-modal-ba"' + (ADM_TAR_MODAL_BA ? ' checked' : '') + '> 🎯 Best Approach' +
+      '</label>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:14px;">' +
+      '<button class="adm-btn-primary" onclick="admTarModalGuardar_()" style="flex:2;">Guardar Cambios</button>' +
+      '<button class="btn-cancel" onclick="closeFloatingModal()" style="flex:1;">Cancelar</button>' +
+    '</div>' +
+    '<div id="adm-tar-modal-msg" class="adm-msg" style="display:none;"></div>';
+}
+
+function renderAdmTarModalScorecard_(){
+  const el = document.getElementById('adm-tar-modal-scorecard');
+  if(!el) return;
+  const pares = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.pares) || new Array(18).fill(4);
+  const indices = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.indices) || [];
+  el.innerHTML = renderAdmTarScorecardEditable_(ADM_TAR_SCORES, pares, indices);
+}
+
+function renderAdmTarScorecardEditable_(scores, pares, indices){
+  function nine(from, to, lbl){
+    let h = '<table class="perf-ecl-table"><thead><tr><th class="lbl">' + lbl + '</th>';
+    for(let i = from; i < to; i++) h += '<th><div class="perf-ecl-hoyo">H' + (i+1) + '</div></th>';
+    h += '<th><div class="perf-ecl-hoyo">Tot</div></th></tr></thead><tbody>';
+    if(indices && indices.length){
+      h += '<tr><td class="lbl">Hándicap</td>';
+      for(let i = from; i < to; i++) h += '<td><span class="perf-ecl-par">' + (indices[i] || '—') + '</span></td>';
+      h += '<td></td></tr>';
+    }
+    h += '<tr class="perf-par-row"><td class="lbl">Par</td>';
+    let parTot = 0;
+    for(let i = from; i < to; i++){
+      const p = pares[i];
+      h += '<td><span class="perf-ecl-par">' + (p || '—') + '</span></td>';
+      if(p) parTot += p;
+    }
+    h += '<td><span class="perf-ecl-par">' + parTot + '</span></td></tr>';
+    h += '<tr><td class="lbl">Score</td>';
+    let scoreTot = 0;
+    let allOk = true;
+    for(let i = from; i < to; i++){
+      const s = scores[i];
+      h += '<td style="cursor:pointer;" onclick="admTarAbrirKeypad(' + (i+1) + ')">' + scoreSymbolHtml(s, pares[i]) + '</td>';
+      if(s !== null && s !== undefined) scoreTot += s; else allOk = false;
+    }
+    h += '<td>' + scoreSymbolHtml(allOk ? scoreTot : null, parTot, true) + '</td></tr>';
+    h += '</tbody></table>';
+    return h;
+  }
+  return '<div style="overflow-x:auto;">' + nine(0, 9, 'IDA') + '</div>' +
+         '<div style="overflow-x:auto;margin-top:10px;">' + nine(9, 18, 'VUELTA') + '</div>';
+}
+
+function admTarAbrirKeypad(hoyo){
+  const hcpEl = document.getElementById('adm-tar-modal-hcp');
+  const ldEl  = document.getElementById('adm-tar-modal-ld');
+  const baEl  = document.getElementById('adm-tar-modal-ba');
+  if(hcpEl) ADM_TAR_MODAL_HCP = hcpEl.value;
+  if(ldEl)  ADM_TAR_MODAL_LD  = ldEl.checked;
+  if(baEl)  ADM_TAR_MODAL_BA  = baEl.checked;
+
+  closeFloatingModal();
+  ADM_TAR_KEYPAD_HOYO = hoyo;
+  const pares = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.pares) || [];
+  const par = pares[hoyo - 1];
+  const actual = ADM_TAR_SCORES[hoyo - 1];
+  document.getElementById('adm-tar-keypad-hoyo').textContent = 'Hoyo ' + hoyo;
+  document.getElementById('adm-tar-keypad-par').textContent = par ? 'Par ' + par : '';
+  document.getElementById('adm-tar-keypad-big').textContent = (actual !== null && actual !== undefined) ? actual : '–';
+  document.getElementById('adm-tar-keypad-low').style.display = 'grid';
+  document.getElementById('adm-tar-keypad-high').style.display = 'none';
+  document.getElementById('adm-tar-keypad').style.display = 'flex';
+}
+
+function admTarKeypadSet(v){
+  if(ADM_TAR_KEYPAD_HOYO === null) return;
+  ADM_TAR_SCORES[ADM_TAR_KEYPAD_HOYO - 1] = v;
+  document.getElementById('adm-tar-keypad-big').textContent = v;
+  setTimeout(admTarCerrarKeypadYVolver_, 150);
+}
+
+function admTarKeypadClear(){
+  if(ADM_TAR_KEYPAD_HOYO === null) return;
+  ADM_TAR_SCORES[ADM_TAR_KEYPAD_HOYO - 1] = null;
+  document.getElementById('adm-tar-keypad-big').textContent = '–';
+  setTimeout(admTarCerrarKeypadYVolver_, 150);
+}
+
+function admTarKeypadShowHigh(){
+  document.getElementById('adm-tar-keypad-low').style.display = 'none';
+  document.getElementById('adm-tar-keypad-high').style.display = 'grid';
+}
+
+function admTarKeypadShowLow(){
+  document.getElementById('adm-tar-keypad-high').style.display = 'none';
+  document.getElementById('adm-tar-keypad-low').style.display = 'grid';
+}
+
+function admTarCerrarKeypad(e){
+  if(e && e.target && e.target.id !== 'adm-tar-keypad') return;
+  ADM_TAR_KEYPAD_HOYO = null;
+  document.getElementById('adm-tar-keypad').style.display = 'none';
+}
+
+function admTarCerrarKeypadYVolver_(){
+  ADM_TAR_KEYPAD_HOYO = null;
+  document.getElementById('adm-tar-keypad').style.display = 'none';
+  openFloatingModal(admTarModalHtml_());
+  renderAdmTarModalScorecard_();
+}
+
+function cerrarAdmTarEditor() {
+  ADM_TAR_PLAYER = null;
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  const ed = document.getElementById('adm-tar-editor');
+  if(ed) ed.style.display = 'none';
+  const msg = document.getElementById('adm-tar-msg');
+  if(msg) msg.style.display = 'none';
+}
+
+function admTarModalGuardar_() {
+  if(!ADM_TAR_PLAYER) return;
+  const msg = document.getElementById('adm-tar-modal-msg');
+  const hcp = document.getElementById('adm-tar-modal-hcp').value.trim();
+  const ld  = document.getElementById('adm-tar-modal-ld').checked ? 1 : 0;
+  const ba  = document.getElementById('adm-tar-modal-ba').checked ? 1 : 0;
+  if(!hcp){
+    msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el HCP de juego'; msg.style.display = 'block'; return;
+  }
+  const scores = ADM_TAR_SCORES.map(v => v !== null ? v : '');
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+  ngtApiPost({
+    action: 'cargarTarjeta',
+    adminKey: ADMIN_KEY_OK,
+    matricula: ADM_TAR_PLAYER.matricula,
+    fecha: ADM_EDIT_FECHA,
+    hcp: parseInt(hcp),
+    scores: scores,
+    ld: ld,
+    ba: ba,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok'; msg.textContent = '✓ Tarjeta guardada';
+      setTimeout(() => { closeFloatingModal(); loadAdmTarjetas(ADM_EDIT_FECHA); }, 900);
+    } else {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+```
+
+**Nota:** `cerrarAdmTarEditor()` queda igual, palabra por palabra — la incluí completa en el bloque de reemplazo solo porque estaba en el medio de las funciones que había que tocar, pero no cambia ni una línea. Sigue sirviendo como "limpiar variables" cuando se cierra el editor (ahora ya no tiene un `<div>` que ocultar, así que sus dos `if` internos simplemente no hacen nada — no molesta).
+
+### Cambio 5 — dentro de `cerrarEditPanel()`, agregar el cierre del modal flotante
+
+Buscá:
+
+```javascript
+function cerrarEditPanel(){
+  ADM_EDIT_FECHA = null;
+  const msg = document.getElementById('adm-reset-msg');
+  if(msg) msg.style.display = 'none';
+  cerrarAdmTarEditor();
+}
+```
+
+Reemplazalo por:
+
+```javascript
+function cerrarEditPanel(){
+  ADM_EDIT_FECHA = null;
+  const msg = document.getElementById('adm-reset-msg');
+  if(msg) msg.style.display = 'none';
+  cerrarAdmTarEditor();
+  closeFloatingModal();
+}
+```
+
+(Es solo una red de seguridad: si el admin sale de la pantalla de Gestionar Fecha con el modal de tarjeta o el pad numérico abiertos, se cierran solos.)
+
+### Qué NO cambia (Tarea 93)
+
+- No se toca ningún archivo `.gs` — el flujo de guardado usa exactamente la misma acción `cargarTarjeta` que ya existía, con los mismos parámetros. No hace falta ningún deploy nuevo.
+- No se toca absolutamente nada del pad numérico que usan los jugadores para cargar su propio score en vivo (`#score-modal`, `smSetAndClose`, `smClear`, etc.) ni el que usa el admin para revisar tarjetas durante la carga en vivo (`liveOpenScoreModal`). El pad nuevo de esta tarea es un componente propio e independiente (`#adm-tar-keypad`), aunque se ve igual.
+- No se toca la clase CSS `.adm-tar-hole-input` (ni `.adm-tar-grid`, `.adm-tar-hole`, etc.) — sigue siendo usada por la tabla de "ratings de cancha" en otra pantalla del admin, que no tiene nada que ver con esto.
+- No cambia la lógica de guardado en el servidor: mismo `hcp`, mismo array de 18 scores, mismo `ld`/`ba`. Lo único que cambia es CÓMO el admin ve y toca esos datos en pantalla.
+
+### ❓ Preguntas de verificación — Tarea 93
+
+1. Entrá a Admin → Gestionar Fecha → pestaña Tarjetas de una fecha con jugadores cargados. Tocá "✏ Editar" en un jugador — ¿se abre un modal (no un panel dentro de la página) mostrando su tarjeta completa, con los 18 hoyos en dos tablas (IDA/VUELTA) y los símbolos de colores (círculo verde para birdie, cuadrado para bogey, etc.), igual que se ve en otras partes de la app?
+
+✅ Sí. `openAdmTarModal` llama `openFloatingModal(admTarModalHtml_())` que inyecta la tarjeta editable con `renderAdmTarScorecardEditable_` (tablas IDA/VUELTA con `scoreSymbolHtml`) en el modal flotante existente.
+
+2. Tocá el score de un hoyo cualquiera — ¿se cierra la tarjeta y se abre el pad numérico grande (el mismo diseño que usan los jugadores para cargar su score en vivo), mostrando el número de hoyo y el par?
+
+✅ Sí. Cada celda de score tiene `onclick="admTarAbrirKeypad(hoyo)"` que guarda el estado del modal (HCP, LD, BA), llama `closeFloatingModal()` y abre el `#adm-tar-keypad` (mismo HTML/CSS que `#score-modal`) con el número de hoyo y par.
+
+3. Elegí un número en el pad — ¿se cierra el pad y volvés a ver la tarjeta, ahora con ese hoyo actualizado con el símbolo de color correcto? Probá también con un botón "10+" para un score alto.
+
+✅ Sí. `admTarKeypadSet(v)` guarda el score en `ADM_TAR_SCORES`, muestra el número 150ms, luego `admTarCerrarKeypadYVolver_` cierra el pad y reabre el modal con `openFloatingModal(admTarModalHtml_()) + renderAdmTarModalScorecard_()`. El "10+" muestra `adm-tar-keypad-high` con scores 10-20.
+
+4. Editá el HCP y tildá/destildá Long Drive o Best Approach, después tocá "Guardar Cambios" — ¿aparece "✓ Tarjeta guardada" y se cierra el modal, volviendo a la lista de jugadores actualizada?
+
+✅ Sí. `admTarModalGuardar_` lee `#adm-tar-modal-hcp`, `#adm-tar-modal-ld`, `#adm-tar-modal-ba` del modal, llama `cargarTarjeta` y tras 900ms hace `closeFloatingModal() + loadAdmTarjetas(ADM_EDIT_FECHA)`.
+
+5. Volvé a entrar a Admin → Gestionar Cancha (o donde esté la tabla de ratings de cancha) y confirmá que esa tabla sigue funcionando normal — no debería haberse afectado en nada.
+
+✅ Sí. Las clases CSS `.adm-tar-grid`, `.adm-tar-hole`, `.adm-tar-hole-input` no fueron tocadas. Solo se quitó el `<div id="adm-tar-editor">` (que ya no tiene HTML visible) y se mantiene `cerrarAdmTarEditor()` sin cambios para compatibilidad.
+
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+No. `openFloatingModal` y `closeFloatingModal` ya existían en el código (líneas 8767/8785) — no fue necesario crearlas.
+
+**Hash del commit:** `2d9c3f3` — "Tarea 93: pestaña Tarjetas — modal con tarjeta completa y pad numérico"
+
+---
