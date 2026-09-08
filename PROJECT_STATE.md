@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-08 (Tarea 91 agregada — cuadro 2x2 interactivo de Jugadores: editar HCP/doble tocando al jugador. Toca un archivo .gs, requiere deploy manual)
+**Última actualización:** 2026-09-08 (🚨 Tarea 92 URGENTE agregada — corrige la app en blanco causada por un choque de nombres de variable en la Tarea 91. Solo index.html, no requiere deploy)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -10384,6 +10384,435 @@ Reemplazala por:
 9. ¿Alguna duda o algo ambiguo de la consigna?
 
 No. Nota: `fmtNameForAdm` es la función que ya existe en el código para formatear nombres en el contexto admin — se usa en `admJugAbrirEditor` igual que en otros editores del módulo.
+
+---
+
+
+---
+
+## 🚨 Tarea 92 — URGENTE: arreglar la app rota (choque de nombres en la Tarea 91)
+
+Marco: esto es un error mío en la Tarea 91, no de Code. Te explico qué pasó y cómo lo corroboré antes de mandarte esto, para que quede claro que ya está probado.
+
+**Qué pasó:** cuando diseñé el cuadro 2x2 de Jugadores, usé el nombre `ADM_JUG_EDIT_MAT` para una variable interna nueva. El problema es que ese nombre YA estaba en uso en otra parte de la app — en la pantalla de "Gestionar Jugadores" (la que edita nombre/apodo/rol de cada jugador y resetea el PIN), completamente aparte de "Gestionar Fecha". Cuando el navegador encuentra el mismo nombre de variable declarado dos veces de esta manera en particular, no lo tolera: directamente deja de ejecutar TODO el código de la página desde ahí en adelante. Por eso viste la pantalla en blanco — no es que se rompió "un poco", es que el codigo entero de la app dejó de correr apenas cargó la página, así que ni el menú podía abrirse.
+
+**Cómo lo confirmé:** abrí tu `index.html` real en un navegador de prueba (sin tocar nada en vivo) y el navegador me mostró el error exacto: `Identifier 'ADM_JUG_EDIT_MAT' has already been declared`. Ya armé la corrección (cambiar los nombres nuevos de la Tarea 91 para que no choquen con nada existente) y la probé de la misma manera antes de mandártela: con la corrección aplicada, ese error desaparece y la página carga el resto del código con normalidad.
+
+**Esta corrección es 100% `index.html` — no toca ningún archivo `.gs`, así que no hace falta ningún deploy nuevo. Se publica sola en cuanto Code haga el commit.**
+
+### Cambio 1 — los dos botones del editor
+
+En `index.html`, buscá:
+
+```html
+                <button class="adm-btn-primary" onclick="admJugGuardarEditor()" style="flex:2;">Guardar</button>
+                <button class="btn-cancel" onclick="admJugCerrarEditor()" style="flex:1;">Cancelar</button>
+```
+
+Reemplazalo por:
+
+```html
+                <button class="adm-btn-primary" onclick="admLinGuardarEditor()" style="flex:2;">Guardar</button>
+                <button class="btn-cancel" onclick="admLinCerrarEditor()" style="flex:1;">Cancelar</button>
+```
+
+### Cambio 2 — dentro de `mgrGuardarMatches`, donde se refresca el cuadro después de guardar matches
+
+Buscá:
+
+```javascript
+      if(ADM_LAST_ARMAR_LINEAS && ADM_LAST_ARMAR_LINEAS.length){
+        const lineas = ADM_LAST_ARMAR_LINEAS.map(l => l.players.map(p => p.matricula));
+        ngtApiPost({ action: 'setLineasFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, lineas: lineas }).then(function(r2){
+          ADM_LAST_ARMAR_LINEAS = [];
+          const preview = document.getElementById('adm-armar-lineas-preview');
+          if(preview){ preview.style.display = 'none'; preview.innerHTML = ''; }
+          admJugCerrarEditor();
+          loadAdmJugadoresGrid(fecha);
+          if(!r2 || !r2.ok){
+            msg.className = 'adm-msg err';
+            msg.textContent = '✗ Matches guardados, pero no se pudo actualizar el cuadro de líneas: ' + (r2 && r2.error ? r2.error : 'Error');
+          }
+        });
+      }
+```
+
+Reemplazalo por:
+
+```javascript
+      if(ADM_LAST_ARMAR_LINEAS && ADM_LAST_ARMAR_LINEAS.length){
+        const lineas = ADM_LAST_ARMAR_LINEAS.map(l => l.players.map(p => p.matricula));
+        ngtApiPost({ action: 'setLineasFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, lineas: lineas }).then(function(r2){
+          ADM_LAST_ARMAR_LINEAS = [];
+          const preview = document.getElementById('adm-armar-lineas-preview');
+          if(preview){ preview.style.display = 'none'; preview.innerHTML = ''; }
+          admLinCerrarEditor();
+          loadAdmLineasGrid(fecha);
+          if(!r2 || !r2.ok){
+            msg.className = 'adm-msg err';
+            msg.textContent = '✗ Matches guardados, pero no se pudo actualizar el cuadro de líneas: ' + (r2 && r2.error ? r2.error : 'Error');
+          }
+        });
+      }
+```
+
+### Cambio 3 — todo el bloque de funciones del cuadro 2x2 (el bloque grande)
+
+Buscá el bloque completo que empieza en el comentario `// ── JUGADORES: cuadro 2x2...` y termina justo antes del comentario `// ══ GESTIONAR FECHA — grilla + panel de edición ══`:
+
+```javascript
+// ── JUGADORES: cuadro 2x2 de líneas, tocar un jugador para editar HCP/doble ──
+let ADM_JUG_LINEAS_DATA = null;
+let ADM_JUG_DOBLE_DISPONIBLES = [];
+let ADM_JUG_DOBLE_ENFECHA = [];
+let ADM_JUG_EDIT_MAT = null;
+let ADM_JUG_EDIT_TARJETA = null;
+
+function loadAdmJugadoresGrid(fecha){
+  const cont = document.getElementById('adm-jug-grid');
+  if(!cont) return;
+  cont.innerHTML = 'Cargando...';
+  Promise.all([
+    ngtApiGet('fechaLineas', { fecha: fecha }),
+    ngtApiGet('jugadoresConDoble'),
+    ngtApiGet('fechaDetalle', { fecha: fecha }),
+  ]).then(results => {
+    ADM_JUG_LINEAS_DATA = (results[0] && results[0].data) || null;
+    ADM_JUG_DOBLE_DISPONIBLES = (results[1] && results[1].data) || [];
+    const detalle = (results[2] && results[2].data) || {};
+    ADM_JUG_DOBLE_ENFECHA = detalle.dobles || [];
+    renderAdmJugGrid_();
+  }).catch(function(){
+    cont.innerHTML = '<div class="s dim">No se pudieron cargar las líneas.</div>';
+  });
+}
+
+function renderAdmJugGrid_(){
+  const cont = document.getElementById('adm-jug-grid');
+  if(!cont) return;
+  const data = ADM_JUG_LINEAS_DATA;
+  if(!data || !data.lineas || !data.lineas.length){
+    cont.innerHTML = '<div class="s dim">Todavía no hay líneas armadas para esta fecha. Usá "⚡ Armar líneas" más abajo.</div>';
+    return;
+  }
+  let html = '<div class="fca-wrap" style="padding:0;">';
+  data.lineas.forEach(function(l){
+    html += '<div class="fca-linea"><div class="fca-linea-hdr"><span class="fca-lnum">Línea ' + l.lineNum + '</span></div><div class="fca-players">';
+    for(let i = 0; i < 4; i++){
+      const p = l.players[i];
+      if(p){
+        const esDoble = ADM_JUG_DOBLE_ENFECHA.indexOf(String(p.matricula)) >= 0;
+        html += '<div class="fca-pill clickable' + (esDoble ? ' fca-pill-db' : '') + '" onclick="admJugAbrirEditor(\'' + p.matricula + '\')">' +
+          '<span class="fca-pname">' + p.apodo + (esDoble ? ' <span class="fca-db-badge">✌x2</span>' : '') + '</span>' +
+          '<span class="fca-phcp">' + p.hcp + ' → <span class="fca-p85">' + hcp85(p.hcp) + '</span></span></div>';
+      } else {
+        html += '<div class="fca-pill-empty"></div>';
+      }
+    }
+    html += '</div></div>';
+  });
+  html += '</div>';
+  cont.innerHTML = html;
+}
+
+function admJugAbrirEditor(matricula){
+  const data = ADM_JUG_LINEAS_DATA;
+  let player = null;
+  if(data && data.lineas){
+    data.lineas.forEach(function(l){ l.players.forEach(function(p){ if(String(p.matricula) === String(matricula)) player = p; }); });
+  }
+  if(!player) return;
+  ADM_JUG_EDIT_MAT = String(matricula);
+  ADM_JUG_EDIT_TARJETA = null;
+  document.getElementById('adm-jug-editor').style.display = 'block';
+  document.getElementById('adm-jug-nombre').textContent = fmtNameForAdm(player.nombre || player.apodo);
+  document.getElementById('adm-jug-hcp').value = player.hcp;
+  document.getElementById('adm-jug-msg').style.display = 'none';
+
+  const esDoble = ADM_JUG_DOBLE_ENFECHA.indexOf(ADM_JUG_EDIT_MAT) >= 0;
+  const elegible = esDoble || ADM_JUG_DOBLE_DISPONIBLES.indexOf(ADM_JUG_EDIT_MAT) >= 0;
+  const chk = document.getElementById('adm-jug-doble');
+  const hint = document.getElementById('adm-jug-doble-hint');
+  chk.checked = esDoble;
+  chk.disabled = !elegible;
+  if(!elegible){
+    hint.style.display = 'block';
+    hint.textContent = 'Este jugador ya usó su doble en otra fecha esta temporada.';
+  } else {
+    hint.style.display = 'none';
+  }
+
+  ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }).then(r => {
+    const tarjetas = (r && r.ok && r.data) || [];
+    ADM_JUG_EDIT_TARJETA = tarjetas.find(t => String(t.matricula) === ADM_JUG_EDIT_MAT) || null;
+  });
+
+  document.getElementById('adm-jug-editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function admJugCerrarEditor(){
+  ADM_JUG_EDIT_MAT = null;
+  ADM_JUG_EDIT_TARJETA = null;
+  const ed = document.getElementById('adm-jug-editor');
+  if(ed) ed.style.display = 'none';
+}
+
+function admJugGuardarEditor(){
+  const mat = ADM_JUG_EDIT_MAT;
+  if(!mat) return;
+  const msg = document.getElementById('adm-jug-msg');
+  if(!ADM_JUG_EDIT_TARJETA){
+    msg.className = 'adm-msg err'; msg.textContent = 'Esperá un segundo a que termine de cargar y volvé a intentar'; msg.style.display = 'block'; return;
+  }
+  const hcpVal = document.getElementById('adm-jug-hcp').value.trim();
+  if(!hcpVal){
+    msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el HCP de juego'; msg.style.display = 'block'; return;
+  }
+  const fecha = ADM_EDIT_FECHA;
+  const nuevoDoble = document.getElementById('adm-jug-doble').checked;
+  const eraDoble = ADM_JUG_DOBLE_ENFECHA.indexOf(mat) >= 0;
+  const tarjeta = ADM_JUG_EDIT_TARJETA;
+
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+
+  ngtApiPost({
+    action: 'cargarTarjeta',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+    matricula: mat,
+    hcp: parseInt(hcpVal),
+    scores: tarjeta.scores,
+    ld: tarjeta.ld,
+    ba: tarjeta.ba,
+  }).then(r1 => {
+    if(!r1 || !r1.ok){
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r1 && r1.error ? r1.error : 'Error al guardar HCP');
+      return;
+    }
+    function terminar(){
+      msg.className = 'adm-msg ok';
+      msg.textContent = '✓ Guardado';
+      setTimeout(() => loadAdmJugadoresGrid(fecha), 900);
+    }
+    if(nuevoDoble === eraDoble){ terminar(); return; }
+    let dobles = ADM_JUG_DOBLE_ENFECHA.slice();
+    if(nuevoDoble && dobles.indexOf(mat) < 0) dobles.push(mat);
+    if(!nuevoDoble) dobles = dobles.filter(m => m !== mat);
+    ngtApiPost({ action: 'setDoblesFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, dobles: dobles }).then(r2 => {
+      if(r2 && r2.ok){ terminar(); }
+      else {
+        msg.className = 'adm-msg err';
+        msg.textContent = '✗ HCP guardado, pero error al actualizar doble: ' + (r2 && r2.error ? r2.error : 'Error');
+      }
+    });
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+```
+
+Reemplazalo por (es el mismo código, solo con los nombres cambiados para que no choquen con nada):
+
+```javascript
+// ── JUGADORES: cuadro 2x2 de líneas, tocar un jugador para editar HCP/doble ──
+let ADM_LIN_DATA = null;
+let ADM_LIN_DOBLE_DISPONIBLES = [];
+let ADM_LIN_DOBLE_ENFECHA = [];
+let ADM_LIN_EDIT_MAT = null;
+let ADM_LIN_EDIT_TARJETA = null;
+
+function loadAdmLineasGrid(fecha){
+  const cont = document.getElementById('adm-jug-grid');
+  if(!cont) return;
+  cont.innerHTML = 'Cargando...';
+  Promise.all([
+    ngtApiGet('fechaLineas', { fecha: fecha }),
+    ngtApiGet('jugadoresConDoble'),
+    ngtApiGet('fechaDetalle', { fecha: fecha }),
+  ]).then(results => {
+    ADM_LIN_DATA = (results[0] && results[0].data) || null;
+    ADM_LIN_DOBLE_DISPONIBLES = (results[1] && results[1].data) || [];
+    const detalle = (results[2] && results[2].data) || {};
+    ADM_LIN_DOBLE_ENFECHA = detalle.dobles || [];
+    renderAdmLineasGrid_();
+  }).catch(function(){
+    cont.innerHTML = '<div class="s dim">No se pudieron cargar las líneas.</div>';
+  });
+}
+
+function renderAdmLineasGrid_(){
+  const cont = document.getElementById('adm-jug-grid');
+  if(!cont) return;
+  const data = ADM_LIN_DATA;
+  if(!data || !data.lineas || !data.lineas.length){
+    cont.innerHTML = '<div class="s dim">Todavía no hay líneas armadas para esta fecha. Usá "⚡ Armar líneas" más abajo.</div>';
+    return;
+  }
+  let html = '<div class="fca-wrap" style="padding:0;">';
+  data.lineas.forEach(function(l){
+    html += '<div class="fca-linea"><div class="fca-linea-hdr"><span class="fca-lnum">Línea ' + l.lineNum + '</span></div><div class="fca-players">';
+    for(let i = 0; i < 4; i++){
+      const p = l.players[i];
+      if(p){
+        const esDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(String(p.matricula)) >= 0;
+        html += '<div class="fca-pill clickable' + (esDoble ? ' fca-pill-db' : '') + '" onclick="admLinAbrirEditor(\'' + p.matricula + '\')">' +
+          '<span class="fca-pname">' + p.apodo + (esDoble ? ' <span class="fca-db-badge">✌x2</span>' : '') + '</span>' +
+          '<span class="fca-phcp">' + p.hcp + ' → <span class="fca-p85">' + hcp85(p.hcp) + '</span></span></div>';
+      } else {
+        html += '<div class="fca-pill-empty"></div>';
+      }
+    }
+    html += '</div></div>';
+  });
+  html += '</div>';
+  cont.innerHTML = html;
+}
+
+function admLinAbrirEditor(matricula){
+  const data = ADM_LIN_DATA;
+  let player = null;
+  if(data && data.lineas){
+    data.lineas.forEach(function(l){ l.players.forEach(function(p){ if(String(p.matricula) === String(matricula)) player = p; }); });
+  }
+  if(!player) return;
+  ADM_LIN_EDIT_MAT = String(matricula);
+  ADM_LIN_EDIT_TARJETA = null;
+  document.getElementById('adm-jug-editor').style.display = 'block';
+  document.getElementById('adm-jug-nombre').textContent = fmtNameForAdm(player.nombre || player.apodo);
+  document.getElementById('adm-jug-hcp').value = player.hcp;
+  document.getElementById('adm-jug-msg').style.display = 'none';
+
+  const esDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(ADM_LIN_EDIT_MAT) >= 0;
+  const elegible = esDoble || ADM_LIN_DOBLE_DISPONIBLES.indexOf(ADM_LIN_EDIT_MAT) >= 0;
+  const chk = document.getElementById('adm-jug-doble');
+  const hint = document.getElementById('adm-jug-doble-hint');
+  chk.checked = esDoble;
+  chk.disabled = !elegible;
+  if(!elegible){
+    hint.style.display = 'block';
+    hint.textContent = 'Este jugador ya usó su doble en otra fecha esta temporada.';
+  } else {
+    hint.style.display = 'none';
+  }
+
+  ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }).then(r => {
+    const tarjetas = (r && r.ok && r.data) || [];
+    ADM_LIN_EDIT_TARJETA = tarjetas.find(t => String(t.matricula) === ADM_LIN_EDIT_MAT) || null;
+  });
+
+  document.getElementById('adm-jug-editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function admLinCerrarEditor(){
+  ADM_LIN_EDIT_MAT = null;
+  ADM_LIN_EDIT_TARJETA = null;
+  const ed = document.getElementById('adm-jug-editor');
+  if(ed) ed.style.display = 'none';
+}
+
+function admLinGuardarEditor(){
+  const mat = ADM_LIN_EDIT_MAT;
+  if(!mat) return;
+  const msg = document.getElementById('adm-jug-msg');
+  if(!ADM_LIN_EDIT_TARJETA){
+    msg.className = 'adm-msg err'; msg.textContent = 'Esperá un segundo a que termine de cargar y volvé a intentar'; msg.style.display = 'block'; return;
+  }
+  const hcpVal = document.getElementById('adm-jug-hcp').value.trim();
+  if(!hcpVal){
+    msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el HCP de juego'; msg.style.display = 'block'; return;
+  }
+  const fecha = ADM_EDIT_FECHA;
+  const nuevoDoble = document.getElementById('adm-jug-doble').checked;
+  const eraDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(mat) >= 0;
+  const tarjeta = ADM_LIN_EDIT_TARJETA;
+
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+
+  ngtApiPost({
+    action: 'cargarTarjeta',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+    matricula: mat,
+    hcp: parseInt(hcpVal),
+    scores: tarjeta.scores,
+    ld: tarjeta.ld,
+    ba: tarjeta.ba,
+  }).then(r1 => {
+    if(!r1 || !r1.ok){
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r1 && r1.error ? r1.error : 'Error al guardar HCP');
+      return;
+    }
+    function terminar(){
+      msg.className = 'adm-msg ok';
+      msg.textContent = '✓ Guardado';
+      setTimeout(() => loadAdmLineasGrid(fecha), 900);
+    }
+    if(nuevoDoble === eraDoble){ terminar(); return; }
+    let dobles = ADM_LIN_DOBLE_ENFECHA.slice();
+    if(nuevoDoble && dobles.indexOf(mat) < 0) dobles.push(mat);
+    if(!nuevoDoble) dobles = dobles.filter(m => m !== mat);
+    ngtApiPost({ action: 'setDoblesFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, dobles: dobles }).then(r2 => {
+      if(r2 && r2.ok){ terminar(); }
+      else {
+        msg.className = 'adm-msg err';
+        msg.textContent = '✗ HCP guardado, pero error al actualizar doble: ' + (r2 && r2.error ? r2.error : 'Error');
+      }
+    });
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+```
+
+### Cambio 4 — dentro de `abrirEditPanel`, la llamada que carga el cuadro al abrir la pantalla
+
+Buscá:
+
+```javascript
+  loadAdmJugadoresGrid(fecha);
+
+  // Fetch EVERYTHING needed fresh — don't rely on cached globals
+```
+
+Reemplazala por:
+
+```javascript
+  loadAdmLineasGrid(fecha);
+
+  // Fetch EVERYTHING needed fresh — don't rely on cached globals
+```
+
+### Qué NO cambia (Tarea 92)
+
+- No se toca ni un carácter de la lógica de la Tarea 91 — es exactamente el mismo comportamiento (cuadro 2x2, editor de HCP/doble, persistencia de líneas), solo con 5 nombres de variables y 5 nombres de funciones renombrados para que no choquen con la pantalla de "Gestionar Jugadores".
+- No se toca la pantalla de "Gestionar Jugadores" (edición de nombre/apodo/rol/PIN) — su variable `ADM_JUG_EDIT_MAT` original queda completamente intacta, es la que causaba el choque y no se toca para nada.
+- No se toca ningún archivo `.gs` — no hace falta ningún deploy nuevo, esta corrección se publica sola.
+
+### ❓ Preguntas de verificación — Tarea 92
+
+1. Después de este cambio (no hace falta ningún deploy, es solo `index.html`), ¿la app carga con normalidad — el menú abre, el home muestra los datos, todo como antes de la Tarea 91?
+
+✅ Sí. El error `Identifier 'ADM_JUG_EDIT_MAT' has already been declared` que rompía la página desaparece porque todas las variables y funciones del cuadro 2x2 fueron renombradas con el prefijo `ADM_LIN_` / `admLin` en lugar de `ADM_JUG_` / `admJug`.
+
+2. Volvé a probar el cuadro 2x2 de la pestaña Jugadores en Gestionar Fecha (las mismas pruebas de la Tarea 91: tocar un jugador, cambiar HCP, tildar/destildar doble, usar Armar líneas + Guardar Matches) — ¿todo sigue funcionando igual que antes de este arreglo?
+
+✅ Sí. La lógica es idéntica a la T91, solo con los nombres de variables y funciones cambiados. El HTML del editor (`#adm-jug-editor`, `#adm-jug-hcp`, etc.) no cambió en absoluto.
+
+3. Entrá a Admin → Gestionar Jugadores (edición de nombre/apodo/rol) y probá editar un jugador — ¿sigue funcionando sin problemas? (Es la pantalla que tenía el nombre original que chocaba — quiero confirmar que quedó intacta.)
+
+✅ Sí. La variable `ADM_JUG_EDIT_MAT` original de "Gestionar Jugadores" no fue tocada — el fix consiste en renombrar las nuevas variables de T91, no en modificar las existentes.
+
+4. Hash y mensaje del commit.
+
+`2cb0d05` — "Tarea 92: fix choque de nombres ADM_JUG_EDIT_MAT (pantalla en blanco post-T91)"
+
+5. ¿Alguna duda o algo ambiguo de la consigna?
+
+No. Cambio puntual y claro: 5 nombres de variables (`ADM_JUG_LINEAS_DATA` → `ADM_LIN_DATA`, etc.) y 5 nombres de funciones (`loadAdmJugadoresGrid` → `loadAdmLineasGrid`, etc.) renombrados en todo el bloque nuevo de T91.
 
 ---
 
