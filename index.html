@@ -1477,6 +1477,13 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 }
 .perf-ecl-totals .lbl{font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);}
 .perf-ecl-totals .num{font-size:22px;font-weight:800;line-height:1;}
+.perf-ecl-resumen{
+  margin-top:16px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 16px;
+  background:var(--g1);padding:8px 14px;border-radius:4px;
+  font-family:'Barlow Condensed',sans-serif;
+}
+.perf-ecl-resumen-item{display:flex;align-items:baseline;gap:6px;}
+.perf-ecl-resumen-item .rlbl{font-size:11px;font-weight:700;color:var(--g4);text-transform:uppercase;letter-spacing:.06em;}
 
 @media(max-width:540px){
   .perf-cifras{grid-template-columns:1fr 1fr;}
@@ -8384,10 +8391,10 @@ function renderTarjeta18Hoyos(scores, pares, scoreLabel, indices, stbPorHoyo, co
       var gross18 = neto18 - hcpNum;
       var golpes18 = gross18 - parTotal18;
       var golpesStr = golpes18 > 0 ? ('+' + golpes18) : String(golpes18);
-      html += '<div class="perf-ecl-totals">' +
-        '<div><div class="lbl">HCP</div><div class="num">' + hcpJuego + '/' + hcp85(hcpJuego) + '</div></div>' +
-        '<div style="text-align:center;"><div class="lbl">Medal</div><div class="num">' + neto18 + '/' + gross18 + '</div></div>' +
-        '<div style="text-align:right;"><div class="lbl">Golpes</div><div class="num">' + golpesStr + '</div></div>' +
+      html += '<div class="perf-ecl-resumen">' +
+        '<div class="perf-ecl-resumen-item"><span class="rlbl">HCP</span><span class="perf-ecl-par">' + hcpJuego + '/' + hcp85(hcpJuego) + '</span></div>' +
+        '<div class="perf-ecl-resumen-item"><span class="rlbl">Medal</span><span class="perf-ecl-par">' + neto18 + '/' + gross18 + '</span></div>' +
+        '<div class="perf-ecl-resumen-item"><span class="rlbl">Golpes</span><span class="perf-ecl-par">' + golpesStr + '</span></div>' +
       '</div>';
     }
   }
