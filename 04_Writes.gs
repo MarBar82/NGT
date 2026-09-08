@@ -1150,12 +1150,31 @@ function setLineasFecha_(params) {
   return { ok: true };
 }
 
+function fechaTieneScoresCargados_(fecha) {
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return false;
+  const fStr = String(fecha);
+  const last = findNextEmptyRow_(sh, 1);
+  if (last <= 2) return false;
+  const data = sh.getRange(2, 1, last - 2, 22).getValues();
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (String(row[0] || '').trim() !== fStr) continue;
+    for (let c = 4; c < 22; c++) {
+      const v = row[c];
+      if (v !== '' && v !== null && v !== undefined) return true;
+    }
+  }
+  return false;
+}
+
 function quitarJugadorDeLinea_(params) {
   const { adminKey, fecha, matricula } = params;
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
   if (!fecha || !matricula) return { ok: false, error: 'Falta fecha o matrícula' };
   const fStr = String(fecha);
   const mStr = String(matricula);
+  if (fechaTieneScoresCargados_(fStr)) return { ok: false, error: 'Ya hay scores cargados en esta fecha — no se puede modificar la línea. Usalo solo antes de que arranque la fecha.' };
   const meta = getFechaMeta_(fStr);
   if (!meta || !meta.lineas || !meta.lineas.length) return { ok: false, error: 'Esta fecha no tiene líneas armadas' };
   const nuevasLineas = meta.lineas.map(function(l) {
@@ -1184,6 +1203,7 @@ function agregarJugadorALinea_(params) {
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
   if (!fecha || !matricula || !lineNum) return { ok: false, error: 'Faltan datos' };
   const fStr = String(fecha); const mStr = String(matricula);
+  if (fechaTieneScoresCargados_(fStr)) return { ok: false, error: 'Ya hay scores cargados en esta fecha — no se puede modificar la línea. Usalo solo antes de que arranque la fecha.' };
   const meta = getFechaMeta_(fStr);
   if (!meta || !meta.lineas || !meta.lineas.length) return { ok: false, error: 'Esta fecha no tiene líneas armadas' };
   const yaAsignado = meta.lineas.some(function(l) {

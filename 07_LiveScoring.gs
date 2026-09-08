@@ -173,7 +173,7 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
     let estado = '';
     if (mr.played > 0) {
       if (diff === 0) estado = 'AS';
-      else if (abs > remaining) estado = abs + '&' + remaining + (diff < 0 ? ' DN' : '');
+      else if (abs > remaining && remaining > 0) estado = abs + '&' + remaining + (diff < 0 ? ' DN' : '');
       else estado = diff > 0 ? (diff + ' UP') : (abs + ' DN');
     }
 
@@ -541,7 +541,7 @@ function calcularResultadoMatch_(netA, netB) {
   if (played > 0) {
     if (diff === 0) {
       resA = 'AS'; resB = 'AS'; mPtsA = 3; mPtsB = 3;
-    } else if (abs > remaining) {
+    } else if (abs > remaining && remaining > 0) {
       if (diff > 0) { resA = abs + '&' + remaining; mPtsA = 6; }
       else          { resB = abs + '&' + remaining; mPtsB = 6; }
     } else {
