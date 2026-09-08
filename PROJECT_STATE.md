@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-08 (Tareas 94 a 97 agregadas — rediseño completo de "Gestionar Fecha": se sacan los recuadros con header azul de todas las secciones, en Jugadores/Líneas ahora se puede sacar un jugador de una línea y sumar a otro en el casillero vacío, Tarjetas pasa a verse de a 2 por fila sin botón Editar, Bonus se separa en dos secciones limpias, y en Crear Fecha el checklist de jugadores pasa a ser botones que se tildan con color. La Tarea 94 agrega funciones nuevas al backend y necesita deploy manual de Apps Script — las Tareas 95, 96 y 97 son solo index.html y se publican solas)
+**Última actualización:** 2026-09-08 (Tarea 99 agregada — el deploy de la Tarea 94 ya funcionó, pero Marco encontró que sacar/sumar un jugador de una línea con la fecha ya empezada rompe las tarjetas y los matches de los demás jugadores. La Tarea 99 bloquea esa función en cuanto hay al menos un hoyo cargado en la fecha —a partir de ahí solo se puede usar "Recalcular Fecha" para arreglar cosas—, y de paso corrige que los matches que terminan en el hoyo 18 por margen se mostraban "2&0"/"1&0" en vez de "2 UP"/"1 UP". Los dos cambios son de backend —`04_Writes.gs` y `07_LiveScoring.gs`— y necesitan el mismo deploy manual de Apps Script que la Tarea 94. La Tarea 98 —diseño de Recalcular, líneas 2x2 y Gestionar Fechas como pill— sigue pendiente, no depende de esta)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -12543,3 +12543,371 @@ Reemplazalo por:
 3. La selección funciona igual — `wizValidarPaso1_` y el armado de líneas leen `#adm-jugadores-list input:checked`, que no cambió.
 4. Al resetear el wizard, el `forEach` saca `checked` y también remueve la clase `on` del wrapper.
 5. Sin dudas.
+
+## 🎯 Tarea para Claude Code — Tarea 98 (ajustes de diseño: Recalcular, líneas 2x2, Gestionar Fechas como pill)
+
+### Contexto
+
+Marco probó las Tareas 94-97 y pidió 3 ajustes más sobre el mismo rediseño (todo `index.html`, sin backend):
+
+1. La pestaña **Recalcular** (dentro de Gestionar Fecha) también tenía recuadros con header azul — sacarlos, dejando solo los botones "Recalcular Fecha" y "Borrar Fecha Completa" con el estilo moderno del resto del rediseño.
+2. En la pestaña **Jugadores**, los 4 jugadores de cada línea tienen que verse en grilla de **2x2** (no apilados de a uno), y donde dice "HCP → HCP al 85%" cambiar la flechita por una barra: **"HCP / HCP al 85%"**.
+3. En la pantalla **Gestionar Fechas** (la grilla donde se elige qué fecha administrar — no confundir con "Gestionar Fecha", la pantalla de una fecha puntual), sacar los iconos de lápiz ✏ y tacho de basura 🗑 de cada recuadro de fecha. Ahora se toca directo el recuadro de la fecha (que pasa a tener formato pill, como el resto de los elementos del rediseño) para entrar a administrarla.
+
+**Nota sobre el punto 3:** como el botón de tacho (🗑) desaparece de esta pantalla, para borrar una fecha ahora hay que entrar a esa fecha y usar "Borrar Fecha Completa" en la pestaña Recalcular (que ya existía y sigue funcionando igual). No hace falta un botón de borrado rápido en la grilla porque ya está resuelto adentro de cada fecha.
+
+### Cambio 1 — HTML de la pestaña Recalcular: sacar los recuadros azules
+
+Buscá este bloque completo:
+
+```html
+      <div id="edtab-panel-recalc" style="display:none;">
+        <!-- RECALCULAR FECHA (unificado) -->
+        <div class="adm-card" id="adm-recalc-card">
+          <div class="adm-card-hdr">🔄 Recalcular Fecha</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:12px;font-size:12px;">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
+            <button class="adm-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
+            <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <!-- BORRAR FECHA — al fondo de la pantalla de edición -->
+        <div class="adm-card" style="border-color:#fca5a5;">
+          <div class="adm-card-hdr danger">Borrar Fecha</div>
+          <div class="adm-card-body">
+            <p style="font-size:12px;color:var(--g4);line-height:1.5;margin:0 0 12px;">
+              Elimina esta fecha por completo: tarjetas, STB, matches, SCORE y Leaderboard.<br>
+              <strong style="color:#b91c1c;">Esta acción no se puede deshacer.</strong>
+            </p>
+            <button class="adm-btn-destructive" onclick="adminEliminarFecha()">Borrar Fecha Completa</button>
+            <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+```
+
+Reemplazalo por:
+
+```html
+      <div id="edtab-panel-recalc" style="display:none;">
+        <div class="gf-section">
+          <div class="gf-section-title">Recalcular Fecha</div>
+          <div class="gf-hint">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
+          <button class="gf-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
+          <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+        </div>
+
+        <div class="gf-section">
+          <div class="gf-section-title" style="color:#b91c1c;border-bottom-color:#b91c1c;">Borrar Fecha</div>
+          <div class="gf-hint">Elimina esta fecha por completo: tarjetas, STB, matches, SCORE y Leaderboard. <strong style="color:#b91c1c;">Esta acción no se puede deshacer.</strong></div>
+          <button class="adm-btn-destructive" onclick="adminEliminarFecha()">Borrar Fecha Completa</button>
+          <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+```
+
+### Cambio 2 — CSS: modernizar el botón "Borrar Fecha Completa"
+
+Buscá:
+
+```css
+.adm-btn-destructive{width:100%;background:#b91c1c;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:11px;border:none;border-radius:3px;cursor:pointer;transition:.12s;}
+```
+
+Reemplazalo por:
+
+```css
+.adm-btn-destructive{width:100%;background:#b91c1c;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:14px;border:none;border-radius:8px;cursor:pointer;transition:.12s;}
+```
+
+(Es el mismo botón rojo de siempre, solo con las esquinas más redondeadas y un poco más grande, para que combine con los demás botones del rediseño.)
+
+### Cambio 3 — CSS: grilla de jugadores por línea en 2x2
+
+Buscá:
+
+```css
+.gf-lin-players{display:flex;flex-direction:column;gap:8px;}
+```
+
+Reemplazalo por:
+
+```css
+.gf-lin-players{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+@media(max-width:380px){.gf-lin-players{grid-template-columns:1fr;}}
+```
+
+(En pantallas muy angostas —menos de 380px— baja a 1 columna para que no se vea apretado, igual que ya hace la grilla de Tarjetas.)
+
+### Cambio 4 — CSS: la pastilla de cada jugador pasa a apilar nombre y HCP (para que entre bien en 2 columnas)
+
+Buscá:
+
+```css
+.gf-lin-pill{appearance:none;-webkit-appearance:none;margin:0;display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 16px;background:var(--white);border:1px solid var(--g1);border-radius:12px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+```
+
+Reemplazalo por:
+
+```css
+.gf-lin-pill{appearance:none;-webkit-appearance:none;margin:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;padding:12px 14px;background:var(--white);border:1px solid var(--g1);border-radius:12px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+```
+
+### Cambio 5 — CSS: mantener centrado el botón punteado "+ Sumar jugador" con el nuevo layout
+
+Buscá:
+
+```css
+.gf-lin-pill-empty{justify-content:center;border:1.5px dashed var(--g3);background:var(--off);color:var(--g4);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;box-shadow:none;}
+```
+
+Reemplazalo por:
+
+```css
+.gf-lin-pill-empty{align-items:center;justify-content:center;text-align:center;border:1.5px dashed var(--g3);background:var(--off);color:var(--g4);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;box-shadow:none;}
+```
+
+### Cambio 6 — JS: cambiar la flechita por "/" en `renderAdmLineasGrid_`
+
+Buscá:
+
+```javascript
+          '<span class="gf-lin-phcp">' + p.hcp + ' → <span class="gf-lin-p85">' + hcp85(p.hcp) + '</span></span></button>';
+```
+
+Reemplazalo por:
+
+```javascript
+          '<span class="gf-lin-phcp">' + p.hcp + ' / <span class="gf-lin-p85">' + hcp85(p.hcp) + '</span></span></button>';
+```
+
+### Cambio 7 — CSS: el recuadro de cada fecha (Gestionar Fechas) pasa a ser un botón-pill clickeable
+
+Buscá:
+
+```css
+.adm-fecha-tile{background:var(--white);border:var(--border);border-radius:12px;padding:14px 10px 10px;text-align:center;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+```
+
+Reemplazalo por:
+
+```css
+.adm-fecha-tile{appearance:none;-webkit-appearance:none;width:100%;background:var(--white);border:var(--border);border-radius:12px;padding:14px 10px 10px;text-align:center;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);cursor:pointer;font-family:inherit;transition:background .12s;}
+.adm-fecha-tile:hover{background:var(--off);}
+.adm-fecha-tile:active{background:var(--off);transform:scale(.97);}
+```
+
+### Cambio 8 — JS: `renderFechasGrid()` — sacar los botones de lápiz/tacho, todo el recuadro lleva a la fecha
+
+Buscá:
+
+```javascript
+      return `
+      <div class="adm-fecha-tile">
+        <div class="adm-fecha-tile-num">${f}</div>
+        <div class="adm-fecha-tile-lbl">Fecha</div>
+        ${badge}
+        <div class="adm-fecha-tile-btns">
+          <button class="adm-fecha-tile-btn" title="Editar" onclick="abrirEditPanel('${f}')">✏</button>
+          <button class="adm-fecha-tile-btn danger" title="Borrar" onclick="adminEliminarFechaDesdeGrid('${f}')">🗑</button>
+        </div>
+      </div>`;
+```
+
+Reemplazalo por:
+
+```javascript
+      return `
+      <button type="button" class="adm-fecha-tile" onclick="abrirEditPanel('${f}')">
+        <div class="adm-fecha-tile-num">${f}</div>
+        <div class="adm-fecha-tile-lbl">Fecha</div>
+        ${badge}
+      </button>`;
+```
+
+### Qué NO cambia (Tarea 98)
+
+- No se toca ningún archivo `.gs` — no hace falta deploy para esta tarea.
+- La función `adminEliminarFechaDesdeGrid()` deja de usarse (ya no hay botón que la llame) pero no se borra del código — queda ahí sin uso, no molesta a nada. Si en el futuro Marco quiere un atajo de borrado rápido desde la grilla, se puede reactivar.
+- `admRecalcularFecha()` y `adminEliminarFecha()` (el borrado real, usado desde adentro de la fecha) no se tocan — siguen funcionando exactamente igual.
+- La clase `.adm-card-hdr.danger` queda sin uso (era el header rojo del recuadro azul de Borrar Fecha) pero no se borra, por las dudas se use en otro lado más adelante.
+- No se toca la pantalla pública "Ver Líneas" (la que ven los jugadores) ni la grilla de Tarjetas — son casos aparte, no comparten estas clases CSS.
+
+### ❓ Preguntas de verificación — Tarea 98
+
+1. Entrá a Admin → Gestionar Fecha de una fecha cualquiera → pestaña Recalcular. ¿Ya no aparece ningún recuadro con header azul, solo el texto explicativo y el botón "🔄 Recalcular Fecha" (rojo, con esquinas redondeadas)? ¿Y más abajo el título "Borrar Fecha" en rojo, con el botón "Borrar Fecha Completa" con el mismo estilo moderno redondeado?
+2. En la misma fecha, andá a la pestaña Jugadores. ¿Los 4 jugadores de cada línea se ven en una grilla de 2x2 (dos arriba, dos abajo) en vez de apilados uno debajo del otro? ¿El HCP se ve como, por ejemplo, "12 / 10" en vez de "12 → 10"?
+3. Volvé a Admin → Gestionar Fechas (la pantalla con todas las fechas para elegir cuál administrar). ¿Ya no aparecen los iconos de lápiz ni de tacho de basura en cada recuadro? ¿Al tocar directamente sobre el recuadro de una fecha entra a administrarla? ¿El recuadro tiene un efecto visual al tocarlo (cambia de color un instante), como el resto de los botones-pill de la app?
+4. Confirmá que para borrar una fecha ahora hay que entrar a ella y usar "Borrar Fecha Completa" en la pestaña Recalcular, y que sigue funcionando igual que antes (pide confirmación y borra todo).
+5. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 98
+
+1. Sí: la pestaña Recalcular ya no tiene cards azules. Hay dos secciones `gf-section`: "Recalcular Fecha" (hint + botón rojo `gf-btn-primary`) y "Borrar Fecha" (título en rojo `#b91c1c`, hint, botón `adm-btn-destructive` con `border-radius:8px`).
+2. Sí: `gf-lin-players` usa `display:grid;grid-template-columns:1fr 1fr` → los 4 jugadores se muestran en 2x2. El HCP dice "12 / 10" (se reemplazó `→` por `/` en `renderAdmLineasGrid_`). En <380px baja a 1 columna.
+3. Sí: `renderFechasGrid` ya no genera botones de lápiz/tacho. El contenedor es `<button class="adm-fecha-tile" onclick="abrirEditPanel(...)">` — todo el tile es clickeable, con hover y `scale(.97)` al tocar.
+4. `adminEliminarFecha()` (llamada desde la pestaña Recalcular) no se tocó. `adminEliminarFechaDesdeGrid()` queda en el código sin uso pero sin borrar.
+5. Sin dudas.
+
+## 🎯 Tarea para Claude Code — Tarea 99 (bloquear quitar/sumar jugador una vez que arrancó la fecha + arreglar "2&0"/"1&0")
+
+### Contexto
+
+Marco probó "Sacar de la línea" y "Sumar jugador" (Tarea 94) en una fecha que ya tenía scores cargados, y encontró que rompía las tarjetas y los matches de los demás jugadores (quedaron en pendiente, y "Rearmar líneas" dejó de encontrarlos). Revisé a fondo el código de `quitarJugadorDeLinea_`/`agregarJugadorALinea_`/`editarFecha_` y no encontré ninguna forma de que, en teoría, toquen a un jugador que no sea el que se está sacando o sumando — están armadas para tocar solo a ese jugador puntual. Mi conclusión, sin poder probarlo en vivo contra la planilla real, es que el problema aparece específicamente cuando la fecha ya tiene juego en curso (algo que estas funciones no estaban pensadas para tocar).
+
+En vez de perseguir un bug que no puedo reproducir de este lado, hacemos lo que Marco propuso, que es la solución correcta de todas formas: esta función solo tiene sentido ANTES de que arranque la fecha (mientras se están armando las líneas), así que la bloqueamos apenas se cargó el primer hoyo. A partir de ese momento, si hace falta corregir algo de un jugador en una fecha ya empezada, se sigue pudiendo usar "Recalcular Fecha" (Tarea 98) para poner todo en orden, o pedirme que lo revisemos juntos con más detalle.
+
+De paso, Marco pidió otro arreglo chico: cuando un match termina exactamente en el hoyo 18 por diferencia de puntos (sin haberse "cerrado" antes), tiene que mostrarse como "1 UP" o "2 UP" — no "1&0" / "2&0". El "&0" no existe en el golf: la notación "X&Y" es solo para cuando el match se termina ANTES del hoyo 18 (con Y hoyos todavía por jugar); si se llega al hoyo 18 y se define por diferencia, siempre es "X UP".
+
+Los dos cambios son en archivos `.gs` — **esta tarea necesita el mismo deploy manual de Apps Script que hiciste para la Tarea 94** (Implementar → Administrar implementaciones → editar → Nueva versión → Implementar).
+
+### Parte 1 — Bloquear la función una vez que hay scores cargados
+
+#### Cambio 1 — nueva función en `04_Writes.gs`: detectar si la fecha ya tiene hoyos cargados
+
+Buscá el final de `setLineasFecha_` (el mismo bloque de siempre, justo antes de donde empieza `quitarJugadorDeLinea_`):
+
+```javascript
+  audit_('SET_LINEAS_FECHA', 'admin', { fecha, lineas: meta[fStr].lineas });
+  return { ok: true };
+}
+
+function quitarJugadorDeLinea_(params) {
+```
+
+Reemplazalo por (agrega la función nueva justo antes de `quitarJugadorDeLinea_`, sin tocar nada de lo que ya estaba):
+
+```javascript
+  audit_('SET_LINEAS_FECHA', 'admin', { fecha, lineas: meta[fStr].lineas });
+  return { ok: true };
+}
+
+/**
+ * true si algún jugador de esta fecha ya tiene al menos un hoyo cargado (columnas E:V
+ * de TARJETAS). Se usa para bloquear quitarJugadorDeLinea_/agregarJugadorALinea_ una vez
+ * que arrancó la carga de scores — a partir de ahí, tocar la línea puede romper tarjetas
+ * y matches ya en curso. Antes de que arranque la fecha (0 hoyos cargados) es seguro.
+ */
+function fechaTieneScoresCargados_(fecha) {
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return false;
+  const fStr = String(fecha);
+  const last = findNextEmptyRow_(sh, 1);
+  if (last <= 2) return false;
+  const data = sh.getRange(2, 1, last - 2, 22).getValues(); // A(0)=fecha, B(1)=mat, ... E..V(4..21)=H1..H18
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (String(row[0] || '').trim() !== fStr) continue;
+    for (let c = 4; c < 22; c++) {
+      const v = row[c];
+      if (v !== '' && v !== null && v !== undefined) return true;
+    }
+  }
+  return false;
+}
+
+function quitarJugadorDeLinea_(params) {
+```
+
+#### Cambio 2 — usar la función nueva dentro de `quitarJugadorDeLinea_`
+
+Buscá:
+
+```javascript
+  if (!fecha || !matricula) return { ok: false, error: 'Falta fecha o matrícula' };
+  const fStr = String(fecha);
+  const mStr = String(matricula);
+  const meta = getFechaMeta_(fStr);
+```
+
+Reemplazalo por:
+
+```javascript
+  if (!fecha || !matricula) return { ok: false, error: 'Falta fecha o matrícula' };
+  const fStr = String(fecha);
+  const mStr = String(matricula);
+  if (fechaTieneScoresCargados_(fStr)) return { ok: false, error: 'Ya hay scores cargados en esta fecha — no se puede modificar la línea. Usalo solo antes de que arranque la fecha.' };
+  const meta = getFechaMeta_(fStr);
+```
+
+#### Cambio 3 — usar la función nueva dentro de `agregarJugadorALinea_`
+
+Buscá:
+
+```javascript
+  if (!fecha || !matricula || !lineNum) return { ok: false, error: 'Faltan datos' };
+  const fStr = String(fecha); const mStr = String(matricula);
+  const meta = getFechaMeta_(fStr);
+```
+
+Reemplazalo por:
+
+```javascript
+  if (!fecha || !matricula || !lineNum) return { ok: false, error: 'Faltan datos' };
+  const fStr = String(fecha); const mStr = String(matricula);
+  if (fechaTieneScoresCargados_(fStr)) return { ok: false, error: 'Ya hay scores cargados en esta fecha — no se puede modificar la línea. Usalo solo antes de que arranque la fecha.' };
+  const meta = getFechaMeta_(fStr);
+```
+
+(No hace falta cambiar nada del frontend: si el admin toca "Sacar de la línea" o el casillero vacío en una fecha que ya tiene scores, el modal ya sabe mostrar el mensaje de error que le mande el servidor — solo va a decir "Ya hay scores cargados en esta fecha...".)
+
+### Parte 2 — Matches decididos en el hoyo 18: "X UP" en vez de "X&0"
+
+#### Cambio 4 — `buildLineaSnapshot_` en `07_LiveScoring.gs` (el resumen que se ve mientras se juega)
+
+Buscá:
+
+```javascript
+      else if (abs > remaining) estado = abs + '&' + remaining + (diff < 0 ? ' DN' : '');
+```
+
+Reemplazalo por:
+
+```javascript
+      else if (abs > remaining && remaining > 0) estado = abs + '&' + remaining + (diff < 0 ? ' DN' : '');
+```
+
+#### Cambio 5 — `calcularResultadoMatch_` en `07_LiveScoring.gs` (el resultado final que queda guardado)
+
+Buscá:
+
+```javascript
+    if (diff === 0) {
+      resA = 'AS'; resB = 'AS'; mPtsA = 3; mPtsB = 3;
+    } else if (abs > remaining) {
+      if (diff > 0) { resA = abs + '&' + remaining; mPtsA = 6; }
+      else          { resB = abs + '&' + remaining; mPtsB = 6; }
+    } else {
+```
+
+Reemplazalo por:
+
+```javascript
+    if (diff === 0) {
+      resA = 'AS'; resB = 'AS'; mPtsA = 3; mPtsB = 3;
+    } else if (abs > remaining && remaining > 0) {
+      if (diff > 0) { resA = abs + '&' + remaining; mPtsA = 6; }
+      else          { resB = abs + '&' + remaining; mPtsB = 6; }
+    } else {
+```
+
+(Este cambio solo agrega `&& remaining > 0` en las dos condiciones — la lógica de "cierre anticipado real" con hoyos de sobra, tipo "4&2" o "3&1", queda exactamente igual que antes. Lo único que cambia es que ya no aparece un "&0" imposible cuando el match se define recién en el hoyo 18.)
+
+### Qué NO cambia (Tarea 99)
+
+- Todo lo que ya funcionaba de `quitarJugadorDeLinea_`/`agregarJugadorALinea_` sigue igual — solo se agrega una verificación al principio que corta la función ANTES de tocar nada, si detecta scores cargados. Si la fecha está limpia (0 hoyos cargados en cualquier jugador), la función se comporta exactamente como en la Tarea 94.
+- No se toca `editarFecha_`, `setLineasFecha_`, `getFechaDetalle_` ni ninguna otra función existente.
+- El cálculo de "cierre anticipado" (cuando el match se define antes del hoyo 18, tipo "3&2") no cambia en nada.
+- No se toca el frontend (`index.html`) — el mensaje de error nuevo se muestra solo porque el modal ya sabe mostrar cualquier error que devuelva el servidor.
+
+### ❓ Preguntas de verificación — Tarea 99
+
+1. Elegí una fecha que YA tenga algún hoyo cargado (aunque sea de un solo jugador) y probá tocar un jugador en una línea → "Sacar de la línea". ¿Aparece el mensaje "Ya hay scores cargados en esta fecha — no se puede modificar la línea..." y NO se saca al jugador?
+2. Probá lo mismo tocando un casillero vacío para sumar a alguien (si esa fecha tiene alguno). ¿Da el mismo tipo de error y no suma a nadie?
+3. Ahora probá en una fecha SIN ningún hoyo cargado todavía (una de prueba, recién armada) — ¿"Sacar de la línea" y "Sumar jugador" funcionan normalmente, igual que antes?
+4. Buscá (o armá de prueba) un match que se haya definido justo en el hoyo 18 por 1 o 2 puntos de diferencia — ¿ahora se ve "1 UP" / "2 UP" en vez de "1&0" / "2&0"? Fijate tanto en la pantalla de seguimiento en vivo como en el resultado que queda guardado al final.
+5. Confirmá que un match que se cierra ANTES del hoyo 18 (por ejemplo "4&2", con hoyos de sobra) se sigue viendo igual que siempre.
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+**Para Marco, aparte de las preguntas de arriba:** si después de este cambio volvés a probar "sacar/sumar" en una fecha SIN scores todavía y el problema de tarjetas/matches rotos vuelve a aparecer (no debería, pero por las dudas), avisame con el número de fecha — eso me diría que el problema es más profundo que "se usó mientras había scores cargados", y ahí sigo investigando con ese dato puntual.
