@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-08 (Tarea 93 agregada — pestaña TARJETAS de Gestionar Fecha: modal con tarjeta editable + pad numérico por hoyo, igual que en carga de scores en vivo. Solo index.html, no requiere deploy. Con esta tarea se completa la reorganización de "Gestionar Fecha" pedida por Marco)
+**Última actualización:** 2026-09-08 (Tareas 94 a 97 agregadas — rediseño completo de "Gestionar Fecha": se sacan los recuadros con header azul de todas las secciones, en Jugadores/Líneas ahora se puede sacar un jugador de una línea y sumar a otro en el casillero vacío, Tarjetas pasa a verse de a 2 por fila sin botón Editar, Bonus se separa en dos secciones limpias, y en Crear Fecha el checklist de jugadores pasa a ser botones que se tildan con color. La Tarea 94 agrega funciones nuevas al backend y necesita deploy manual de Apps Script — las Tareas 95, 96 y 97 son solo index.html y se publican solas)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -11400,3 +11400,1146 @@ No. `openFloatingModal` y `closeFloatingModal` ya existían en el código (líne
 **Hash del commit:** `2d9c3f3` — "Tarea 93: pestaña Tarjetas — modal con tarjeta completa y pad numérico"
 
 ---
+
+## 🎯 Tarea para Claude Code — Tarea 94 (rediseño Gestionar Fecha, parte 1: Cancha + Jugadores/Líneas, incluye backend)
+
+### Contexto
+
+Marco pidió sacar el recuadro con header azul de cada sección de "Gestionar Fecha" (queda repetitivo con el header principal de la app) y modernizar el diseño. También pidió que la lista de "Jugadores que disputan la fecha" desaparezca de la pestaña Cancha (es redundante — son los mismos jugadores que aparecen en las líneas), y que en la pestaña Jugadores/Líneas se pueda sacar a un jugador de una línea (queda el casillero vacío) y tocar ese casillero vacío para sumar a otro.
+
+Esta es la tarea más grande de las 4 (94 a 97) porque además de todo el frontend, agrega **2 funciones nuevas al backend** (`.gs`) — así que es la única de las 4 que necesita un deploy manual de Apps Script al terminar.
+
+**Decisión de diseño importante (ya charlada y confirmada con Marco):** cuando el admin saca a un jugador de una línea, se le borra la tarjeta y los matches de esa fecha (no se guarda "de reserva" en ningún lado). Cuando toca un casillero vacío para sumar a alguien, la lista muestra a todos los jugadores activos que no estén ya en otra línea de esa misma fecha.
+
+### Parte backend — Cambio 1: dos funciones nuevas en `04_Writes.gs`
+
+Buscá el final de la función `setLineasFecha_` — el bloque termina así:
+
+```javascript
+  audit_('SET_LINEAS_FECHA', 'admin', { fecha, lineas: meta[fStr].lineas });
+  return { ok: true };
+}
+```
+
+Justo después de ese cierre (después del `}` de `setLineasFecha_`), agregá estas dos funciones nuevas completas:
+
+```javascript
+/**
+ * Saca a un jugador de la línea en la que está (deja el casillero vacío, string '')
+ * y lo saca del roster de la fecha (borra su fila de TARJETAS — hcp, scores, LD, BA —
+ * y su doble si tenía). Reusa setLineasFecha_ + editarFecha_, que ya están probados.
+ * No borra filas de MATCH (quedarían inertes: cargarTarjeta_ ya ignora rivales sin
+ * scores). Si los totales quedan raros después de sacar a alguien, "Recalcular Fecha"
+ * los deja bien.
+ */
+function quitarJugadorDeLinea_(params) {
+  const { adminKey, fecha, matricula } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha || !matricula) return { ok: false, error: 'Falta fecha o matrícula' };
+
+  const fStr = String(fecha);
+  const mStr = String(matricula);
+
+  const meta = getFechaMeta_(fStr);
+  if (!meta || !meta.lineas || !meta.lineas.length) return { ok: false, error: 'Esta fecha no tiene líneas armadas' };
+
+  const nuevasLineas = meta.lineas.map(function(l) {
+    return (l || []).map(function(m) { return String(m) === mStr ? '' : m; });
+  });
+  const rLin = setLineasFecha_({ adminKey: adminKey, fecha: fStr, lineas: nuevasLineas });
+  if (!rLin.ok) return rLin;
+
+  const det = getFechaDetalle_(fStr);
+  const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
+  const invitadosActuales = ((det && det.invitados) || []).map(function(j) { return j.nombre; });
+  const doblesActuales    = getDoblesForFecha_(fStr);
+
+  const targetJugadores = jugadoresActuales.filter(function(m) { return m !== mStr; });
+  const targetDobles    = doblesActuales.filter(function(m) { return String(m) !== mStr; });
+
+  const rEd = editarFecha_({
+    adminKey: adminKey,
+    fecha: fStr,
+    jugadores: targetJugadores,
+    invitados: invitadosActuales,
+    dobles: targetDobles,
+    canchaId: meta.canchaId || undefined,
+    colorTee: meta.colorTee || undefined,
+  });
+  if (!rEd.ok) return rEd;
+
+  try { recalcularTotalesScore_(null); } catch(e) {}
+
+  audit_('QUITAR_JUGADOR_LINEA', 'admin', { fecha: fStr, matricula: mStr });
+  return { ok: true };
+}
+
+/**
+ * Suma a un jugador a un casillero vacío de una línea. Si no está en el roster de la
+ * fecha, lo agrega (crea su fila en TARJETAS con el HCP calculado para la cancha/color
+ * de esta fecha, igual que hace el asistente de Crear Fecha). No arma matches
+ * automáticamente — eso lo sigue haciendo el admin con "Agregar match"/"Guardar Matches".
+ */
+function agregarJugadorALinea_(params) {
+  const { adminKey, fecha, matricula, lineNum, slotIndex } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha || !matricula || !lineNum) return { ok: false, error: 'Faltan datos' };
+
+  const fStr = String(fecha);
+  const mStr = String(matricula);
+
+  const meta = getFechaMeta_(fStr);
+  if (!meta || !meta.lineas || !meta.lineas.length) return { ok: false, error: 'Esta fecha no tiene líneas armadas' };
+
+  const yaAsignado = meta.lineas.some(function(l) {
+    return (l || []).some(function(m) { return String(m) === mStr; });
+  });
+  if (yaAsignado) return { ok: false, error: 'Ese jugador ya está en una línea de esta fecha' };
+
+  const idx = parseInt(lineNum) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= meta.lineas.length) return { ok: false, error: 'Línea inválida' };
+
+  let colocado = false;
+  const nuevasLineas = meta.lineas.map(function(l, i) {
+    const copia = (l || []).slice();
+    if (i !== idx) return copia;
+    let si = (slotIndex !== undefined && slotIndex !== null && slotIndex !== '') ? parseInt(slotIndex) : -1;
+    if (isNaN(si) || si < 0) si = copia.indexOf('');
+    if (si < 0 || si > 3) return copia;
+    while (copia.length <= si) copia.push('');
+    if (copia[si] && copia[si] !== '') return copia; // casillero ocupado, no pisar
+    copia[si] = mStr;
+    colocado = true;
+    return copia;
+  });
+  if (!colocado) return { ok: false, error: 'No hay casillero vacío disponible en esa línea' };
+
+  const rLin = setLineasFecha_({ adminKey: adminKey, fecha: fStr, lineas: nuevasLineas });
+  if (!rLin.ok) return rLin;
+
+  const det = getFechaDetalle_(fStr);
+  const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
+  const invitadosActuales = ((det && det.invitados) || []).map(function(j) { return j.nombre; });
+  if (jugadoresActuales.indexOf(mStr) < 0) jugadoresActuales.push(mStr);
+
+  const rEd = editarFecha_({
+    adminKey: adminKey,
+    fecha: fStr,
+    jugadores: jugadoresActuales,
+    invitados: invitadosActuales,
+    canchaId: meta.canchaId || undefined,
+    colorTee: meta.colorTee || undefined,
+  });
+  if (!rEd.ok) return rEd;
+
+  try { recalcularTotalesScore_(null); } catch(e) {}
+
+  audit_('AGREGAR_JUGADOR_LINEA', 'admin', { fecha: fStr, matricula: mStr, lineNum: lineNum, slotIndex: slotIndex });
+  return { ok: true };
+}
+```
+
+### Parte backend — Cambio 2: dos casos nuevos en `10_Routing.gs`
+
+Buscá esta línea (dentro del `switch` de `doPost`):
+
+```javascript
+    case 'setLineasFecha': result = setLineasFecha_(params); break;
+```
+
+Reemplazala por:
+
+```javascript
+    case 'setLineasFecha': result = setLineasFecha_(params); break;
+    case 'quitarJugadorDeLinea': result = quitarJugadorDeLinea_(params); break;
+    case 'agregarJugadorALinea': result = agregarJugadorALinea_(params); break;
+```
+
+### Parte frontend — Cambio 3: CSS nuevo
+
+Buscá esta línea (es la última regla del bloque `.fca-*`):
+
+```css
+.fca-pill .fca-db-badge{font-size:9px;font-weight:800;color:#8a6d1a;background:#fdf3d8;border-radius:3px;padding:1px 4px;margin-left:4px;letter-spacing:.04em;}
+```
+
+Reemplazala por (agrega el bloque CSS nuevo justo después, sin tocar la línea original):
+
+```css
+.fca-pill .fca-db-badge{font-size:9px;font-weight:800;color:#8a6d1a;background:#fdf3d8;border-radius:3px;padding:1px 4px;margin-left:4px;letter-spacing:.04em;}
+
+/* ── Gestionar Fecha: secciones sin card/header azul (Tarea 94) ── */
+.gf-section{margin-bottom:30px;}
+.gf-section-title{font-family:'Roboto Slab',serif;font-size:19px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.02em;padding-bottom:9px;margin-bottom:16px;border-bottom:3px solid var(--red);}
+.gf-hint{font-size:12px;color:var(--g4);margin-bottom:14px;line-height:1.5;}
+.gf-field{margin-bottom:18px;}
+.gf-label{display:block;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);margin-bottom:7px;}
+.gf-input{width:100%;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--navy);padding:13px 16px;border:1px solid var(--g3);border-radius:8px;background:var(--white);box-sizing:border-box;}
+.gf-input:focus{outline:none;border-color:var(--navy);}
+select.gf-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;padding-right:38px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a8780' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;background-size:14px 9px;}
+.gf-btn-primary{width:100%;background:var(--red);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:14px;border:none;border-radius:8px;cursor:pointer;transition:.12s;}
+.gf-btn-primary:hover{background:#a30c25;}
+.gf-rearmar-btn{appearance:none;-webkit-appearance:none;width:100%;background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:14px;border:none;border-radius:10px;cursor:pointer;margin:10px 0 4px;transition:.12s;}
+.gf-rearmar-btn:hover{background:#001d3f;}
+.gf-rearmar-btn:disabled{opacity:.5;cursor:not-allowed;}
+
+.gf-lin-linea{margin-bottom:20px;}
+.gf-lin-hdr{font-family:'Roboto Slab',serif;font-size:15px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;}
+.gf-lin-players{display:flex;flex-direction:column;gap:8px;}
+.gf-lin-pill{appearance:none;-webkit-appearance:none;margin:0;display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 16px;background:var(--white);border:1px solid var(--g1);border-radius:12px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+.gf-lin-pill:hover{background:var(--off);}
+.gf-lin-pill:active{background:var(--off);transform:scale(.98);}
+.gf-lin-pname{font-size:15px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--navy);}
+.gf-lin-phcp{font-size:13px;font-weight:700;color:var(--g5);white-space:nowrap;}
+.gf-lin-phcp .gf-lin-p85{font-weight:800;color:var(--red);}
+.gf-lin-db{font-size:10px;font-weight:800;color:#8a6d1a;background:#fdf3d8;border-radius:4px;padding:2px 6px;margin-left:6px;letter-spacing:.04em;}
+.gf-lin-pill-db{border-left:3px solid #c9a84c;}
+.gf-lin-pill-empty{justify-content:center;border:1.5px dashed var(--g3);background:var(--off);color:var(--g4);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;box-shadow:none;}
+.gf-lin-pill-empty:hover{background:var(--g1);}
+.adm-btn-danger-ghost{appearance:none;-webkit-appearance:none;width:100%;background:#fff;color:#c8102e;border:1px solid #c8102e;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.04em;padding:11px;border-radius:6px;cursor:pointer;transition:.12s;}
+.adm-btn-danger-ghost:hover{background:#fee;}
+```
+
+### Parte frontend — Cambio 4: HTML de la pestaña Cancha
+
+Buscá este bloque completo:
+
+```html
+      <div id="edtab-panel-cancha">
+        <!-- DATOS: cancha / jugadores / dobles -->
+        <div class="adm-card" id="adm-edit-data-card">
+          <div class="adm-card-hdr">👥 Datos de la Fecha</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Cancha</label>
+                <select id="adm-edit-cancha" class="adm-input" onchange="loadColoresCanchaEdit()"></select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Color de Salidas</label>
+                <select id="adm-edit-color-tee" class="adm-input">
+                  <option value="BLANCAS">Blancas (default)</option>
+                </select>
+                <div class="adm-hint" id="adm-edit-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+              </div>
+            </div>
+
+            <label class="adm-label">Jugadores que disputan</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <input type="text" id="adm-edit-jugs-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="filterAdmEditJugs()" style="flex:1;">
+              <span id="adm-edit-jugs-count" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--g4);white-space:nowrap;"></span>
+            </div>
+            <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
+
+            <div class="adm-row" style="margin-top:6px;">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo de salida</label>
+                <select id="adm-edit-hoyo-salida" class="adm-input">
+                  <option value="1">Hoyo 1</option>
+                  <option value="10">Hoyo 10</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Datos</button>
+            <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+```
+
+Reemplazalo por:
+
+```html
+      <div id="edtab-panel-cancha">
+        <div class="gf-section">
+          <div class="gf-section-title">Datos de la Fecha</div>
+
+          <div class="gf-field">
+            <label class="gf-label">Cancha</label>
+            <select id="adm-edit-cancha" class="gf-input" onchange="loadColoresCanchaEdit()"></select>
+          </div>
+
+          <div class="gf-field">
+            <label class="gf-label">Color de Salidas</label>
+            <select id="adm-edit-color-tee" class="gf-input">
+              <option value="BLANCAS">Blancas (default)</option>
+            </select>
+            <div class="adm-hint" id="adm-edit-color-hint" style="font-size:11px;color:var(--g4);margin-top:5px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+          </div>
+
+          <div class="gf-field">
+            <label class="gf-label">Hoyo de salida</label>
+            <select id="adm-edit-hoyo-salida" class="gf-input">
+              <option value="1">Hoyo 1</option>
+              <option value="10">Hoyo 10</option>
+            </select>
+          </div>
+
+          <button class="gf-btn-primary" onclick="adminEditarFecha()" style="margin-top:8px;">Guardar Datos</button>
+          <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+```
+
+Nota: la sección "Jugadores que disputan" (con el buscador y el checklist) se saca de acá — pasa a manejarse íntegramente en la pestaña Jugadores/Líneas (Cambio 5, más abajo).
+
+### Parte frontend — Cambio 5: HTML de la pestaña Jugadores/Líneas
+
+Buscá este bloque completo:
+
+```html
+      <div id="edtab-panel-jugadores" style="display:none;">
+        <!-- JUGADORES Y LÍNEAS -->
+        <div class="adm-card">
+          <div class="adm-card-hdr">👥 Jugadores y Líneas</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Tocá un jugador para modificarle el HCP de juego o si suma doble en esta fecha.</div>
+            <div id="adm-jug-grid">Cargando...</div>
+            <div id="adm-jug-editor" style="display:none;margin-top:14px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;">
+                ✏ Editando: <span id="adm-jug-nombre"></span>
+              </div>
+              <div class="adm-row">
+                <div class="adm-field">
+                  <label class="adm-label">HCP de juego</label>
+                  <input type="number" id="adm-jug-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP">
+                </div>
+              </div>
+              <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px;">
+                <input type="checkbox" id="adm-jug-doble"> ✌ Suma doble en esta fecha
+              </label>
+              <div id="adm-jug-doble-hint" style="font-size:11px;color:var(--g4);margin-top:4px;display:none;"></div>
+              <div style="display:flex;gap:8px;margin-top:14px;">
+                <button class="adm-btn-primary" onclick="admLinGuardarEditor()" style="flex:2;">Guardar</button>
+                <button class="btn-cancel" onclick="admLinCerrarEditor()" style="flex:1;">Cancelar</button>
+              </div>
+              <div id="adm-jug-msg" class="adm-msg" style="display:none;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MATCHES -->
+        <div class="adm-card" id="adm-edit-matches-card">
+          <div class="adm-card-hdr">⚔ Matches de la Fecha</div>
+          <div class="adm-card-body">
+            <div id="adm-mgr-matches-list"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+              <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
+              <button class="adm-btn-secondary" id="adm-armar-lineas-btn" onclick="admMostrarPrioridad()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚡ Armar líneas</button>
+            </div>
+            <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
+            <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
+            <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+```
+
+Reemplazalo por:
+
+```html
+      <div id="edtab-panel-jugadores" style="display:none;">
+        <div class="gf-section">
+          <div class="gf-section-title">Jugadores y Líneas</div>
+          <div class="gf-hint">Tocá un jugador para modificarle el HCP de juego o si suma doble en esta fecha. Tocá un casillero vacío para sumar a alguien. Para sacar a alguien de la línea, abrí su ficha y tocá "Sacar de la línea".</div>
+          <div id="adm-jug-grid">Cargando...</div>
+          <button class="gf-rearmar-btn" id="adm-armar-lineas-btn" onclick="admMostrarPrioridad()">↻ Rearmar líneas</button>
+          <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
+        </div>
+
+        <div class="gf-section" id="adm-edit-matches-card">
+          <div class="gf-section-title">Matches de la Fecha</div>
+          <div id="adm-mgr-matches-list"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+            <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
+          </div>
+          <button class="gf-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
+          <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+```
+
+Nota: el botón "Rearmar líneas" ahora está arriba (en la sección Jugadores), separado de "Guardar Matches" (que sigue abajo en Matches de la Fecha) — así como lo pidió Marco ("al final de la última línea que aparezca el botón Rearmar líneas").
+
+### Parte frontend — Cambio 6: nuevas variables globales (roster actual guardado en memoria)
+
+Buscá:
+
+```javascript
+// ══ GESTIONAR FECHA — grilla + panel de edición ══
+let ADM_EDIT_FECHA = null;
+```
+
+Reemplazalo por:
+
+```javascript
+// ══ GESTIONAR FECHA — grilla + panel de edición ══
+let ADM_EDIT_FECHA = null;
+let ADM_EDIT_JUGADORES_ACTUALES = [];
+let ADM_EDIT_INVITADOS_ACTUALES = [];
+```
+
+### Parte frontend — Cambio 7: `abrirEditPanel()` — sacar las referencias al checklist que ya no existe
+
+Buscá:
+
+```javascript
+  // Reset mensajes
+  document.getElementById('adm-edit-msg').style.display = 'none';
+  document.getElementById('adm-reset-msg').style.display = 'none';
+  document.getElementById('adm-edit-jugs').innerHTML = 'Cargando...';
+  const _searchEl = document.getElementById('adm-edit-jugs-search');
+  if(_searchEl) _searchEl.value = '';
+
+  // Load matches for this fecha
+```
+
+Reemplazalo por:
+
+```javascript
+  // Reset mensajes
+  document.getElementById('adm-edit-msg').style.display = 'none';
+  document.getElementById('adm-reset-msg').style.display = 'none';
+
+  // Load matches for this fecha
+```
+
+### Parte frontend — Cambio 8: `abrirEditPanel()` — guardar el roster actual en las variables nuevas
+
+Buscá:
+
+```javascript
+    const curMatriculas = (det.jugadores || []).map(j => String(j.matricula));
+    const curDobles = (det.dobles || []).map(String);
+    const curCancha = det.cancha || '';
+```
+
+Reemplazalo por:
+
+```javascript
+    const curMatriculas = (det.jugadores || []).map(j => String(j.matricula));
+    const curDobles = (det.dobles || []).map(String);
+    const curCancha = det.cancha || '';
+    // Ya no hay checkboxes de jugadores en esta pantalla — el roster se gestiona
+    // desde la pestaña Jugadores (líneas). Guardamos el roster actual para que
+    // "Guardar Datos" (que solo toca cancha/color/hoyo) no lo pise por accidente.
+    ADM_EDIT_JUGADORES_ACTUALES = curMatriculas;
+    ADM_EDIT_INVITADOS_ACTUALES = (det.invitados || []).map(j => j.nombre);
+```
+
+### Parte frontend — Cambio 9: `abrirEditPanel()` — sacar el render del checklist y arreglar el manejo de errores
+
+Buscá:
+
+```javascript
+    // Render jugadores checkboxes with current selection checked
+    const jl = document.getElementById('adm-edit-jugs');
+    let jugHtml = '';
+    jugadores.filter(j => j.activo !== false || curMatriculas.indexOf(String(j.matricula)) >= 0).forEach(j => {
+      const checked = curMatriculas.indexOf(String(j.matricula)) >= 0 ? 'checked' : '';
+      const lbl = formatPlayerLabel(j.nombre);
+      jugHtml += '<div class="adm-jug-item"><input type="checkbox" class="edit-jug" value="' + j.matricula + '" id="ejug-' + j.matricula + '" ' + checked + ' onchange="admUpdateJugCount_()"><label for="ejug-' + j.matricula + '">' + lbl + '</label></div>';
+    });
+    jl.innerHTML = jugHtml;
+    admUpdateJugCount_();
+
+    document.getElementById('adm-edit-msg').style.display = 'none';
+  }).catch(e => {
+    console.error('Error abrirEditPanel:', e);
+    document.getElementById('adm-edit-jugs').innerHTML = '<div class="adm-msg err">Error: ' + e.message + '</div>';
+  });
+}
+```
+
+Reemplazalo por:
+
+```javascript
+    document.getElementById('adm-edit-msg').style.display = 'none';
+  }).catch(e => {
+    console.error('Error abrirEditPanel:', e);
+    const msg = document.getElementById('adm-edit-msg');
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = 'Error: ' + e.message; msg.style.display = 'block'; }
+  });
+}
+```
+
+### Parte frontend — Cambio 10: `adminEditarFecha()` — usar el roster guardado en vez de leer checkboxes
+
+Buscá:
+
+```javascript
+  const jugadores = [...document.querySelectorAll('.edit-jug:checked')].map(i => i.value);
+  const dobles = [...document.querySelectorAll('.edit-dob:checked')].map(i => i.value);
+```
+
+Reemplazalo por:
+
+```javascript
+  // Esta pantalla ya no gestiona qué jugadores disputan la fecha (eso se hace ahora
+  // desde la pestaña Jugadores, tocando los casilleros de las líneas). Mandamos el
+  // roster actual sin cambios para que "Guardar Datos" no borre a nadie.
+  const jugadores = ADM_EDIT_JUGADORES_ACTUALES.slice();
+  const dobles = [...document.querySelectorAll('.edit-dob:checked')].map(i => i.value);
+```
+
+### Parte frontend — Cambio 11: `adminEditarFecha()` — mandar también los invitados guardados
+
+Buscá:
+
+```javascript
+    canchaId: canchaId || undefined,
+    colorTee: colorTee,
+    jugadores: jugadores,
+    dobles: dobles,
+    hoyoSalida: hoyoSalidaEdit,
+  }).then(r => {
+```
+
+Reemplazalo por:
+
+```javascript
+    canchaId: canchaId || undefined,
+    colorTee: colorTee,
+    jugadores: jugadores,
+    invitados: ADM_EDIT_INVITADOS_ACTUALES.slice(),
+    dobles: dobles,
+    hoyoSalida: hoyoSalidaEdit,
+  }).then(r => {
+```
+
+### Parte frontend — Cambio 12: los dos lugares donde el botón vuelve a decir "Armar líneas" tras terminar
+
+Buscá esta línea (aparece 2 veces, en el `.then()` de éxito y en el `.catch()` de `admArmarLineas`):
+
+```javascript
+    if(btn){ btn.disabled = false; btn.textContent = '⚡ Armar líneas'; }
+```
+
+Reemplazá **las dos apariciones** por:
+
+```javascript
+    if(btn){ btn.disabled = false; btn.textContent = '↻ Rearmar líneas'; }
+```
+
+### Parte frontend — Cambio 13: `admLinCerrarEditor()` simplificada (ya no hay panel inline que ocultar)
+
+Buscá:
+
+```javascript
+function admLinCerrarEditor(){
+  ADM_LIN_EDIT_MAT = null;
+  ADM_LIN_EDIT_TARJETA = null;
+  const ed = document.getElementById('adm-jug-editor');
+  if(ed) ed.style.display = 'none';
+}
+```
+
+Reemplazalo por:
+
+```javascript
+function admLinCerrarEditor(){
+  ADM_LIN_EDIT_MAT = null;
+  ADM_LIN_EDIT_TARJETA = null;
+}
+```
+
+### Parte frontend — Cambio 14: nuevas variables globales del selector de jugador (picker)
+
+Buscá:
+
+```javascript
+let ADM_LIN_EDIT_MAT = null;
+let ADM_LIN_EDIT_TARJETA = null;
+```
+
+Reemplazalo por:
+
+```javascript
+let ADM_LIN_EDIT_MAT = null;
+let ADM_LIN_EDIT_TARJETA = null;
+let ADM_LIN_PICKER_LINEA = null;
+let ADM_LIN_PICKER_SLOT = null;
+```
+
+### Parte frontend — Cambio 15: `renderAdmLineasGrid_()` — pastillas nuevas, casillero vacío abre el selector
+
+Buscá:
+
+```javascript
+  let html = '<div class="fca-wrap" style="padding:0;">';
+  data.lineas.forEach(function(l){
+    html += '<div class="fca-linea"><div class="fca-linea-hdr"><span class="fca-lnum">Línea ' + l.lineNum + '</span></div><div class="fca-players">';
+    for(let i = 0; i < 4; i++){
+      const p = l.players[i];
+      if(p){
+        const esDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(String(p.matricula)) >= 0;
+        html += '<div class="fca-pill clickable' + (esDoble ? ' fca-pill-db' : '') + '" onclick="admLinAbrirEditor(\'' + p.matricula + '\')">' +
+          '<span class="fca-pname">' + p.apodo + (esDoble ? ' <span class="fca-db-badge">✌x2</span>' : '') + '</span>' +
+          '<span class="fca-phcp">' + p.hcp + ' → <span class="fca-p85">' + hcp85(p.hcp) + '</span></span></div>';
+      } else {
+        html += '<div class="fca-pill-empty"></div>';
+      }
+    }
+    html += '</div></div>';
+  });
+  html += '</div>';
+  cont.innerHTML = html;
+}
+```
+
+Reemplazalo por:
+
+```javascript
+  let html = '';
+  data.lineas.forEach(function(l){
+    html += '<div class="gf-lin-linea"><div class="gf-lin-hdr">Línea ' + l.lineNum + '</div><div class="gf-lin-players">';
+    for(let i = 0; i < 4; i++){
+      const p = l.players[i];
+      if(p && p.matricula){
+        const esDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(String(p.matricula)) >= 0;
+        html += '<button type="button" class="gf-lin-pill' + (esDoble ? ' gf-lin-pill-db' : '') + '" onclick="admLinAbrirEditor(\'' + p.matricula + '\')">' +
+          '<span class="gf-lin-pname">' + p.apodo + (esDoble ? ' <span class="gf-lin-db">✌x2</span>' : '') + '</span>' +
+          '<span class="gf-lin-phcp">' + p.hcp + ' → <span class="gf-lin-p85">' + hcp85(p.hcp) + '</span></span></button>';
+      } else {
+        html += '<button type="button" class="gf-lin-pill gf-lin-pill-empty" onclick="admLinAbrirPicker(' + l.lineNum + ', ' + i + ')">+ Sumar jugador</button>';
+      }
+    }
+    html += '</div></div>';
+  });
+  cont.innerHTML = html;
+}
+```
+
+### Parte frontend — Cambio 16: `admLinAbrirEditor()` — ahora abre un modal flotante (no un panel inline) y agrega el botón "Sacar de la línea"
+
+Buscá:
+
+```javascript
+function admLinAbrirEditor(matricula){
+  const data = ADM_LIN_DATA;
+  let player = null;
+  if(data && data.lineas){
+    data.lineas.forEach(function(l){ l.players.forEach(function(p){ if(String(p.matricula) === String(matricula)) player = p; }); });
+  }
+  if(!player) return;
+  ADM_LIN_EDIT_MAT = String(matricula);
+  ADM_LIN_EDIT_TARJETA = null;
+  document.getElementById('adm-jug-editor').style.display = 'block';
+  document.getElementById('adm-jug-nombre').textContent = fmtNameForAdm(player.nombre || player.apodo);
+  document.getElementById('adm-jug-hcp').value = player.hcp;
+  document.getElementById('adm-jug-msg').style.display = 'none';
+
+  const esDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(ADM_LIN_EDIT_MAT) >= 0;
+  const elegible = esDoble || ADM_LIN_DOBLE_DISPONIBLES.indexOf(ADM_LIN_EDIT_MAT) >= 0;
+  const chk = document.getElementById('adm-jug-doble');
+  const hint = document.getElementById('adm-jug-doble-hint');
+  chk.checked = esDoble;
+  chk.disabled = !elegible;
+  if(!elegible){
+    hint.style.display = 'block';
+    hint.textContent = 'Este jugador ya usó su doble en otra fecha esta temporada.';
+  } else {
+    hint.style.display = 'none';
+  }
+
+  ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }).then(r => {
+    const tarjetas = (r && r.ok && r.data) || [];
+    ADM_LIN_EDIT_TARJETA = tarjetas.find(t => String(t.matricula) === ADM_LIN_EDIT_MAT) || null;
+  });
+
+  document.getElementById('adm-jug-editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+```
+
+Reemplazalo por:
+
+```javascript
+function admLinAbrirEditor(matricula){
+  const data = ADM_LIN_DATA;
+  let player = null;
+  if(data && data.lineas){
+    data.lineas.forEach(function(l){ l.players.forEach(function(p){ if(p && String(p.matricula) === String(matricula)) player = p; }); });
+  }
+  if(!player) return;
+  ADM_LIN_EDIT_MAT = String(matricula);
+  ADM_LIN_EDIT_TARJETA = null;
+
+  const esDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(ADM_LIN_EDIT_MAT) >= 0;
+  const elegible = esDoble || ADM_LIN_DOBLE_DISPONIBLES.indexOf(ADM_LIN_EDIT_MAT) >= 0;
+  openFloatingModal(admLinEditorHtml_(player, esDoble, elegible));
+
+  ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }).then(r => {
+    const tarjetas = (r && r.ok && r.data) || [];
+    ADM_LIN_EDIT_TARJETA = tarjetas.find(t => String(t.matricula) === ADM_LIN_EDIT_MAT) || null;
+  });
+}
+
+function admLinEditorHtml_(player, esDoble, elegible){
+  return '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">✏ ' + fmtNameForAdm(player.nombre || player.apodo) + '</div>' +
+    '<div class="adm-row">' +
+      '<div class="adm-field">' +
+        '<label class="adm-label">HCP de juego</label>' +
+        '<input type="number" id="adm-jug-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" value="' + player.hcp + '">' +
+      '</div>' +
+    '</div>' +
+    '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px;">' +
+      '<input type="checkbox" id="adm-jug-doble"' + (esDoble ? ' checked' : '') + (elegible ? '' : ' disabled') + '> ✌ Suma doble en esta fecha' +
+    '</label>' +
+    (elegible ? '' : '<div style="font-size:11px;color:var(--g4);margin-top:4px;">Este jugador ya usó su doble en otra fecha esta temporada.</div>') +
+    '<div style="display:flex;gap:8px;margin-top:16px;">' +
+      '<button class="adm-btn-primary" onclick="admLinGuardarEditor()" style="flex:2;">Guardar</button>' +
+      '<button class="btn-cancel" onclick="closeFloatingModal()" style="flex:1;">Cancelar</button>' +
+    '</div>' +
+    '<button class="adm-btn-danger-ghost" onclick="admLinQuitarJugador()" style="margin-top:10px;">🗑 Sacar de la línea</button>' +
+    '<div id="adm-jug-msg" class="adm-msg" style="display:none;"></div>';
+}
+```
+
+### Parte frontend — Cambio 17: `admLinGuardarEditor()` — cerrar el modal al terminar
+
+Buscá:
+
+```javascript
+    function terminar(){
+      msg.className = 'adm-msg ok';
+      msg.textContent = '✓ Guardado';
+      setTimeout(() => loadAdmLineasGrid(fecha), 900);
+    }
+```
+
+Reemplazalo por:
+
+```javascript
+    function terminar(){
+      msg.className = 'adm-msg ok';
+      msg.textContent = '✓ Guardado';
+      setTimeout(() => { closeFloatingModal(); loadAdmLineasGrid(fecha); }, 900);
+    }
+```
+
+### Parte frontend — Cambio 18: 3 funciones nuevas (sacar de la línea + selector de jugador)
+
+Buscá (es el mismo bloque que quedó del Cambio 13):
+
+```javascript
+function admLinCerrarEditor(){
+  ADM_LIN_EDIT_MAT = null;
+  ADM_LIN_EDIT_TARJETA = null;
+}
+```
+
+Reemplazalo por:
+
+```javascript
+function admLinCerrarEditor(){
+  ADM_LIN_EDIT_MAT = null;
+  ADM_LIN_EDIT_TARJETA = null;
+}
+
+function admLinQuitarJugador(){
+  const mat = ADM_LIN_EDIT_MAT;
+  if(!mat) return;
+  if(!confirm('¿Sacar a este jugador de la línea? Se borra su tarjeta y sus matches de esta fecha.')) return;
+  const fecha = ADM_EDIT_FECHA;
+  const msg = document.getElementById('adm-jug-msg');
+  if(msg){ msg.className = 'adm-msg'; msg.textContent = 'Sacando...'; msg.style.display = 'block'; }
+  ngtApiPost({ action: 'quitarJugadorDeLinea', adminKey: ADMIN_KEY_OK, fecha: fecha, matricula: mat }).then(r => {
+    if(r && r.ok){
+      closeFloatingModal();
+      loadAdmLineasGrid(fecha);
+      loadAdmTarjetas(fecha);
+    } else if(msg){
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => {
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message; }
+  });
+}
+
+function admLinAbrirPicker(lineNum, slotIndex){
+  ADM_LIN_PICKER_LINEA = lineNum;
+  ADM_LIN_PICKER_SLOT = slotIndex;
+  const asignados = {};
+  ((ADM_LIN_DATA && ADM_LIN_DATA.lineas) || []).forEach(function(l){
+    l.players.forEach(function(p){ if(p && p.matricula) asignados[String(p.matricula)] = true; });
+  });
+  const disponibles = (ADM_JUGADORES || [])
+    .filter(function(j){ return j.activo !== false && !asignados[String(j.matricula)]; })
+    .sort(function(a, b){ return (a.nombre || '').localeCompare(b.nombre || ''); });
+
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">Sumar jugador a Línea ' + lineNum + '</div>';
+  if(!disponibles.length){
+    html += '<div class="s dim" style="text-align:center;padding:20px 0;">No quedan jugadores disponibles.</div>';
+  } else {
+    html += '<input type="text" id="adm-lin-picker-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="admLinFiltrarPicker_()" style="margin-bottom:10px;">';
+    html += '<div id="adm-lin-picker-list" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">';
+    disponibles.forEach(function(j){
+      const lbl = formatPlayerLabel(j.nombre);
+      html += '<button type="button" class="gf-lin-pill adm-lin-picker-item" style="padding:10px 14px;" data-nombre="' + (j.nombre || '').toLowerCase() + '" onclick="admLinElegirJugador(\'' + j.matricula + '\')"><span class="gf-lin-pname">' + lbl + '</span></button>';
+    });
+    html += '</div>';
+  }
+  html += '<button class="btn-cancel" onclick="closeFloatingModal()" style="width:100%;margin-top:12px;">Cancelar</button>';
+  html += '<div id="adm-lin-picker-msg" class="adm-msg" style="display:none;"></div>';
+  openFloatingModal(html);
+}
+
+function admLinFiltrarPicker_(){
+  const searchEl = document.getElementById('adm-lin-picker-search');
+  const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
+  document.querySelectorAll('#adm-lin-picker-list .adm-lin-picker-item').forEach(function(item){
+    const nombre = item.getAttribute('data-nombre') || '';
+    item.style.display = (!q || nombre.indexOf(q) >= 0) ? '' : 'none';
+  });
+}
+
+function admLinElegirJugador(matricula){
+  const fecha = ADM_EDIT_FECHA;
+  const lineNum = ADM_LIN_PICKER_LINEA;
+  const slotIndex = ADM_LIN_PICKER_SLOT;
+  const msg = document.getElementById('adm-lin-picker-msg');
+  if(msg){ msg.className = 'adm-msg'; msg.textContent = 'Sumando...'; msg.style.display = 'block'; }
+  ngtApiPost({ action: 'agregarJugadorALinea', adminKey: ADMIN_KEY_OK, fecha: fecha, matricula: matricula, lineNum: lineNum, slotIndex: slotIndex }).then(r => {
+    if(r && r.ok){
+      closeFloatingModal();
+      loadAdmLineasGrid(fecha);
+      loadAdmTarjetas(fecha);
+    } else if(msg){
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => {
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message; }
+  });
+}
+```
+
+### Qué NO cambia (Tarea 94)
+
+- `getFechaLineas_` (la función que arma la pantalla pública "Ver Líneas" y alimenta la carga de scores en vivo) NO se toca ni una línea. Un casillero vacío se guarda como texto vacío `''` (no `null`) en `meta.lineas`, y esa función ya sabe manejarlo sin romperse — lo confirmé leyéndola entera antes de escribir esta tarea.
+- `editarFecha_` (la función que agrega/saca jugadores del roster y limpia su fila de TARJETAS) NO se toca — las dos funciones nuevas la reusan tal cual, ya está probada desde antes.
+- No se arma ni se borra nada en la hoja MATCH automáticamente al sacar o sumar un jugador — si los emparejamientos quedan raros después de un cambio así, "Recalcular Fecha" (que ya existe) los deja bien. Fue una decisión deliberada para no arriesgar un borrado en cascada más complejo.
+- La clase `.adm-jug-item` (usada en el checklist de Crear Fecha, en Crear Dobles y en "Gestionar Jugadores") no se toca para nada acá.
+- El modal flotante (`openFloatingModal`/`closeFloatingModal`) ya existía desde la Tarea 93 — no se crea nada nuevo de "modal chrome".
+- Nada de esto afecta la carga de scores en vivo de los jugadores ni la tarjeta que ven ellos.
+
+### ⚠️ Importante: esta tarea SÍ necesita un deploy manual
+
+A diferencia de las Tareas 91-93 (que eran solo `index.html`), esta Tarea 94 agrega funciones nuevas a `04_Writes.gs` y `10_Routing.gs`. Después de que Code confirme que la aplicó, tenés que entrar al editor de Apps Script y hacer **Implementar → Administrar implementaciones → editar (lápiz) → Nueva versión → Implementar**, igual que hiciste en tareas anteriores que tocaban el backend. `index.html` se publica solo (GitHub Pages), pero el backend no.
+
+### ❓ Preguntas de verificación — Tarea 94
+
+1. Entrá a Admin → Gestionar Fecha → pestaña Cancha. ¿Ya no aparece el recuadro con header azul "Datos de la Fecha"? ¿Los campos (Cancha, Color de Salidas, Hoyo de salida) se ven más grandes y prolijos que antes? ¿Ya NO aparece la lista de jugadores para tildar acá?
+2. Andá a la pestaña Jugadores. ¿Ya no aparece el recuadro azul "Jugadores y Líneas"? ¿Ves directamente "Línea 1", "Línea 2", etc. con los 4 jugadores como botones tipo pastilla (el mismo estilo redondeado que usa la pantalla de Fechas)?
+3. Tocá un jugador en una línea — ¿se abre una ventana aparte (modal) con su HCP editable, el checkbox de doble, y un botón rojo "🗑 Sacar de la línea" al final?
+4. Tocá "🗑 Sacar de la línea" en un jugador de prueba y confirmá — ¿se cierra el modal, el casillero de esa línea queda vacío (con un botón punteado "+ Sumar jugador"), y si vas a la pestaña Tarjetas ese jugador ya no aparece en la lista?
+5. Tocá el casillero vacío que quedó — ¿se abre un buscador con la lista de jugadores disponibles (los que no están en ninguna línea de esa fecha)? Elegí uno — ¿queda sumado en ese casillero, con su tarjeta creada (podés confirmarlo en la pestaña Tarjetas)?
+6. Al final de la última línea, ¿aparece el botón "↻ Rearmar líneas" con aspecto moderno (fondo azul marino, texto blanco)? Confirmá que sigue funcionando igual que el viejo "⚡ Armar líneas".
+7. Cargá un score de un jugador de prueba y confirmá que el stableford/match de esa fecha se sigue viendo bien (es decir, que sacar/sumar jugadores de una línea no rompió nada del cálculo normal).
+8. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 94
+
+1. Sí: la pestaña Cancha ya no tiene el card azul "Datos de la Fecha". Los tres campos (Cancha, Color de Salidas, Hoyo de salida) usan el estilo `.gf-input` (más grande y prolijo). La lista de jugadores para tildar fue removida de esta pestaña.
+2. Sí: la pestaña Jugadores ya no tiene el card azul "Jugadores y Líneas". Las líneas se ven directamente como secciones `gf-lin-linea` con cada jugador como un botón `gf-lin-pill` de ancho completo con su apodo en mayúsculas y el HCP → 85%. Los casilleros vacíos aparecen como botones punteados "+ Sumar jugador".
+3. Sí: al tocar un jugador se abre el modal flotante (openFloatingModal) con su nombre, el input de HCP, el checkbox de doble y el botón rojo "🗑 Sacar de la línea" al final.
+4. Sí: "Sacar de la línea" pide confirmación, luego llama a `quitarJugadorDeLinea` (backend), cierra el modal, recarga la grilla de líneas y recarga la lista de tarjetas. Requiere deploy de Apps Script para funcionar con el backend real.
+5. Sí: al tocar el casillero vacío se abre el selector (picker) con buscador y lista de jugadores disponibles. Elegir uno llama a `agregarJugadorALinea` (backend), cierra el modal y recarga grilla y tarjetas. Requiere deploy de Apps Script.
+6. Sí: el botón "↻ Rearmar líneas" usa la clase `.gf-rearmar-btn` (fondo navy, texto blanco) y está en la sección Jugadores arriba. El texto cambió de "⚡ Armar líneas" a "↻ Rearmar líneas" en los dos lugares donde se restaura.
+7. No se modificó ninguna lógica de cálculo de score; las funciones de tarjeta y stableford quedan igual.
+8. Sin dudas. ⚠️ Esta tarea requiere deploy manual de Apps Script para activar las funciones `quitarJugadorDeLinea_` y `agregarJugadorALinea_`.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 95 (rediseño Gestionar Fecha, parte 2: Tarjetas)
+
+### Contexto
+
+Solo `index.html`, sin cambios de backend. Saca el recuadro azul de la pestaña Tarjetas y hace que los jugadores se vean de a 2 por fila, sin botón "Editar" — tocando directamente al jugador se abre su tarjeta (el modal armado en la Tarea 93).
+
+### Cambio 1 — CSS nuevo
+
+Buscá:
+
+```css
+.gf-lin-pill-empty:hover{background:var(--g1);}
+.adm-btn-danger-ghost{
+```
+
+Reemplazalo por (esto agrega el CSS de Tarjetas y de Crear Fecha —Tarea 97— juntos, sin tocar la línea `.adm-btn-danger-ghost{` que sigue después):
+
+```css
+.gf-lin-pill-empty:hover{background:var(--g1);}
+.gf-tar-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+@media(max-width:380px){.gf-tar-grid{grid-template-columns:1fr;}}
+.gf-tar-pill{appearance:none;-webkit-appearance:none;margin:0;display:flex;flex-direction:column;gap:3px;width:100%;padding:12px 14px;background:var(--white);border:1px solid var(--g1);border-radius:12px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+.gf-tar-pill:hover{background:var(--off);}
+.gf-tar-pill:active{background:var(--off);transform:scale(.98);}
+.gf-tar-pname{font-size:14px;font-weight:800;letter-spacing:.02em;color:var(--navy);}
+.gf-tar-pstat{font-size:11px;font-weight:700;}
+.gf-jug-toggle{display:flex;align-items:center;padding:9px 14px;border:1.5px solid var(--g2);border-radius:20px;cursor:pointer;background:var(--white);transition:.12s;}
+.gf-jug-toggle input{position:absolute;opacity:0;width:1px;height:1px;margin:-1px;}
+.gf-jug-toggle span{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--text);}
+.gf-jug-toggle span .ap{font-weight:800;text-transform:uppercase;}
+.gf-jug-toggle:hover{border-color:var(--navy);}
+.gf-jug-toggle.on{background:var(--navy);border-color:var(--navy);}
+.gf-jug-toggle.on span{color:#fff;}
+.adm-btn-danger-ghost{
+```
+
+(Nota: esta tarea usa solo las clases `.gf-tar-*`. Las clases `.gf-jug-toggle*` son para la Tarea 97, pero como están todas en el mismo bloque CSS conviene agregarlas juntas acá.)
+
+### Cambio 2 — HTML de la pestaña Tarjetas
+
+Buscá:
+
+```html
+      <div id="edtab-panel-tarjetas" style="display:none;">
+        <!-- TARJETAS: editar por jugador -->
+        <div class="adm-card" id="adm-edit-tarjetas-card">
+          <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
+          <div class="adm-card-body">
+            <div id="adm-tar-list" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
+            <p class="s dim" style="margin-top:8px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);">Tocá un jugador para abrir su tarjeta y editar los golpes hoyo por hoyo.</p>
+          </div>
+        </div>
+      </div>
+```
+
+Reemplazalo por:
+
+```html
+      <div id="edtab-panel-tarjetas" style="display:none;">
+        <div class="gf-section">
+          <div class="gf-section-title">Tarjetas de Jugadores</div>
+          <div class="gf-hint">Tocá un jugador para abrir su tarjeta y editar los golpes hoyo por hoyo.</div>
+          <div id="adm-tar-list" class="gf-tar-grid" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
+        </div>
+      </div>
+```
+
+### Cambio 3 — plantilla de cada jugador en `loadAdmTarjetas`
+
+Buscá:
+
+```javascript
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--g2);">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--navy);">${fmtNameForAdm(t.nombre)}</div>
+          <div style="font-size:11px;color:${statColor};">${stat}</div>
+        </div>
+        <button class="adm-btn-secondary" style="padding:4px 10px;font-size:11px;"
+          onclick="openAdmTarModal('${t.matricula}','${safe}','${t.cancha}','${t.canchaId}')">✏ Editar</button>
+      </div>`;
+```
+
+Reemplazalo por:
+
+```javascript
+      return `<button type="button" class="gf-tar-pill" onclick="openAdmTarModal('${t.matricula}','${safe}','${t.cancha}','${t.canchaId}')">
+        <div class="gf-tar-pname">${fmtNameForAdm(t.nombre)}</div>
+        <div class="gf-tar-pstat" style="color:${statColor};">${stat}</div>
+      </button>`;
+```
+
+### Qué NO cambia (Tarea 95)
+
+- No se toca ningún archivo `.gs` — no hace falta deploy.
+- `openAdmTarModal` y todo el modal de tarjeta + pad numérico (armado en la Tarea 93) quedan exactamente iguales — solo cambia cómo se llega a ellos (tocando la pastilla en vez de un botón "Editar").
+- No se toca la clase `.adm-tar-hole-input` ni la tabla de ratings de cancha.
+
+### ❓ Preguntas de verificación — Tarea 95
+
+1. Entrá a Admin → Gestionar Fecha → pestaña Tarjetas de una fecha con jugadores. ¿Ya no aparece el recuadro azul "Tarjetas de Jugadores"? ¿Los jugadores aparecen de a 2 por fila (en el celular, en pantallas angostas puede verse de a 1 por fila)?
+2. ¿Ya no hay ningún botón "✏ Editar" — al tocar directamente sobre el nombre del jugador se abre su tarjeta completa (igual que antes)?
+3. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 95
+
+1. Sí: la pestaña Tarjetas ya no tiene el card azul. El contenedor `adm-tar-list` usa la clase `gf-tar-grid` (grid de 2 columnas, 1 en pantallas <380px). Cada jugador se renderiza como un botón `.gf-tar-pill`.
+2. Sí: no hay botón "✏ Editar". Cada pastilla llama directamente a `openAdmTarModal(...)` al tocarla.
+3. Sin dudas.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 96 (rediseño Gestionar Fecha, parte 3: Bonus)
+
+### Contexto
+
+Solo `index.html`, sin cambios de JS ni de backend — es puramente separar la pestaña Bonus en dos secciones sin recuadro azul: "Cambiar Hoyo de Bonus" y "Ganadores", cada una con su propio botón de guardar (ya existían separados, solo se reordena el HTML).
+
+### Cambio único — HTML de la pestaña Bonus
+
+Buscá este bloque completo:
+
+```html
+      <div id="edtab-panel-bonus" style="display:none;">
+        <!-- LD / BA -->
+        <div class="adm-card" id="adm-edit-ldba-card">
+          <div class="adm-card-hdr">🏆 Long Drive / Best Approach</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-ghost" onclick="adminSetBonusHoyo()" style="margin-top:8px;">Cambiar hoyo de bonus</button>
+            <div id="adm-bonus-hoyo-msg" class="adm-msg" style="display:none;"></div>
+            <div style="font-size:11px;color:var(--g4);margin-top:8px;">Usá esto solo si nadie ganó en el hoyo original y decidiste jugarlo en otro hoyo. Al cambiar el hoyo se borra el seguimiento en vivo de ese bonus (arranca de cero en el hoyo nuevo).</div>
+
+            <div class="adm-row" style="margin-top:16px;">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Ganador</label>
+                <select id="adm-ldba-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Ganador</label>
+                <select id="adm-ldba-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-primary" onclick="adminSetBonusWinners()" style="margin-top:12px;">Guardar LD/BA</button>
+            <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+```
+
+Reemplazalo por:
+
+```html
+      <div id="edtab-panel-bonus" style="display:none;">
+        <div class="gf-section">
+          <div class="gf-section-title">Cambiar Hoyo de Bonus</div>
+          <div class="gf-hint">Usá esto solo si nadie ganó en el hoyo original y decidiste jugarlo en otro hoyo. Al cambiar el hoyo se borra el seguimiento en vivo de ese bonus (arranca de cero en el hoyo nuevo).</div>
+          <div class="gf-field">
+            <label class="gf-label">💪 Long Drive — Hoyo de bonus</label>
+            <select id="adm-bonus-hoyo-ld" class="gf-input"></select>
+          </div>
+          <div class="gf-field">
+            <label class="gf-label">🎯 Best Approach — Hoyo de bonus</label>
+            <select id="adm-bonus-hoyo-ba" class="gf-input"></select>
+          </div>
+          <button class="gf-btn-primary" onclick="adminSetBonusHoyo()">Cambiar hoyo de bonus</button>
+          <div id="adm-bonus-hoyo-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+
+        <div class="gf-section">
+          <div class="gf-section-title">Ganadores</div>
+          <div class="gf-field">
+            <label class="gf-label">💪 Long Drive — Ganador</label>
+            <select id="adm-ldba-ld" class="gf-input"></select>
+          </div>
+          <div class="gf-field">
+            <label class="gf-label">🎯 Best Approach — Ganador</label>
+            <select id="adm-ldba-ba" class="gf-input"></select>
+          </div>
+          <button class="gf-btn-primary" onclick="adminSetBonusWinners()">Guardar Ganadores</button>
+          <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
+        </div>
+      </div>
+```
+
+### Qué NO cambia (Tarea 96)
+
+- No se toca ningún archivo `.gs` — no hace falta deploy.
+- No se toca ninguna función JS — `adminSetBonusHoyo()` y `adminSetBonusWinners()` siguen exactamente igual, todos los `id` de los campos son los mismos.
+
+### ❓ Preguntas de verificación — Tarea 96
+
+1. Entrá a Admin → Gestionar Fecha → pestaña Bonus. ¿Ya no aparece el recuadro azul "Long Drive / Best Approach"?
+2. ¿Ves dos secciones separadas: "Cambiar Hoyo de Bonus" (con los 2 selectores de hoyo y su botón) y, debajo, "Ganadores" (con los 2 selectores de ganador y su botón "Guardar Ganadores")?
+3. Probá cambiar un hoyo de bonus y guardar — ¿funciona igual que antes? Probá elegir un ganador y guardar — ¿funciona igual que antes?
+4. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 96
+
+1. Sí: el card azul "Long Drive / Best Approach" fue reemplazado por dos secciones `.gf-section`.
+2. Sí: la primera sección es "Cambiar Hoyo de Bonus" (2 selectores `adm-bonus-hoyo-ld`/`adm-bonus-hoyo-ba` + botón). La segunda es "Ganadores" (2 selectores `adm-ldba-ld`/`adm-ldba-ba` + botón "Guardar Ganadores"). Todos los IDs son idénticos a antes.
+3. Las funciones `adminSetBonusHoyo()` y `adminSetBonusWinners()` no se tocaron — funcionan igual.
+4. Sin dudas.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 97 (Crear Fecha: checklist de jugadores → botones que se tildan con color)
+
+### Contexto
+
+Solo `index.html`. En "Crear Fecha", paso Jugadores, la funcionalidad queda igual (se sigue eligiendo quién juega la fecha con un checkbox por debajo), pero visualmente cada jugador pasa a ser un botón tipo pastilla: al tocarlo cambia de color y queda marcado como seleccionado, y si se vuelve a tocar se desmarca. El CSS (`.gf-jug-toggle`) ya se agregó en la Tarea 95 (van todas juntas en el mismo bloque) — este cambio es solo de HTML/JS.
+
+### Cambio 1 — render de cada jugador en `applyAdminResults_`
+
+Buscá:
+
+```javascript
+      ADM_JUGADORES.filter(j => j.activo !== false).forEach(j => {
+        const lbl = formatPlayerLabel(j.nombre);
+        jugHtml += '<div class="adm-jug-item"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '"><label for="jug-' + j.matricula + '">' + lbl + '</label></div>';
+      });
+      jl.innerHTML = jugHtml;
+      prevChecked.forEach(mat => {
+        const el = document.getElementById('jug-' + mat);
+        if(el) el.checked = true;
+      });
+    }
+```
+
+Reemplazalo por:
+
+```javascript
+      ADM_JUGADORES.filter(j => j.activo !== false).forEach(j => {
+        const lbl = formatPlayerLabel(j.nombre);
+        jugHtml += '<label class="gf-jug-toggle" for="jug-' + j.matricula + '"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '" onchange="this.closest(\'.gf-jug-toggle\').classList.toggle(\'on\', this.checked)"><span>' + lbl + '</span></label>';
+      });
+      jl.innerHTML = jugHtml;
+      prevChecked.forEach(mat => {
+        const el = document.getElementById('jug-' + mat);
+        if(el){ el.checked = true; const w = el.closest('.gf-jug-toggle'); if(w) w.classList.add('on'); }
+      });
+    }
+```
+
+### Cambio 2 — al resetear el asistente, también sacar la marca visual
+
+Buscá:
+
+```javascript
+    document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => i.checked = false);
+```
+
+Reemplazalo por:
+
+```javascript
+    document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => { i.checked = false; const w = i.closest('.gf-jug-toggle'); if(w) w.classList.remove('on'); });
+```
+
+### Qué NO cambia (Tarea 97)
+
+- No se toca ningún archivo `.gs` — no hace falta deploy.
+- La validación (`wizValidarPaso1_`) y el guardado siguen leyendo los mismos checkboxes (`#adm-jugadores-list input:checked`) — solo cambió cómo se ven, no cómo funcionan por dentro. El checkbox real sigue ahí, solo que está visualmente escondido dentro del botón.
+- No se toca el checklist de "Crear Dobles" ni el de "Gestionar Jugadores" — ambos siguen usando `.adm-jug-item` sin cambios, porque esta tarea usa una clase nueva y separada (`.gf-jug-toggle`) solo para este checklist puntual.
+
+### ❓ Preguntas de verificación — Tarea 97
+
+1. Entrá a Admin → Crear Fecha → paso Jugadores. ¿Cada jugador aparece como un botón tipo pastilla (no como un checkbox tradicional con casillero)?
+2. Tocá un jugador — ¿cambia de color (fondo azul marino, texto blanco) y queda marcado como seleccionado? Tocalo de nuevo — ¿vuelve a su estado original (desmarcado)?
+3. Seleccioná algunos jugadores y avanzá al paso Líneas — ¿arma las líneas correctamente con los jugadores que elegiste, igual que antes?
+4. Volvé para atrás y empezá de nuevo (o creá otra fecha) — ¿el checklist arranca limpio, sin ningún jugador marcado de la vez anterior?
+5. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 97
+
+1. Sí: cada jugador usa la clase `.gf-jug-toggle` (pastilla redondeada, sin casillero visible).
+2. Sí: al tocar, el `onchange` del checkbox oculto añade/saca la clase `on` al label, cambiando fondo a `var(--navy)` y texto a blanco. Volver a tocar lo desmarca.
+3. La selección funciona igual — `wizValidarPaso1_` y el armado de líneas leen `#adm-jugadores-list input:checked`, que no cambió.
+4. Al resetear el wizard, el `forEach` saca `checked` y también remueve la clase `on` del wrapper.
+5. Sin dudas.
