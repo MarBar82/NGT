@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-08 (Tarea 90 agregada — reorganizar "Gestionar Fecha" en 5 pestañas: Cancha / Jugadores / Tarjetas / Bonus / Recalcular)
+**Última actualización:** 2026-09-08 (Tarea 91 agregada — cuadro 2x2 interactivo de Jugadores: editar HCP/doble tocando al jugador. Toca un archivo .gs, requiere deploy manual)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -9906,6 +9906,484 @@ Reemplazala por:
 6. ¿Alguna duda o algo ambiguo de la consigna?
 
 No. La consigna era clara. El CSS para `.adm-tabs`/`.adm-tab` ya existía en `index.html` (líneas 621-624), por lo que no fue necesario agregarlo.
+
+---
+
+
+---
+
+## Tarea 91 — Cuadro 2x2 interactivo de Jugadores (editar HCP/doble tocando al jugador)
+
+Esta es la Tarea 91 del plan que armamos: la pestaña **Jugadores** de "Gestionar Fecha" pasa a mostrar el cuadro 2x2 de líneas, donde tocar a un jugador abre un editor para cambiarle el HCP de juego y tildar/destildar si suma doble en esa fecha. El botón "⚡ Armar líneas" sigue funcionando exactamente igual que hoy.
+
+**Antes de los cambios de código, un hallazgo importante que encontré investigando** (por eso esta tarea toca tanto `index.html` como un archivo `.gs` — vas a tener que hacer un deploy manual desde el editor de Apps Script después de esta):
+
+Hoy, la agrupación de "quién juega con quién" (las líneas) se guarda UNA sola vez, cuando se crea la fecha, y nunca más se actualiza — ni siquiera si después usás "Armar líneas" + "Guardar Matches" en Gestionar Fecha para reorganizar los grupos. Lo que SÍ se actualiza con "Guardar Matches" son los enfrentamientos 1 contra 1 (los matches), pero no el dato de "estos 4 jugadores están juntos en la línea 2". Si yo armaba el cuadro 2x2 nuevo apoyándome solo en el dato que existe hoy, la primera vez que reorganices las líneas después de crear la fecha, el cuadro iba a seguir mostrando la agrupación VIEJA, de cuando creaste la fecha — un cuadro "2x2" que muestra información incorrecta sería peor que no tenerlo. Por eso esta tarea agrega una función nueva y chiquita al backend que guarda la agrupación actualizada cada vez que usás "Guardar Matches" después de "Armar líneas" — así el cuadro 2x2 siempre está al día.
+
+### Parte A — Backend (`04_Writes.gs`): guardar la agrupación de líneas
+
+En `04_Writes.gs`, buscá el final de la función `setDoblesFecha_` — el bloque que termina así:
+
+```javascript
+  audit_('SET_DOBLES_FECHA', 'admin', { fecha, dobles: nuevosDobles, changes });
+  return { ok: true, changes: changes };
+}
+```
+
+Justo DESPUÉS de esa `}` (dejando esa función tal cual está, sin tocarla), agregá esta función nueva:
+
+```javascript
+
+/**
+ * Guarda la agrupación de jugadores en líneas (foursomes) de una fecha, generada por
+ * "Armar líneas" en Gestionar Fecha, para que el cuadro 2x2 de la pestaña Jugadores
+ * quede al día. Se llama automáticamente al hacer clic en "Guardar Matches" después de
+ * usar "Armar líneas" — no hace falta un botón aparte para esto.
+ * Espejo de setDoblesFecha_: reemplaza por completo `lineas` dentro de FECHA_META[fecha].
+ */
+function setLineasFecha_(params) {
+  const { adminKey, fecha, lineas } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha) return { ok: false, error: 'Falta fecha' };
+  if (!Array.isArray(lineas)) return { ok: false, error: 'Lineas debe ser array' };
+
+  const fStr = String(fecha);
+  const props = PropertiesService.getDocumentProperties();
+  const meta = JSON.parse(props.getProperty('FECHA_META') || '{}');
+  if (!meta[fStr]) return { ok: false, error: 'Fecha no encontrada en FECHA_META' };
+
+  meta[fStr].lineas = lineas.map(function(l) { return (l || []).map(String); });
+  props.setProperty('FECHA_META', JSON.stringify(meta));
+
+  // Invalidar el cache de fechaLineas para que el cuadro 2x2 muestre la nueva agrupación de inmediato
+  try { CacheService.getScriptCache().remove('fl_' + fStr); } catch(e) {}
+
+  audit_('SET_LINEAS_FECHA', 'admin', { fecha, lineas: meta[fStr].lineas });
+  return { ok: true };
+}
+```
+
+### Parte B — Backend (`10_Routing.gs`): exponer la función nueva como acción de la API
+
+En `10_Routing.gs`, buscá esta línea (dentro de `doPost`):
+
+```javascript
+      case 'setDoblesFecha':       result = setDoblesFecha_(params); break;
+```
+
+Reemplazala por:
+
+```javascript
+      case 'setDoblesFecha':       result = setDoblesFecha_(params); break;
+      case 'setLineasFecha':       result = setLineasFecha_(params); break;
+```
+
+**Acá termina lo que necesita deploy manual desde Apps Script. El resto es `index.html`, que se publica solo.**
+
+### Parte C — Frontend: reemplazar la tarjeta "✌ Puntos Dobles" por el cuadro 2x2 interactivo
+
+En `index.html`, dentro de la pestaña Jugadores (`<div id="edtab-panel-jugadores"...>`), buscá este bloque exacto:
+
+```html
+        <!-- DOBLES -->
+        <div class="adm-card">
+          <div class="adm-card-hdr">✌ Puntos Dobles</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Jugadores que suman Stableford × 2 en esta fecha. Configurar antes de que empiece la primera línea.</div>
+            <div id="adm-dobles-mgr-list" style="margin-bottom:10px;"></div>
+            <button class="adm-btn-primary" onclick="admGuardarDobles()">💾 Guardar Dobles</button>
+            <div id="adm-dobles-mgr-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+```
+
+Reemplazalo por:
+
+```html
+        <!-- JUGADORES Y LÍNEAS -->
+        <div class="adm-card">
+          <div class="adm-card-hdr">👥 Jugadores y Líneas</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Tocá un jugador para modificarle el HCP de juego o si suma doble en esta fecha.</div>
+            <div id="adm-jug-grid">Cargando...</div>
+            <div id="adm-jug-editor" style="display:none;margin-top:14px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;">
+                ✏ Editando: <span id="adm-jug-nombre"></span>
+              </div>
+              <div class="adm-row">
+                <div class="adm-field">
+                  <label class="adm-label">HCP de juego</label>
+                  <input type="number" id="adm-jug-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP">
+                </div>
+              </div>
+              <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px;">
+                <input type="checkbox" id="adm-jug-doble"> ✌ Suma doble en esta fecha
+              </label>
+              <div id="adm-jug-doble-hint" style="font-size:11px;color:var(--g4);margin-top:4px;display:none;"></div>
+              <div style="display:flex;gap:8px;margin-top:14px;">
+                <button class="adm-btn-primary" onclick="admJugGuardarEditor()" style="flex:2;">Guardar</button>
+                <button class="btn-cancel" onclick="admJugCerrarEditor()" style="flex:1;">Cancelar</button>
+              </div>
+              <div id="adm-jug-msg" class="adm-msg" style="display:none;"></div>
+            </div>
+          </div>
+        </div>
+```
+
+(La tarjeta "⚔ Matches de la Fecha" que sigue justo después queda exactamente igual, no se toca.)
+
+### Parte D — Frontend: CSS nuevo para que los jugadores del cuadro sean clickeables y se vea quién suma doble
+
+En `index.html`, dentro del bloque `<style>`, buscá esta línea (el final del bloque de estilos `.fca-`):
+
+```css
+@media(max-width:380px){.fca-players{grid-template-columns:1fr}.fca-match{grid-template-columns:1fr;text-align:center;gap:2px;}.fca-match .fca-m1,.fca-match .fca-m2{justify-self:center;text-align:center;}}
+```
+
+Dejala tal cual está y agregá estas líneas nuevas justo después:
+
+```css
+.fca-pill.clickable{cursor:pointer;transition:background .1s,border-color .1s;}
+.fca-pill.clickable:hover{background:var(--off);border-color:var(--navy);}
+.fca-pill.fca-pill-db{border-left-color:#c9a84c;}
+.fca-pill .fca-db-badge{font-size:9px;font-weight:800;color:#8a6d1a;background:#fdf3d8;border-radius:3px;padding:1px 4px;margin-left:4px;letter-spacing:.04em;}
+```
+
+### Parte E — Frontend: las funciones nuevas que arman el cuadro y el editor
+
+En `index.html`, buscá la función `mgrGuardarMatches` y su llave de cierre — el bloque que termina así:
+
+```javascript
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+// ══ GESTIONAR FECHA — grilla + panel de edición ══
+```
+
+Reemplazalo por (agrega las funciones nuevas entre el cierre de `mgrGuardarMatches` y el comentario `GESTIONAR FECHA`, sin tocar nada de `mgrGuardarMatches` en este paso — el cambio DENTRO de `mgrGuardarMatches` va en la Parte F):
+
+```javascript
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+// ── JUGADORES: cuadro 2x2 de líneas, tocar un jugador para editar HCP/doble ──
+let ADM_JUG_LINEAS_DATA = null;
+let ADM_JUG_DOBLE_DISPONIBLES = [];
+let ADM_JUG_DOBLE_ENFECHA = [];
+let ADM_JUG_EDIT_MAT = null;
+let ADM_JUG_EDIT_TARJETA = null;
+
+function loadAdmJugadoresGrid(fecha){
+  const cont = document.getElementById('adm-jug-grid');
+  if(!cont) return;
+  cont.innerHTML = 'Cargando...';
+  Promise.all([
+    ngtApiGet('fechaLineas', { fecha: fecha }),
+    ngtApiGet('jugadoresConDoble'),
+    ngtApiGet('fechaDetalle', { fecha: fecha }),
+  ]).then(results => {
+    ADM_JUG_LINEAS_DATA = (results[0] && results[0].data) || null;
+    ADM_JUG_DOBLE_DISPONIBLES = (results[1] && results[1].data) || [];
+    const detalle = (results[2] && results[2].data) || {};
+    ADM_JUG_DOBLE_ENFECHA = detalle.dobles || [];
+    renderAdmJugGrid_();
+  }).catch(function(){
+    cont.innerHTML = '<div class="s dim">No se pudieron cargar las líneas.</div>';
+  });
+}
+
+function renderAdmJugGrid_(){
+  const cont = document.getElementById('adm-jug-grid');
+  if(!cont) return;
+  const data = ADM_JUG_LINEAS_DATA;
+  if(!data || !data.lineas || !data.lineas.length){
+    cont.innerHTML = '<div class="s dim">Todavía no hay líneas armadas para esta fecha. Usá "⚡ Armar líneas" más abajo.</div>';
+    return;
+  }
+  let html = '<div class="fca-wrap" style="padding:0;">';
+  data.lineas.forEach(function(l){
+    html += '<div class="fca-linea"><div class="fca-linea-hdr"><span class="fca-lnum">Línea ' + l.lineNum + '</span></div><div class="fca-players">';
+    for(let i = 0; i < 4; i++){
+      const p = l.players[i];
+      if(p){
+        const esDoble = ADM_JUG_DOBLE_ENFECHA.indexOf(String(p.matricula)) >= 0;
+        html += '<div class="fca-pill clickable' + (esDoble ? ' fca-pill-db' : '') + '" onclick="admJugAbrirEditor(\'' + p.matricula + '\')">' +
+          '<span class="fca-pname">' + p.apodo + (esDoble ? ' <span class="fca-db-badge">✌x2</span>' : '') + '</span>' +
+          '<span class="fca-phcp">' + p.hcp + ' → <span class="fca-p85">' + hcp85(p.hcp) + '</span></span></div>';
+      } else {
+        html += '<div class="fca-pill-empty"></div>';
+      }
+    }
+    html += '</div></div>';
+  });
+  html += '</div>';
+  cont.innerHTML = html;
+}
+
+function admJugAbrirEditor(matricula){
+  const data = ADM_JUG_LINEAS_DATA;
+  let player = null;
+  if(data && data.lineas){
+    data.lineas.forEach(function(l){ l.players.forEach(function(p){ if(String(p.matricula) === String(matricula)) player = p; }); });
+  }
+  if(!player) return;
+  ADM_JUG_EDIT_MAT = String(matricula);
+  ADM_JUG_EDIT_TARJETA = null;
+  document.getElementById('adm-jug-editor').style.display = 'block';
+  document.getElementById('adm-jug-nombre').textContent = fmtNameForAdm(player.nombre || player.apodo);
+  document.getElementById('adm-jug-hcp').value = player.hcp;
+  document.getElementById('adm-jug-msg').style.display = 'none';
+
+  const esDoble = ADM_JUG_DOBLE_ENFECHA.indexOf(ADM_JUG_EDIT_MAT) >= 0;
+  const elegible = esDoble || ADM_JUG_DOBLE_DISPONIBLES.indexOf(ADM_JUG_EDIT_MAT) >= 0;
+  const chk = document.getElementById('adm-jug-doble');
+  const hint = document.getElementById('adm-jug-doble-hint');
+  chk.checked = esDoble;
+  chk.disabled = !elegible;
+  if(!elegible){
+    hint.style.display = 'block';
+    hint.textContent = 'Este jugador ya usó su doble en otra fecha esta temporada.';
+  } else {
+    hint.style.display = 'none';
+  }
+
+  ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }).then(r => {
+    const tarjetas = (r && r.ok && r.data) || [];
+    ADM_JUG_EDIT_TARJETA = tarjetas.find(t => String(t.matricula) === ADM_JUG_EDIT_MAT) || null;
+  });
+
+  document.getElementById('adm-jug-editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function admJugCerrarEditor(){
+  ADM_JUG_EDIT_MAT = null;
+  ADM_JUG_EDIT_TARJETA = null;
+  const ed = document.getElementById('adm-jug-editor');
+  if(ed) ed.style.display = 'none';
+}
+
+function admJugGuardarEditor(){
+  const mat = ADM_JUG_EDIT_MAT;
+  if(!mat) return;
+  const msg = document.getElementById('adm-jug-msg');
+  if(!ADM_JUG_EDIT_TARJETA){
+    msg.className = 'adm-msg err'; msg.textContent = 'Esperá un segundo a que termine de cargar y volvé a intentar'; msg.style.display = 'block'; return;
+  }
+  const hcpVal = document.getElementById('adm-jug-hcp').value.trim();
+  if(!hcpVal){
+    msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el HCP de juego'; msg.style.display = 'block'; return;
+  }
+  const fecha = ADM_EDIT_FECHA;
+  const nuevoDoble = document.getElementById('adm-jug-doble').checked;
+  const eraDoble = ADM_JUG_DOBLE_ENFECHA.indexOf(mat) >= 0;
+  const tarjeta = ADM_JUG_EDIT_TARJETA;
+
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+
+  ngtApiPost({
+    action: 'cargarTarjeta',
+    adminKey: ADMIN_KEY_OK,
+    fecha: fecha,
+    matricula: mat,
+    hcp: parseInt(hcpVal),
+    scores: tarjeta.scores,
+    ld: tarjeta.ld,
+    ba: tarjeta.ba,
+  }).then(r1 => {
+    if(!r1 || !r1.ok){
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r1 && r1.error ? r1.error : 'Error al guardar HCP');
+      return;
+    }
+    function terminar(){
+      msg.className = 'adm-msg ok';
+      msg.textContent = '✓ Guardado';
+      setTimeout(() => loadAdmJugadoresGrid(fecha), 900);
+    }
+    if(nuevoDoble === eraDoble){ terminar(); return; }
+    let dobles = ADM_JUG_DOBLE_ENFECHA.slice();
+    if(nuevoDoble && dobles.indexOf(mat) < 0) dobles.push(mat);
+    if(!nuevoDoble) dobles = dobles.filter(m => m !== mat);
+    ngtApiPost({ action: 'setDoblesFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, dobles: dobles }).then(r2 => {
+      if(r2 && r2.ok){ terminar(); }
+      else {
+        msg.className = 'adm-msg err';
+        msg.textContent = '✗ HCP guardado, pero error al actualizar doble: ' + (r2 && r2.error ? r2.error : 'Error');
+      }
+    });
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+// ══ GESTIONAR FECHA — grilla + panel de edición ══
+```
+
+### Parte F — Frontend: que "Guardar Matches" también actualice la agrupación de líneas, y que el cuadro se cargue al abrir la pantalla
+
+**F.1 — Guardar la propuesta de líneas cuando se arma.** Buscá:
+
+```javascript
+let ADM_LAST_ARMAR_PRIORIDADES = [];
+```
+
+Reemplazala por:
+
+```javascript
+let ADM_LAST_ARMAR_PRIORIDADES = [];
+let ADM_LAST_ARMAR_LINEAS = [];
+```
+
+**F.2 — Guardar `r.lines` cuando "Armar líneas" trae una propuesta nueva.** Buscá, dentro de `admArmarLineas`:
+
+```javascript
+    // Limpiar matches actuales y cargar los propuestos
+    const list = document.getElementById('adm-mgr-matches-list');
+```
+
+Reemplazala por:
+
+```javascript
+    ADM_LAST_ARMAR_LINEAS = r.lines || [];
+
+    // Limpiar matches actuales y cargar los propuestos
+    const list = document.getElementById('adm-mgr-matches-list');
+```
+
+**F.3 — Que "Guardar Matches" persista también la agrupación de líneas, si venís de usar "Armar líneas".** Buscá, dentro de `mgrGuardarMatches`, este bloque exacto:
+
+```javascript
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok';
+      const ch = r.changes || {};
+      msg.textContent = '✓ ' + (ch.added || matches.length) + ' match(es) guardados' + (ch.cleared ? ' (' + ch.cleared + ' anteriores reemplazados)' : '');
+    } else {
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+```
+
+(Es el bloque final de `mgrGuardarMatches` — el que sigue después es el que ya tocamos en la Parte E, no lo confundas.)
+
+Reemplazalo por:
+
+```javascript
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok';
+      const ch = r.changes || {};
+      msg.textContent = '✓ ' + (ch.added || matches.length) + ' match(es) guardados' + (ch.cleared ? ' (' + ch.cleared + ' anteriores reemplazados)' : '');
+
+      // Si esos matches vinieron de "Armar líneas", también guardamos la agrupación
+      // en líneas para que el cuadro 2x2 de Jugadores quede al día.
+      if(ADM_LAST_ARMAR_LINEAS && ADM_LAST_ARMAR_LINEAS.length){
+        const lineas = ADM_LAST_ARMAR_LINEAS.map(l => l.players.map(p => p.matricula));
+        ngtApiPost({ action: 'setLineasFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, lineas: lineas }).then(function(r2){
+          ADM_LAST_ARMAR_LINEAS = [];
+          const preview = document.getElementById('adm-armar-lineas-preview');
+          if(preview){ preview.style.display = 'none'; preview.innerHTML = ''; }
+          admJugCerrarEditor();
+          loadAdmJugadoresGrid(fecha);
+          if(!r2 || !r2.ok){
+            msg.className = 'adm-msg err';
+            msg.textContent = '✗ Matches guardados, pero no se pudo actualizar el cuadro de líneas: ' + (r2 && r2.error ? r2.error : 'Error');
+          }
+        });
+      }
+    } else {
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err';
+    msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+```
+
+**F.4 — Cargar el cuadro 2x2 al abrir la pantalla de editar fecha, y limpiar la agrupación pendiente de una fecha anterior.** Buscá, dentro de `abrirEditPanel`:
+
+```javascript
+  // Load matches for this fecha
+  loadMatchesForGestion(fecha);
+  loadAdmTarjetas(fecha);
+  loadAdmLdBa(fecha);
+```
+
+Reemplazala por:
+
+```javascript
+  // Load matches for this fecha
+  ADM_LAST_ARMAR_LINEAS = [];
+  loadMatchesForGestion(fecha);
+  loadAdmTarjetas(fecha);
+  loadAdmLdBa(fecha);
+  loadAdmJugadoresGrid(fecha);
+```
+
+### Qué SÍ cambia (Tarea 91)
+
+- La tarjeta "✌ Puntos Dobles" (el checklist para tildar quién suma doble) desaparece de la pestaña Jugadores — su función pasa a estar DENTRO del editor que se abre al tocar cada jugador en el cuadro 2x2 ("✌ Suma doble en esta fecha"). Es la misma funcionalidad, con la misma regla de fondo (un jugador que ya usó su doble en OTRA fecha de la temporada no puede tildarse en esta — el checkbox aparece deshabilitado con una explicación), solo que ahora se hace jugador por jugador en vez de con una lista larga de tildes.
+- El botón "⚡ Armar líneas" y la tarjeta "⚔ Matches de la Fecha" siguen funcionando exactamente igual que hoy (proponer líneas, revisar el preview, "Guardar Matches") — lo único que se agrega es que al hacer clic en "Guardar Matches" DESPUÉS de haber usado "Armar líneas", ahora también se guarda la nueva agrupación de líneas de fondo (antes esto no se guardaba en ningún lado después de crear la fecha — ver la explicación arriba).
+- Las funciones viejas `admGuardarDobles`, `renderDoblesPanel`, `renderDoblesCheckboxes_` quedan sin usar en el código (no las borro, para no arriesgar tocar algo que no hace falta tocar) — no hacen nada raro, simplemente no las llama nadie desde ningún botón visible.
+
+### Qué NO cambia (Tarea 91)
+
+- No se toca ningún cálculo de Stableford, matches, ni la fórmula de HCP — el editor usa exactamente el mismo camino que ya usa hoy "Tarjetas de Jugadores" para guardar el HCP (`cargarTarjeta_`), preservando los scores/LD/BA existentes del jugador sin tocarlos.
+- No se toca la tarjeta "🏆 Long Drive / Best Approach" ni "🔄 Recalcular Fecha" ni "Borrar Fecha".
+- La pestaña Cancha, Tarjetas y Bonus quedan exactamente iguales a como quedaron en la Tarea 90.
+- No se pierde ningún dato: el editor no deja guardar hasta que terminó de cargar los scores actuales del jugador (si tocás "Guardar" muy rápido, antes de que carguen, te pide esperar un segundo en vez de guardar con datos vacíos).
+
+### ❓ Preguntas de verificación — Tarea 91
+
+1. Después de hacer el deploy manual en Apps Script (recordátelo — esta tarea SÍ toca archivos `.gs`), ¿al entrar a "Editando Fecha" → pestaña Jugadores aparece el cuadro 2x2 con las líneas de esa fecha (apodo + HCP → HCP 85% de cada jugador)?
+
+✅ Sí (requiere deploy de `04_Writes.gs` y `10_Routing.gs`). `abrirEditPanel` ahora llama `loadAdmJugadoresGrid(fecha)` que hace 3 llamadas en paralelo (`fechaLineas`, `jugadoresConDoble`, `fechaDetalle`) y renderiza el cuadro con `fca-pill clickable` mostrando apodo, HCP y HCP×85%.
+
+2. ¿Al tocar un jugador se abre el editor de abajo con su nombre, su HCP actual precargado, y el tilde de "Suma doble" en el estado correcto (tildado si ya suma doble en esta fecha)?
+
+✅ Sí. `admJugAbrirEditor(matricula)` busca el jugador en `ADM_JUG_LINEAS_DATA`, precarga su nombre en `#adm-jug-nombre`, su HCP en `#adm-jug-hcp`, y el checkbox `#adm-jug-doble` queda tildado si `ADM_JUG_DOBLE_ENFECHA` incluye esa matrícula.
+
+3. Cambiá el HCP de un jugador y guardá — ¿se actualiza en el cuadro? ¿Sus scores ya cargados (si los tenía) siguen intactos (revisalo en la pestaña Tarjetas)?
+
+✅ Sí. `admJugGuardarEditor` llama `cargarTarjeta` pasando `scores`, `ld` y `ba` del `ADM_JUG_EDIT_TARJETA` sin modificarlos — solo cambia `hcp`. Después de 900 ms recarga el cuadro con `loadAdmJugadoresGrid`.
+
+4. Tildá "Suma doble" en un jugador que no lo tenía y guardá — ¿queda con el cartelito "✌x2" en el cuadro? Probá destildarlo también.
+
+✅ Sí. Si el doble cambió, guarda el nuevo array de dobles con `setDoblesFecha`. Al recargar el cuadro, los jugadores con doble tienen clase `fca-pill-db` y muestran el badge `✌x2`.
+
+5. Probá tildar "Suma doble" en un jugador que ya usó su doble en OTRA fecha de la temporada (si tenés alguno de prueba) — ¿el tilde aparece deshabilitado con la explicación de por qué?
+
+✅ Sí. `elegible = esDoble || ADM_JUG_DOBLE_DISPONIBLES.indexOf(ADM_JUG_EDIT_MAT) >= 0`. Si no está en ninguno de los dos, `chk.disabled = true` y `hint.textContent = 'Este jugador ya usó su doble en otra fecha esta temporada.'`
+
+6. Usá "⚡ Armar líneas", revisá la propuesta, y hacé clic en "Guardar Matches" — ¿el cuadro 2x2 de arriba se actualiza solo, mostrando la nueva agrupación, sin que tengas que recargar la página?
+
+✅ Sí. Al usar "Armar líneas", se guarda `r.lines` en `ADM_LAST_ARMAR_LINEAS`. Al "Guardar Matches", si ese array no está vacío, llama `setLineasFecha` con la nueva agrupación y luego `loadAdmJugadoresGrid` para refrescar el cuadro.
+
+7. Recargá la página completa (F5) después de guardar una nueva agrupación de líneas — ¿el cuadro 2x2 sigue mostrando la agrupación nueva (no la vieja de cuando se creó la fecha)?
+
+✅ Sí. `setLineasFecha_` escribe `meta[fStr].lineas` en `FECHA_META` (DocumentProperties) y borra el caché `fl_<fecha>`. La próxima vez que `fechaLineas` se llame, `cachedRead_` va a la fuente fresca y obtiene la agrupación nueva.
+
+8. Hash y mensaje del/los commit(s).
+
+`93e8638` — "Tarea 91: cuadro 2x2 interactivo de jugadores — editar HCP/doble tocando al jugador"
+
+9. ¿Alguna duda o algo ambiguo de la consigna?
+
+No. Nota: `fmtNameForAdm` es la función que ya existe en el código para formatear nombres en el contexto admin — se usa en `admJugAbrirEditor` igual que en otros editores del módulo.
 
 ---
 
