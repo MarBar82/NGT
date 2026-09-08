@@ -507,7 +507,9 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 
 /* ADMIN */
 .adm-fecha-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-bottom:16px;}
-.adm-fecha-tile{background:var(--white);border:var(--border);border-radius:12px;padding:14px 10px 10px;text-align:center;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+.adm-fecha-tile{appearance:none;-webkit-appearance:none;width:100%;background:var(--white);border:var(--border);border-radius:12px;padding:14px 10px 10px;text-align:center;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);cursor:pointer;font-family:inherit;transition:background .12s;}
+.adm-fecha-tile:hover{background:var(--off);}
+.adm-fecha-tile:active{background:var(--off);transform:scale(.97);}
 .adm-fecha-tile-num{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:800;color:var(--navy);line-height:1;}
 .adm-fecha-tile-lbl{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--g4);margin:2px 0 6px;}
 .adm-fecha-tile-badge{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:10px;margin-bottom:8px;}
@@ -598,7 +600,7 @@ select.adm-input:disabled{opacity:.55;cursor:not-allowed;background-color:var(--
 .adm-card-hdr .btn-back:hover{color:#fff;border-color:rgba(255,255,255,.7);background:rgba(255,255,255,.16);}
 .btn-cancel{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--g4);background:none;border:none;padding:6px 10px;cursor:pointer;transition:.12s;}
 .btn-cancel:hover{color:var(--navy);}
-.adm-btn-destructive{width:100%;background:#b91c1c;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:11px;border:none;border-radius:3px;cursor:pointer;transition:.12s;}
+.adm-btn-destructive{width:100%;background:#b91c1c;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:14px;border:none;border-radius:8px;cursor:pointer;transition:.12s;}
 .adm-btn-destructive:hover{background:#991b1b;}
 .adm-btn-destructive:disabled{opacity:.5;cursor:not-allowed;}
 .adm-error{background:#fee;color:#c8102e;padding:10px;border-radius:3px;font-size:13px;margin-top:10px;border-left:3px solid var(--red);}
@@ -1040,8 +1042,9 @@ select.gf-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;pad
 
 .gf-lin-linea{margin-bottom:20px;}
 .gf-lin-hdr{font-family:'Roboto Slab',serif;font-size:15px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;}
-.gf-lin-players{display:flex;flex-direction:column;gap:8px;}
-.gf-lin-pill{appearance:none;-webkit-appearance:none;margin:0;display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 16px;background:var(--white);border:1px solid var(--g1);border-radius:12px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
+.gf-lin-players{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+@media(max-width:380px){.gf-lin-players{grid-template-columns:1fr;}}
+.gf-lin-pill{appearance:none;-webkit-appearance:none;margin:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;padding:12px 14px;background:var(--white);border:1px solid var(--g1);border-radius:12px;cursor:pointer;text-align:left;font-family:'Barlow Condensed',sans-serif;transition:background .12s;box-shadow:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);}
 .gf-lin-pill:hover{background:var(--off);}
 .gf-lin-pill:active{background:var(--off);transform:scale(.98);}
 .gf-lin-pname{font-size:15px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--navy);}
@@ -1049,7 +1052,7 @@ select.gf-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;pad
 .gf-lin-phcp .gf-lin-p85{font-weight:800;color:var(--red);}
 .gf-lin-db{font-size:10px;font-weight:800;color:#8a6d1a;background:#fdf3d8;border-radius:4px;padding:2px 6px;margin-left:6px;letter-spacing:.04em;}
 .gf-lin-pill-db{border-left:3px solid #c9a84c;}
-.gf-lin-pill-empty{justify-content:center;border:1.5px dashed var(--g3);background:var(--off);color:var(--g4);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;box-shadow:none;}
+.gf-lin-pill-empty{align-items:center;justify-content:center;text-align:center;border:1.5px dashed var(--g3);background:var(--off);color:var(--g4);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;box-shadow:none;}
 .gf-lin-pill-empty:hover{background:var(--g1);}
 .adm-btn-danger-ghost{appearance:none;-webkit-appearance:none;width:100%;background:#fff;color:#c8102e;border:1px solid #c8102e;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.04em;padding:11px;border-radius:6px;cursor:pointer;transition:.12s;}
 .adm-btn-danger-ghost:hover{background:#fee;}
@@ -2460,27 +2463,18 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       </div>
 
       <div id="edtab-panel-recalc" style="display:none;">
-        <!-- RECALCULAR FECHA (unificado) -->
-        <div class="adm-card" id="adm-recalc-card">
-          <div class="adm-card-hdr">🔄 Recalcular Fecha</div>
-          <div class="adm-card-body">
-            <div class="s dim" style="margin-bottom:12px;font-size:12px;">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
-            <button class="adm-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
-            <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
-          </div>
+        <div class="gf-section">
+          <div class="gf-section-title">Recalcular Fecha</div>
+          <div class="gf-hint">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
+          <button class="gf-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
+          <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
         </div>
 
-        <!-- BORRAR FECHA — al fondo de la pantalla de edición -->
-        <div class="adm-card" style="border-color:#fca5a5;">
-          <div class="adm-card-hdr danger">Borrar Fecha</div>
-          <div class="adm-card-body">
-            <p style="font-size:12px;color:var(--g4);line-height:1.5;margin:0 0 12px;">
-              Elimina esta fecha por completo: tarjetas, STB, matches, SCORE y Leaderboard.<br>
-              <strong style="color:#b91c1c;">Esta acción no se puede deshacer.</strong>
-            </p>
-            <button class="adm-btn-destructive" onclick="adminEliminarFecha()">Borrar Fecha Completa</button>
-            <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
-          </div>
+        <div class="gf-section">
+          <div class="gf-section-title" style="color:#b91c1c;border-bottom-color:#b91c1c;">Borrar Fecha</div>
+          <div class="gf-hint">Elimina esta fecha por completo: tarjetas, STB, matches, SCORE y Leaderboard. <strong style="color:#b91c1c;">Esta acción no se puede deshacer.</strong></div>
+          <button class="adm-btn-destructive" onclick="adminEliminarFecha()">Borrar Fecha Completa</button>
+          <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
         </div>
       </div>
 
@@ -5257,7 +5251,7 @@ function renderAdmLineasGrid_(){
         const esDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(String(p.matricula)) >= 0;
         html += '<button type="button" class="gf-lin-pill' + (esDoble ? ' gf-lin-pill-db' : '') + '" onclick="admLinAbrirEditor(\'' + p.matricula + '\')">' +
           '<span class="gf-lin-pname">' + p.apodo + (esDoble ? ' <span class="gf-lin-db">✌x2</span>' : '') + '</span>' +
-          '<span class="gf-lin-phcp">' + p.hcp + ' → <span class="gf-lin-p85">' + hcp85(p.hcp) + '</span></span></button>';
+          '<span class="gf-lin-phcp">' + p.hcp + ' / <span class="gf-lin-p85">' + hcp85(p.hcp) + '</span></span></button>';
       } else {
         html += '<button type="button" class="gf-lin-pill gf-lin-pill-empty" onclick="admLinAbrirPicker(' + l.lineNum + ', ' + i + ')">+ Sumar jugador</button>';
       }
@@ -5466,15 +5460,11 @@ function renderFechasGrid(){
         ? '<div class="adm-fecha-tile-badge completa">✓ Completa</div>'
         : '<div class="adm-fecha-tile-badge pendiente">' + item.firmados + '/' + item.totalJugadores + ' firmados</div>';
       return `
-      <div class="adm-fecha-tile">
+      <button type="button" class="adm-fecha-tile" onclick="abrirEditPanel('${f}')">
         <div class="adm-fecha-tile-num">${f}</div>
         <div class="adm-fecha-tile-lbl">Fecha</div>
         ${badge}
-        <div class="adm-fecha-tile-btns">
-          <button class="adm-fecha-tile-btn" title="Editar" onclick="abrirEditPanel('${f}')">✏</button>
-          <button class="adm-fecha-tile-btn danger" title="Borrar" onclick="adminEliminarFechaDesdeGrid('${f}')">🗑</button>
-        </div>
-      </div>`;
+      </button>`;
     }).join('');
   }).catch(() => {
     grid.innerHTML = '<div style="color:#c8102e;font-size:13px;">Error al cargar fechas</div>';
