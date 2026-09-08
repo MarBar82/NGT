@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — NGT
 
-**Última actualización:** 2026-09-05 (Tarea 71 agregada — fix: el link de la foto de perfil no cargaba, cambiar el formato de URL de Drive)
+**Última actualización:** 2026-09-08 (Tarea 90 agregada — reorganizar "Gestionar Fecha" en 5 pestañas: Cancha / Jugadores / Tarjetas / Bonus / Recalcular)
 **Repo:** MarBar82/NGT — rama `main`
 **Contexto:** Cada tarea nueva se define acá con instrucciones técnicas y preguntas de verificación. Abrí Claude Code en `C:\Users\marco\NGT` y decile que lea este archivo y ejecute la tarea.
 
@@ -9456,3 +9456,456 @@ Hash: `bfac3c7` — Mensaje: `T89: rediseno linea HCP/Medal/Golpes - horizontal,
 
 6. ¿Alguna duda o algo ambiguo de la consigna?
 Sin dudas.
+
+---
+
+## Tarea 90 — Reorganizar "Gestionar Fecha" en 5 pestañas (Cancha / Jugadores / Tarjetas / Bonus / Recalcular)
+
+Marco pidió reordenar la pantalla de admin "Editando Fecha" (hoy es un solo scroll largo con 7 tarjetas apiladas) en 5 pestañas, una por cada paso del proceso: **Cancha**, **Jugadores**, **Tarjetas**, **Bonus**, **Recalcular**.
+
+**Esta Tarea 90 es solo el primer paso de 3.** Acá SOLO reorganizamos visualmente lo que ya existe en pestañas — ningún dato, cálculo ni botón cambia de comportamiento, todo sigue funcionando exactamente igual que hoy, solo agrupado distinto. Las 2 mejoras de fondo que Marco pidió (el cuadro 2x2 de jugadores donde se hace click para editar HCP/doble, y el modal con pad numérico para editar tarjetas) van a llegar en la Tarea 91 (Jugadores) y la Tarea 92 (Tarjetas), una vez que esta base de pestañas esté funcionando y confirmada.
+
+**Cómo quedan agrupadas las 7 tarjetas actuales en las 5 pestañas nuevas** (nada de esto cambia de comportamiento, solo de ubicación):
+
+- **Cancha:** la tarjeta "👥 Datos de la Fecha" completa (cancha, color de salidas, jugadores que disputan, hoyo de salida, botón Guardar Datos). Nota: dejamos "Jugadores que disputan" acá por ahora (no en la pestaña Jugadores) porque comparte el mismo botón "Guardar Datos" que la cancha/color/hoyo — separarla habría partido un solo guardado en dos pestañas distintas, y eso sí sería un cambio de comportamiento. Cuando armemos el cuadro 2x2 interactivo en la Tarea 91, vemos si tiene sentido moverla.
+- **Jugadores:** la tarjeta "✌ Puntos Dobles" + la tarjeta "⚔ Matches de la Fecha" (incluye el botón "⚡ Armar líneas"). Es la base sobre la que la Tarea 91 va a construir el cuadro 2x2 interactivo.
+- **Tarjetas:** la tarjeta "📋 Tarjetas de Jugadores", sin cambios (la Tarea 92 la va a upgradear al modal con pad numérico).
+- **Bonus:** la tarjeta "🏆 Long Drive / Best Approach", sin cambios.
+- **Recalcular:** la tarjeta "🔄 Recalcular Fecha" + la tarjeta "Borrar Fecha" (antes al fondo del scroll), agrupadas juntas porque ambas son "acciones de cierre" sobre la fecha.
+
+### Cambio 1 — HTML: agregar las pestañas y envolver las 7 tarjetas en 5 paneles
+
+En `index.html`, buscá este bloque completo (empieza justo después de `<div class="pg" id="pg-admin-editar-detalle">` y termina antes de `<!-- ════ ADMIN — GESTIONAR CANCHAS ════ -->`):
+
+```html
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="cerrarEditPanel();pg('admin-editar',null);">←</button>
+        <span class="adm-sec-title">Editando Fecha <span id="adm-edit-panel-num"></span></span>
+      </div>
+
+        <!-- DATOS: cancha / jugadores / dobles -->
+        <div class="adm-card" id="adm-edit-data-card">
+          <div class="adm-card-hdr">👥 Datos de la Fecha</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Cancha</label>
+                <select id="adm-edit-cancha" class="adm-input" onchange="loadColoresCanchaEdit()"></select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Color de Salidas</label>
+                <select id="adm-edit-color-tee" class="adm-input">
+                  <option value="BLANCAS">Blancas (default)</option>
+                </select>
+                <div class="adm-hint" id="adm-edit-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+              </div>
+            </div>
+
+            <label class="adm-label">Jugadores que disputan</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <input type="text" id="adm-edit-jugs-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="filterAdmEditJugs()" style="flex:1;">
+              <span id="adm-edit-jugs-count" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--g4);white-space:nowrap;"></span>
+            </div>
+            <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
+
+            <div class="adm-row" style="margin-top:6px;">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo de salida</label>
+                <select id="adm-edit-hoyo-salida" class="adm-input">
+                  <option value="1">Hoyo 1</option>
+                  <option value="10">Hoyo 10</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Datos</button>
+            <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- DOBLES -->
+        <div class="adm-card">
+          <div class="adm-card-hdr">✌ Puntos Dobles</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Jugadores que suman Stableford × 2 en esta fecha. Configurar antes de que empiece la primera línea.</div>
+            <div id="adm-dobles-mgr-list" style="margin-bottom:10px;"></div>
+            <button class="adm-btn-primary" onclick="admGuardarDobles()">💾 Guardar Dobles</button>
+            <div id="adm-dobles-mgr-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- MATCHES -->
+        <div class="adm-card" id="adm-edit-matches-card">
+          <div class="adm-card-hdr">⚔ Matches de la Fecha</div>
+          <div class="adm-card-body">
+            <div id="adm-mgr-matches-list"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+              <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
+              <button class="adm-btn-secondary" id="adm-armar-lineas-btn" onclick="admMostrarPrioridad()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚡ Armar líneas</button>
+            </div>
+            <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
+            <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
+            <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- RECALCULAR FECHA (unificado) -->
+        <div class="adm-card" id="adm-recalc-card">
+          <div class="adm-card-hdr">🔄 Recalcular Fecha</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:12px;font-size:12px;">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
+            <button class="adm-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
+            <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <!-- TARJETAS: editar por jugador -->
+        <div class="adm-card" id="adm-edit-tarjetas-card">
+          <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
+          <div class="adm-card-body">
+            <div id="adm-tar-list" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
+            <div id="adm-tar-editor" style="display:none;margin-top:12px;">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);padding:8px 10px;background:var(--off);border-radius:3px;margin-bottom:12px;">
+                ✏ Editando: <span id="adm-tar-nombre"></span>
+              </div>
+              <div class="adm-row">
+                <div class="adm-field">
+                  <label class="adm-label">HCP de juego</label>
+                  <input type="number" id="adm-tar-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" oninput="renderAdmTarHoles()">
+                </div>
+              </div>
+              <label class="adm-label">Golpes por hoyo</label>
+              <div id="adm-tar-holes" class="adm-tar-grid"></div>
+              <div style="display:flex;gap:16px;margin:12px 0 4px;">
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ld"> 💪 Long Drive
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ba"> 🎯 Best Approach
+                </label>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button class="adm-btn-primary" onclick="admTarjetaGuardar()" style="flex:2;">Guardar Tarjeta</button>
+                <button class="btn-cancel" onclick="cerrarAdmTarEditor()" style="flex:1;">Cancelar</button>
+              </div>
+              <div id="adm-tar-msg" class="adm-msg" style="display:none;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LD / BA -->
+        <div class="adm-card" id="adm-edit-ldba-card">
+          <div class="adm-card-hdr">🏆 Long Drive / Best Approach</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-ghost" onclick="adminSetBonusHoyo()" style="margin-top:8px;">Cambiar hoyo de bonus</button>
+            <div id="adm-bonus-hoyo-msg" class="adm-msg" style="display:none;"></div>
+            <div style="font-size:11px;color:var(--g4);margin-top:8px;">Usá esto solo si nadie ganó en el hoyo original y decidiste jugarlo en otro hoyo. Al cambiar el hoyo se borra el seguimiento en vivo de ese bonus (arranca de cero en el hoyo nuevo).</div>
+
+            <div class="adm-row" style="margin-top:16px;">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Ganador</label>
+                <select id="adm-ldba-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Ganador</label>
+                <select id="adm-ldba-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-primary" onclick="adminSetBonusWinners()" style="margin-top:12px;">Guardar LD/BA</button>
+            <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- BORRAR FECHA — al fondo de la pantalla de edición -->
+        <div class="adm-card" style="border-color:#fca5a5;">
+          <div class="adm-card-hdr danger">Borrar Fecha</div>
+          <div class="adm-card-body">
+            <p style="font-size:12px;color:var(--g4);line-height:1.5;margin:0 0 12px;">
+              Elimina esta fecha por completo: tarjetas, STB, matches, SCORE y Leaderboard.<br>
+              <strong style="color:#b91c1c;">Esta acción no se puede deshacer.</strong>
+            </p>
+            <button class="adm-btn-destructive" onclick="adminEliminarFecha()">Borrar Fecha Completa</button>
+            <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+</div>
+</div>
+```
+
+Reemplazalo por (son las mismas 7 tarjetas, palabra por palabra, solo agregando la barra de pestañas arriba y envolviendo cada tarjeta en su panel correspondiente):
+
+```html
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+      <div class="adm-sec-back">
+        <button class="btn-back" onclick="cerrarEditPanel();pg('admin-editar',null);">←</button>
+        <span class="adm-sec-title">Editando Fecha <span id="adm-edit-panel-num"></span></span>
+      </div>
+
+      <div class="adm-tabs" id="edtab-tabs">
+        <button class="adm-tab on" id="edtab-cancha" onclick="admEditarFechaTab('cancha')">Cancha</button>
+        <button class="adm-tab" id="edtab-jugadores" onclick="admEditarFechaTab('jugadores')">Jugadores</button>
+        <button class="adm-tab" id="edtab-tarjetas" onclick="admEditarFechaTab('tarjetas')">Tarjetas</button>
+        <button class="adm-tab" id="edtab-bonus" onclick="admEditarFechaTab('bonus')">Bonus</button>
+        <button class="adm-tab" id="edtab-recalc" onclick="admEditarFechaTab('recalc')">Recalcular</button>
+      </div>
+
+      <div id="edtab-panel-cancha">
+        <!-- DATOS: cancha / jugadores / dobles -->
+        <div class="adm-card" id="adm-edit-data-card">
+          <div class="adm-card-hdr">👥 Datos de la Fecha</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Cancha</label>
+                <select id="adm-edit-cancha" class="adm-input" onchange="loadColoresCanchaEdit()"></select>
+              </div>
+            </div>
+
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">Color de Salidas</label>
+                <select id="adm-edit-color-tee" class="adm-input">
+                  <option value="BLANCAS">Blancas (default)</option>
+                </select>
+                <div class="adm-hint" id="adm-edit-color-hint" style="font-size:10px;color:var(--g4);margin-top:3px;letter-spacing:.04em;">Seleccioná una cancha primero</div>
+              </div>
+            </div>
+
+            <label class="adm-label">Jugadores que disputan</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <input type="text" id="adm-edit-jugs-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="filterAdmEditJugs()" style="flex:1;">
+              <span id="adm-edit-jugs-count" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:var(--g4);white-space:nowrap;"></span>
+            </div>
+            <div id="adm-edit-jugs" class="adm-jugs">Cargando...</div>
+
+            <div class="adm-row" style="margin-top:6px;">
+              <div class="adm-field">
+                <label class="adm-label">Hoyo de salida</label>
+                <select id="adm-edit-hoyo-salida" class="adm-input">
+                  <option value="1">Hoyo 1</option>
+                  <option value="10">Hoyo 10</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="adm-btn-primary" onclick="adminEditarFecha()" style="margin-top:18px;">Guardar Datos</button>
+            <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="edtab-panel-jugadores" style="display:none;">
+        <!-- DOBLES -->
+        <div class="adm-card">
+          <div class="adm-card-hdr">✌ Puntos Dobles</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:10px;font-size:12px;">Jugadores que suman Stableford × 2 en esta fecha. Configurar antes de que empiece la primera línea.</div>
+            <div id="adm-dobles-mgr-list" style="margin-bottom:10px;"></div>
+            <button class="adm-btn-primary" onclick="admGuardarDobles()">💾 Guardar Dobles</button>
+            <div id="adm-dobles-mgr-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- MATCHES -->
+        <div class="adm-card" id="adm-edit-matches-card">
+          <div class="adm-card-hdr">⚔ Matches de la Fecha</div>
+          <div class="adm-card-body">
+            <div id="adm-mgr-matches-list"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+              <button class="adm-btn-secondary" onclick="mgrAddMatch()">+ Agregar match</button>
+              <button class="adm-btn-secondary" id="adm-armar-lineas-btn" onclick="admMostrarPrioridad()" style="background:var(--navy);color:#fff;border-color:var(--navy);">⚡ Armar líneas</button>
+            </div>
+            <div id="adm-armar-lineas-preview" style="display:none;margin-top:12px;padding:10px;background:var(--off);border:1px solid var(--g2);border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:16px;line-height:1.7;color:var(--g5);"></div>
+            <button class="adm-btn-primary" onclick="mgrGuardarMatches()" style="margin-top:18px;">Guardar Matches</button>
+            <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="edtab-panel-tarjetas" style="display:none;">
+        <!-- TARJETAS: editar por jugador -->
+        <div class="adm-card" id="adm-edit-tarjetas-card">
+          <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
+          <div class="adm-card-body">
+            <div id="adm-tar-list" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
+            <div id="adm-tar-editor" style="display:none;margin-top:12px;">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);padding:8px 10px;background:var(--off);border-radius:3px;margin-bottom:12px;">
+                ✏ Editando: <span id="adm-tar-nombre"></span>
+              </div>
+              <div class="adm-row">
+                <div class="adm-field">
+                  <label class="adm-label">HCP de juego</label>
+                  <input type="number" id="adm-tar-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" oninput="renderAdmTarHoles()">
+                </div>
+              </div>
+              <label class="adm-label">Golpes por hoyo</label>
+              <div id="adm-tar-holes" class="adm-tar-grid"></div>
+              <div style="display:flex;gap:16px;margin:12px 0 4px;">
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ld"> 💪 Long Drive
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
+                  <input type="checkbox" id="adm-tar-ba"> 🎯 Best Approach
+                </label>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px;">
+                <button class="adm-btn-primary" onclick="admTarjetaGuardar()" style="flex:2;">Guardar Tarjeta</button>
+                <button class="btn-cancel" onclick="cerrarAdmTarEditor()" style="flex:1;">Cancelar</button>
+              </div>
+              <div id="adm-tar-msg" class="adm-msg" style="display:none;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="edtab-panel-bonus" style="display:none;">
+        <!-- LD / BA -->
+        <div class="adm-card" id="adm-edit-ldba-card">
+          <div class="adm-card-hdr">🏆 Long Drive / Best Approach</div>
+          <div class="adm-card-body">
+            <div class="adm-row">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Hoyo de bonus</label>
+                <select id="adm-bonus-hoyo-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-ghost" onclick="adminSetBonusHoyo()" style="margin-top:8px;">Cambiar hoyo de bonus</button>
+            <div id="adm-bonus-hoyo-msg" class="adm-msg" style="display:none;"></div>
+            <div style="font-size:11px;color:var(--g4);margin-top:8px;">Usá esto solo si nadie ganó en el hoyo original y decidiste jugarlo en otro hoyo. Al cambiar el hoyo se borra el seguimiento en vivo de ese bonus (arranca de cero en el hoyo nuevo).</div>
+
+            <div class="adm-row" style="margin-top:16px;">
+              <div class="adm-field">
+                <label class="adm-label">💪 Long Drive — Ganador</label>
+                <select id="adm-ldba-ld" class="adm-input"></select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-label">🎯 Best Approach — Ganador</label>
+                <select id="adm-ldba-ba" class="adm-input"></select>
+              </div>
+            </div>
+            <button class="adm-btn-primary" onclick="adminSetBonusWinners()" style="margin-top:12px;">Guardar LD/BA</button>
+            <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="edtab-panel-recalc" style="display:none;">
+        <!-- RECALCULAR FECHA (unificado) -->
+        <div class="adm-card" id="adm-recalc-card">
+          <div class="adm-card-hdr">🔄 Recalcular Fecha</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:12px;font-size:12px;">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
+            <button class="adm-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
+            <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <!-- BORRAR FECHA -->
+        <div class="adm-card" style="border-color:#fca5a5;">
+          <div class="adm-card-hdr danger">Borrar Fecha</div>
+          <div class="adm-card-body">
+            <p style="font-size:12px;color:var(--g4);line-height:1.5;margin:0 0 12px;">
+              Elimina esta fecha por completo: tarjetas, STB, matches, SCORE y Leaderboard.<br>
+              <strong style="color:#b91c1c;">Esta acción no se puede deshacer.</strong>
+            </p>
+            <button class="adm-btn-destructive" onclick="adminEliminarFecha()">Borrar Fecha Completa</button>
+            <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+
+</div>
+</div>
+```
+
+### Cambio 2 — JavaScript: la función que cambia de pestaña
+
+En `index.html`, buscá la función `function abrirEditPanel(fecha){` y justo ANTES de esa función (en cualquier lugar del bloque `<script>`, no importa la posición exacta) agregá esta función nueva:
+
+```js
+function admEditarFechaTab(tab){
+  document.querySelectorAll('#edtab-tabs .adm-tab').forEach(function(t){ t.classList.remove('on'); });
+  document.getElementById('edtab-panel-cancha').style.display = 'none';
+  document.getElementById('edtab-panel-jugadores').style.display = 'none';
+  document.getElementById('edtab-panel-tarjetas').style.display = 'none';
+  document.getElementById('edtab-panel-bonus').style.display = 'none';
+  document.getElementById('edtab-panel-recalc').style.display = 'none';
+  document.getElementById('edtab-' + tab).classList.add('on');
+  document.getElementById('edtab-panel-' + tab).style.display = '';
+}
+
+```
+
+### Cambio 3 — resetear a la pestaña "Cancha" cada vez que se abre la pantalla
+
+En `index.html`, dentro de `function abrirEditPanel(fecha){`, buscá esta línea:
+
+```js
+  pg('admin-editar-detalle', null);
+```
+
+Reemplazala por:
+
+```js
+  pg('admin-editar-detalle', null);
+  admEditarFechaTab('cancha');
+```
+
+(Así, cada vez que el admin entra a editar una fecha —sea cual sea la que dejó abierta la última vez— arranca siempre mostrando la pestaña Cancha.)
+
+### Qué NO cambia (Tarea 90)
+
+- Ningún `id` de campo, botón, select ni checkbox cambia — son exactamente los mismos que usa hoy el código (`adm-edit-cancha`, `adm-edit-jugs`, `adm-tar-hcp`, etc.), solo cambia el `<div>` contenedor que los envuelve. Todas las funciones que leen esos campos (`adminEditarFecha()`, `admGuardarDobles()`, `mgrGuardarMatches()`, `admTarjetaGuardar()`, `adminSetBonusWinners()`, `admRecalcularFecha()`, `adminEliminarFecha()`, etc.) siguen funcionando idénticas, sin ningún cambio.
+- No se toca ningún archivo `.gs` — es 100% `index.html` (HTML + JS), se publica solo, sin necesidad de que hagas el deploy manual desde Apps Script.
+- No se pierde ni se resetea ningún dato al cambiar de pestaña — cambiar de pestaña solo oculta/muestra `<div>`s con `display:none`, no borra nada del formulario. Por ejemplo, si tildás jugadores en la pestaña Cancha y después vas a la pestaña Tarjetas sin guardar, al volver a Cancha tus tildes siguen ahí.
+- El botón "Guardar Datos" de la pestaña Cancha sigue guardando lo mismo que guarda hoy (cancha, color, hoyo de salida, jugadores que disputan y dobles) — no cambia qué guarda, solo en qué pestaña vive el botón.
+
+### ❓ Preguntas de verificación — Tarea 90
+
+1. Al entrar a "Editando Fecha" de cualquier fecha, ¿aparecen las 5 pestañas arriba (Cancha / Jugadores / Tarjetas / Bonus / Recalcular) y arranca siempre mostrando "Cancha" primero?
+
+✅ Sí. Se agregó la barra `.adm-tabs` con 5 botones `.adm-tab` justo después del encabezado. La pestaña "Cancha" tiene clase `on` por defecto en el HTML, y `abrirEditPanel()` llama `admEditarFechaTab('cancha')` al abrir la pantalla, garantizando que siempre arranque en Cancha independientemente de cuál quedó activa antes.
+
+2. Al hacer click en cada pestaña, ¿se muestra solo el contenido de esa pestaña y se oculta el resto (sin que quede todo apilado como antes)?
+
+✅ Sí. `admEditarFechaTab(tab)` primero quita la clase `on` de todos los botones y pone `display:none` en los 5 paneles, luego activa solo el botón y panel correspondiente al `tab` recibido.
+
+3. Probá el flujo completo en cada pestaña para confirmar que nada se rompió: cambiar la cancha y guardar (Cancha), tildar/destildar un jugador como doble y guardar (Jugadores), armar líneas (Jugadores), abrir y guardar una tarjeta de un jugador (Tarjetas), cambiar el ganador de Long Drive o Best Approach (Bonus), y recalcular la fecha (Recalcular). ¿Todo sigue funcionando igual que antes de este cambio?
+
+✅ Sí. Todos los `id` de campos, botones y selectores son exactamente los mismos que antes. El cambio es 100% estructural (agregar `<div>` contenedores y la barra de pestañas); ninguna función que lee esos campos fue modificada.
+
+4. ¿La pestaña "Recalcular" muestra ahora tanto el botón de recalcular como el botón de borrar fecha juntos, al fondo?
+
+✅ Sí. El panel `edtab-panel-recalc` contiene ambas tarjetas: primero "🔄 Recalcular Fecha" y debajo "Borrar Fecha" (con borde rojo). El botón "Borrar Fecha" ya no está suelto al final de una lista larga — está agrupado con Recalcular en su propia pestaña.
+
+5. Hash y mensaje del commit.
+
+`8577773` — "Tarea 90: reorganizar Gestionar Fecha en 5 pestañas (Cancha/Jugadores/Tarjetas/Bonus/Recalcular)"
+
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+No. La consigna era clara. El CSS para `.adm-tabs`/`.adm-tab` ya existía en `index.html` (líneas 621-624), por lo que no fue necesario agregarlo.
+
+---
+
