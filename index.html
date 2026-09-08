@@ -2353,8 +2353,8 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
               </label>
               <div id="adm-jug-doble-hint" style="font-size:11px;color:var(--g4);margin-top:4px;display:none;"></div>
               <div style="display:flex;gap:8px;margin-top:14px;">
-                <button class="adm-btn-primary" onclick="admJugGuardarEditor()" style="flex:2;">Guardar</button>
-                <button class="btn-cancel" onclick="admJugCerrarEditor()" style="flex:1;">Cancelar</button>
+                <button class="adm-btn-primary" onclick="admLinGuardarEditor()" style="flex:2;">Guardar</button>
+                <button class="btn-cancel" onclick="admLinCerrarEditor()" style="flex:1;">Cancelar</button>
               </div>
               <div id="adm-jug-msg" class="adm-msg" style="display:none;"></div>
             </div>
@@ -5183,8 +5183,8 @@ function mgrGuardarMatches(){
           ADM_LAST_ARMAR_LINEAS = [];
           const preview = document.getElementById('adm-armar-lineas-preview');
           if(preview){ preview.style.display = 'none'; preview.innerHTML = ''; }
-          admJugCerrarEditor();
-          loadAdmJugadoresGrid(fecha);
+          admLinCerrarEditor();
+          loadAdmLineasGrid(fecha);
           if(!r2 || !r2.ok){
             msg.className = 'adm-msg err';
             msg.textContent = '✗ Matches guardados, pero no se pudo actualizar el cuadro de líneas: ' + (r2 && r2.error ? r2.error : 'Error');
@@ -5202,13 +5202,13 @@ function mgrGuardarMatches(){
 }
 
 // ── JUGADORES: cuadro 2x2 de líneas, tocar un jugador para editar HCP/doble ──
-let ADM_JUG_LINEAS_DATA = null;
-let ADM_JUG_DOBLE_DISPONIBLES = [];
-let ADM_JUG_DOBLE_ENFECHA = [];
-let ADM_JUG_EDIT_MAT = null;
-let ADM_JUG_EDIT_TARJETA = null;
+let ADM_LIN_DATA = null;
+let ADM_LIN_DOBLE_DISPONIBLES = [];
+let ADM_LIN_DOBLE_ENFECHA = [];
+let ADM_LIN_EDIT_MAT = null;
+let ADM_LIN_EDIT_TARJETA = null;
 
-function loadAdmJugadoresGrid(fecha){
+function loadAdmLineasGrid(fecha){
   const cont = document.getElementById('adm-jug-grid');
   if(!cont) return;
   cont.innerHTML = 'Cargando...';
@@ -5217,20 +5217,20 @@ function loadAdmJugadoresGrid(fecha){
     ngtApiGet('jugadoresConDoble'),
     ngtApiGet('fechaDetalle', { fecha: fecha }),
   ]).then(results => {
-    ADM_JUG_LINEAS_DATA = (results[0] && results[0].data) || null;
-    ADM_JUG_DOBLE_DISPONIBLES = (results[1] && results[1].data) || [];
+    ADM_LIN_DATA = (results[0] && results[0].data) || null;
+    ADM_LIN_DOBLE_DISPONIBLES = (results[1] && results[1].data) || [];
     const detalle = (results[2] && results[2].data) || {};
-    ADM_JUG_DOBLE_ENFECHA = detalle.dobles || [];
-    renderAdmJugGrid_();
+    ADM_LIN_DOBLE_ENFECHA = detalle.dobles || [];
+    renderAdmLineasGrid_();
   }).catch(function(){
     cont.innerHTML = '<div class="s dim">No se pudieron cargar las líneas.</div>';
   });
 }
 
-function renderAdmJugGrid_(){
+function renderAdmLineasGrid_(){
   const cont = document.getElementById('adm-jug-grid');
   if(!cont) return;
-  const data = ADM_JUG_LINEAS_DATA;
+  const data = ADM_LIN_DATA;
   if(!data || !data.lineas || !data.lineas.length){
     cont.innerHTML = '<div class="s dim">Todavía no hay líneas armadas para esta fecha. Usá "⚡ Armar líneas" más abajo.</div>';
     return;
@@ -5241,8 +5241,8 @@ function renderAdmJugGrid_(){
     for(let i = 0; i < 4; i++){
       const p = l.players[i];
       if(p){
-        const esDoble = ADM_JUG_DOBLE_ENFECHA.indexOf(String(p.matricula)) >= 0;
-        html += '<div class="fca-pill clickable' + (esDoble ? ' fca-pill-db' : '') + '" onclick="admJugAbrirEditor(\'' + p.matricula + '\')">' +
+        const esDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(String(p.matricula)) >= 0;
+        html += '<div class="fca-pill clickable' + (esDoble ? ' fca-pill-db' : '') + '" onclick="admLinAbrirEditor(\'' + p.matricula + '\')">' +
           '<span class="fca-pname">' + p.apodo + (esDoble ? ' <span class="fca-db-badge">✌x2</span>' : '') + '</span>' +
           '<span class="fca-phcp">' + p.hcp + ' → <span class="fca-p85">' + hcp85(p.hcp) + '</span></span></div>';
       } else {
@@ -5255,22 +5255,22 @@ function renderAdmJugGrid_(){
   cont.innerHTML = html;
 }
 
-function admJugAbrirEditor(matricula){
-  const data = ADM_JUG_LINEAS_DATA;
+function admLinAbrirEditor(matricula){
+  const data = ADM_LIN_DATA;
   let player = null;
   if(data && data.lineas){
     data.lineas.forEach(function(l){ l.players.forEach(function(p){ if(String(p.matricula) === String(matricula)) player = p; }); });
   }
   if(!player) return;
-  ADM_JUG_EDIT_MAT = String(matricula);
-  ADM_JUG_EDIT_TARJETA = null;
+  ADM_LIN_EDIT_MAT = String(matricula);
+  ADM_LIN_EDIT_TARJETA = null;
   document.getElementById('adm-jug-editor').style.display = 'block';
   document.getElementById('adm-jug-nombre').textContent = fmtNameForAdm(player.nombre || player.apodo);
   document.getElementById('adm-jug-hcp').value = player.hcp;
   document.getElementById('adm-jug-msg').style.display = 'none';
 
-  const esDoble = ADM_JUG_DOBLE_ENFECHA.indexOf(ADM_JUG_EDIT_MAT) >= 0;
-  const elegible = esDoble || ADM_JUG_DOBLE_DISPONIBLES.indexOf(ADM_JUG_EDIT_MAT) >= 0;
+  const esDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(ADM_LIN_EDIT_MAT) >= 0;
+  const elegible = esDoble || ADM_LIN_DOBLE_DISPONIBLES.indexOf(ADM_LIN_EDIT_MAT) >= 0;
   const chk = document.getElementById('adm-jug-doble');
   const hint = document.getElementById('adm-jug-doble-hint');
   chk.checked = esDoble;
@@ -5284,24 +5284,24 @@ function admJugAbrirEditor(matricula){
 
   ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }).then(r => {
     const tarjetas = (r && r.ok && r.data) || [];
-    ADM_JUG_EDIT_TARJETA = tarjetas.find(t => String(t.matricula) === ADM_JUG_EDIT_MAT) || null;
+    ADM_LIN_EDIT_TARJETA = tarjetas.find(t => String(t.matricula) === ADM_LIN_EDIT_MAT) || null;
   });
 
   document.getElementById('adm-jug-editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function admJugCerrarEditor(){
-  ADM_JUG_EDIT_MAT = null;
-  ADM_JUG_EDIT_TARJETA = null;
+function admLinCerrarEditor(){
+  ADM_LIN_EDIT_MAT = null;
+  ADM_LIN_EDIT_TARJETA = null;
   const ed = document.getElementById('adm-jug-editor');
   if(ed) ed.style.display = 'none';
 }
 
-function admJugGuardarEditor(){
-  const mat = ADM_JUG_EDIT_MAT;
+function admLinGuardarEditor(){
+  const mat = ADM_LIN_EDIT_MAT;
   if(!mat) return;
   const msg = document.getElementById('adm-jug-msg');
-  if(!ADM_JUG_EDIT_TARJETA){
+  if(!ADM_LIN_EDIT_TARJETA){
     msg.className = 'adm-msg err'; msg.textContent = 'Esperá un segundo a que termine de cargar y volvé a intentar'; msg.style.display = 'block'; return;
   }
   const hcpVal = document.getElementById('adm-jug-hcp').value.trim();
@@ -5310,8 +5310,8 @@ function admJugGuardarEditor(){
   }
   const fecha = ADM_EDIT_FECHA;
   const nuevoDoble = document.getElementById('adm-jug-doble').checked;
-  const eraDoble = ADM_JUG_DOBLE_ENFECHA.indexOf(mat) >= 0;
-  const tarjeta = ADM_JUG_EDIT_TARJETA;
+  const eraDoble = ADM_LIN_DOBLE_ENFECHA.indexOf(mat) >= 0;
+  const tarjeta = ADM_LIN_EDIT_TARJETA;
 
   msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
 
@@ -5333,10 +5333,10 @@ function admJugGuardarEditor(){
     function terminar(){
       msg.className = 'adm-msg ok';
       msg.textContent = '✓ Guardado';
-      setTimeout(() => loadAdmJugadoresGrid(fecha), 900);
+      setTimeout(() => loadAdmLineasGrid(fecha), 900);
     }
     if(nuevoDoble === eraDoble){ terminar(); return; }
-    let dobles = ADM_JUG_DOBLE_ENFECHA.slice();
+    let dobles = ADM_LIN_DOBLE_ENFECHA.slice();
     if(nuevoDoble && dobles.indexOf(mat) < 0) dobles.push(mat);
     if(!nuevoDoble) dobles = dobles.filter(m => m !== mat);
     ngtApiPost({ action: 'setDoblesFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, dobles: dobles }).then(r2 => {
@@ -5422,7 +5422,7 @@ function abrirEditPanel(fecha){
   loadMatchesForGestion(fecha);
   loadAdmTarjetas(fecha);
   loadAdmLdBa(fecha);
-  loadAdmJugadoresGrid(fecha);
+  loadAdmLineasGrid(fecha);
 
   // Fetch EVERYTHING needed fresh — don't rely on cached globals
   Promise.all([
