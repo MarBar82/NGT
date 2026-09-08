@@ -9364,3 +9364,95 @@ Hash: `938f1a6` — mismo commit que las Tareas 86 y 87.
 
 5. ¿Alguna duda o algo ambiguo de la consigna?
 Sin dudas. Cambio de una sola línea de CSS.
+
+---
+
+## Tarea 89 — Rediseñar la línea HCP/Medal/Golpes para que se vea como parte de la tarjeta
+
+Marco probó la Tarea 86 y el cálculo está bien, pero el estilo visual no le cerró: quedó como una franja azul oscuro aparte (reutilizamos el estilo `.perf-ecl-totals` que ya existía para la tabla Eclectic), con cada dato apilado — la etiqueta arriba ("HCP") y el número abajo. Marco pidió 2 cosas:
+
+1. Que se vea como una línea más de la propia tarjeta (mismos colores/tipografía que las filas de Par/Score/Puntos), en vez de una franja de otro estilo — pero con un poco más de separación arriba para que se note que es un dato aparte, no una fila más de la tabla.
+2. Que cada dato se muestre en horizontal: la etiqueta y su valor en la misma línea, uno al lado del otro (ej: "HCP  18/15"), no la etiqueta arriba y el número abajo.
+
+### Cambio 1 — CSS nuevo
+
+En `index.html`, buscá:
+
+```css
+.perf-ecl-totals .lbl{font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);}
+.perf-ecl-totals .num{font-size:22px;font-weight:800;line-height:1;}
+```
+
+Dejalo tal cual está (no se toca — la tabla Eclectic la sigue usando) y agregá estas líneas nuevas justo después:
+
+```css
+.perf-ecl-resumen{
+  margin-top:16px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 16px;
+  background:var(--g1);padding:8px 14px;border-radius:4px;
+  font-family:'Barlow Condensed',sans-serif;
+}
+.perf-ecl-resumen-item{display:flex;align-items:baseline;gap:6px;}
+.perf-ecl-resumen-item .rlbl{font-size:11px;font-weight:700;color:var(--g4);text-transform:uppercase;letter-spacing:.06em;}
+```
+
+(`.perf-ecl-resumen` usa el mismo gris de fondo que ya usan las filas de "Par" y "Puntos" dentro de la tarjeta — `.perf-par-row td{background:var(--g1);}` — así queda con la misma paleta que el resto de la tarjeta, y el valor de cada dato va a reutilizar la clase `.perf-ecl-par` que ya existe, la misma que usan los números de Par/Hándicap/Puntos, para que la tipografía sea idéntica a la del resto de la tarjeta.)
+
+### Cambio 2 — el HTML que arma la línea
+
+En `index.html`, dentro de la función `renderTarjeta18Hoyos`, buscá:
+
+```js
+    if(allPar && allScores){
+      var hcpNum = parseFloat(hcpJuego) || 0;
+      var gross18 = neto18 - hcpNum;
+      var golpes18 = gross18 - parTotal18;
+      var golpesStr = golpes18 > 0 ? ('+' + golpes18) : String(golpes18);
+      html += '<div class="perf-ecl-totals">' +
+        '<div><div class="lbl">HCP</div><div class="num">' + hcpJuego + '/' + hcp85(hcpJuego) + '</div></div>' +
+        '<div style="text-align:center;"><div class="lbl">Medal</div><div class="num">' + neto18 + '/' + gross18 + '</div></div>' +
+        '<div style="text-align:right;"><div class="lbl">Golpes</div><div class="num">' + golpesStr + '</div></div>' +
+      '</div>';
+    }
+```
+
+Reemplazalo por:
+
+```js
+    if(allPar && allScores){
+      var hcpNum = parseFloat(hcpJuego) || 0;
+      var gross18 = neto18 - hcpNum;
+      var golpes18 = gross18 - parTotal18;
+      var golpesStr = golpes18 > 0 ? ('+' + golpes18) : String(golpes18);
+      html += '<div class="perf-ecl-resumen">' +
+        '<div class="perf-ecl-resumen-item"><span class="rlbl">HCP</span><span class="perf-ecl-par">' + hcpJuego + '/' + hcp85(hcpJuego) + '</span></div>' +
+        '<div class="perf-ecl-resumen-item"><span class="rlbl">Medal</span><span class="perf-ecl-par">' + neto18 + '/' + gross18 + '</span></div>' +
+        '<div class="perf-ecl-resumen-item"><span class="rlbl">Golpes</span><span class="perf-ecl-par">' + golpesStr + '</span></div>' +
+      '</div>';
+    }
+```
+
+### Qué NO cambia (Tarea 89)
+
+- No se toca el cálculo de HCP/Medal/Golpes — sigue siendo exactamente la misma fórmula de la Tarea 86, ya confirmada como correcta. Esto es puramente estético.
+- No se toca `.perf-ecl-totals` (ni su CSS ni sus usos) — la tabla Eclectic histórica la sigue usando tal cual estaba.
+- No se toca ningún archivo `.gs`, ni ningún otro cálculo de la app.
+
+### ❓ Preguntas de verificación — Tarea 89
+
+1. ¿La línea de resumen ahora tiene el mismo estilo visual (colores, tipografía) que las filas de Par/Score/Puntos de la tarjeta, en vez de la franja azul oscura de antes?
+Sí. Se reemplazó `.perf-ecl-totals` (franja navy con números grandes dorados) por `.perf-ecl-resumen` con `background:var(--g1)` — el mismo gris claro que usan las filas de Par y Puntos en la tarjeta. Los valores usan la clase `.perf-ecl-par` (misma tipografía que los números de Par/Hándicap/Puntos).
+
+2. ¿Tiene un poco más de separación arriba (respecto a la tabla VUELTA) que la que hay entre las tablas IDA y VUELTA, para notarse como un dato aparte?
+Sí. `.perf-ecl-resumen` tiene `margin-top:16px`, más que los `margin-top:10px` que separan IDA de VUELTA.
+
+3. ¿Cada dato se ve ahora en horizontal — la etiqueta y su número uno al lado del otro (ej. "HCP 18/15"), en vez de la etiqueta arriba y el número abajo?
+Sí. Cada ítem es un `.perf-ecl-resumen-item` con `display:flex;align-items:baseline;gap:6px` — etiqueta `.rlbl` y valor `.perf-ecl-par` en la misma línea.
+
+4. ¿Se ve bien en los 3 lugares (Live Scoring Stableford, modal individual, acordeón de FECHAS) y en celular sin romperse ni desbordar?
+El contenedor usa `flex-wrap:wrap` para que en pantallas angostas los 3 ítems puedan pasar a 2 líneas sin desbordar.
+
+5. Hash y mensaje del commit.
+Hash: `bfac3c7` — Mensaje: `T89: rediseno linea HCP/Medal/Golpes - horizontal, estilo tarjeta, sin franja azul`
+
+6. ¿Alguna duda o algo ambiguo de la consigna?
+Sin dudas.
