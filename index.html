@@ -2274,6 +2274,15 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <span class="adm-sec-title">Editando Fecha <span id="adm-edit-panel-num"></span></span>
       </div>
 
+      <div class="adm-tabs" id="edtab-tabs">
+        <button class="adm-tab on" id="edtab-cancha" onclick="admEditarFechaTab('cancha')">Cancha</button>
+        <button class="adm-tab" id="edtab-jugadores" onclick="admEditarFechaTab('jugadores')">Jugadores</button>
+        <button class="adm-tab" id="edtab-tarjetas" onclick="admEditarFechaTab('tarjetas')">Tarjetas</button>
+        <button class="adm-tab" id="edtab-bonus" onclick="admEditarFechaTab('bonus')">Bonus</button>
+        <button class="adm-tab" id="edtab-recalc" onclick="admEditarFechaTab('recalc')">Recalcular</button>
+      </div>
+
+      <div id="edtab-panel-cancha">
         <!-- DATOS: cancha / jugadores / dobles -->
         <div class="adm-card" id="adm-edit-data-card">
           <div class="adm-card-hdr">👥 Datos de la Fecha</div>
@@ -2316,7 +2325,9 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div id="adm-edit-msg" class="adm-msg" style="display:none;"></div>
           </div>
         </div>
+      </div>
 
+      <div id="edtab-panel-jugadores" style="display:none;">
         <!-- DOBLES -->
         <div class="adm-card">
           <div class="adm-card-hdr">✌ Puntos Dobles</div>
@@ -2342,17 +2353,9 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div id="adm-mgr-match-msg" class="adm-msg" style="display:none;"></div>
           </div>
         </div>
+      </div>
 
-        <!-- RECALCULAR FECHA (unificado) -->
-        <div class="adm-card" id="adm-recalc-card">
-          <div class="adm-card-hdr">🔄 Recalcular Fecha</div>
-          <div class="adm-card-body">
-            <div class="s dim" style="margin-bottom:12px;font-size:12px;">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
-            <button class="adm-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
-            <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
-          </div>
-        </div>
-
+      <div id="edtab-panel-tarjetas" style="display:none;">
         <!-- TARJETAS: editar por jugador -->
         <div class="adm-card" id="adm-edit-tarjetas-card">
           <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
@@ -2386,7 +2389,9 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             </div>
           </div>
         </div>
+      </div>
 
+      <div id="edtab-panel-bonus" style="display:none;">
         <!-- LD / BA -->
         <div class="adm-card" id="adm-edit-ldba-card">
           <div class="adm-card-hdr">🏆 Long Drive / Best Approach</div>
@@ -2419,6 +2424,18 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div id="adm-ldba-msg" class="adm-msg" style="display:none;"></div>
           </div>
         </div>
+      </div>
+
+      <div id="edtab-panel-recalc" style="display:none;">
+        <!-- RECALCULAR FECHA (unificado) -->
+        <div class="adm-card" id="adm-recalc-card">
+          <div class="adm-card-hdr">🔄 Recalcular Fecha</div>
+          <div class="adm-card-body">
+            <div class="s dim" style="margin-bottom:12px;font-size:12px;">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
+            <button class="adm-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
+            <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
+          </div>
+        </div>
 
         <!-- BORRAR FECHA — al fondo de la pantalla de edición -->
         <div class="adm-card" style="border-color:#fca5a5;">
@@ -2432,6 +2449,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
             <div id="adm-reset-msg" class="adm-msg" style="display:none;"></div>
           </div>
         </div>
+      </div>
 
 </div>
 </div>
@@ -5184,10 +5202,22 @@ function cerrarEditPanel(){
   cerrarAdmTarEditor();
 }
 
+function admEditarFechaTab(tab){
+  document.querySelectorAll('#edtab-tabs .adm-tab').forEach(function(t){ t.classList.remove('on'); });
+  document.getElementById('edtab-panel-cancha').style.display = 'none';
+  document.getElementById('edtab-panel-jugadores').style.display = 'none';
+  document.getElementById('edtab-panel-tarjetas').style.display = 'none';
+  document.getElementById('edtab-panel-bonus').style.display = 'none';
+  document.getElementById('edtab-panel-recalc').style.display = 'none';
+  document.getElementById('edtab-' + tab).classList.add('on');
+  document.getElementById('edtab-panel-' + tab).style.display = '';
+}
+
 function abrirEditPanel(fecha){
   ADM_EDIT_FECHA = String(fecha);
   document.getElementById('adm-edit-panel-num').textContent = fecha;
   pg('admin-editar-detalle', null);
+  admEditarFechaTab('cancha');
 
   // Reset mensajes
   document.getElementById('adm-edit-msg').style.display = 'none';
