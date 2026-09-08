@@ -1130,6 +1130,26 @@ function setDoblesFecha_(params) {
   return { ok: true, changes: changes };
 }
 
+function setLineasFecha_(params) {
+  const { adminKey, fecha, lineas } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha) return { ok: false, error: 'Falta fecha' };
+  if (!Array.isArray(lineas)) return { ok: false, error: 'Lineas debe ser array' };
+
+  const fStr = String(fecha);
+  const props = PropertiesService.getDocumentProperties();
+  const meta = JSON.parse(props.getProperty('FECHA_META') || '{}');
+  if (!meta[fStr]) return { ok: false, error: 'Fecha no encontrada en FECHA_META' };
+
+  meta[fStr].lineas = lineas.map(function(l) { return (l || []).map(String); });
+  props.setProperty('FECHA_META', JSON.stringify(meta));
+
+  try { CacheService.getScriptCache().remove('fl_' + fStr); } catch(e) {}
+
+  audit_('SET_LINEAS_FECHA', 'admin', { fecha, lineas: meta[fStr].lineas });
+  return { ok: true };
+}
+
 /**
  * Recalcula Stableford hoyo a hoyo para todos los jugadores de una fecha.
  * Útil cuando el HCP de juego fue corregido después de que las tarjetas ya estaban cargadas.
