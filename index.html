@@ -2040,6 +2040,45 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   </div>
 </div>
 
+<!-- Admin tarjeta keypad modal -->
+<div id="adm-tar-keypad" class="sm-overlay" style="display:none;" onclick="admTarCerrarKeypad(event)">
+  <div class="sm-box" onclick="event.stopPropagation()">
+    <div class="sm-hdr">
+      <div class="sm-hoyo" id="adm-tar-keypad-hoyo">Hoyo 1</div>
+      <div class="sm-par" id="adm-tar-keypad-par">Par 4</div>
+    </div>
+    <div class="sm-big" id="adm-tar-keypad-big">–</div>
+    <div class="sm-keypad" id="adm-tar-keypad-low">
+      <button onclick="admTarKeypadSet(1)">1</button>
+      <button onclick="admTarKeypadSet(2)">2</button>
+      <button onclick="admTarKeypadSet(3)">3</button>
+      <button onclick="admTarKeypadSet(4)">4</button>
+      <button onclick="admTarKeypadSet(5)">5</button>
+      <button onclick="admTarKeypadSet(6)">6</button>
+      <button onclick="admTarKeypadSet(7)">7</button>
+      <button onclick="admTarKeypadSet(8)">8</button>
+      <button onclick="admTarKeypadSet(9)">9</button>
+      <button class="sm-clear" onclick="admTarKeypadClear()">✕</button>
+      <button onclick="admTarKeypadSet(0)">0</button>
+      <button class="sm-more" onclick="admTarKeypadShowHigh()">10+</button>
+    </div>
+    <div class="sm-keypad" id="adm-tar-keypad-high" style="display:none;">
+      <button onclick="admTarKeypadSet(10)">10</button>
+      <button onclick="admTarKeypadSet(11)">11</button>
+      <button onclick="admTarKeypadSet(12)">12</button>
+      <button onclick="admTarKeypadSet(13)">13</button>
+      <button onclick="admTarKeypadSet(14)">14</button>
+      <button onclick="admTarKeypadSet(15)">15</button>
+      <button onclick="admTarKeypadSet(16)">16</button>
+      <button onclick="admTarKeypadSet(17)">17</button>
+      <button onclick="admTarKeypadSet(18)">18</button>
+      <button onclick="admTarKeypadSet(19)">19</button>
+      <button onclick="admTarKeypadSet(20)">20</button>
+      <button class="sm-more" onclick="admTarKeypadShowLow()">‹ 1-9</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- Bonus hole arrival notice -->
 <div id="bonus-aviso-modal" class="sm-overlay" style="display:none;" onclick="if(event.target===this) bonusAvisoCerrar()">
@@ -2383,32 +2422,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
           <div class="adm-card-hdr">📋 Tarjetas de Jugadores</div>
           <div class="adm-card-body">
             <div id="adm-tar-list" style="color:var(--g4);font-size:13px;">Seleccioná una fecha primero</div>
-            <div id="adm-tar-editor" style="display:none;margin-top:12px;">
-              <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--navy);padding:8px 10px;background:var(--off);border-radius:3px;margin-bottom:12px;">
-                ✏ Editando: <span id="adm-tar-nombre"></span>
-              </div>
-              <div class="adm-row">
-                <div class="adm-field">
-                  <label class="adm-label">HCP de juego</label>
-                  <input type="number" id="adm-tar-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" oninput="renderAdmTarHoles()">
-                </div>
-              </div>
-              <label class="adm-label">Golpes por hoyo</label>
-              <div id="adm-tar-holes" class="adm-tar-grid"></div>
-              <div style="display:flex;gap:16px;margin:12px 0 4px;">
-                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
-                  <input type="checkbox" id="adm-tar-ld"> 💪 Long Drive
-                </label>
-                <label style="display:flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">
-                  <input type="checkbox" id="adm-tar-ba"> 🎯 Best Approach
-                </label>
-              </div>
-              <div style="display:flex;gap:8px;margin-top:12px;">
-                <button class="adm-btn-primary" onclick="admTarjetaGuardar()" style="flex:2;">Guardar Tarjeta</button>
-                <button class="btn-cancel" onclick="cerrarAdmTarEditor()" style="flex:1;">Cancelar</button>
-              </div>
-              <div id="adm-tar-msg" class="adm-msg" style="display:none;"></div>
-            </div>
+            <p class="s dim" style="margin-top:8px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);">Tocá un jugador para abrir su tarjeta y editar los golpes hoyo por hoyo.</p>
           </div>
         </div>
       </div>
@@ -5391,6 +5405,7 @@ function cerrarEditPanel(){
   const msg = document.getElementById('adm-reset-msg');
   if(msg) msg.style.display = 'none';
   cerrarAdmTarEditor();
+  closeFloatingModal();
 }
 
 function admEditarFechaTab(tab){
@@ -5598,11 +5613,16 @@ function adminEliminarFecha(){
 let ADM_TAR_PLAYER = null;
 let ADM_TAR_SCORES = new Array(18).fill(null);
 let ADM_TAR_CANCHA_DATA = null;
+let ADM_TAR_KEYPAD_HOYO = null;
+let ADM_TAR_MODAL_HCP = '';
+let ADM_TAR_MODAL_LD = false;
+let ADM_TAR_MODAL_BA = false;
 
 function loadAdmTarjetas(fecha) {
   const listEl = document.getElementById('adm-tar-list');
   if(!listEl) return;
   cerrarAdmTarEditor();
+  closeFloatingModal();
   listEl.innerHTML = 'Cargando...';
   ngtApiPost({
     action: 'getTarjetasForFecha',
@@ -5625,7 +5645,7 @@ function loadAdmTarjetas(fecha) {
           <div style="font-size:11px;color:${statColor};">${stat}</div>
         </div>
         <button class="adm-btn-secondary" style="padding:4px 10px;font-size:11px;"
-          onclick="openAdmTarEditor('${t.matricula}','${safe}','${t.cancha}','${t.canchaId}')">✏ Editar</button>
+          onclick="openAdmTarModal('${t.matricula}','${safe}','${t.cancha}','${t.canchaId}')">✏ Editar</button>
       </div>`;
     }).join('');
   }).catch(e => {
@@ -5633,17 +5653,14 @@ function loadAdmTarjetas(fecha) {
   });
 }
 
-function openAdmTarEditor(mat, nombre, cancha, canchaId) {
+function openAdmTarModal(mat, nombre, cancha, canchaId) {
   ADM_TAR_PLAYER = { matricula: mat, nombre: nombre, cancha: cancha, canchaId: canchaId };
   ADM_TAR_SCORES = new Array(18).fill(null);
   ADM_TAR_CANCHA_DATA = null;
-  document.getElementById('adm-tar-editor').style.display = 'block';
-  document.getElementById('adm-tar-nombre').textContent = fmtNameForAdm(nombre);
-  document.getElementById('adm-tar-hcp').value = '';
-  document.getElementById('adm-tar-ld').checked = false;
-  document.getElementById('adm-tar-ba').checked = false;
-  document.getElementById('adm-tar-msg').style.display = 'none';
-  renderAdmTarHoles();
+  ADM_TAR_MODAL_HCP = '';
+  ADM_TAR_MODAL_LD = false;
+  ADM_TAR_MODAL_BA = false;
+  openFloatingModal('<div style="padding:30px 10px;text-align:center;color:var(--g4);">Cargando...</div>');
 
   Promise.all([
     ngtApiGet('canchaPares', { cancha: cancha }),
@@ -5653,42 +5670,140 @@ function openAdmTarEditor(mat, nombre, cancha, canchaId) {
     const tarjetas = (results[1] && results[1].ok && results[1].data) || [];
     const myTar = tarjetas.find(t => String(t.matricula) === String(mat));
     if(myTar){
-      if(myTar.hcp !== null && myTar.hcp !== '') document.getElementById('adm-tar-hcp').value = myTar.hcp;
+      if(myTar.hcp !== null && myTar.hcp !== '') ADM_TAR_MODAL_HCP = myTar.hcp;
       if(Array.isArray(myTar.scores)) ADM_TAR_SCORES = myTar.scores.map(v => v === null ? null : Number(v));
-      document.getElementById('adm-tar-ld').checked = myTar.ld === 1;
-      document.getElementById('adm-tar-ba').checked = myTar.ba === 1;
+      ADM_TAR_MODAL_LD = myTar.ld === 1;
+      ADM_TAR_MODAL_BA = myTar.ba === 1;
     }
-    renderAdmTarHoles();
-    document.getElementById('adm-tar-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    openFloatingModal(admTarModalHtml_());
+    renderAdmTarModalScorecard_();
   });
 }
 
-function renderAdmTarHoles() {
-  const pares   = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.pares)   || new Array(18).fill(4);
+function admTarModalHtml_(){
+  const nombre = ADM_TAR_PLAYER ? ADM_TAR_PLAYER.nombre : '';
+  return '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:10px;">✏ ' + fmtNameForAdm(nombre) + '</div>' +
+    '<div class="adm-row">' +
+      '<div class="adm-field">' +
+        '<label class="adm-label">HCP de juego</label>' +
+        '<input type="number" id="adm-tar-modal-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" value="' + ADM_TAR_MODAL_HCP + '">' +
+      '</div>' +
+    '</div>' +
+    '<div id="adm-tar-modal-scorecard" style="margin-top:10px;"></div>' +
+    '<p style="margin:8px 0 0;font-family:\'Barlow Condensed\',sans-serif;font-size:11px;color:var(--g4);text-align:center;letter-spacing:.04em;">TOCÁ UN SCORE PARA EDITARLO</p>' +
+    '<div style="display:flex;gap:16px;margin:16px 0 4px;">' +
+      '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">' +
+        '<input type="checkbox" id="adm-tar-modal-ld"' + (ADM_TAR_MODAL_LD ? ' checked' : '') + '> 💪 Long Drive' +
+      '</label>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">' +
+        '<input type="checkbox" id="adm-tar-modal-ba"' + (ADM_TAR_MODAL_BA ? ' checked' : '') + '> 🎯 Best Approach' +
+      '</label>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:14px;">' +
+      '<button class="adm-btn-primary" onclick="admTarModalGuardar_()" style="flex:2;">Guardar Cambios</button>' +
+      '<button class="btn-cancel" onclick="closeFloatingModal()" style="flex:1;">Cancelar</button>' +
+    '</div>' +
+    '<div id="adm-tar-modal-msg" class="adm-msg" style="display:none;"></div>';
+}
+
+function renderAdmTarModalScorecard_(){
+  const el = document.getElementById('adm-tar-modal-scorecard');
+  if(!el) return;
+  const pares = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.pares) || new Array(18).fill(4);
   const indices = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.indices) || [];
-  const hcp = parseInt(document.getElementById('adm-tar-hcp').value) || 0;
-  const hcp85val = hcp ? Math.round(hcp * 0.85) : 0;
-  const holesEl = document.getElementById('adm-tar-holes');
-  if(!holesEl) return;
-  let html = '';
-  for(let h = 0; h < 18; h++){
-    const par    = pares[h]   || 4;
-    const indice = indices[h] || null;
-    const score  = ADM_TAR_SCORES[h];
-    const val    = score !== null ? score : '';
-    const extras = (indice && hcp85val) ? Math.floor((hcp85val + 18 - indice) / 18) : 0;
-    const dots   = extras > 0 ? '<span style="color:var(--navy);font-size:8px;">' + '●'.repeat(extras) + '</span>' : '';
-    const idxHtml = indice ? `<div class="adm-tar-hole-idx">Índ ${indice}${dots ? ' '+dots : ''}</div>` : '';
-    html += `<div class="adm-tar-hole">
-      <div class="adm-tar-hole-num">H${h+1}</div>
-      <div class="adm-tar-hole-par">P${par}</div>
-      ${idxHtml}
-      <input type="number" class="adm-tar-hole-input" id="adm-tar-h${h}"
-        value="${val}" min="1" max="15" inputmode="numeric"
-        oninput="ADM_TAR_SCORES[${h}] = this.value !== '' ? (parseInt(this.value)||null) : null">
-    </div>`;
+  el.innerHTML = renderAdmTarScorecardEditable_(ADM_TAR_SCORES, pares, indices);
+}
+
+function renderAdmTarScorecardEditable_(scores, pares, indices){
+  function nine(from, to, lbl){
+    let h = '<table class="perf-ecl-table"><thead><tr><th class="lbl">' + lbl + '</th>';
+    for(let i = from; i < to; i++) h += '<th><div class="perf-ecl-hoyo">H' + (i+1) + '</div></th>';
+    h += '<th><div class="perf-ecl-hoyo">Tot</div></th></tr></thead><tbody>';
+    if(indices && indices.length){
+      h += '<tr><td class="lbl">Hándicap</td>';
+      for(let i = from; i < to; i++) h += '<td><span class="perf-ecl-par">' + (indices[i] || '—') + '</span></td>';
+      h += '<td></td></tr>';
+    }
+    h += '<tr class="perf-par-row"><td class="lbl">Par</td>';
+    let parTot = 0;
+    for(let i = from; i < to; i++){
+      const p = pares[i];
+      h += '<td><span class="perf-ecl-par">' + (p || '—') + '</span></td>';
+      if(p) parTot += p;
+    }
+    h += '<td><span class="perf-ecl-par">' + parTot + '</span></td></tr>';
+    h += '<tr><td class="lbl">Score</td>';
+    let scoreTot = 0;
+    let allOk = true;
+    for(let i = from; i < to; i++){
+      const s = scores[i];
+      h += '<td style="cursor:pointer;" onclick="admTarAbrirKeypad(' + (i+1) + ')">' + scoreSymbolHtml(s, pares[i]) + '</td>';
+      if(s !== null && s !== undefined) scoreTot += s; else allOk = false;
+    }
+    h += '<td>' + scoreSymbolHtml(allOk ? scoreTot : null, parTot, true) + '</td></tr>';
+    h += '</tbody></table>';
+    return h;
   }
-  holesEl.innerHTML = html;
+  return '<div style="overflow-x:auto;">' + nine(0, 9, 'IDA') + '</div>' +
+         '<div style="overflow-x:auto;margin-top:10px;">' + nine(9, 18, 'VUELTA') + '</div>';
+}
+
+function admTarAbrirKeypad(hoyo){
+  const hcpEl = document.getElementById('adm-tar-modal-hcp');
+  const ldEl  = document.getElementById('adm-tar-modal-ld');
+  const baEl  = document.getElementById('adm-tar-modal-ba');
+  if(hcpEl) ADM_TAR_MODAL_HCP = hcpEl.value;
+  if(ldEl)  ADM_TAR_MODAL_LD  = ldEl.checked;
+  if(baEl)  ADM_TAR_MODAL_BA  = baEl.checked;
+
+  closeFloatingModal();
+  ADM_TAR_KEYPAD_HOYO = hoyo;
+  const pares = (ADM_TAR_CANCHA_DATA && ADM_TAR_CANCHA_DATA.pares) || [];
+  const par = pares[hoyo - 1];
+  const actual = ADM_TAR_SCORES[hoyo - 1];
+  document.getElementById('adm-tar-keypad-hoyo').textContent = 'Hoyo ' + hoyo;
+  document.getElementById('adm-tar-keypad-par').textContent = par ? 'Par ' + par : '';
+  document.getElementById('adm-tar-keypad-big').textContent = (actual !== null && actual !== undefined) ? actual : '–';
+  document.getElementById('adm-tar-keypad-low').style.display = 'grid';
+  document.getElementById('adm-tar-keypad-high').style.display = 'none';
+  document.getElementById('adm-tar-keypad').style.display = 'flex';
+}
+
+function admTarKeypadSet(v){
+  if(ADM_TAR_KEYPAD_HOYO === null) return;
+  ADM_TAR_SCORES[ADM_TAR_KEYPAD_HOYO - 1] = v;
+  document.getElementById('adm-tar-keypad-big').textContent = v;
+  setTimeout(admTarCerrarKeypadYVolver_, 150);
+}
+
+function admTarKeypadClear(){
+  if(ADM_TAR_KEYPAD_HOYO === null) return;
+  ADM_TAR_SCORES[ADM_TAR_KEYPAD_HOYO - 1] = null;
+  document.getElementById('adm-tar-keypad-big').textContent = '–';
+  setTimeout(admTarCerrarKeypadYVolver_, 150);
+}
+
+function admTarKeypadShowHigh(){
+  document.getElementById('adm-tar-keypad-low').style.display = 'none';
+  document.getElementById('adm-tar-keypad-high').style.display = 'grid';
+}
+
+function admTarKeypadShowLow(){
+  document.getElementById('adm-tar-keypad-high').style.display = 'none';
+  document.getElementById('adm-tar-keypad-low').style.display = 'grid';
+}
+
+function admTarCerrarKeypad(e){
+  if(e && e.target && e.target.id !== 'adm-tar-keypad') return;
+  ADM_TAR_KEYPAD_HOYO = null;
+  document.getElementById('adm-tar-keypad').style.display = 'none';
+}
+
+function admTarCerrarKeypadYVolver_(){
+  ADM_TAR_KEYPAD_HOYO = null;
+  document.getElementById('adm-tar-keypad').style.display = 'none';
+  openFloatingModal(admTarModalHtml_());
+  renderAdmTarModalScorecard_();
 }
 
 function cerrarAdmTarEditor() {
@@ -5701,12 +5816,12 @@ function cerrarAdmTarEditor() {
   if(msg) msg.style.display = 'none';
 }
 
-function admTarjetaGuardar() {
+function admTarModalGuardar_() {
   if(!ADM_TAR_PLAYER) return;
-  const msg = document.getElementById('adm-tar-msg');
-  const hcp = document.getElementById('adm-tar-hcp').value.trim();
-  const ld  = document.getElementById('adm-tar-ld').checked ? 1 : 0;
-  const ba  = document.getElementById('adm-tar-ba').checked ? 1 : 0;
+  const msg = document.getElementById('adm-tar-modal-msg');
+  const hcp = document.getElementById('adm-tar-modal-hcp').value.trim();
+  const ld  = document.getElementById('adm-tar-modal-ld').checked ? 1 : 0;
+  const ba  = document.getElementById('adm-tar-modal-ba').checked ? 1 : 0;
   if(!hcp){
     msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el HCP de juego'; msg.style.display = 'block'; return;
   }
@@ -5724,7 +5839,7 @@ function admTarjetaGuardar() {
   }).then(r => {
     if(r.ok){
       msg.className = 'adm-msg ok'; msg.textContent = '✓ Tarjeta guardada';
-      setTimeout(() => loadAdmTarjetas(ADM_EDIT_FECHA), 900);
+      setTimeout(() => { closeFloatingModal(); loadAdmTarjetas(ADM_EDIT_FECHA); }, 900);
     } else {
       msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
     }
