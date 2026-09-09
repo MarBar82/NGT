@@ -13063,3 +13063,374 @@ Reemplazalo por:
 3. Sí: se agregó `const doblesActuales = (det && det.dobles) || []` y se pasa como `dobles: doblesActuales` en el llamado a `editarFecha_` — los dobles ya no se borran al sumar un jugador.
 4. Cambio 1: `03_Reads.gs` línea `findNextEmptyRow_(shT, 1)`. Cambio 2: `04_Writes.gs` en `agregarJugadorALinea_`, agrega `doblesActuales` al payload. Cambios 3 y 4: `index.html`, `admLinQuitarJugador` y `admLinElegirJugador` agregan `if(MGR_FECHA === fecha) loadMatchesForGestion(fecha)` en el bloque de éxito.
 5. Sin dudas. ⚠️ Requiere deploy manual de `03_Reads.gs` y `04_Writes.gs`.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 101 (Rearmar líneas sin efecto, pantalla de "Cancha" antes del Live Scoring, tab Recalcular cortada, mismo diseño en Líneas y Matches de Crear Fecha)
+
+### Contexto
+
+Marco reportó 4 cosas en un mismo mensaje. Van una por una.
+
+**1. "Rearmar líneas no modifica nada" en Crear Fecha.** Investigué el algoritmo que arma las líneas (`armarLineas_`). Con UNA sola línea de 4 jugadores (el caso típico cuando se prueba con un grupo chico, como la Fecha 7), el botón "Rearmar" cambia la semilla al azar, pero eso solo afecta CÓMO SE AGRUPAN los jugadores en líneas — con una sola línea no hay nada que agrupar distinto (todos van juntos, no hay otra opción). Lo que SÍ puede variar es CÓMO SE ARMAN LOS 2 PARTIDOS dentro de esa línea de 4 (hay 3 formas posibles de dividir 4 jugadores en 2 partidos), pero el código elegía siempre la primera opción con mejor puntaje, sin sortear entre las que empatan en puntaje — y en una fecha nueva sin historial de partidos, las 3 formas suelen empatar en 0. Por eso "Rearmar" no hacía nada visible: no era que no funcionara, es que literalmente no había ninguna otra opción MEJOR para elegir, y el código no sabía sortear entre las igual de buenas. Lo arreglé para que, cuando hay empate, sortee entre las opciones empatadas — nunca elige una peor, así que la calidad de los partidos no cambia, pero ahora si volvés a apretar "Rearmar" vas a ver variar los cruces cuando hay empate. Lo probé con datos de prueba: cuando SÍ hay una opción claramente mejor (por ejemplo, dos jugadores que ya jugaron entre sí antes), el sorteo nunca elige la peor — solo entra a jugar cuando hay empate real.
+
+Ojo: si la línea es de 3 jugadores (no de 4), ahí "Rearmar" nunca va a mostrar nada distinto — con 3 jugadores el partido es todos-contra-todos, no hay otra combinación posible. Eso es esperable, no es un bug.
+
+**2. Pantalla de "Cancha" antes de abrir el Live Scoring.** Encontré la causa: al terminar de crear la fecha, el código primero volvía a poner en pantalla el Paso 1 del asistente (Cancha) y RECIÉN DESPUÉS, cuando terminaba de cargar los datos nuevos, te sacaba de ahí para llevarte al Live Scoring. Ese "recién después" puede tardar un toque, y en el medio quedabas viendo la pantalla de Cancha sin ningún indicio de que algo seguía pasando. Hice los dos cambios juntos, como pediste: ahora se muestra "⏳ Abriendo tu tarjeta..." mientras se espera, y el reseteo a la pantalla de Cancha pasa recién DESPUÉS de haber salido de la pantalla de Crear Fecha — así ya no se ve más ese paso intermedio.
+
+**3. Tab "Recalcular" cortada en Gestionar Fecha.** Confirmé el problema: la fila de pestañas (Cancha / Jugadores / Tarjetas / Bonus / Recalcular) no tenía forma de "correrse" si no entraban todas — en pantallas angostas, la última quedaba directamente invisible, no solo apretada. Hice dos cosas: (a) ahora esa fila se puede desplazar con el dedo si hace falta (nunca más queda una pestaña inalcanzable, en esta ni en ninguna otra fila de pestañas de la app), y (b) como pediste, cambié "Recalcular" por el ícono de engranaje (⚙) para que ocupe mucho menos espacio y sea más difícil que haga falta desplazarse.
+
+**4. Mismo diseño en "Líneas y Matches" de Crear Fecha.** Esa pantalla (el resumen de líneas + partidos que aparece al armar líneas, tanto en Crear Fecha como dentro de "Armar líneas" en Gestionar Fecha) todavía tenía el diseño viejo, con recuadros más chatos y flecha "→" en el HCP. La rediseñé para que use exactamente el mismo lenguaje visual que ya armamos para Gestionar Fecha (tarjetas redondeadas con sombra, "/" en vez de "→", mismo tipo de letra y colores). Como esta pantalla se usa en los dos lugares, el cambio se ve reflejado en ambos automáticamente.
+
+### Parte 1 — Rearmar líneas: sortear entre las mejores empatadas
+
+#### Cambio 1 — `bestFourDiv` en `06_ArmarLineas.gs`
+
+Buscá:
+
+```javascript
+  function bestFourDiv(group) {
+    var divs = [
+      [[0,1],[2,3]],
+      [[0,2],[1,3]],
+      [[0,3],[1,2]],
+    ];
+    var best = null, bestScore = Infinity;
+    divs.forEach(function(div) {
+      var sideA = [group[div[0][0]], group[div[0][1]]];
+      var sideB = [group[div[1][0]], group[div[1][1]]];
+      var mps = [
+        [sideA[0], sideB[0]], [sideA[0], sideB[1]],
+        [sideA[1], sideB[0]], [sideA[1], sideB[1]],
+      ];
+      // Penalizar matches repetidos (proporcional a la cantidad de veces que ya jugaron)
+      var matchScore = mps.reduce(function(s, mp) {
+        return s + Math.abs(mp[0].hcp - mp[1].hcp)
+                 + (matchedPairs[pKey(mp[0], mp[1])] || 0) * PEN_MATCH_REPEAT;
+      }, 0);
+      // Penalizar línea compartida en últimas 2 fechas
+      var lineScore = allPairs(group).reduce(function(s, mp) {
+        return s + (recentLinePairs[pKey(mp[0], mp[1])] ? PEN_LINE_REPEAT : 0);
+      }, 0);
+      var total = matchScore + lineScore;
+      if (total < bestScore) {
+        bestScore = total;
+        best = { matches: mps, matchScore: matchScore, lineScore: lineScore };
+      }
+    });
+    return best; // siempre devuelve la mejor opción disponible
+  }
+```
+
+Reemplazalo por:
+
+```javascript
+  function bestFourDiv(group) {
+    var divs = [
+      [[0,1],[2,3]],
+      [[0,2],[1,3]],
+      [[0,3],[1,2]],
+    ];
+    var options = divs.map(function(div) {
+      var sideA = [group[div[0][0]], group[div[0][1]]];
+      var sideB = [group[div[1][0]], group[div[1][1]]];
+      var mps = [
+        [sideA[0], sideB[0]], [sideA[0], sideB[1]],
+        [sideA[1], sideB[0]], [sideA[1], sideB[1]],
+      ];
+      // Penalizar matches repetidos (proporcional a la cantidad de veces que ya jugaron)
+      var matchScore = mps.reduce(function(s, mp) {
+        return s + Math.abs(mp[0].hcp - mp[1].hcp)
+                 + (matchedPairs[pKey(mp[0], mp[1])] || 0) * PEN_MATCH_REPEAT;
+      }, 0);
+      // Penalizar línea compartida en últimas 2 fechas
+      var lineScore = allPairs(group).reduce(function(s, mp) {
+        return s + (recentLinePairs[pKey(mp[0], mp[1])] ? PEN_LINE_REPEAT : 0);
+      }, 0);
+      return { matches: mps, matchScore: matchScore, lineScore: lineScore, total: matchScore + lineScore };
+    });
+    var bestScore = Math.min.apply(null, options.map(function(o) { return o.total; }));
+    var tied = options.filter(function(o) { return o.total === bestScore; });
+    // Si hay empate entre 2 o 3 divisiones igual de buenas y se pidió un seed (botón
+    // "Rearmar"), elegimos al azar entre las empatadas -- así "Rearmar" tiene efecto
+    // visible incluso en una fecha de una sola línea de 4, donde no hay otra cosa para
+    // variar. Nunca se elige una opción peor: solo se sortea entre las mejores.
+    var chosen = (seed > 0 && tied.length > 1) ? tied[Math.floor(rand_() * tied.length)] : tied[0];
+    return chosen; // siempre devuelve la mejor opción disponible (o una de las mejores empatadas)
+  }
+```
+
+### Parte 2 — no mostrar más la pantalla de "Cancha" antes del Live Scoring
+
+#### Cambio 2 — `finalizarWizard` en `index.html`
+
+Buscá:
+
+```javascript
+function finalizarWizard(rFecha, rMatches, lineasParam){
+  const msg = document.getElementById('adm-s2-msg');
+  msg.className = 'adm-msg ok';
+  let txt = '✓ Fecha creada — ' + rFecha.added + ' tarjetas';
+  if(rMatches) txt += ' + ' + rMatches.count + ' matches';
+  msg.textContent = txt;
+
+  // Reset wizard
+  setTimeout(function(){
+    document.getElementById('adm-fecha').value = '';
+    document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => { i.checked = false; const w = i.closest('.gf-jug-toggle'); if(w) w.classList.remove('on'); });
+    WIZ_PASO1_DATA = null;
+    wizResetWizardCompleto_();
+    // Limpiar caches y refrescar home con la nueva fecha
+    try { localStorage.removeItem('ngt_fechaActiva'); } catch(e){}
+    // Refresh admin data (esto no necesita esperar)
+    loadAdminData();
+    // Si el admin logueado también juega esta fecha, lo llevamos directo a su Live Scoring
+    var misMat = (NGT_SESSION && NGT_SESSION.mat) ? String(NGT_SESSION.mat) : null;
+    var soyJugador = misMat && lineasParam && lineasParam.some(function(linea){
+      return linea.some(function(m){ return String(m) === misMat; });
+    });
+    function irALaFechaCorrecta(){
+      if(soyJugador){
+        pg('mit', null);
+      } else {
+        pg('lb', null);
+      }
+    }
+    // IMPORTANTE: esperamos a que ngtInitData() actualice HOME_FECHA_ACTIVA con la fecha
+    // recién creada ANTES de navegar. Si navegamos antes de que la respuesta llegue, la
+    // app usa el valor viejo de HOME_FECHA_ACTIVA (la fecha activa anterior a esta) y abre
+    // el Live Scoring de la fecha equivocada — esto es exactamente lo que le pasó a Marco.
+    // .then(fn, fn) hace que se navegue tanto si la consulta funcionó como si falló, para
+    // no dejar a nadie trabado en la pantalla de "Fecha creada" sin poder avanzar.
+    ngtInitData().then(irALaFechaCorrecta, irALaFechaCorrecta);
+  }, 1800);
+}
+```
+
+Reemplazalo por:
+
+```javascript
+function finalizarWizard(rFecha, rMatches, lineasParam){
+  const msg = document.getElementById('adm-s2-msg');
+  msg.className = 'adm-msg ok';
+  let txt = '✓ Fecha creada — ' + rFecha.added + ' tarjetas';
+  if(rMatches) txt += ' + ' + rMatches.count + ' matches';
+  msg.textContent = txt;
+
+  setTimeout(function(){
+    // Avisamos que estamos por navegar -- todavía no reseteamos el wizard a su
+    // pantalla inicial (eso mostraría "Cancha" de vuelta mientras esperamos).
+    msg.textContent = '⏳ Abriendo tu tarjeta...';
+    // Limpiar caches y refrescar home con la nueva fecha
+    try { localStorage.removeItem('ngt_fechaActiva'); } catch(e){}
+    // Refresh admin data (esto no necesita esperar)
+    loadAdminData();
+    // Si el admin logueado también juega esta fecha, lo llevamos directo a su Live Scoring
+    var misMat = (NGT_SESSION && NGT_SESSION.mat) ? String(NGT_SESSION.mat) : null;
+    var soyJugador = misMat && lineasParam && lineasParam.some(function(linea){
+      return linea.some(function(m){ return String(m) === misMat; });
+    });
+    function irALaFechaCorrecta(){
+      if(soyJugador){
+        pg('mit', null);
+      } else {
+        pg('lb', null);
+      }
+      // Recién ahora reseteamos el wizard a su pantalla inicial (Cancha). Como pg()
+      // ya ocultó por completo la pantalla de "Crear Fecha", el usuario nunca llega
+      // a ver ese reset -- antes se hacía ANTES de navegar y por eso se veía, por un
+      // instante, la pantalla de "Cancha" en medio de crear la fecha.
+      document.getElementById('adm-fecha').value = '';
+      document.querySelectorAll('#adm-jugadores-list input:checked').forEach(i => { i.checked = false; const w = i.closest('.gf-jug-toggle'); if(w) w.classList.remove('on'); });
+      WIZ_PASO1_DATA = null;
+      wizResetWizardCompleto_();
+    }
+    // IMPORTANTE: esperamos a que ngtInitData() actualice HOME_FECHA_ACTIVA con la fecha
+    // recién creada ANTES de navegar. Si navegamos antes de que la respuesta llegue, la
+    // app usa el valor viejo de HOME_FECHA_ACTIVA (la fecha activa anterior a esta) y abre
+    // el Live Scoring de la fecha equivocada — esto es exactamente lo que le pasó a Marco.
+    // .then(fn, fn) hace que se navegue tanto si la consulta funcionó como si falló, para
+    // no dejar a nadie trabado en la pantalla de "Fecha creada" sin poder avanzar.
+    ngtInitData().then(irALaFechaCorrecta, irALaFechaCorrecta);
+  }, 1800);
+}
+```
+
+### Parte 3 — pestañas que no se cortan más + ícono de engranaje en Recalcular
+
+#### Cambio 3 — CSS de `.adm-tabs`/`.adm-tab` en `index.html`
+
+Buscá:
+
+```css
+.adm-tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:2px solid var(--g2);}
+.adm-tab{background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--g4);padding:10px 16px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;}
+```
+
+Reemplazalo por:
+
+```css
+.adm-tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:2px solid var(--g2);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.adm-tabs::-webkit-scrollbar{display:none;}
+.adm-tab{background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--g4);padding:10px 16px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;flex:0 0 auto;}
+```
+
+(Esto arregla la fila de pestañas en TODOS lados de la app donde se usa este mismo estilo, no solo en Gestionar Fecha — nunca más una pestaña queda inalcanzable, en el peor de los casos se puede desplazar con el dedo.)
+
+#### Cambio 4 — botón de la pestaña Recalcular en `index.html`
+
+Buscá:
+
+```html
+        <button class="adm-tab" id="edtab-recalc" onclick="admEditarFechaTab('recalc')">Recalcular</button>
+```
+
+Reemplazalo por:
+
+```html
+        <button class="adm-tab" id="edtab-recalc" onclick="admEditarFechaTab('recalc')" title="Recalcular">⚙</button>
+```
+
+### Parte 4 — mismo diseño (pills) en la pantalla de Líneas y Matches
+
+#### Cambio 5 — nueva CSS en `index.html` (agregar, no reemplaza nada existente)
+
+Buscá:
+
+```css
+.gf-lin-pill-empty:hover{background:var(--g1);}
+```
+
+Reemplazalo por (se agrega debajo, sin tocar la línea de arriba):
+
+```css
+.gf-lin-pill-empty:hover{background:var(--g1);}
+.gf-lin-lhdr{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px;margin-bottom:8px;}
+.gf-lin-lmeta{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--g4);}
+.gf-lin-pill-static{cursor:default;}
+.gf-lin-pill-static:hover{background:var(--white);}
+.gf-lin-match-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--navy);margin-top:10px;padding:8px 2px;border-top:1px solid var(--g1);}
+.gf-lin-match-arrow{transition:transform .15s;font-size:12px;}
+.gf-lin-match-toggle.open .gf-lin-match-arrow{transform:rotate(180deg);}
+.gf-lin-matches{display:flex;flex-direction:column;gap:6px;margin-top:4px;}
+.gf-lin-match{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;background:var(--white);border:1px solid var(--g1);border-radius:10px;padding:9px 12px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;color:var(--navy);text-transform:uppercase;box-shadow:0 1px 2px rgba(0,35,75,.06);}
+.gf-lin-match .gf-lin-m1{justify-self:start;text-align:left;}
+.gf-lin-match .gf-lin-m2{justify-self:end;text-align:right;}
+.gf-lin-match .gf-lin-mvs{color:var(--red);font-weight:900;font-size:10px;letter-spacing:.08em;}
+.gf-lin-match .gf-lin-m-hcp{font-weight:700;color:var(--g5);font-size:11px;}
+@media(max-width:380px){.gf-lin-match{grid-template-columns:1fr;text-align:center;gap:2px;}.gf-lin-match .gf-lin-m1,.gf-lin-match .gf-lin-m2{justify-self:center;text-align:center;}}
+```
+
+#### Cambio 6 — `renderFechaCardAdmin_` en `index.html`
+
+Buscá:
+
+```javascript
+function renderFechaCardAdmin_(lineas){
+  let html = '<div class="fca-wrap">';
+  lineas.forEach(function(l, idx){
+    const bodyId = 'fca-m-' + idx;
+    html += '<div class="fca-linea">' +
+      '<div class="fca-linea-hdr"><span class="fca-lnum">Línea ' + l.lineNum + '</span>' +
+      '<span class="fca-lmeta">' + l.horario + ' · Hoyo ' + l.hoyo + ' · ' + l.colorTee + '</span></div>' +
+      '<div class="fca-players">';
+
+    for(let i = 0; i < 4; i++){
+      const p = l.players[i];
+      if(p){
+        html += '<div class="fca-pill"><span class="fca-pname">' + p.apodo + '</span>' +
+          '<span class="fca-phcp">' + p.hcp + ' → <span class="fca-p85">' + p.hcp85 + '</span></span></div>';
+      } else {
+        html += '<div class="fca-pill-empty"></div>';
+      }
+    }
+
+    html += '</div>' +
+      '<div class="fca-match-toggle open" onclick="toggleFcaMatches_(this,\'' + bodyId + '\')">' +
+      '<span>⚔ Matches (' + l.matches.length + ')</span><span class="fca-match-arrow">▾</span></div>' +
+      '<div class="fca-matches" id="' + bodyId + '">';
+
+    l.matches.forEach(function(m){
+      html += '<div class="fca-match">' +
+        '<span class="fca-m1">' + m.apodo1 + ' hcp ' + m.hcp85_1 + '</span>' +
+        '<span class="fca-mvs">VS.</span>' +
+        '<span class="fca-m2">hcp ' + m.hcp85_2 + ' ' + m.apodo2 + '</span></div>';
+    });
+
+    html += '</div></div>';
+  });
+  html += '</div>';
+  return html;
+}
+```
+
+Reemplazalo por:
+
+```javascript
+function renderFechaCardAdmin_(lineas){
+  let html = '<div class="fca-wrap">';
+  lineas.forEach(function(l, idx){
+    const bodyId = 'fca-m-' + idx;
+    html += '<div class="gf-lin-linea">' +
+      '<div class="gf-lin-lhdr"><span class="gf-lin-hdr">Línea ' + l.lineNum + '</span>' +
+      '<span class="gf-lin-lmeta">' + l.horario + ' · Hoyo ' + l.hoyo + ' · ' + l.colorTee + '</span></div>' +
+      '<div class="gf-lin-players">';
+
+    for(let i = 0; i < 4; i++){
+      const p = l.players[i];
+      if(p){
+        html += '<div class="gf-lin-pill gf-lin-pill-static"><span class="gf-lin-pname">' + p.apodo + '</span>' +
+          '<span class="gf-lin-phcp">' + p.hcp + ' / <span class="gf-lin-p85">' + p.hcp85 + '</span></span></div>';
+      } else {
+        html += '<div class="gf-lin-pill gf-lin-pill-empty gf-lin-pill-static"></div>';
+      }
+    }
+
+    html += '</div>' +
+      '<div class="gf-lin-match-toggle open" onclick="toggleFcaMatches_(this,\'' + bodyId + '\')">' +
+      '<span>⚔ Matches (' + l.matches.length + ')</span><span class="gf-lin-match-arrow">▾</span></div>' +
+      '<div class="gf-lin-matches" id="' + bodyId + '">';
+
+    l.matches.forEach(function(m){
+      html += '<div class="gf-lin-match">' +
+        '<span class="gf-lin-m1">' + m.apodo1 + ' <span class="gf-lin-m-hcp">' + m.hcp85_1 + '</span></span>' +
+        '<span class="gf-lin-mvs">VS</span>' +
+        '<span class="gf-lin-m2"><span class="gf-lin-m-hcp">' + m.hcp85_2 + '</span> ' + m.apodo2 + '</span></div>';
+    });
+
+    html += '</div></div>';
+  });
+  html += '</div>';
+  return html;
+}
+```
+
+(La función `toggleFcaMatches_` que abre/cierra los matches no cambia — ya funciona con cualquier `id`/clase, no hace falta tocarla.)
+
+### Qué NO cambia (Tarea 101)
+
+- El algoritmo de armado de líneas sigue evitando lo mismo de siempre (partidos repetidos, compañeros repetidos, HCP parejo) — el cambio de `bestFourDiv` solo agrega un sorteo cuando hay un empate real, nunca elige una opción peor.
+- `wizArmarLineas`, `wizEjecutarArmarLineas_`, `wizRearmarLineas_`, `admRearmarLineas_`, `admMostrarPrioridad` no se tocan.
+- El resto de la pantalla de Crear Fecha (Paso 1, Paso 1a, Paso 1b) no cambia.
+- Las demás pestañas de Gestionar Fecha (Cancha, Jugadores, Tarjetas, Bonus) no cambian de texto, solo se benefician de que la fila ahora se puede desplazar si hace falta.
+- Los datos que muestra "Líneas y Matches" no cambian — jugadores, HCP, matches son los mismos; solo cambia cómo se ven.
+
+### ❓ Preguntas de verificación — Tarea 101
+
+1. Armá una fecha de prueba con exactamente 4 jugadores (una sola línea) sin historial de partidos previo. Andá a "Líneas y Matches", anotá los 2 partidos que arma, tocá "Rearmar" varias veces — ¿ahora sí ves cambiar la combinación de partidos al menos alguna vez?
+2. Armá otra fecha de prueba donde 2 de esos jugadores YA hayan jugado entre sí en una fecha anterior. Tocá "Rearmar" varias veces — ¿esos 2 siguen sin quedar enfrentados entre sí en ningún resultado (el sorteo nunca elige la opción peor)?
+3. Creá una fecha nueva de punta a punta (Cancha → Jugadores → Armar líneas → Crear) y fijate: ¿al terminar, aparece "Abriendo tu tarjeta..." y te lleva directo al Live Scoring, sin pasar por la pantalla de Cancha en el medio?
+4. En Gestionar Fecha, achicá la ventana del navegador (o probá en el celular) hasta que las pestañas no entren — ¿ahora se pueden desplazar con el dedo/mouse en vez de quedar cortadas? ¿La última pestaña ahora es un ícono de engranaje (⚙)?
+5. En "Líneas y Matches" (tanto en Crear Fecha como en "Armar líneas" dentro de Gestionar Fecha) — ¿el diseño de las tarjetas de línea/jugadores/matches ahora se ve igual de prolijo que el resto de la app rediseñada (tarjetas redondeadas, "/" en vez de "→")?
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+**Para Marco:** el Cambio 1 (`06_ArmarLineas.gs`) necesita el deploy manual de siempre. Los Cambios 2 a 6 son todos de `index.html`, así que se publican solos.
+
+### ✅ Respuestas de verificación — Tarea 101
+
+1. Sí: `bestFourDiv` ahora computa los 3 puntajes, filtra las empatadas en `tied`, y cuando `seed > 0` (botón "Rearmar") sortea entre ellas con `rand_()`. Con historial vacío las 3 opciones empatan en 0, así que "Rearmar" varía los cruces al azar.
+2. Sí: el sorteo solo aplica entre las opciones con `total === bestScore`. Si una opción tiene penalización por partido repetido, su `total` es mayor y nunca entra en `tied` — el sorteo no la elige.
+3. Sí: el reset del wizard (que ponía la pantalla de Cancha de vuelta) ahora está dentro de `irALaFechaCorrecta()`, que se ejecuta DESPUÉS de `pg('mit')` o `pg('lb')`. El mensaje cambia a "⏳ Abriendo tu tarjeta..." mientras espera `ngtInitData`.
+4. Sí: `.adm-tabs` tiene `overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none` + `.adm-tabs::-webkit-scrollbar{display:none}`. `.adm-tab` tiene `white-space:nowrap;flex:0 0 auto`. La pestaña Recalcular ahora es `⚙` (con `title="Recalcular"`).
+5. Sí: `renderFechaCardAdmin_` usa `gf-lin-linea`, `gf-lin-hdr`, `gf-lin-players`, `gf-lin-pill gf-lin-pill-static`, `gf-lin-phcp` con "/" en vez de "→", y `gf-lin-match` para los cruces con grid 3 columnas (apodo / VS / apodo). Aplica en Crear Fecha y en Gestionar Fecha.
+6. Sin dudas. ⚠️ `06_ArmarLineas.gs` requiere deploy manual de Apps Script.
