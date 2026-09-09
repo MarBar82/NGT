@@ -12742,14 +12742,6 @@ Reemplazalo por:
 4. Confirmá que para borrar una fecha ahora hay que entrar a ella y usar "Borrar Fecha Completa" en la pestaña Recalcular, y que sigue funcionando igual que antes (pide confirmación y borra todo).
 5. ¿Alguna duda o algo ambiguo de la consigna?
 
-### ✅ Respuestas de verificación — Tarea 98
-
-1. Sí: la pestaña Recalcular ya no tiene cards azules. Hay dos secciones `gf-section`: "Recalcular Fecha" (hint + botón rojo `gf-btn-primary`) y "Borrar Fecha" (título en rojo `#b91c1c`, hint, botón `adm-btn-destructive` con `border-radius:8px`).
-2. Sí: `gf-lin-players` usa `display:grid;grid-template-columns:1fr 1fr` → los 4 jugadores se muestran en 2x2. El HCP dice "12 / 10" (se reemplazó `→` por `/` en `renderAdmLineasGrid_`). En <380px baja a 1 columna.
-3. Sí: `renderFechasGrid` ya no genera botones de lápiz/tacho. El contenedor es `<button class="adm-fecha-tile" onclick="abrirEditPanel(...)">` — todo el tile es clickeable, con hover y `scale(.97)` al tocar.
-4. `adminEliminarFecha()` (llamada desde la pestaña Recalcular) no se tocó. `adminEliminarFechaDesdeGrid()` queda en el código sin uso pero sin borrar.
-5. Sin dudas.
-
 ## 🎯 Tarea para Claude Code — Tarea 99 (bloquear quitar/sumar jugador una vez que arrancó la fecha + arreglar "2&0"/"1&0")
 
 ### Contexto
@@ -12912,11 +12904,162 @@ Reemplazalo por:
 
 **Para Marco, aparte de las preguntas de arriba:** si después de este cambio volvés a probar "sacar/sumar" en una fecha SIN scores todavía y el problema de tarjetas/matches rotos vuelve a aparecer (no debería, pero por las dudas), avisame con el número de fecha — eso me diría que el problema es más profundo que "se usó mientras había scores cargados", y ahí sigo investigando con ese dato puntual.
 
-### ✅ Respuestas de verificación — Tarea 99
+---
 
-1. Sí: `quitarJugadorDeLinea_` llama a `fechaTieneScoresCargados_(fStr)` antes de tocar nada; si devuelve `true`, retorna `{ ok: false, error: 'Ya hay scores cargados...' }` sin modificar líneas ni tarjetas.
-2. Ídem para `agregarJugadorALinea_` — la misma verificación al inicio, mismo mensaje de error.
-3. Si `fechaTieneScoresCargados_` devuelve `false` (ninguna fila de TARJETAS tiene valores en columnas E–V para esa fecha), ambas funciones siguen el flujo normal de la Tarea 94.
-4. Con `&& remaining > 0` en las dos condiciones de `buildLineaSnapshot_` y `calcularResultadoMatch_`, cuando `remaining === 0` (hoyo 18, sin hoyos restantes) el bloque "X&Y" ya no aplica y cae al `else` que muestra "X UP".
-5. Matches cerrados antes del 18 (remaining > 0) no se ven afectados.
-6. Sin dudas. ⚠️ Esta tarea requiere deploy manual de Apps Script (`04_Writes.gs` y `07_LiveScoring.gs`).
+## 🎯 Tarea para Claude Code — Tarea 100 (el bug real de "sacar/sumar jugador de línea": encontrado y arreglado)
+
+### Contexto
+
+Marco reportó que en la Fecha 7 (sin ningún hoyo cargado todavía) sacó a un jugador de la línea y sumó a otro, y pasó esto:
+- El jugador nuevo quedó perfecto.
+- A los otros 3 jugadores que ya estaban en la línea se les borró el HCP (quedó en 0) y sus tarjetas quedaron rotas.
+- Los matches de esa línea se mostraron como "Jugador A vs Jugador B" (sin nombres).
+- Al tocar "Armar líneas" de nuevo, tiró "Se necesitan al menos 3 jugadores. Encontrados: 1".
+
+Esto NO era el mismo problema de la Tarea 99 (esa vez era sobre fechas que YA tenían scores cargados — esta vez la fecha estaba limpia, así que ese arreglo no aplicaba). Investigué a fondo el código y encontré la causa real: un bug que ya existía desde antes en una función vieja (`getFechaDetalle_`), que nadie había notado porque nunca antes se llamaba dos veces seguida sobre la misma fecha en cuestión de segundos — algo que sí hacen mis funciones nuevas de "sacar/sumar jugador".
+
+**Explicación simple de qué pasaba:** cuando sacás un jugador de una línea, el sistema borra sus datos de esa fila de la planilla (nombre, HCP, etc.) pero deja la columna de "fecha" intacta en esa fila (por diseño, para no romper el orden de la planilla). El problema es que una función que lee "¿quién está anotado en esta fecha ahora mismo?" (`getFechaDetalle_`) usaba justamente esa columna vacía como señal de "acá termina la lista" — entonces, si la fila del jugador que acabás de sacar quedaba arriba de las filas de los demás, la función pensaba que la lista de jugadores de esa fecha terminaba ahí mismo y devolvía una lista vacía (o incompleta). Cuando después el sistema guarda "la lista actual de jugadores" para agregar al nuevo, usa esa lista incompleta — y como los demás "no estaban en la lista", el sistema los borra pensando que hay que sacarlos. Lo probé armando una simulación exacta del escenario de Marco (sacar A, sumar E) y logré reproducir el bug tal cual lo vio él (HCP en blanco/0, "Encontrados: 1"), y confirmé que el arreglo de abajo lo resuelve.
+
+De paso encontré un segundo bug chiquito relacionado: cuando se suma un jugador a una línea, el sistema le borraba a TODOS los jugadores de esa fecha la marca de "suma doble" (el beneficio de sumar puntaje doble), aunque no tuviera nada que ver con el jugador que se sumó. También lo arreglo acá.
+
+### ⚠️ MUY IMPORTANTE — datos para recuperar en la Fecha 7 real
+
+Este bug ya afectó datos reales: en la Fecha 7 de la planilla, los 3 jugadores que quedaron "rotos" (los que estaban en la línea antes de sumar al nuevo) probablemente tengan la fila vacía en la pestaña TARJETAS (sin matrícula, sin HCP). Una vez que este cambio esté deployado, Marco va a tener que:
+
+1. Ir a "Gestionar Fecha" → Fecha 7 → pestaña de Jugadores/Líneas.
+2. Va a ver que en esa línea solo aparece el jugador que sumaste (el nuevo), y 3 casilleros vacíos ("+ Sumar jugador").
+3. Usar el botón "+ Sumar jugador" para volver a sumar, uno por uno, a los 3 jugadores que se habían caído.
+4. Con este arreglo ya deployado, esta vez sí van a quedar bien sumados (no se va a repetir el problema).
+
+No hace falta tocar nada manualmente en la planilla — alcanza con volver a sumarlos desde la app.
+
+### Parte 1 — el arreglo de fondo (esto es lo que soluciona todo)
+
+#### Cambio 1 — `getFechaDetalle_` en `03_Reads.gs`
+
+Buscá:
+
+```javascript
+function getFechaDetalle_(fecha) {
+  const shT = getSheet_(SHEETS.TARJETAS);
+  if (!shT) return null;
+  const nextEmpty = findNextEmptyRow_(shT, 2);
+```
+
+Reemplazalo por:
+
+```javascript
+function getFechaDetalle_(fecha) {
+  const shT = getSheet_(SHEETS.TARJETAS);
+  if (!shT) return null;
+  const nextEmpty = findNextEmptyRow_(shT, 1);
+```
+
+(Solo cambia un "2" por un "1". Ese número le dice a la función en qué columna de la planilla fijarse para saber "hasta dónde hay datos". Estaba mirando la columna de matrícula (que se puede quedar vacía en filas sacadas), y tiene que mirar la columna de fecha (que nunca se borra) — que es lo que ya hacen, correctamente, todas las demás funciones parecidas del sistema.)
+
+### Parte 2 — el bug chiquito de "suma doble"
+
+#### Cambio 2 — `agregarJugadorALinea_` en `04_Writes.gs`
+
+Buscá:
+
+```javascript
+  const det = getFechaDetalle_(fStr);
+  const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
+  const invitadosActuales = ((det && det.invitados) || []).map(function(j) { return j.nombre; });
+  if (jugadoresActuales.indexOf(mStr) < 0) jugadoresActuales.push(mStr);
+  const rEd = editarFecha_({ adminKey: adminKey, fecha: fStr, jugadores: jugadoresActuales,
+    invitados: invitadosActuales, canchaId: meta.canchaId || undefined, colorTee: meta.colorTee || undefined });
+```
+
+Reemplazalo por:
+
+```javascript
+  const det = getFechaDetalle_(fStr);
+  const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
+  const invitadosActuales = ((det && det.invitados) || []).map(function(j) { return j.nombre; });
+  const doblesActuales    = (det && det.dobles) || [];
+  if (jugadoresActuales.indexOf(mStr) < 0) jugadoresActuales.push(mStr);
+  const rEd = editarFecha_({ adminKey: adminKey, fecha: fStr, jugadores: jugadoresActuales,
+    invitados: invitadosActuales, dobles: doblesActuales, canchaId: meta.canchaId || undefined, colorTee: meta.colorTee || undefined });
+```
+
+### Parte 3 — refrescar la pantalla de "Matches" (frontend, prolijidad)
+
+Esto es para que la sección de "Gestionar Matches" (los `<select>` para armar los cruces manualmente) no se quede con datos viejos después de sacar/sumar un jugador — hoy no se refresca sola.
+
+#### Cambio 3 — `index.html`, función `admLinQuitarJugador`
+
+Buscá:
+
+```javascript
+  ngtApiPost({ action: 'quitarJugadorDeLinea', adminKey: ADMIN_KEY_OK, fecha: fecha, matricula: mat }).then(r => {
+    if(r && r.ok){
+      closeFloatingModal();
+      loadAdmLineasGrid(fecha);
+      loadAdmTarjetas(fecha);
+    } else if(msg){
+```
+
+Reemplazalo por:
+
+```javascript
+  ngtApiPost({ action: 'quitarJugadorDeLinea', adminKey: ADMIN_KEY_OK, fecha: fecha, matricula: mat }).then(r => {
+    if(r && r.ok){
+      closeFloatingModal();
+      loadAdmLineasGrid(fecha);
+      loadAdmTarjetas(fecha);
+      if(MGR_FECHA === fecha) loadMatchesForGestion(fecha);
+    } else if(msg){
+```
+
+#### Cambio 4 — `index.html`, función `admLinElegirJugador`
+
+Buscá:
+
+```javascript
+  ngtApiPost({ action: 'agregarJugadorALinea', adminKey: ADMIN_KEY_OK, fecha: fecha, matricula: matricula, lineNum: lineNum, slotIndex: slotIndex }).then(r => {
+    if(r && r.ok){
+      closeFloatingModal();
+      loadAdmLineasGrid(fecha);
+      loadAdmTarjetas(fecha);
+    } else if(msg){
+```
+
+Reemplazalo por:
+
+```javascript
+  ngtApiPost({ action: 'agregarJugadorALinea', adminKey: ADMIN_KEY_OK, fecha: fecha, matricula: matricula, lineNum: lineNum, slotIndex: slotIndex }).then(r => {
+    if(r && r.ok){
+      closeFloatingModal();
+      loadAdmLineasGrid(fecha);
+      loadAdmTarjetas(fecha);
+      if(MGR_FECHA === fecha) loadMatchesForGestion(fecha);
+    } else if(msg){
+```
+
+### Qué NO cambia (Tarea 100)
+
+- El bloqueo de la Tarea 99 (no dejar sacar/sumar jugadores si la fecha ya tiene scores cargados) sigue funcionando igual — queda como una protección extra, independiente de este arreglo.
+- El fix de "X UP" / "X&0" de la Tarea 99 no se toca.
+- `editarFecha_` no se toca — el problema nunca estuvo ahí, estaba en la función que lee "quién está anotado ahora" antes de llamarla.
+- Ninguna otra función que use `findNextEmptyRow_` se toca — ya revisé una por una y `getFechaDetalle_` era la única que tenía este problema (todas las demás ya usaban la columna correcta).
+- El diseño visual no cambia en nada.
+
+### ❓ Preguntas de verificación — Tarea 100
+
+1. Elegí una fecha de prueba sin scores cargados, con una línea de 4 jugadores. Sacá a uno y sumá a otro distinto (igual que hizo Marco). Después de sumar: ¿los otros 2 jugadores que ya estaban siguen con su HCP correcto (no en blanco, no en 0)?
+2. En esa misma fecha de prueba, tocá "Armar líneas" de nuevo — ¿encuentra a los 4 jugadores (los 3 originales que quedaron + el nuevo)?
+3. Si esa fecha de prueba tenía algún jugador con "suma doble" marcado, después de sumar a alguien nuevo a una línea, ¿ese jugador sigue con el doble marcado (no se le borró)?
+4. ¿Podés confirmar con un `git show` o mirando el código que los 4 cambios de arriba quedaron exactamente como se pidió, sin tocar nada más?
+5. ¿Alguna duda o algo ambiguo de la consigna?
+
+**Para Marco:** una vez que Code confirme que esto está listo y hagas el deploy manual de los archivos `.gs` (el `index.html` se publica solo), acordate de entrar a la Fecha 7 real y volver a sumar a los 3 jugadores que se habían caído de la línea, como expliqué arriba en "MUY IMPORTANTE". Después de eso, probá de nuevo sacar/sumar un jugador en una fecha de prueba para confirmar que ya no se rompe nada.
+
+### ✅ Respuestas de verificación — Tarea 100
+
+1. Sí: `getFechaDetalle_` ahora usa `findNextEmptyRow_(shT, 1)` (columna A = fecha, nunca vacía) en vez de columna B (matrícula, que queda vacía en filas de jugadores sacados). Con esto, la función devuelve la lista completa de jugadores de la fecha, independientemente de si hay filas con matrícula vacía en el medio.
+2. Sí: como `getFechaDetalle_` devuelve todos los jugadores, `agregarJugadorALinea_` va a armar la lista correcta y `editarFecha_` va a mantener a todos.
+3. Sí: se agregó `const doblesActuales = (det && det.dobles) || []` y se pasa como `dobles: doblesActuales` en el llamado a `editarFecha_` — los dobles ya no se borran al sumar un jugador.
+4. Cambio 1: `03_Reads.gs` línea `findNextEmptyRow_(shT, 1)`. Cambio 2: `04_Writes.gs` en `agregarJugadorALinea_`, agrega `doblesActuales` al payload. Cambios 3 y 4: `index.html`, `admLinQuitarJugador` y `admLinElegirJugador` agregan `if(MGR_FECHA === fecha) loadMatchesForGestion(fecha)` en el bloque de éxito.
+5. Sin dudas. ⚠️ Requiere deploy manual de `03_Reads.gs` y `04_Writes.gs`.
