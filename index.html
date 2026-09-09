@@ -5318,6 +5318,7 @@ function admLinQuitarJugador(){
       closeFloatingModal();
       loadAdmLineasGrid(fecha);
       loadAdmTarjetas(fecha);
+      if(MGR_FECHA === fecha) loadMatchesForGestion(fecha);
     } else if(msg){
       msg.className = 'adm-msg err';
       msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');
@@ -5375,6 +5376,7 @@ function admLinElegirJugador(matricula){
       closeFloatingModal();
       loadAdmLineasGrid(fecha);
       loadAdmTarjetas(fecha);
+      if(MGR_FECHA === fecha) loadMatchesForGestion(fecha);
     } else if(msg){
       msg.className = 'adm-msg err';
       msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');

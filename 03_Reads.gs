@@ -1173,7 +1173,7 @@ function getFechaLineas_(fecha) {
 function getFechaDetalle_(fecha) {
   const shT = getSheet_(SHEETS.TARJETAS);
   if (!shT) return null;
-  const nextEmpty = findNextEmptyRow_(shT, 2);
+  const nextEmpty = findNextEmptyRow_(shT, 1);
   if (nextEmpty <= 2) return null;
 
   // A(0)=fecha, B(1)=mat, C(2)=hcp, D(3)=canchaId, E..V(4..21)=H1..H18, W(22)=LD, X(23)=BA, Y(24)=colorTee

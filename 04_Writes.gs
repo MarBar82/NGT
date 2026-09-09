@@ -1229,9 +1229,10 @@ function agregarJugadorALinea_(params) {
   const det = getFechaDetalle_(fStr);
   const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
   const invitadosActuales = ((det && det.invitados) || []).map(function(j) { return j.nombre; });
+  const doblesActuales    = (det && det.dobles) || [];
   if (jugadoresActuales.indexOf(mStr) < 0) jugadoresActuales.push(mStr);
   const rEd = editarFecha_({ adminKey: adminKey, fecha: fStr, jugadores: jugadoresActuales,
-    invitados: invitadosActuales, canchaId: meta.canchaId || undefined, colorTee: meta.colorTee || undefined });
+    invitados: invitadosActuales, dobles: doblesActuales, canchaId: meta.canchaId || undefined, colorTee: meta.colorTee || undefined });
   if (!rEd.ok) return rEd;
   try { recalcularTotalesScore_(null); } catch(e) {}
   audit_('AGREGAR_JUGADOR_LINEA', 'admin', { fecha: fStr, matricula: mStr, lineNum, slotIndex });
