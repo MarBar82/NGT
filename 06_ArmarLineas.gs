@@ -232,8 +232,7 @@ function armarLineas_(params) {
       [[0,2],[1,3]],
       [[0,3],[1,2]],
     ];
-    var best = null, bestScore = Infinity;
-    divs.forEach(function(div) {
+    var options = divs.map(function(div) {
       var sideA = [group[div[0][0]], group[div[0][1]]];
       var sideB = [group[div[1][0]], group[div[1][1]]];
       var mps = [
@@ -249,13 +248,16 @@ function armarLineas_(params) {
       var lineScore = allPairs(group).reduce(function(s, mp) {
         return s + (recentLinePairs[pKey(mp[0], mp[1])] ? PEN_LINE_REPEAT : 0);
       }, 0);
-      var total = matchScore + lineScore;
-      if (total < bestScore) {
-        bestScore = total;
-        best = { matches: mps, matchScore: matchScore, lineScore: lineScore };
-      }
+      return { matches: mps, matchScore: matchScore, lineScore: lineScore, total: matchScore + lineScore };
     });
-    return best; // siempre devuelve la mejor opción disponible
+    var bestScore = Math.min.apply(null, options.map(function(o) { return o.total; }));
+    var tied = options.filter(function(o) { return o.total === bestScore; });
+    // Si hay empate entre 2 o 3 divisiones igual de buenas y se pidió un seed (botón
+    // "Rearmar"), elegimos al azar entre las empatadas -- así "Rearmar" tiene efecto
+    // visible incluso en una fecha de una sola línea de 4, donde no hay otra cosa para
+    // variar. Nunca se elige una opción peor: solo se sortea entre las mejores.
+    var chosen = (seed > 0 && tied.length > 1) ? tied[Math.floor(rand_() * tied.length)] : tied[0];
+    return chosen; // siempre devuelve la mejor opción disponible (o una de las mejores empatadas)
   }
 
   // Puntaje de un grupo de 3 — nunca Infinity
