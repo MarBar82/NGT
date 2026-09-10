@@ -4117,6 +4117,12 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
     // Guardar resultado para wizCrearTodo
     WIZ_LINEAS_RESULT = r;
 
+    // Reflejar qué jugadores ya tienen marcada la suma doble (elegida en el Paso 1)
+    if(!data.dobles) data.dobles = [];
+    (WIZ_LINEAS_RESULT.lines || []).forEach(function(l){
+      (l.players || []).forEach(function(p){ if(p) p.esDoble = data.dobles.indexOf(String(p.matricula)) >= 0; });
+    });
+
     // Ir a Paso 2
     wizMostrarPaso2_(jugsInFecha, canchaName);
 
@@ -4130,7 +4136,16 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
         });
       };
       pintar();
-      lineditIniciar_(WIZ_LINEAS_RESULT.lines, pintar, { fecha: data.fecha, canchaId: data.canchaId, colorTee: data.colorTee });
+      lineditIniciar_(WIZ_LINEAS_RESULT.lines, pintar, {
+        fecha: data.fecha, canchaId: data.canchaId, colorTee: data.colorTee, persisted: false,
+        onToggleDoble: function(mat, nuevoValor){
+          if(!data.dobles) data.dobles = [];
+          const idx = data.dobles.indexOf(mat);
+          if(nuevoValor && idx < 0) data.dobles.push(mat);
+          if(!nuevoValor && idx >= 0) data.dobles.splice(idx, 1);
+          return true;
+        },
+      });
     }
   }).catch(e => {
     wizResetBotones_();
@@ -4141,6 +4156,7 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
 
 function wizRearmarLineas_(){
   if(!WIZ_LAST_ARMAR_PARAMS) return;
+  if(lineditHuboEdicionManual_() && !confirm('Ya hiciste cambios manuales en las líneas (invitados sumados, jugadores movidos o HCP ajustado). Si volvés a armar automático, esos cambios se pierden. ¿Querés continuar?')) return;
   const { jugadoresConHcp, prioridades, jugsInFecha, canchaName, data } = WIZ_LAST_ARMAR_PARAMS;
   const btn = document.getElementById('wiz-rearmar-btn');
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Rearmando...'; }
@@ -4214,6 +4230,12 @@ function wizCrearTodo(){
   const lineasParam = WIZ_LINEAS_RESULT
     ? WIZ_LINEAS_RESULT.lines.map(l => l.players.filter(p => p).map(p => p.matricula))
     : [];
+  // Si el admin ajustó algún HCP a mano en la pantalla de líneas, mandarlo para
+  // que crearFecha_ lo respete en vez del HCP calculado automáticamente.
+  const hcpOverrides = {};
+  if(WIZ_LINEAS_RESULT){
+    WIZ_LINEAS_RESULT.lines.forEach(l => l.players.filter(p => p && !p.esInvitado).forEach(p => { hcpOverrides[p.matricula] = p.hcp; }));
+  }
   ngtApiPost({
     action:   'crearFecha',
     adminKey: ADMIN_KEY_OK,
@@ -4227,6 +4249,7 @@ function wizCrearTodo(){
     hoyoSalida:  WIZ_PASO1_DATA.hoyoSalida || 1,
     bonusHoyos:  WIZ_PASO1_DATA.bonusHoyos || {},
     lineas:      lineasParam,
+    hcpOverrides: hcpOverrides,
   }).then(r => {
     if(!r.ok){
       if(crearBtn){ crearBtn.disabled = false; crearBtn.textContent = '🏌 Comenzar Partida'; }
@@ -5130,6 +5153,13 @@ function admArmarLineas(prioridades, seed){
     // Mostrar preview de líneas — editable a mano + compartir por WhatsApp (mismo motor que Crear Fecha)
     if(preview){
       const det = MGR_FECHA_DETALLE || {};
+      if(!det.dobles) det.dobles = [];
+
+      // Reflejar qué jugadores ya tienen marcada la suma doble en esta fecha
+      ADM_LAST_ARMAR_LINEAS.forEach(function(l){
+        (l.players || []).forEach(function(p){ if(p) p.esDoble = det.dobles.indexOf(String(p.matricula)) >= 0; });
+      });
+
       const pintar = function(){
         pintarLineasPreview_(preview, ADM_LAST_ARMAR_LINEAS, {
           repeatCount: r.repeatCount, onRearmar: 'admRearmarLineas_()',
@@ -5144,8 +5174,18 @@ function admArmarLineas(prioridades, seed){
       };
       pintar();
       lineditIniciar_(ADM_LAST_ARMAR_LINEAS, pintar, {
-        fecha: fecha, canchaId: det.canchaId, colorTee: det.colorTee,
+        fecha: fecha, canchaId: det.canchaId, colorTee: det.colorTee, persisted: true,
         onInvitadoCreado: function(mat, nombre){ MGR_FECHA_JUGS.push({ matricula: mat, nombre: nombre }); },
+        onToggleDoble: function(mat, nuevoValor){
+          const idx = det.dobles.indexOf(mat);
+          const prev = det.dobles.slice();
+          if(nuevoValor && idx < 0) det.dobles.push(mat);
+          if(!nuevoValor && idx >= 0) det.dobles.splice(idx, 1);
+          return ngtApiPost({ action: 'setDoblesFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, dobles: det.dobles.slice() }).then(function(r2){
+            if(!r2 || !r2.ok){ det.dobles = prev; return false; }
+            return true;
+          }).catch(function(){ det.dobles = prev; return false; });
+        },
       });
     }
   }).catch(e => {
@@ -5155,6 +5195,7 @@ function admArmarLineas(prioridades, seed){
 }
 
 function admRearmarLineas_(){
+  if(lineditHuboEdicionManual_() && !confirm('Ya hiciste cambios manuales en las líneas (invitados sumados, jugadores movidos o HCP ajustado). Si volvés a armar automático, esos cambios se pierden. ¿Querés continuar?')) return;
   document.getElementById('adm-mgr-matches-list').innerHTML = '';
   admArmarLineas(ADM_LAST_ARMAR_PRIORIDADES, Date.now());
 }
@@ -9207,7 +9248,7 @@ function normalizeLineasArmado_(rawLines, horarioBase, hoyoSalida, colorTee){
   return rawLines.map(function(l, idx){
     const players = l.players.filter(function(p){ return p; }).map(function(p){
       const hcp = p.hcp || 0;
-      return { matricula: p.matricula, apodo: p.apodo, hcp: hcp, hcp85: Math.round(hcp * 0.85), esInvitado: !!p.esInvitado };
+      return { matricula: p.matricula, apodo: p.apodo, hcp: hcp, hcp85: Math.round(hcp * 0.85), esInvitado: !!p.esInvitado, esDoble: !!p.esDoble };
     });
     const byMat = {};
     players.forEach(function(p){ byMat[p.matricula] = p; });
@@ -9243,9 +9284,11 @@ function renderFechaCardAdmin_(lineas){
       const p = l.players[i];
       if(p){
         const invClass = p.esInvitado ? ' gf-lin-pill-inv' : '';
+        const dobleClass = p.esDoble ? ' gf-lin-pill-db' : '';
         const invBadge = p.esInvitado ? '<span class="gf-lin-inv-badge">INV</span>' : '';
-        html += '<button type="button" class="gf-lin-pill' + invClass + '" onclick="lineditAbrir_(' + idx + ',' + i + ')">' +
-          '<span class="gf-lin-pname">' + p.apodo + invBadge + '</span>' +
+        const dobleBadge = p.esDoble ? '<span class="gf-lin-db">✌x2</span>' : '';
+        html += '<button type="button" class="gf-lin-pill' + invClass + dobleClass + '" onclick="lineditAbrir_(' + idx + ',' + i + ')">' +
+          '<span class="gf-lin-pname">' + p.apodo + invBadge + dobleBadge + '</span>' +
           '<span class="gf-lin-phcp">' + p.hcp + ' / <span class="gf-lin-p85">' + p.hcp85 + '</span></span></button>';
       } else {
         html += '<button type="button" class="gf-lin-pill gf-lin-pill-empty" onclick="lineditAbrir_(' + idx + ',' + i + ')">+</button>';
@@ -9275,8 +9318,10 @@ function contarJugadores_(linea){
   return (linea.players || []).filter(function(p){ return p; }).length;
 }
 
+// Los invitados nunca juegan match -- los matches son siempre entre jugadores
+// del torneo. Un invitado solo "ocupa" un casillero de la línea.
 function recalcularMatchesLinea_(linea){
-  const g = (linea.players || []).filter(function(p){ return p; });
+  const g = (linea.players || []).filter(function(p){ return p && !p.esInvitado; });
   if(g.length === 2){
     linea.matches = [{ j1: g[0].matricula, j2: g[1].matricula }];
   } else if(g.length === 3){
@@ -9304,18 +9349,49 @@ let LINEDIT_LINES = null;
 let LINEDIT_RERENDER = null;
 let LINEDIT_TARGET = null;
 let LINEDIT_CTX = null;
+let LINEDIT_DIRTY = false; // true si hubo algún cambio manual (mover, invitado, hcp) desde el último armado
 
 function lineditIniciar_(lines, rerenderFn, ctx){
   LINEDIT_LINES = lines; LINEDIT_RERENDER = rerenderFn; LINEDIT_CTX = ctx || {};
+  LINEDIT_DIRTY = false;
 }
 
+// true si hubo algún cambio manual desde el último armado automático — se usa
+// para avisar antes de "Rearmar" (que pisa todo con un armado nuevo).
+function lineditHuboEdicionManual_(){
+  return LINEDIT_DIRTY;
+}
+
+// Tocar un jugador de la línea abre un menú con las 3 acciones posibles.
+// Tocar un casillero vacío va directo a "Mover jugador" (no hay nada que ajustar).
 function lineditAbrir_(lineIdx, slotIdx){
+  if(!LINEDIT_LINES) return;
+  const linea = LINEDIT_LINES[lineIdx];
+  const jugadorActual = linea.players[slotIdx];
+  if(!jugadorActual){ lineditAbrirMover_(lineIdx, slotIdx); return; }
+  LINEDIT_TARGET = { lineIdx: lineIdx, slotIdx: slotIdx };
+  const esDoble = !!jugadorActual.esDoble;
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">' +
+    jugadorActual.apodo + (jugadorActual.esInvitado ? ' <span class="gf-lin-inv-badge">INV</span>' : '') + '</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+  html += '<button type="button" class="gf-lin-pill" onclick="lineditAbrirHcp_()"><span class="gf-lin-pname">✏ Ajustar HCP</span></button>';
+  if(!jugadorActual.esInvitado){
+    html += '<button type="button" class="gf-lin-pill" onclick="lineditToggleDoble_()"><span class="gf-lin-pname">' +
+      (esDoble ? '✌ Sacar suma doble' : '✌ Marcar suma doble') + '</span></button>';
+  }
+  html += '<button type="button" class="gf-lin-pill" onclick="lineditAbrirMover_(' + lineIdx + ',' + slotIdx + ')"><span class="gf-lin-pname">🔀 Mover jugador</span></button>';
+  html += '</div><button class="btn-cancel" onclick="closeFloatingModal()" style="width:100%;margin-top:12px;">Cerrar</button>';
+  openFloatingModal(html);
+}
+
+// Cambiar por otro jugador de cualquier línea, o completar el casillero con un invitado.
+function lineditAbrirMover_(lineIdx, slotIdx){
   if(!LINEDIT_LINES) return;
   LINEDIT_TARGET = { lineIdx: lineIdx, slotIdx: slotIdx };
   const linea = LINEDIT_LINES[lineIdx];
   const jugadorActual = linea.players[slotIdx];
   let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">' +
-    (jugadorActual ? '✏ ' + jugadorActual.apodo : '+ Casillero vacío — Línea ' + linea.lineNum) + '</div>';
+    (jugadorActual ? '🔀 ' + jugadorActual.apodo : '+ Casillero vacío — Línea ' + linea.lineNum) + '</div>';
   html += '<div style="font-size:12px;color:var(--g4);text-align:center;margin-bottom:10px;">Elegí con quién cambiarlo, o sumá un invitado:</div>';
   html += '<button class="gf-lin-pill" style="margin-bottom:8px;width:100%;" onclick="lineditAbrirInvitado_()">+ Sumar invitado</button>';
   html += '<div style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">';
@@ -9324,7 +9400,7 @@ function lineditAbrir_(lineIdx, slotIdx){
       if(li === lineIdx && si === slotIdx) return;
       if(!p) return;
       html += '<button type="button" class="gf-lin-pill" onclick="lineditElegir_(' + li + ',' + si + ')">' +
-        '<span class="gf-lin-pname">' + p.apodo + ' <span style="font-weight:600;color:var(--g4);font-size:11px;">· Línea ' + l.lineNum + '</span></span>' +
+        '<span class="gf-lin-pname">' + p.apodo + (p.esDoble ? ' ✌' : '') + ' <span style="font-weight:600;color:var(--g4);font-size:11px;">· Línea ' + l.lineNum + '</span></span>' +
         '<span class="gf-lin-phcp">' + p.hcp + '</span></button>';
     });
   });
@@ -9353,7 +9429,100 @@ function lineditElegir_(otherLineIdx, otherSlotIdx){
   if(otherLineIdx !== lineIdx) recalcularMatchesLinea_(lineaB);
   closeFloatingModal();
   LINEDIT_TARGET = null;
+  LINEDIT_DIRTY = true;
   if(LINEDIT_RERENDER) LINEDIT_RERENDER();
+}
+
+// Formulario para ajustar el HCP de juego del jugador tocado.
+function lineditAbrirHcp_(){
+  if(!LINEDIT_TARGET || !LINEDIT_LINES) return;
+  const linea = LINEDIT_LINES[LINEDIT_TARGET.lineIdx];
+  const jugador = linea.players[LINEDIT_TARGET.slotIdx];
+  if(!jugador) return;
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">✏ ' + jugador.apodo + '</div>' +
+    '<div class="adm-row"><div class="adm-field"><label class="adm-label">HCP de juego</label>' +
+    '<input type="number" id="lindedit-hcp-val" class="adm-input" min="0" max="54" inputmode="numeric" value="' + jugador.hcp + '"></div></div>' +
+    '<div style="display:flex;gap:8px;margin-top:16px;">' +
+    '<button class="adm-btn-primary" onclick="lineditGuardarHcp_()" style="flex:2;">Guardar</button>' +
+    '<button class="btn-cancel" onclick="lineditAbrir_(' + LINEDIT_TARGET.lineIdx + ',' + LINEDIT_TARGET.slotIdx + ')" style="flex:1;">Volver</button>' +
+    '</div><div id="lindedit-hcp-msg" class="adm-msg" style="display:none;"></div>';
+  openFloatingModal(html);
+}
+
+function lineditGuardarHcp_(){
+  if(!LINEDIT_TARGET || !LINEDIT_LINES) return;
+  const el = document.getElementById('lindedit-hcp-val');
+  const msg = document.getElementById('lindedit-hcp-msg');
+  const val = el ? el.value.trim() : '';
+  if(val === '' || isNaN(parseInt(val))){
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = 'Ingresá un HCP válido'; msg.style.display = 'block'; }
+    return;
+  }
+  const hcpNum = parseInt(val);
+  const lineIdx = LINEDIT_TARGET.lineIdx, slotIdx = LINEDIT_TARGET.slotIdx;
+  const linea = LINEDIT_LINES[lineIdx];
+  const jugador = linea.players[slotIdx];
+  const aplicarLocal = function(){
+    jugador.hcp = hcpNum;
+    jugador.hcp85 = Math.round(hcpNum * 0.85);
+    closeFloatingModal();
+    LINEDIT_TARGET = null;
+    LINEDIT_DIRTY = true;
+    if(LINEDIT_RERENDER) LINEDIT_RERENDER();
+  };
+  if(LINEDIT_CTX && LINEDIT_CTX.persisted && LINEDIT_CTX.fecha){
+    if(msg){ msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block'; }
+    ngtApiPost({ action: 'cargarTarjeta', adminKey: ADMIN_KEY_OK, fecha: LINEDIT_CTX.fecha, matricula: jugador.matricula, hcp: hcpNum }).then(function(r){
+      if(!r || !r.ok){
+        if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error'); msg.style.display = 'block'; }
+        return;
+      }
+      aplicarLocal();
+    }).catch(function(e){
+      if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message; msg.style.display = 'block'; }
+    });
+  } else {
+    aplicarLocal();
+  }
+}
+
+// Marca o saca "suma doble" del jugador tocado. Los invitados nunca la tienen.
+// Al marcar, verifica contra el servidor que no la haya usado ya en otra fecha.
+function lineditToggleDoble_(){
+  if(!LINEDIT_TARGET || !LINEDIT_LINES) return;
+  const linea = LINEDIT_LINES[LINEDIT_TARGET.lineIdx];
+  const jugador = linea.players[LINEDIT_TARGET.slotIdx];
+  if(!jugador || jugador.esInvitado) return;
+  const mat = String(jugador.matricula);
+  const yaEsDoble = !!jugador.esDoble;
+
+  const aplicar = function(){
+    jugador.esDoble = !yaEsDoble;
+    closeFloatingModal();
+    LINEDIT_TARGET = null;
+    if(LINEDIT_RERENDER) LINEDIT_RERENDER();
+  };
+  const ejecutarToggle = function(){
+    const cb = LINEDIT_CTX && LINEDIT_CTX.onToggleDoble;
+    if(!cb){ aplicar(); return; }
+    Promise.resolve(cb(mat, !yaEsDoble)).then(function(ok){
+      if(ok === false){ alert('No se pudo actualizar el doble. Probá de nuevo.'); return; }
+      aplicar();
+    }).catch(function(){ alert('No se pudo actualizar el doble. Probá de nuevo.'); });
+  };
+
+  if(yaEsDoble){ ejecutarToggle(); return; } // sacar el doble siempre está permitido
+
+  ngtApiGet('jugadoresConDoble').then(function(r){
+    const disponibles = (r && r.data) || [];
+    if(disponibles.indexOf(mat) < 0){
+      alert('Este jugador ya usó su doble en otra fecha esta temporada.');
+      return;
+    }
+    ejecutarToggle();
+  }).catch(function(){
+    alert('No se pudo verificar la disponibilidad del doble. Probá de nuevo.');
+  });
 }
 
 function lineditAbrirInvitado_(){
@@ -9364,7 +9533,7 @@ function lineditAbrirInvitado_(){
     '<input type="number" id="lindedit-inv-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP"></div></div>' +
     '<div style="display:flex;gap:8px;margin-top:16px;">' +
     '<button class="adm-btn-primary" onclick="lineditConfirmarInvitado_()" style="flex:2;">Sumar</button>' +
-    '<button class="btn-cancel" onclick="lineditAbrir_(' + LINEDIT_TARGET.lineIdx + ',' + LINEDIT_TARGET.slotIdx + ')" style="flex:1;">Volver</button>' +
+    '<button class="btn-cancel" onclick="lineditAbrirMover_(' + LINEDIT_TARGET.lineIdx + ',' + LINEDIT_TARGET.slotIdx + ')" style="flex:1;">Volver</button>' +
     '</div><div id="lindedit-inv-msg" class="adm-msg" style="display:none;"></div>';
   openFloatingModal(html);
 }
@@ -9398,6 +9567,7 @@ function lineditConfirmarInvitado_(){
     recalcularMatchesLinea_(linea);
     closeFloatingModal();
     LINEDIT_TARGET = null;
+    LINEDIT_DIRTY = true;
     if(LINEDIT_CTX.onInvitadoCreado) LINEDIT_CTX.onInvitadoCreado(r.matricula, nombre, r.hcp || 0);
     if(LINEDIT_RERENDER) LINEDIT_RERENDER();
   }).catch(function(e){
@@ -9449,9 +9619,22 @@ function compartirLineasWhatsapp_(containerId, fecha){
   const btns = document.querySelectorAll('[data-wa-btn="' + containerId + '"]');
   btns.forEach(function(b){ b.disabled = true; b.textContent = '⏳ Generando...'; });
   const restore = function(){ btns.forEach(function(b){ b.disabled = false; b.textContent = '📤 WhatsApp'; }); };
+
+  // La tarjeta en el celular es angosta (para entrar en la pantalla), y eso daba
+  // una imagen muy angosta y larga -- difícil de leer y que se pixela al hacer
+  // zoom. Para la imagen que se comparte, clonamos el contenido a un contenedor
+  // ancho y oculto fuera de pantalla, y capturamos con más resolución.
+  const CAPTURE_WIDTH = 680;
+  const clone = el.cloneNode(true);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + CAPTURE_WIDTH + 'px;background:#f5f4ef;padding:18px;box-sizing:border-box;';
+  wrap.appendChild(clone);
+  document.body.appendChild(wrap);
+
   cargarHtml2Canvas_().then(function(html2canvas){
-    return html2canvas(el, { backgroundColor: '#f5f4ef', scale: 2, useCORS: true });
+    return html2canvas(wrap, { backgroundColor: '#f5f4ef', scale: 3, useCORS: true, width: CAPTURE_WIDTH });
   }).then(function(canvas){
+    if(wrap.parentNode) document.body.removeChild(wrap);
     return new Promise(function(resolve){ canvas.toBlob(resolve, 'image/png'); });
   }).then(function(blob){
     restore();
@@ -9469,6 +9652,7 @@ function compartirLineasWhatsapp_(containerId, fecha){
       alert('Este navegador no permite compartir directo a WhatsApp — se descargó la imagen, así la podés mandar vos desde tu galería.');
     }
   }).catch(function(e){
+    if(wrap.parentNode) document.body.removeChild(wrap);
     restore();
     alert('No se pudo generar la imagen: ' + e.message);
   });

@@ -1,7 +1,7 @@
 ﻿// ════════════ WRITES ════════════
 function crearFecha_(params) {
   const { adminKey, fecha, canchaId, jugadores, dobles, invitados, colorTee,
-          horario, greenFee, lineas, hoyoSalida, bonusHoyos } = params;
+          horario, greenFee, lineas, hoyoSalida, bonusHoyos, hcpOverrides } = params;
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
   if (!fecha || !canchaId || ((!jugadores || !jugadores.length) && (!invitados || !invitados.length))) {
     return { ok: false, error: 'Faltan datos' };
@@ -52,8 +52,15 @@ function crearFecha_(params) {
     const startJug = nextRow;
     sh.getRange(startJug, 1, newJugMats.length, 2)
       .setValues(newJugMats.map(m => [fecha, m]));                     // A-B (fecha, mat)
+    // Si el admin ajustó el HCP a mano en la pantalla de líneas, ese valor
+    // (hcpOverrides) tiene prioridad sobre el HCP calculado automáticamente.
+    const hcpOv = (hcpOverrides && typeof hcpOverrides === 'object') ? hcpOverrides : {};
     sh.getRange(startJug, 3, newJugMats.length, 1)
-      .setValues(newJugMats.map(m => [hcpMap[m] !== undefined ? hcpMap[m] : ''])); // C (HCP de juego)
+      .setValues(newJugMats.map(m => {
+        const ov = hcpOv[m];
+        const val = (ov !== undefined && ov !== null && ov !== '') ? parseInt(ov) : (hcpMap[m] !== undefined ? hcpMap[m] : '');
+        return [val];
+      })); // C (HCP de juego)
     sh.getRange(startJug, 4, newJugMats.length, 1)
       .setValues(newJugMats.map(() => [canchaId]));                    // D (canchaId)
     sh.getRange(startJug, 25, newJugMats.length, 1)
