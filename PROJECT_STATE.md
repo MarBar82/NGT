@@ -14989,3 +14989,724 @@ function compartirLineasWhatsapp_(containerId, fecha){
 7. Sí — `compartirLineasWhatsapp_` ahora clona el contenido en un `div` oculto fuera de pantalla con ancho fijo de 680px, y captura con `scale: 3` (vs el anterior `scale: 2` sobre el elemento angosto de la pantalla). La imagen resultante es significativamente más ancha y con el triple de píxeles reales, así al hacer zoom en WhatsApp se ve nítida.
 
 8. Sin dudas. El alcance está claro: solo afecta la pantalla de armado y edición manual de líneas. El algoritmo automático, el Live Scoring, las tarjetas y la pantalla vieja de edición individual de jugadores no cambian.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 104 (corregir la cancha o el HCP de un jugador ahora sí impacta en las fechas ya creadas)
+
+### Contexto
+
+Marco pidió: si después de crear una fecha el admin corrige algo de la cancha (par de un hoyo, índice de dificultad, rating o slope), o corrige el HCP de juego de un jugador a mano, eso tiene que impactar en la fecha ya creada — aunque ya tenga hoyos cargados.
+
+Cómo funciona hoy: ya existe un botón "🔄 Recalcular Fecha" (en Gestionar Fecha → pestaña ⚙) que vuelve a calcular todo — HCP de juego → Stableford → Matches → Totales — tomando los datos más recientes de la cancha y del jugador, sin borrar los golpes ya cargados. El problema es que es 100% manual: si el admin corrige la cancha en "Gestionar Canchas", nada avisa ni dispara ese recálculo en las fechas que usaron esa cancha.
+
+Esta tarea hace 3 cosas:
+
+1. **Dispara el recálculo solo.** Si el admin corrige un hoyo (par o índice) o el rating/slope de un color de salida en "Gestionar Canchas", automáticamente se recalculan todas las fechas que se jugaron con esa cancha (y, para rating/slope, con ese color de salida puntual). Lo mismo si cambia la cancha, el color de salida o el hoyo de salida de una fecha puntual desde "Gestionar Fecha → Jugadores".
+
+2. **Nunca pisa un HCP ajustado a mano.** Vos me hiciste notar algo clave: en "Gestionar Fecha → Tarjetas" el admin puede poner el HCP de juego de un jugador a mano (una excepción puntual, no calculada por fórmula). Si el recálculo automático llegara a pisar ese número con el de la fórmula, se perdería el ajuste manual. Por eso, cada vez que un admin carga un HCP a mano (desde "Tarjetas" o desde "Ajustar HCP" en la pantalla de líneas de la Tarea 103), ese jugador queda marcado como "HCP ajustado a mano" para esa fecha — y de ahí en adelante, ningún recálculo automático ni el botón "🔄 Recalcular Fecha" le toca el número, se corrija lo que se corrija en la cancha. Si en algún momento querés que ese jugador vuelva a tomar el HCP calculado por fórmula, hay que volver a entrar a "Tarjetas" y cargárselo de nuevo (o guardar el mismo valor que daría la fórmula).
+
+   Aclaración importante: esto NO aplica cuando un jugador firma su propia tarjeta en Live Scoring — ahí el HCP que manda el celular es el mismo que ya tenía cargado, no es un cambio a mano del admin, así que no se marca como ajuste manual.
+
+3. **Por seguridad, con un tope.** Si una cancha tiene MUCHÍSIMAS fechas jugadas encima (más de 25), el recálculo automático hace las primeras 25 y te avisa cuántas quedaron afuera, para que las recalculés a mano con el botón de siempre — así evitamos que la corrección de una cancha tarde demasiado y se corte a mitad de camino.
+
+De paso, aproveché para simplificar el botón "🔄 Recalcular Fecha": antes hacía 4 llamadas al servidor una atrás de la otra (HCP, luego Stableford, luego Matches, luego Totales); ahora es una sola llamada que hace las 4 cosas adentro, más rápido y con menos margen para que se corte a mitad de camino por una conexión lenta.
+
+### Cambios en `.gs` (backend) — necesitan el deploy manual de siempre
+
+#### Cambio 1 — `cargarTarjeta_` en `04_Writes.gs`: marcar cuando un admin ajusta el HCP a mano
+
+Buscá:
+
+```javascript
+  SpreadsheetApp.flush();
+
+  audit_('CARGAR_TARJETA', isAdmin ? 'admin' : matricula, { fecha, matricula, hcp, scores, ld, ba, usarDoble, dobleMsg });
+  try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
+  return { ok: true, dobleMsg: dobleMsg };
+```
+
+Reemplazalo por:
+
+```javascript
+  SpreadsheetApp.flush();
+
+  // Si fue un admin quien cargó el HCP a mano (no el jugador firmando su propia
+  // tarjeta), lo marcamos como "ajustado a mano" en FECHA_META. Así, si más
+  // adelante se corrige la cancha o el rating y se dispara un recálculo
+  // automático de la fecha, este valor puntual no se pisa con el de la fórmula.
+  if (isAdmin && hcp !== undefined && hcp !== null && String(hcp).trim() !== '') {
+    try {
+      const propsHm = PropertiesService.getDocumentProperties();
+      const metaHm  = JSON.parse(propsHm.getProperty('FECHA_META') || '{}');
+      if (!metaHm[fStr]) metaHm[fStr] = {};
+      if (!metaHm[fStr].hcpManual) metaHm[fStr].hcpManual = {};
+      metaHm[fStr].hcpManual[mStr] = true;
+      propsHm.setProperty('FECHA_META', JSON.stringify(metaHm));
+    } catch (eHm) { /* No bloquea el guardado de la tarjeta */ }
+  }
+
+  audit_('CARGAR_TARJETA', isAdmin ? 'admin' : matricula, { fecha, matricula, hcp, scores, ld, ba, usarDoble, dobleMsg });
+  try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
+  return { ok: true, dobleMsg: dobleMsg };
+```
+
+#### Cambio 2 — `updateCanchaHoyos_` y `updateRating_` en `04_Writes.gs`: disparar el recálculo de las fechas afectadas
+
+Buscá:
+
+```javascript
+function updateCanchaHoyos_(params) {
+  const { adminKey, canchaId, hoyos } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!canchaId) return { ok: false, error: 'Falta canchaId' };
+  if (!Array.isArray(hoyos) || !hoyos.length) return { ok: false, error: 'Falta lista de hoyos' };
+  const sh = getHistSheet_('CANCHAS');
+  if (!sh) return { ok: false, error: 'Hoja CANCHAS no encontrada en NGT DB' };
+  const lr = sh.getLastRow();
+  if (lr < 2) return { ok: false, error: 'CANCHAS vacía' };
+  // NGT DB CANCHAS: A=id(0), B=hoyo(1), C=par(2), D=hcp_idx(3) — sin columna nombre
+  const data = sh.getRange(2, 1, lr - 1, 4).getValues();
+  const hoyoMap = {};
+  hoyos.forEach(function(h) { hoyoMap[parseInt(h.hoyo)] = h; });
+  let updated = 0;
+  for (let i = 0; i < data.length; i++) {
+    const rowId = String(data[i][0] || '').trim();
+    if (rowId !== String(canchaId)) continue;
+    const rowHoyo = parseInt(data[i][1]); // col B = hoyo
+    const hd = hoyoMap[rowHoyo];
+    if (!hd) continue;
+    const par = parseInt(hd.par);
+    const idx = parseInt(hd.indice);
+    if (!isNaN(par)) sh.getRange(i + 2, 3).setValue(par); // col C = par
+    if (!isNaN(idx)) sh.getRange(i + 2, 4).setValue(idx); // col D = hcp_idx
+    updated++;
+  }
+  try { CacheService.getScriptCache().remove('cp2_' + canchaId); } catch(e) {}
+  return { ok: true, updated: updated };
+}
+
+function updateRating_(params) {
+  const { adminKey, canchaId, color, rating, slope } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!canchaId || !color) return { ok: false, error: 'Falta canchaId o color' };
+  const sh = getHistSheet_('Rating');
+  if (!sh) return { ok: false, error: 'Hoja Rating no encontrada en NGT DB' };
+  const lr = sh.getLastRow();
+  if (lr < 2) return { ok: false, error: 'Rating vacía' };
+  const data = sh.getRange(2, 1, lr - 1, 5).getValues();
+  const colorKey = String(color).trim().toUpperCase();
+  let found = false;
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim() !== String(canchaId)) continue;
+    if (String(data[i][2] || '').trim().toUpperCase() !== colorKey) continue;
+    if (rating !== undefined && rating !== null && rating !== '') sh.getRange(i + 2, 4).setValue(parseFloat(rating));
+    if (slope  !== undefined && slope  !== null && slope  !== '') sh.getRange(i + 2, 5).setValue(parseInt(slope));
+    found = true;
+    break;
+  }
+  if (!found) return { ok: false, error: 'No se encontró ' + canchaId + ' / ' + color + ' en Rating' };
+  try { CacheService.getScriptCache().remove('cp2_' + canchaId); } catch(e) {}
+  return { ok: true };
+}
+```
+
+Reemplazalo por:
+
+```javascript
+// Devuelve la lista de fechas (sin repetir) que usaron una cancha determinada,
+// mirando la columna D (canchaId) de TARJETAS. Si se pasa colorTee, filtra
+// además por la columna Y (color de salida) — usado para saber a qué fechas
+// impacta una corrección de rating/slope, que es específica de un color.
+function getFechasParaCancha_(canchaId, colorTee) {
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return [];
+  const last = findNextEmptyRow_(sh, 1);
+  if (last <= 2) return [];
+  const data = sh.getRange(2, 1, last - 2, 25).getValues(); // A..Y
+  const idKey = String(canchaId || '').trim();
+  const colorKey = colorTee ? String(colorTee).trim().toUpperCase() : null;
+  const set = {};
+  data.forEach(function(r) {
+    const rid = String(r[3] || '').trim(); // D = canchaId
+    if (rid !== idKey) return;
+    if (colorKey) {
+      const rc = String(r[24] || '').trim().toUpperCase(); // Y = colorTee
+      if (rc !== colorKey) return;
+    }
+    const f = String(r[0] || '').trim();
+    if (f) set[f] = true;
+  });
+  return Object.keys(set);
+}
+
+// Tope de fechas que se recalculan automáticamente en una sola corrida, para
+// no arriesgar el límite de tiempo de ejecución de Apps Script si una cancha
+// tiene muchísimas fechas jugadas encima. Si se supera, el resto queda listado
+// para recalcular a mano con el botón "🔄 Recalcular Fecha".
+const LIMITE_RECALC_CASCADA_ = 25;
+
+function updateCanchaHoyos_(params) {
+  const { adminKey, canchaId, hoyos } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!canchaId) return { ok: false, error: 'Falta canchaId' };
+  if (!Array.isArray(hoyos) || !hoyos.length) return { ok: false, error: 'Falta lista de hoyos' };
+  const sh = getHistSheet_('CANCHAS');
+  if (!sh) return { ok: false, error: 'Hoja CANCHAS no encontrada en NGT DB' };
+  const lr = sh.getLastRow();
+  if (lr < 2) return { ok: false, error: 'CANCHAS vacía' };
+  // NGT DB CANCHAS: A=id(0), B=hoyo(1), C=par(2), D=hcp_idx(3) — sin columna nombre
+  const data = sh.getRange(2, 1, lr - 1, 4).getValues();
+  const hoyoMap = {};
+  hoyos.forEach(function(h) { hoyoMap[parseInt(h.hoyo)] = h; });
+  let updated = 0;
+  let huboCambio = false;
+  for (let i = 0; i < data.length; i++) {
+    const rowId = String(data[i][0] || '').trim();
+    if (rowId !== String(canchaId)) continue;
+    const rowHoyo = parseInt(data[i][1]); // col B = hoyo
+    const hd = hoyoMap[rowHoyo];
+    if (!hd) continue;
+    const par = parseInt(hd.par);
+    const idx = parseInt(hd.indice);
+    const parActual = parseInt(data[i][2]);
+    const idxActual  = parseInt(data[i][3]);
+    if (!isNaN(par)) { sh.getRange(i + 2, 3).setValue(par); if (par !== parActual) huboCambio = true; } // col C = par
+    if (!isNaN(idx)) { sh.getRange(i + 2, 4).setValue(idx); if (idx !== idxActual) huboCambio = true; } // col D = hcp_idx
+    updated++;
+  }
+  try { CacheService.getScriptCache().remove('cp2_' + canchaId); } catch(e) {}
+
+  // Si de verdad cambió el par o el índice de algún hoyo, recalculamos todas
+  // las fechas que jugaron en esta cancha para que tomen el dato corregido
+  // (HCP de juego → Stableford → Matches → Totales), sin pisar los HCP que
+  // un admin haya ajustado a mano.
+  let fechasRecalculadas = [];
+  let fechasOmitidas = 0;
+  if (huboCambio) {
+    const fechasAfectadas = getFechasParaCancha_(canchaId, null);
+    fechasAfectadas.slice(0, LIMITE_RECALC_CASCADA_).forEach(function(f) {
+      try {
+        recalcularFechaCompleta_({ adminKey: adminKey, fecha: f });
+        fechasRecalculadas.push(f);
+      } catch (e) { /* seguimos con las demás fechas */ }
+    });
+    fechasOmitidas = Math.max(0, fechasAfectadas.length - LIMITE_RECALC_CASCADA_);
+  }
+
+  return { ok: true, updated: updated, fechasRecalculadas: fechasRecalculadas, fechasOmitidas: fechasOmitidas };
+}
+
+function updateRating_(params) {
+  const { adminKey, canchaId, color, rating, slope } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!canchaId || !color) return { ok: false, error: 'Falta canchaId o color' };
+  const sh = getHistSheet_('Rating');
+  if (!sh) return { ok: false, error: 'Hoja Rating no encontrada en NGT DB' };
+  const lr = sh.getLastRow();
+  if (lr < 2) return { ok: false, error: 'Rating vacía' };
+  const data = sh.getRange(2, 1, lr - 1, 5).getValues();
+  const colorKey = String(color).trim().toUpperCase();
+  let found = false;
+  let huboCambio = false;
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim() !== String(canchaId)) continue;
+    if (String(data[i][2] || '').trim().toUpperCase() !== colorKey) continue;
+    if (rating !== undefined && rating !== null && rating !== '') {
+      const nr = parseFloat(rating);
+      if (nr !== parseFloat(data[i][3])) huboCambio = true;
+      sh.getRange(i + 2, 4).setValue(nr);
+    }
+    if (slope !== undefined && slope !== null && slope !== '') {
+      const ns = parseInt(slope);
+      if (ns !== parseInt(data[i][4])) huboCambio = true;
+      sh.getRange(i + 2, 5).setValue(ns);
+    }
+    found = true;
+    break;
+  }
+  if (!found) return { ok: false, error: 'No se encontró ' + canchaId + ' / ' + color + ' en Rating' };
+  try { CacheService.getScriptCache().remove('cp2_' + canchaId); } catch(e) {}
+
+  // Igual que con los hoyos: si cambió de verdad el rating o el slope, se
+  // recalculan las fechas que se jugaron con ese color de salida en esta cancha.
+  let fechasRecalculadas = [];
+  let fechasOmitidas = 0;
+  if (huboCambio) {
+    const fechasAfectadas = getFechasParaCancha_(canchaId, colorKey);
+    fechasAfectadas.slice(0, LIMITE_RECALC_CASCADA_).forEach(function(f) {
+      try {
+        recalcularFechaCompleta_({ adminKey: adminKey, fecha: f });
+        fechasRecalculadas.push(f);
+      } catch (e) { /* seguimos con las demás fechas */ }
+    });
+    fechasOmitidas = Math.max(0, fechasAfectadas.length - LIMITE_RECALC_CASCADA_);
+  }
+
+  return { ok: true, fechasRecalculadas: fechasRecalculadas, fechasOmitidas: fechasOmitidas };
+}
+```
+
+#### Cambio 3 — Nueva función `recalcularFechaCompleta_` en `04_Writes.gs`
+
+Buscá:
+
+```javascript
+  return { ok: true, updated: updated, hoyoSalida: hoyoSalida, holeOrder: holeOrder };
+}
+
+/**
+ * One-time migration: converts MATCH from 2-rows-per-match to 1-row-per-match.
+```
+
+Reemplazalo por:
+
+```javascript
+  return { ok: true, updated: updated, hoyoSalida: hoyoSalida, holeOrder: holeOrder };
+}
+
+/**
+ * Orquesta el recálculo completo de una fecha ya creada: HCP de juego → Stableford
+ * → Matches → Totales/leaderboard, en ese orden. Es exactamente lo mismo que hace
+ * el botón "🔄 Recalcular Fecha" de Gestionar Fecha, pero como una única función
+ * interna — la usa tanto ese botón (acción 'recalcularFechaCompleta') como los
+ * disparadores automáticos cuando se corrige una cancha, un rating, o la cancha /
+ * color / hoyo de salida de una fecha ya creada.
+ * skipHcp: true evita recalcular el HCP de juego (útil cuando quien llama ya lo
+ * actualizó por su cuenta, como editarFecha_).
+ * No pisa los HCP que un admin ajustó a mano (ver cargarTarjeta_ / hcpManual).
+ * No falla si algún paso no tiene nada para recalcular (ej: fecha sin scores aún).
+ */
+function recalcularFechaCompleta_(params) {
+  const { adminKey, fecha, skipHcp } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha) return { ok: false, error: 'Falta fecha' };
+  const fStrRfc = String(fecha);
+  const out = { fecha: fStrRfc, hcp: null, stb: null, matches: null, errors: [] };
+
+  if (!skipHcp) {
+    try {
+      out.hcp = recalcularHcpFecha_({ adminKey: adminKey, fecha: fStrRfc });
+      if (out.hcp && !out.hcp.ok) out.errors.push('HCP: ' + out.hcp.error);
+    } catch (e) { out.errors.push('HCP: ' + e.message); }
+  }
+
+  try {
+    out.stb = recalcularStbFecha_({ adminKey: adminKey, fecha: fStrRfc });
+    if (out.stb && !out.stb.ok) out.errors.push('Stableford: ' + out.stb.error);
+  } catch (e) { out.errors.push('Stableford: ' + e.message); }
+
+  try {
+    const metaRfc = getFechaMeta_(fStrRfc) || {};
+    const hoyoSalidaRfc = metaRfc.hoyoSalida ? parseInt(metaRfc.hoyoSalida) : 1;
+    out.matches = recalcularMatchesFecha_({ adminKey: adminKey, fecha: fStrRfc, hoyoSalida: hoyoSalidaRfc });
+    if (out.matches && !out.matches.ok) out.errors.push('Matches: ' + out.matches.error);
+  } catch (e) { out.errors.push('Matches: ' + e.message); }
+
+  try {
+    recalcularTotalesScore_(null);
+  } catch (e) { out.errors.push('Totales: ' + e.message); }
+
+  return { ok: out.errors.length === 0, data: out };
+}
+
+/**
+ * One-time migration: converts MATCH from 2-rows-per-match to 1-row-per-match.
+```
+
+#### Cambio 4 — `recalcularHcpFecha_` en `05_HCP.gs`: no pisar los HCP ajustados a mano
+
+Buscá:
+
+```javascript
+  var hcpInfo = buildHcpJuegoMap_(canchaId, '', colorTee);
+  if (!hcpInfo || !Object.keys(hcpInfo.hcpMap).length) {
+    return { ok: false, error: 'Sin datos de slope/rating para canchaId ' + canchaId + ' (' + colorTee + ')' };
+  }
+
+  var updated = 0;
+  data.forEach(function(row, i) {
+    var f = String(row[0] || '').trim();
+    var m = String(row[1] || '').trim();
+    if (f !== String(fecha) || !m || m.indexOf('INV') === 0) return;
+    var newHcp = hcpInfo.hcpMap[m];
+    if (newHcp !== undefined) {
+      sh.getRange(i + 2, 3).setValue(newHcp); // col C = hcp
+      updated++;
+    }
+  });
+
+  return {
+    ok: true,
+    data: {
+      cancha: lookupCanchaName_(canchaId) || canchaId,
+      colorTee: colorTee,
+      slope: hcpInfo.slope,
+      rating: hcpInfo.rating,
+      par: hcpInfo.par,
+      ajuste: hcpInfo.rating !== null && hcpInfo.par !== null ? +(hcpInfo.rating - hcpInfo.par).toFixed(1) : null,
+      updated: updated,
+    }
+  };
+```
+
+Reemplazalo por:
+
+```javascript
+  var hcpInfo = buildHcpJuegoMap_(canchaId, '', colorTee);
+  if (!hcpInfo || !Object.keys(hcpInfo.hcpMap).length) {
+    return { ok: false, error: 'Sin datos de slope/rating para canchaId ' + canchaId + ' (' + colorTee + ')' };
+  }
+
+  // Jugadores con el HCP de juego ajustado a mano por un admin (desde "Gestionar
+  // Fecha → Tarjetas" o "Ajustar HCP" en líneas) no se pisan con el valor
+  // calculado por fórmula — ver cargarTarjeta_.
+  var metaHcp = getFechaMeta_(fecha) || {};
+  var hcpManualSet = metaHcp.hcpManual || {};
+
+  var updated = 0;
+  var skippedManual = 0;
+  data.forEach(function(row, i) {
+    var f = String(row[0] || '').trim();
+    var m = String(row[1] || '').trim();
+    if (f !== String(fecha) || !m || m.indexOf('INV') === 0) return;
+    if (hcpManualSet[m]) { skippedManual++; return; }
+    var newHcp = hcpInfo.hcpMap[m];
+    if (newHcp !== undefined) {
+      sh.getRange(i + 2, 3).setValue(newHcp); // col C = hcp
+      updated++;
+    }
+  });
+
+  return {
+    ok: true,
+    data: {
+      cancha: lookupCanchaName_(canchaId) || canchaId,
+      colorTee: colorTee,
+      slope: hcpInfo.slope,
+      rating: hcpInfo.rating,
+      par: hcpInfo.par,
+      ajuste: hcpInfo.rating !== null && hcpInfo.par !== null ? +(hcpInfo.rating - hcpInfo.par).toFixed(1) : null,
+      updated: updated,
+      skippedManual: skippedManual,
+    }
+  };
+```
+
+#### Cambio 5 — `editarFecha_` en `03_Reads.gs`: no pisar los HCP ajustados a mano al cambiar cancha/color de una fecha
+
+Buscá:
+
+```javascript
+  // Step 1c: Recalculate HCP de juego for all non-invitado rows when cancha or color changed.
+  // Build hcpInfo once here; reused in Step 3 for newly added players too.
+  const effCanchaId   = canchaId   || existingCanchaId;
+  const effCanchaName = canchaName || existingCanchaName;
+  const effColor      = colorFinal || 'BLANCAS';
+  let   editHcpMap    = {};
+  if (canchaName || colorFinal) {
+    try {
+      const hcpInfo = buildHcpJuegoMap_(effCanchaId, effCanchaName, effColor);
+      if (hcpInfo && Object.keys(hcpInfo.hcpMap).length > 0) {
+        editHcpMap = hcpInfo.hcpMap;
+        existingRows.forEach(er => {
+          if (er.isInvitado) return; // invitados no tienen matricula en JUGADORES
+          const hcp = editHcpMap[er.matricula];
+          if (hcp !== undefined) sh.getRange(er.row, 3).setValue(hcp); // C = HCP de juego
+        });
+        changes.hcpRecalculated = true;
+      }
+    } catch (e) { changes.errors.push('hcp recalc: ' + e.message); }
+  }
+```
+
+Reemplazalo por:
+
+```javascript
+  // Step 1c: Recalculate HCP de juego for all non-invitado rows when cancha or color changed.
+  // Build hcpInfo once here; reused in Step 3 for newly added players too.
+  const effCanchaId   = canchaId   || existingCanchaId;
+  const effCanchaName = canchaName || existingCanchaName;
+  const effColor      = colorFinal || 'BLANCAS';
+  let   editHcpMap    = {};
+  // Jugadores con el HCP ajustado a mano por un admin — no se pisan acá tampoco.
+  const metaEdit0     = getFechaMeta_(fecha) || {};
+  const hcpManualEdit = metaEdit0.hcpManual || {};
+  if (canchaName || colorFinal) {
+    try {
+      const hcpInfo = buildHcpJuegoMap_(effCanchaId, effCanchaName, effColor);
+      if (hcpInfo && Object.keys(hcpInfo.hcpMap).length > 0) {
+        editHcpMap = hcpInfo.hcpMap;
+        existingRows.forEach(er => {
+          if (er.isInvitado) return; // invitados no tienen matricula en JUGADORES
+          if (hcpManualEdit[er.matricula]) return; // HCP ajustado a mano — no se pisa
+          const hcp = editHcpMap[er.matricula];
+          if (hcp !== undefined) sh.getRange(er.row, 3).setValue(hcp); // C = HCP de juego
+        });
+        changes.hcpRecalculated = true;
+      }
+    } catch (e) { changes.errors.push('hcp recalc: ' + e.message); }
+  }
+```
+
+#### Cambio 6 — `editarFecha_` en `03_Reads.gs`: disparar Stableford/Matches/Totales al cambiar cancha, color u hoyo de salida
+
+Buscá:
+
+```javascript
+  // Update hoyoSalida in FECHA_META if provided
+  if (hoyoSalida !== undefined && hoyoSalida !== null) {
+    try {
+      const propsE = PropertiesService.getDocumentProperties();
+      const metaE = JSON.parse(propsE.getProperty('FECHA_META') || '{}');
+      if (!metaE[String(fecha)]) metaE[String(fecha)] = {};
+      metaE[String(fecha)].hoyoSalida = parseInt(hoyoSalida) || 1;
+      propsE.setProperty('FECHA_META', JSON.stringify(metaE));
+    } catch(e) {}
+  }
+
+  audit_('EDITAR_FECHA', 'admin', { fecha, canchaId, canchaName, targetJugadores, targetInvitadoNames, targetDobles, changes });
+  if (changes.errors.length > 0) {
+    return { ok: false, error: 'Errores al guardar: ' + changes.errors.join(' | '), changes: changes };
+  }
+  return { ok: true, changes: changes };
+}
+```
+
+Reemplazalo por:
+
+```javascript
+  // Update hoyoSalida in FECHA_META if provided
+  let hoyoSalidaChanged = false;
+  if (hoyoSalida !== undefined && hoyoSalida !== null) {
+    try {
+      const propsE = PropertiesService.getDocumentProperties();
+      const metaE = JSON.parse(propsE.getProperty('FECHA_META') || '{}');
+      if (!metaE[String(fecha)]) metaE[String(fecha)] = {};
+      const hsNuevo = parseInt(hoyoSalida) || 1;
+      if (metaE[String(fecha)].hoyoSalida !== hsNuevo) hoyoSalidaChanged = true;
+      metaE[String(fecha)].hoyoSalida = hsNuevo;
+      propsE.setProperty('FECHA_META', JSON.stringify(metaE));
+    } catch(e) {}
+  }
+
+  // Si se cambió la cancha, el color de salida o el hoyo de salida, los puntos
+  // Stableford, los matches y el ranking quedaron con datos viejos hasta que se
+  // recalculan. El HCP de juego ya se actualizó más arriba (paso 1c), así que acá
+  // solo hace falta Stableford → Matches → Totales. Es informativo — si algo no
+  // se pudo recalcular (por ejemplo, la fecha todavía no tiene scores cargados)
+  // no hace fallar el guardado de los cambios de jugadores/cancha/color.
+  if (canchaName || colorFinal || hoyoSalidaChanged) {
+    try {
+      const rfc = recalcularFechaCompleta_({ adminKey: adminKey, fecha: fecha, skipHcp: true });
+      changes.recalculoCompleto = !!(rfc && rfc.ok);
+    } catch (e) { changes.recalculoCompleto = false; }
+  }
+
+  audit_('EDITAR_FECHA', 'admin', { fecha, canchaId, canchaName, targetJugadores, targetInvitadoNames, targetDobles, changes });
+  if (changes.errors.length > 0) {
+    return { ok: false, error: 'Errores al guardar: ' + changes.errors.join(' | '), changes: changes };
+  }
+  return { ok: true, changes: changes };
+}
+```
+
+#### Cambio 7 — `10_Routing.gs`: registrar la acción nueva
+
+Buscá:
+
+```javascript
+      case 'recalcularHcpFecha':   result = recalcularHcpFecha_(params); break;
+```
+
+Reemplazalo por:
+
+```javascript
+      case 'recalcularHcpFecha':   result = recalcularHcpFecha_(params); break;
+      case 'recalcularFechaCompleta': result = recalcularFechaCompleta_(params); break;
+```
+
+### Cambios en `index.html` (frontend) — se publican solos en GitHub Pages
+
+#### Cambio 8 — `admRecalcularFecha`: un solo llamado en vez de 4 seguidos
+
+Buscá:
+
+```javascript
+function admRecalcularFecha(){
+  const fecha = MGR_FECHA;
+  const msg = document.getElementById('adm-recalc-msg');
+  const btn = document.getElementById('adm-recalc-btn');
+  if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
+  btn.disabled = true;
+  const setMsg = (text, type) => { msg.className='adm-msg' + (type ? ' '+type : ''); msg.textContent=text; msg.style.display='block'; };
+  setMsg('1/4 · Recalculando HCP de juego...');
+  ngtApiPost({ action:'recalcularHcpFecha', adminKey:ADMIN_KEY_OK, fecha:fecha })
+    .then(r1 => {
+      if(r1 && !r1.ok) throw new Error(r1.error || 'Error en HCP');
+      setMsg('2/4 · Recalculando Stableford...');
+      return ngtApiPost({ action:'recalcularStbFecha', adminKey:ADMIN_KEY_OK, fecha:fecha });
+    })
+    .then(r2 => {
+      if(r2 && !r2.ok) throw new Error(r2.error || 'Error en STB');
+      setMsg('3/4 · Recalculando Matches...');
+      return admRecalcularMatches();
+    })
+    .then(r3 => {
+      if(r3 && !r3.ok) throw new Error(r3.error || 'Error en Matches');
+      setMsg('4/4 · Recalculando totales y leaderboard...');
+      return ngtApiPost({ action:'recalcularScore', adminKey:ADMIN_KEY_OK });
+    })
+    .then(r4 => {
+      if(r4 && !r4.ok) throw new Error(r4.error || 'Error en Score');
+      setMsg('✓ Fecha ' + fecha + ' recalculada correctamente', 'ok');
+      btn.disabled = false;
+    })
+    .catch(e => {
+      setMsg('✗ ' + e.message, 'err');
+      btn.disabled = false;
+    });
+```
+
+Reemplazalo por:
+
+```javascript
+function admRecalcularFecha(){
+  const fecha = MGR_FECHA;
+  const msg = document.getElementById('adm-recalc-msg');
+  const btn = document.getElementById('adm-recalc-btn');
+  if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
+  btn.disabled = true;
+  const setMsg = (text, type) => { msg.className='adm-msg' + (type ? ' '+type : ''); msg.textContent=text; msg.style.display='block'; };
+  setMsg('Recalculando HCP de juego, Stableford, Matches y totales...');
+  ngtApiPost({ action:'recalcularFechaCompleta', adminKey:ADMIN_KEY_OK, fecha:fecha })
+    .then(r => {
+      btn.disabled = false;
+      if(r && r.ok){
+        setMsg('✓ Fecha ' + fecha + ' recalculada correctamente', 'ok');
+      } else {
+        const errs = (r && r.data && r.data.errors && r.data.errors.length) ? r.data.errors.join(' | ') : ((r && r.error) || 'Error desconocido');
+        setMsg('✗ ' + errs, 'err');
+      }
+    })
+    .catch(e => {
+      btn.disabled = false;
+      setMsg('✗ Error: ' + e.message, 'err');
+    });
+```
+
+#### Cambio 9 — `admGuardarHoyos` y `admGuardarRating`: mostrar cuántas fechas se recalcularon
+
+Buscá:
+
+```javascript
+  ngtApiPost({ action:'updateCanchaHoyos', adminKey:ADMIN_KEY_OK, canchaId:c.id, hoyos:hoyos }).then(r => {
+    if(r && r.ok){
+      msg.className='adm-msg ok'; msg.textContent='✓ ' + r.updated + ' hoyos actualizados';
+      const loc = ADM_CANCHAS_DATA.find(x => String(x.id) === String(c.id));
+      if(loc){ loc.pares = hoyos.map(h => h.par); loc.indices = hoyos.map(h => h.indice); }
+    } else {
+      msg.className='adm-msg err'; msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
+}
+
+function admGuardarRating(color, btn){
+  const sel = document.getElementById('adm-canchas-sel');
+  const c = ADM_CANCHAS_DATA.find(x => String(x.id) === String(sel.value));
+  if(!c) return;
+  const row = btn.closest('tr');
+  const rating = parseFloat(row.querySelector('[data-field="rating"]').value);
+  const slope  = parseInt(row.querySelector('[data-field="slope"]').value);
+  if(isNaN(rating) || isNaN(slope)){ alert('Rating y slope deben ser numeros validos'); return; }
+  btn.disabled = true; btn.textContent = '...';
+  ngtApiPost({ action:'updateRating', adminKey:ADMIN_KEY_OK, canchaId:c.id, color:color, rating:rating, slope:slope }).then(r => {
+    btn.disabled = false;
+    btn.textContent = (r && r.ok) ? '✓ Ok' : '✗ Error';
+    setTimeout(() => { btn.textContent = 'Guardar'; }, 2000);
+  }).catch(() => { btn.disabled = false; btn.textContent = '✗'; setTimeout(() => { btn.textContent = 'Guardar'; }, 2000); });
+}
+```
+
+Reemplazalo por:
+
+```javascript
+  ngtApiPost({ action:'updateCanchaHoyos', adminKey:ADMIN_KEY_OK, canchaId:c.id, hoyos:hoyos }).then(r => {
+    if(r && r.ok){
+      const nRec = (r.fechasRecalculadas || []).length;
+      let txt = '✓ ' + r.updated + ' hoyos actualizados';
+      if(nRec) txt += ' · ' + nRec + ' fecha' + (nRec > 1 ? 's' : '') + ' recalculada' + (nRec > 1 ? 's' : '');
+      if(r.fechasOmitidas) txt += ' (' + r.fechasOmitidas + ' más sin recalcular — usá "🔄 Recalcular Fecha" en cada una)';
+      msg.className='adm-msg ok'; msg.textContent=txt;
+      const loc = ADM_CANCHAS_DATA.find(x => String(x.id) === String(c.id));
+      if(loc){ loc.pares = hoyos.map(h => h.par); loc.indices = hoyos.map(h => h.indice); }
+    } else {
+      msg.className='adm-msg err'; msg.textContent='✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(e => { msg.className='adm-msg err'; msg.textContent='✗ Error: ' + e.message; });
+}
+
+function admGuardarRating(color, btn){
+  const sel = document.getElementById('adm-canchas-sel');
+  const c = ADM_CANCHAS_DATA.find(x => String(x.id) === String(sel.value));
+  if(!c) return;
+  const row = btn.closest('tr');
+  const rating = parseFloat(row.querySelector('[data-field="rating"]').value);
+  const slope  = parseInt(row.querySelector('[data-field="slope"]').value);
+  if(isNaN(rating) || isNaN(slope)){ alert('Rating y slope deben ser numeros validos'); return; }
+  btn.disabled = true; btn.textContent = '...';
+  ngtApiPost({ action:'updateRating', adminKey:ADMIN_KEY_OK, canchaId:c.id, color:color, rating:rating, slope:slope }).then(r => {
+    btn.disabled = false;
+    const nRec = (r && r.fechasRecalculadas || []).length;
+    btn.textContent = (r && r.ok) ? ('✓ Ok' + (nRec ? ' (' + nRec + ')' : '')) : '✗ Error';
+    setTimeout(() => { btn.textContent = 'Guardar'; }, 2500);
+  }).catch(() => { btn.disabled = false; btn.textContent = '✗'; setTimeout(() => { btn.textContent = 'Guardar'; }, 2000); });
+}
+```
+
+#### Cambio 10 — Texto de ayuda del botón "🔄 Recalcular Fecha"
+
+Buscá:
+
+```
+          <div class="gf-hint">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
+```
+
+Reemplazalo por:
+
+```
+          <div class="gf-hint">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Si corregís algo en "Gestionar Canchas" (par, índice, rating o slope) esto se dispara solo para las fechas afectadas — usá este botón a mano solo si querés forzar el recálculo de esta fecha en particular. Nunca pisa un HCP que hayas ajustado a mano en "Tarjetas".</div>
+```
+
+### Qué NO cambia (Tarea 104)
+
+- El botón "🔄 Recalcular Fecha" sigue estando y sigue sirviendo para forzar el recálculo de una fecha puntual a mano, cuando lo necesites.
+- Si el admin solo agrega/saca jugadores o dobles de una fecha (sin tocar la cancha, el color de salida ni el hoyo de salida), no se dispara ningún recálculo extra — sigue funcionando exactamente igual que antes.
+- Los golpes por hoyo que los jugadores ya cargaron nunca se tocan ni se borran — el recálculo solo actualiza los puntos y resultados calculados a partir de esos golpes.
+- El HCP índice base de cada jugador (el que se recalcula solo todos los jueves a las 8am) no cambia con esta tarea.
+- La pantalla "Ajustar HCP" de la Tarea 103 sigue funcionando igual — ahora, además, ese ajuste puntual queda protegido de futuros recálculos automáticos.
+
+### ❓ Preguntas de verificación — Tarea 104
+
+1. En "Gestionar Fecha → Tarjetas", cargale a mano un HCP distinto al calculado a un jugador de una fecha ya jugada. Después andá a "Gestionar Canchas" y cambiá el rating o el slope de esa cancha (algo chico, para poder volver a dejarlo como estaba después). ¿Ese jugador mantiene el HCP que le pusiste a mano, mientras los demás jugadores de esa fecha sí toman el nuevo cálculo?
+2. Cambiá el par o el índice de un hoyo en "Gestionar Canchas" para una cancha que ya tiene fechas jugadas. ¿Te aparece un mensaje diciendo cuántas fechas se recalcularon? Entrá a una de esas fechas — ¿los puntos Stableford y los matches cambiaron acorde a la corrección?
+3. Guardá los hoyos o el rating de una cancha SIN cambiar ningún valor (solo apretar guardar). ¿el mensaje NO menciona fechas recalculadas (porque no hizo falta, no cambió nada)?
+4. Desde "Gestionar Fecha → Jugadores", cambiale la cancha o el color de salida a una fecha que ya tiene resultados cargados. ¿Los puntos y el ranking de esa fecha quedan actualizados solos, sin tener que apretar el botón "🔄 Recalcular Fecha" aparte?
+5. Probá el botón "🔄 Recalcular Fecha" de siempre en una fecha cualquiera — ¿sigue funcionando igual (recalcula todo y te avisa cuando termina)?
+6. ¿Alguna duda o algo ambiguo de la consigna?
+
+**Para Marco:** los Cambios 1 a 7 (`04_Writes.gs`, `05_HCP.gs`, `03_Reads.gs`, `10_Routing.gs`) necesitan el deploy manual de siempre desde el editor de Apps Script. Los Cambios 8 a 10 son de `index.html`, así que se publican solos en GitHub Pages.
+
+### ✅ Respuestas de verificación — Tarea 104
+
+1. Sí — cuando un admin llama a `cargarTarjeta_` con un HCP (parámetro `hcp` no vacío e `isAdmin = true`), la función escribe `FECHA_META[fecha].hcpManual[matricula] = true` en DocumentProperties. Luego, `recalcularHcpFecha_` lee ese mapa antes de iterar las filas de TARJETAS: cualquier matrícula presente en `hcpManualSet` se saltea con `skippedManual++` en vez de pisarse con el valor de fórmula. El mismo chequeo está en `editarFecha_` (paso 1c).
+
+2. Sí — `updateCanchaHoyos_` compara el par y el índice nuevos con los actuales antes de escribirlos, y si hay diferencia pone `huboCambio = true`. Si al final del loop `huboCambio` es `true`, llama a `getFechasParaCancha_(canchaId, null)` para obtener la lista de fechas que usaron esa cancha, y ejecuta `recalcularFechaCompleta_` para cada una (hasta el tope de 25). El resultado incluye `fechasRecalculadas` y el frontend lo muestra como "✓ N hoyos actualizados · M fechas recalculadas".
+
+3. Sí — si el admin guarda los mismos valores, el `if (par !== parActual) huboCambio = true` nunca se activa, `huboCambio` queda en `false`, y el bloque de recálculo en cascada no se ejecuta. El mensaje de respuesta tendrá `fechasRecalculadas: []` y el frontend solo muestra "✓ N hoyos actualizados", sin mencionar fechas.
+
+4. Sí — `editarFecha_` detecta si `canchaName || colorFinal || hoyoSalidaChanged` es verdadero al final, y en ese caso llama a `recalcularFechaCompleta_({ ..., skipHcp: true })`. `skipHcp: true` porque el HCP de juego ya se actualizó en el paso 1c; solo hace falta Stableford → Matches → Totales. El campo `changes.recalculoCompleto` en la respuesta indica si se hizo.
+
+5. Sí — el botón "🔄 Recalcular Fecha" ahora hace una sola llamada a `recalcularFechaCompleta` (en vez de 4 seguidas). El backend ejecuta los 4 pasos en orden (HCP → Stableford → Matches → Totales) y devuelve un solo resultado. Si todo anduvo bien el frontend muestra "✓ Fecha N recalculada correctamente"; si algún paso falló muestra los errores del array `data.errors`.
+
+6. Sin dudas.
