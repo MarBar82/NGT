@@ -164,6 +164,7 @@ function doPost(e) {
       case 'recalcularScore':          result = recalcularTotalesScore_(params); break;
       case 'calcularGanadoresFechas': result = calcularGanadoresFechas_(params); break;
       case 'recalcularHcpFecha':   result = recalcularHcpFecha_(params); break;
+      case 'recalcularFechaCompleta': result = recalcularFechaCompleta_(params); break;
       case 'recalcularStbFecha':    result = recalcularStbFecha_(params); break;
       case 'updateCanchaHoyos':      result = updateCanchaHoyos_(params); break;
       case 'updateRating':           result = updateRating_(params); break;

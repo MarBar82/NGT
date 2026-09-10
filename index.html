@@ -2480,7 +2480,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       <div id="edtab-panel-recalc" style="display:none;">
         <div class="gf-section">
           <div class="gf-section-title">Recalcular Fecha</div>
-          <div class="gf-hint">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Usarlo si se modificó la cancha, el HCP de un jugador o cualquier configuración.</div>
+          <div class="gf-hint">Recalcula todo en orden: HCP de juego → Stableford por hoyo → Matches → Totales y leaderboard. Si corregís algo en "Gestionar Canchas" (par, índice, rating o slope) esto se dispara solo para las fechas afectadas — usá este botón a mano solo si querés forzar el recálculo de esta fecha en particular. Nunca pisa un HCP que hayas ajustado a mano en "Tarjetas".</div>
           <button class="gf-btn-primary" onclick="admRecalcularFecha()" id="adm-recalc-btn">🔄 Recalcular Fecha</button>
           <div id="adm-recalc-msg" class="adm-msg" style="display:none;margin-top:8px;"></div>
         </div>
@@ -4621,31 +4621,20 @@ function admRecalcularFecha(){
   if(!fecha){ msg.className='adm-msg err'; msg.textContent='Seleccioná una fecha primero'; msg.style.display='block'; return; }
   btn.disabled = true;
   const setMsg = (text, type) => { msg.className='adm-msg' + (type ? ' '+type : ''); msg.textContent=text; msg.style.display='block'; };
-  setMsg('1/4 · Recalculando HCP de juego...');
-  ngtApiPost({ action:'recalcularHcpFecha', adminKey:ADMIN_KEY_OK, fecha:fecha })
-    .then(r1 => {
-      if(r1 && !r1.ok) throw new Error(r1.error || 'Error en HCP');
-      setMsg('2/4 · Recalculando Stableford...');
-      return ngtApiPost({ action:'recalcularStbFecha', adminKey:ADMIN_KEY_OK, fecha:fecha });
-    })
-    .then(r2 => {
-      if(r2 && !r2.ok) throw new Error(r2.error || 'Error en STB');
-      setMsg('3/4 · Recalculando Matches...');
-      return admRecalcularMatches();
-    })
-    .then(r3 => {
-      if(r3 && !r3.ok) throw new Error(r3.error || 'Error en Matches');
-      setMsg('4/4 · Recalculando totales y leaderboard...');
-      return ngtApiPost({ action:'recalcularScore', adminKey:ADMIN_KEY_OK });
-    })
-    .then(r4 => {
-      if(r4 && !r4.ok) throw new Error(r4.error || 'Error en Score');
-      setMsg('✓ Fecha ' + fecha + ' recalculada correctamente', 'ok');
+  setMsg('Recalculando HCP de juego, Stableford, Matches y totales...');
+  ngtApiPost({ action:'recalcularFechaCompleta', adminKey:ADMIN_KEY_OK, fecha:fecha })
+    .then(r => {
       btn.disabled = false;
+      if(r && r.ok){
+        setMsg('✓ Fecha ' + fecha + ' recalculada correctamente', 'ok');
+      } else {
+        const errs = (r && r.data && r.data.errors && r.data.errors.length) ? r.data.errors.join(' | ') : ((r && r.error) || 'Error desconocido');
+        setMsg('✗ ' + errs, 'err');
+      }
     })
     .catch(e => {
-      setMsg('✗ ' + e.message, 'err');
       btn.disabled = false;
+      setMsg('✗ Error: ' + e.message, 'err');
     });
 }
 
@@ -4901,7 +4890,11 @@ function admGuardarHoyos(){
   }
   ngtApiPost({ action:'updateCanchaHoyos', adminKey:ADMIN_KEY_OK, canchaId:c.id, hoyos:hoyos }).then(r => {
     if(r && r.ok){
-      msg.className='adm-msg ok'; msg.textContent='✓ ' + r.updated + ' hoyos actualizados';
+      const nRec = (r.fechasRecalculadas || []).length;
+      let txt = '✓ ' + r.updated + ' hoyos actualizados';
+      if(nRec) txt += ' · ' + nRec + ' fecha' + (nRec > 1 ? 's' : '') + ' recalculada' + (nRec > 1 ? 's' : '');
+      if(r.fechasOmitidas) txt += ' (' + r.fechasOmitidas + ' más sin recalcular — usá "🔄 Recalcular Fecha" en cada una)';
+      msg.className='adm-msg ok'; msg.textContent=txt;
       const loc = ADM_CANCHAS_DATA.find(x => String(x.id) === String(c.id));
       if(loc){ loc.pares = hoyos.map(h => h.par); loc.indices = hoyos.map(h => h.indice); }
     } else {
@@ -4921,8 +4914,9 @@ function admGuardarRating(color, btn){
   btn.disabled = true; btn.textContent = '...';
   ngtApiPost({ action:'updateRating', adminKey:ADMIN_KEY_OK, canchaId:c.id, color:color, rating:rating, slope:slope }).then(r => {
     btn.disabled = false;
-    btn.textContent = (r && r.ok) ? '✓ Ok' : '✗ Error';
-    setTimeout(() => { btn.textContent = 'Guardar'; }, 2000);
+    const nRec = (r && r.fechasRecalculadas || []).length;
+    btn.textContent = (r && r.ok) ? ('✓ Ok' + (nRec ? ' (' + nRec + ')' : '')) : '✗ Error';
+    setTimeout(() => { btn.textContent = 'Guardar'; }, 2500);
   }).catch(() => { btn.disabled = false; btn.textContent = '✗'; setTimeout(() => { btn.textContent = 'Guardar'; }, 2000); });
 }
 

@@ -531,11 +531,19 @@ function recalcularHcpFecha_(params) {
     return { ok: false, error: 'Sin datos de slope/rating para canchaId ' + canchaId + ' (' + colorTee + ')' };
   }
 
+  // Jugadores con el HCP de juego ajustado a mano por un admin (desde "Gestionar
+  // Fecha → Tarjetas" o "Ajustar HCP" en líneas) no se pisan con el valor
+  // calculado por fórmula — ver cargarTarjeta_.
+  var metaHcp = getFechaMeta_(fecha) || {};
+  var hcpManualSet = metaHcp.hcpManual || {};
+
   var updated = 0;
+  var skippedManual = 0;
   data.forEach(function(row, i) {
     var f = String(row[0] || '').trim();
     var m = String(row[1] || '').trim();
     if (f !== String(fecha) || !m || m.indexOf('INV') === 0) return;
+    if (hcpManualSet[m]) { skippedManual++; return; }
     var newHcp = hcpInfo.hcpMap[m];
     if (newHcp !== undefined) {
       sh.getRange(i + 2, 3).setValue(newHcp); // col C = hcp
@@ -553,6 +561,7 @@ function recalcularHcpFecha_(params) {
       par: hcpInfo.par,
       ajuste: hcpInfo.rating !== null && hcpInfo.par !== null ? +(hcpInfo.rating - hcpInfo.par).toFixed(1) : null,
       updated: updated,
+      skippedManual: skippedManual,
     }
   };
 }

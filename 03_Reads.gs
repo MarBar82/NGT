@@ -1298,6 +1298,9 @@ function editarFecha_(params) {
   const effCanchaName = canchaName || existingCanchaName;
   const effColor      = colorFinal || 'BLANCAS';
   let   editHcpMap    = {};
+  // Jugadores con el HCP ajustado a mano por un admin — no se pisan acá tampoco.
+  const metaEdit0     = getFechaMeta_(fecha) || {};
+  const hcpManualEdit = metaEdit0.hcpManual || {};
   if (canchaName || colorFinal) {
     try {
       const hcpInfo = buildHcpJuegoMap_(effCanchaId, effCanchaName, effColor);
@@ -1305,6 +1308,7 @@ function editarFecha_(params) {
         editHcpMap = hcpInfo.hcpMap;
         existingRows.forEach(er => {
           if (er.isInvitado) return; // invitados no tienen matricula en JUGADORES
+          if (hcpManualEdit[er.matricula]) return; // HCP ajustado a mano — no se pisa
           const hcp = editHcpMap[er.matricula];
           if (hcp !== undefined) sh.getRange(er.row, 3).setValue(hcp); // C = HCP de juego
         });
@@ -1424,14 +1428,30 @@ function editarFecha_(params) {
   });
 
   // Update hoyoSalida in FECHA_META if provided
+  let hoyoSalidaChanged = false;
   if (hoyoSalida !== undefined && hoyoSalida !== null) {
     try {
       const propsE = PropertiesService.getDocumentProperties();
       const metaE = JSON.parse(propsE.getProperty('FECHA_META') || '{}');
       if (!metaE[String(fecha)]) metaE[String(fecha)] = {};
-      metaE[String(fecha)].hoyoSalida = parseInt(hoyoSalida) || 1;
+      const hsNuevo = parseInt(hoyoSalida) || 1;
+      if (metaE[String(fecha)].hoyoSalida !== hsNuevo) hoyoSalidaChanged = true;
+      metaE[String(fecha)].hoyoSalida = hsNuevo;
       propsE.setProperty('FECHA_META', JSON.stringify(metaE));
     } catch(e) {}
+  }
+
+  // Si se cambió la cancha, el color de salida o el hoyo de salida, los puntos
+  // Stableford, los matches y el ranking quedaron con datos viejos hasta que se
+  // recalculan. El HCP de juego ya se actualizó más arriba (paso 1c), así que acá
+  // solo hace falta Stableford → Matches → Totales. Es informativo — si algo no
+  // se pudo recalcular (por ejemplo, la fecha todavía no tiene scores cargados)
+  // no hace fallar el guardado de los cambios de jugadores/cancha/color.
+  if (canchaName || colorFinal || hoyoSalidaChanged) {
+    try {
+      const rfc = recalcularFechaCompleta_({ adminKey: adminKey, fecha: fecha, skipHcp: true });
+      changes.recalculoCompleto = !!(rfc && rfc.ok);
+    } catch (e) { changes.recalculoCompleto = false; }
   }
 
   audit_('EDITAR_FECHA', 'admin', { fecha, canchaId, canchaName, targetJugadores, targetInvitadoNames, targetDobles, changes });

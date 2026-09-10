@@ -669,6 +669,21 @@ function cargarTarjeta_(params) {
 
   SpreadsheetApp.flush();
 
+  // Si fue un admin quien cargó el HCP a mano (no el jugador firmando su propia
+  // tarjeta), lo marcamos como "ajustado a mano" en FECHA_META. Así, si más
+  // adelante se corrige la cancha o el rating y se dispara un recálculo
+  // automático de la fecha, este valor puntual no se pisa con el de la fórmula.
+  if (isAdmin && hcp !== undefined && hcp !== null && String(hcp).trim() !== '') {
+    try {
+      const propsHm = PropertiesService.getDocumentProperties();
+      const metaHm  = JSON.parse(propsHm.getProperty('FECHA_META') || '{}');
+      if (!metaHm[fStr]) metaHm[fStr] = {};
+      if (!metaHm[fStr].hcpManual) metaHm[fStr].hcpManual = {};
+      metaHm[fStr].hcpManual[mStr] = true;
+      propsHm.setProperty('FECHA_META', JSON.stringify(metaHm));
+    } catch (eHm) { /* No bloquea el guardado de la tarjeta */ }
+  }
+
   audit_('CARGAR_TARJETA', isAdmin ? 'admin' : matricula, { fecha, matricula, hcp, scores, ld, ba, usarDoble, dobleMsg });
   try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
   return { ok: true, dobleMsg: dobleMsg };
@@ -1363,6 +1378,38 @@ function recalcularStbFecha_(params) {
   return { ok: true, updated: updated, details: details };
 }
 
+// Devuelve la lista de fechas (sin repetir) que usaron una cancha determinada,
+// mirando la columna D (canchaId) de TARJETAS. Si se pasa colorTee, filtra
+// además por la columna Y (color de salida) — usado para saber a qué fechas
+// impacta una corrección de rating/slope, que es específica de un color.
+function getFechasParaCancha_(canchaId, colorTee) {
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return [];
+  const last = findNextEmptyRow_(sh, 1);
+  if (last <= 2) return [];
+  const data = sh.getRange(2, 1, last - 2, 25).getValues(); // A..Y
+  const idKey = String(canchaId || '').trim();
+  const colorKey = colorTee ? String(colorTee).trim().toUpperCase() : null;
+  const set = {};
+  data.forEach(function(r) {
+    const rid = String(r[3] || '').trim(); // D = canchaId
+    if (rid !== idKey) return;
+    if (colorKey) {
+      const rc = String(r[24] || '').trim().toUpperCase(); // Y = colorTee
+      if (rc !== colorKey) return;
+    }
+    const f = String(r[0] || '').trim();
+    if (f) set[f] = true;
+  });
+  return Object.keys(set);
+}
+
+// Tope de fechas que se recalculan automáticamente en una sola corrida, para
+// no arriesgar el límite de tiempo de ejecución de Apps Script si una cancha
+// tiene muchísimas fechas jugadas encima. Si se supera, el resto queda listado
+// para recalcular a mano con el botón "🔄 Recalcular Fecha".
+const LIMITE_RECALC_CASCADA_ = 25;
+
 function updateCanchaHoyos_(params) {
   const { adminKey, canchaId, hoyos } = params || {};
   if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
@@ -1377,6 +1424,7 @@ function updateCanchaHoyos_(params) {
   const hoyoMap = {};
   hoyos.forEach(function(h) { hoyoMap[parseInt(h.hoyo)] = h; });
   let updated = 0;
+  let huboCambio = false;
   for (let i = 0; i < data.length; i++) {
     const rowId = String(data[i][0] || '').trim();
     if (rowId !== String(canchaId)) continue;
@@ -1385,12 +1433,32 @@ function updateCanchaHoyos_(params) {
     if (!hd) continue;
     const par = parseInt(hd.par);
     const idx = parseInt(hd.indice);
-    if (!isNaN(par)) sh.getRange(i + 2, 3).setValue(par); // col C = par
-    if (!isNaN(idx)) sh.getRange(i + 2, 4).setValue(idx); // col D = hcp_idx
+    const parActual = parseInt(data[i][2]);
+    const idxActual  = parseInt(data[i][3]);
+    if (!isNaN(par)) { sh.getRange(i + 2, 3).setValue(par); if (par !== parActual) huboCambio = true; } // col C = par
+    if (!isNaN(idx)) { sh.getRange(i + 2, 4).setValue(idx); if (idx !== idxActual) huboCambio = true; } // col D = hcp_idx
     updated++;
   }
   try { CacheService.getScriptCache().remove('cp2_' + canchaId); } catch(e) {}
-  return { ok: true, updated: updated };
+
+  // Si de verdad cambió el par o el índice de algún hoyo, recalculamos todas
+  // las fechas que jugaron en esta cancha para que tomen el dato corregido
+  // (HCP de juego → Stableford → Matches → Totales), sin pisar los HCP que
+  // un admin haya ajustado a mano.
+  let fechasRecalculadas = [];
+  let fechasOmitidas = 0;
+  if (huboCambio) {
+    const fechasAfectadas = getFechasParaCancha_(canchaId, null);
+    fechasAfectadas.slice(0, LIMITE_RECALC_CASCADA_).forEach(function(f) {
+      try {
+        recalcularFechaCompleta_({ adminKey: adminKey, fecha: f });
+        fechasRecalculadas.push(f);
+      } catch (e) { /* seguimos con las demás fechas */ }
+    });
+    fechasOmitidas = Math.max(0, fechasAfectadas.length - LIMITE_RECALC_CASCADA_);
+  }
+
+  return { ok: true, updated: updated, fechasRecalculadas: fechasRecalculadas, fechasOmitidas: fechasOmitidas };
 }
 
 function updateRating_(params) {
@@ -1404,17 +1472,42 @@ function updateRating_(params) {
   const data = sh.getRange(2, 1, lr - 1, 5).getValues();
   const colorKey = String(color).trim().toUpperCase();
   let found = false;
+  let huboCambio = false;
   for (let i = 0; i < data.length; i++) {
     if (String(data[i][0] || '').trim() !== String(canchaId)) continue;
     if (String(data[i][2] || '').trim().toUpperCase() !== colorKey) continue;
-    if (rating !== undefined && rating !== null && rating !== '') sh.getRange(i + 2, 4).setValue(parseFloat(rating));
-    if (slope  !== undefined && slope  !== null && slope  !== '') sh.getRange(i + 2, 5).setValue(parseInt(slope));
+    if (rating !== undefined && rating !== null && rating !== '') {
+      const nr = parseFloat(rating);
+      if (nr !== parseFloat(data[i][3])) huboCambio = true;
+      sh.getRange(i + 2, 4).setValue(nr);
+    }
+    if (slope !== undefined && slope !== null && slope !== '') {
+      const ns = parseInt(slope);
+      if (ns !== parseInt(data[i][4])) huboCambio = true;
+      sh.getRange(i + 2, 5).setValue(ns);
+    }
     found = true;
     break;
   }
   if (!found) return { ok: false, error: 'No se encontró ' + canchaId + ' / ' + color + ' en Rating' };
   try { CacheService.getScriptCache().remove('cp2_' + canchaId); } catch(e) {}
-  return { ok: true };
+
+  // Igual que con los hoyos: si cambió de verdad el rating o el slope, se
+  // recalculan las fechas que se jugaron con ese color de salida en esta cancha.
+  let fechasRecalculadas = [];
+  let fechasOmitidas = 0;
+  if (huboCambio) {
+    const fechasAfectadas = getFechasParaCancha_(canchaId, colorKey);
+    fechasAfectadas.slice(0, LIMITE_RECALC_CASCADA_).forEach(function(f) {
+      try {
+        recalcularFechaCompleta_({ adminKey: adminKey, fecha: f });
+        fechasRecalculadas.push(f);
+      } catch (e) { /* seguimos con las demás fechas */ }
+    });
+    fechasOmitidas = Math.max(0, fechasAfectadas.length - LIMITE_RECALC_CASCADA_);
+  }
+
+  return { ok: true, fechasRecalculadas: fechasRecalculadas, fechasOmitidas: fechasOmitidas };
 }
 
 function recalcularMatchesFecha_(params) {
@@ -1574,6 +1667,51 @@ function recalcularMatchesFecha_(params) {
   try { CacheService.getScriptCache().remove('fl_' + fStr); } catch(e) {}
   audit_('RECALCULAR_MATCHES', adminKey, { fecha: fStr, updated: updated, hoyoSalida: hoyoSalida });
   return { ok: true, updated: updated, hoyoSalida: hoyoSalida, holeOrder: holeOrder };
+}
+
+/**
+ * Orquesta el recálculo completo de una fecha ya creada: HCP de juego → Stableford
+ * → Matches → Totales/leaderboard, en ese orden. Es exactamente lo mismo que hace
+ * el botón "🔄 Recalcular Fecha" de Gestionar Fecha, pero como una única función
+ * interna — la usa tanto ese botón (acción 'recalcularFechaCompleta') como los
+ * disparadores automáticos cuando se corrige una cancha, un rating, o la cancha /
+ * color / hoyo de salida de una fecha ya creada.
+ * skipHcp: true evita recalcular el HCP de juego (útil cuando quien llama ya lo
+ * actualizó por su cuenta, como editarFecha_).
+ * No pisa los HCP que un admin ajustó a mano (ver cargarTarjeta_ / hcpManual).
+ * No falla si algún paso no tiene nada para recalcular (ej: fecha sin scores aún).
+ */
+function recalcularFechaCompleta_(params) {
+  const { adminKey, fecha, skipHcp } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha) return { ok: false, error: 'Falta fecha' };
+  const fStrRfc = String(fecha);
+  const out = { fecha: fStrRfc, hcp: null, stb: null, matches: null, errors: [] };
+
+  if (!skipHcp) {
+    try {
+      out.hcp = recalcularHcpFecha_({ adminKey: adminKey, fecha: fStrRfc });
+      if (out.hcp && !out.hcp.ok) out.errors.push('HCP: ' + out.hcp.error);
+    } catch (e) { out.errors.push('HCP: ' + e.message); }
+  }
+
+  try {
+    out.stb = recalcularStbFecha_({ adminKey: adminKey, fecha: fStrRfc });
+    if (out.stb && !out.stb.ok) out.errors.push('Stableford: ' + out.stb.error);
+  } catch (e) { out.errors.push('Stableford: ' + e.message); }
+
+  try {
+    const metaRfc = getFechaMeta_(fStrRfc) || {};
+    const hoyoSalidaRfc = metaRfc.hoyoSalida ? parseInt(metaRfc.hoyoSalida) : 1;
+    out.matches = recalcularMatchesFecha_({ adminKey: adminKey, fecha: fStrRfc, hoyoSalida: hoyoSalidaRfc });
+    if (out.matches && !out.matches.ok) out.errors.push('Matches: ' + out.matches.error);
+  } catch (e) { out.errors.push('Matches: ' + e.message); }
+
+  try {
+    recalcularTotalesScore_(null);
+  } catch (e) { out.errors.push('Totales: ' + e.message); }
+
+  return { ok: out.errors.length === 0, data: out };
 }
 
 /**
