@@ -187,6 +187,7 @@ function doPost(e) {
       case 'setLineasFecha':       result = setLineasFecha_(params); break;
       case 'quitarJugadorDeLinea': result = quitarJugadorDeLinea_(params); break;
       case 'agregarJugadorALinea': result = agregarJugadorALinea_(params); break;
+      case 'agregarInvitadoSuelto':  result = agregarInvitadoSuelto_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }

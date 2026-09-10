@@ -1057,8 +1057,8 @@ select.gf-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;pad
 .gf-lin-pill-empty:hover{background:var(--g1);}
 .gf-lin-lhdr{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px;margin-bottom:8px;}
 .gf-lin-lmeta{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--g4);}
-.gf-lin-pill-static{cursor:default;}
-.gf-lin-pill-static:hover{background:var(--white);}
+.gf-lin-pill-inv{border-left:3px solid var(--g4);}
+.gf-lin-inv-badge{font-size:10px;font-weight:800;color:var(--g5);background:var(--g1);border-radius:4px;padding:2px 6px;margin-left:6px;letter-spacing:.04em;}
 .gf-lin-match-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--navy);margin-top:10px;padding:8px 2px;border-top:1px solid var(--g1);}
 .gf-lin-match-arrow{transition:transform .15s;font-size:12px;}
 .gf-lin-match-toggle.open .gf-lin-match-arrow{transform:rotate(180deg);}
@@ -4120,23 +4120,17 @@ function wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canc
     // Ir a Paso 2
     wizMostrarPaso2_(jugsInFecha, canchaName);
 
-    // Mostrar preview de líneas
+    // Mostrar preview de líneas (editable a mano + compartir por WhatsApp)
     const preview = document.getElementById('adm-s2-lineas-preview');
     if(preview){
-      const repeats = r.repeatCount || 0;
-      const repeatColor = repeats > 0 ? 'var(--red)' : 'var(--navy)';
-      const repeatTxt = repeats > 0
-        ? ' · <span style="color:var(--red);">⚠ ' + repeats + ' match' + (repeats > 1 ? 'es' : '') + ' repetido' + (repeats > 1 ? 's' : '') + '</span>'
-        : ' · <span style="color:green;">✓ sin repeticiones</span>';
-      let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
-        '<strong style="color:' + repeatColor + ';">⚡ ' + r.lines.length + ' líneas · ' +
-        r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches' + repeatTxt + '</strong>' +
-        '<button id="wiz-rearmar-btn" onclick="wizRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
-        '</div>';
-      const normalized = normalizeLineasArmado_(r.lines, data.horario, data.hoyoSalida, data.colorTee);
-      html += renderFechaCardAdmin_(normalized);
-      preview.innerHTML = html;
-      preview.style.display = 'block';
+      const pintar = function(){
+        pintarLineasPreview_(preview, WIZ_LINEAS_RESULT.lines, {
+          repeatCount: WIZ_LINEAS_RESULT.repeatCount, onRearmar: 'wizRearmarLineas_()', rearmarBtnId: 'wiz-rearmar-btn',
+          horario: data.horario, hoyoSalida: data.hoyoSalida, colorTee: data.colorTee, fecha: data.fecha,
+        });
+      };
+      pintar();
+      lineditIniciar_(WIZ_LINEAS_RESULT.lines, pintar, { fecha: data.fecha, canchaId: data.canchaId, colorTee: data.colorTee });
     }
   }).catch(e => {
     wizResetBotones_();
@@ -4218,7 +4212,7 @@ function wizCrearTodo(){
 
   // Step A: crear fecha (tarjetas + dobles + líneas + horario)
   const lineasParam = WIZ_LINEAS_RESULT
-    ? WIZ_LINEAS_RESULT.lines.map(l => l.players.map(p => p.matricula))
+    ? WIZ_LINEAS_RESULT.lines.map(l => l.players.filter(p => p).map(p => p.matricula))
     : [];
   ngtApiPost({
     action:   'crearFecha',
@@ -5133,29 +5127,26 @@ function admArmarLineas(prioridades, seed){
 
     ADM_LAST_ARMAR_LINEAS = r.lines || [];
 
-    // Limpiar matches actuales y cargar los propuestos
-    const list = document.getElementById('adm-mgr-matches-list');
-    list.innerHTML = '';
-    r.lines.forEach(l => l.matches.forEach(m => addMgrMatchRow(m.j1, m.j2)));
-
-    // Mostrar preview de líneas — mismo diseño de tarjetas que usa el asistente de Crear Fecha
+    // Mostrar preview de líneas — editable a mano + compartir por WhatsApp (mismo motor que Crear Fecha)
     if(preview){
-      const repeats = r.repeatCount || 0;
-      const repeatColor = repeats > 0 ? 'var(--red)' : 'var(--navy)';
-      const repeatTxt = repeats > 0
-        ? ' · <span style="color:var(--red);">⚠ ' + repeats + ' match' + (repeats > 1 ? 'es' : '') + ' repetido' + (repeats > 1 ? 's' : '') + '</span>'
-        : ' · <span style="color:green;">✓ sin repeticiones</span>';
-      let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
-        '<strong style="color:' + repeatColor + ';">Propuesta — ' + r.lines.length + ' líneas · ' +
-        r.lines.reduce((s,l) => s + l.matches.length, 0) + ' matches' + repeatTxt + '</strong>' +
-        '<button onclick="admRearmarLineas_()" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' +
-        '</div>';
       const det = MGR_FECHA_DETALLE || {};
-      const normalized = normalizeLineasArmado_(r.lines, det.horario, det.hoyoSalida, det.colorTee);
-      html += renderFechaCardAdmin_(normalized);
-      html += '<div style="padding:8px 4px 0;color:var(--g4);font-size:12px;">Revisá los matches arriba y hacé clic en "Guardar Matches" para confirmar.</div>';
-      preview.innerHTML = html;
-      preview.style.display = 'block';
+      const pintar = function(){
+        pintarLineasPreview_(preview, ADM_LAST_ARMAR_LINEAS, {
+          repeatCount: r.repeatCount, onRearmar: 'admRearmarLineas_()',
+          horario: det.horario, hoyoSalida: det.hoyoSalida, colorTee: det.colorTee, fecha: fecha,
+        });
+        preview.insertAdjacentHTML('beforeend', '<div style="padding:8px 4px 0;color:var(--g4);font-size:12px;">Revisá los matches arriba y hacé clic en "Guardar Matches" para confirmar.</div>');
+        const list = document.getElementById('adm-mgr-matches-list');
+        if(list){
+          list.innerHTML = '';
+          ADM_LAST_ARMAR_LINEAS.forEach(function(l){ l.matches.forEach(function(m){ addMgrMatchRow(m.j1, m.j2); }); });
+        }
+      };
+      pintar();
+      lineditIniciar_(ADM_LAST_ARMAR_LINEAS, pintar, {
+        fecha: fecha, canchaId: det.canchaId, colorTee: det.colorTee,
+        onInvitadoCreado: function(mat, nombre){ MGR_FECHA_JUGS.push({ matricula: mat, nombre: nombre }); },
+      });
     }
   }).catch(e => {
     if(btn){ btn.disabled = false; btn.textContent = '↻ Rearmar líneas'; }
@@ -5204,7 +5195,7 @@ function mgrGuardarMatches(){
       msg.textContent = '✓ ' + (ch.added || matches.length) + ' match(es) guardados' + (ch.cleared ? ' (' + ch.cleared + ' anteriores reemplazados)' : '');
 
       if(ADM_LAST_ARMAR_LINEAS && ADM_LAST_ARMAR_LINEAS.length){
-        const lineas = ADM_LAST_ARMAR_LINEAS.map(l => l.players.map(p => p.matricula));
+        const lineas = ADM_LAST_ARMAR_LINEAS.map(l => l.players.filter(p => p).map(p => p.matricula));
         ngtApiPost({ action: 'setLineasFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, lineas: lineas }).then(function(r2){
           ADM_LAST_ARMAR_LINEAS = [];
           const preview = document.getElementById('adm-armar-lineas-preview');
@@ -9214,9 +9205,9 @@ function calcTeeTime_(horario, lineIdx, totalLines){
 function normalizeLineasArmado_(rawLines, horarioBase, hoyoSalida, colorTee){
   const total = rawLines.length;
   return rawLines.map(function(l, idx){
-    const players = l.players.map(function(p){
+    const players = l.players.filter(function(p){ return p; }).map(function(p){
       const hcp = p.hcp || 0;
-      return { matricula: p.matricula, apodo: p.apodo, hcp: hcp, hcp85: Math.round(hcp * 0.85) };
+      return { matricula: p.matricula, apodo: p.apodo, hcp: hcp, hcp85: Math.round(hcp * 0.85), esInvitado: !!p.esInvitado };
     });
     const byMat = {};
     players.forEach(function(p){ byMat[p.matricula] = p; });
@@ -9251,10 +9242,13 @@ function renderFechaCardAdmin_(lineas){
     for(let i = 0; i < 4; i++){
       const p = l.players[i];
       if(p){
-        html += '<div class="gf-lin-pill gf-lin-pill-static"><span class="gf-lin-pname">' + p.apodo + '</span>' +
-          '<span class="gf-lin-phcp">' + p.hcp + ' / <span class="gf-lin-p85">' + p.hcp85 + '</span></span></div>';
+        const invClass = p.esInvitado ? ' gf-lin-pill-inv' : '';
+        const invBadge = p.esInvitado ? '<span class="gf-lin-inv-badge">INV</span>' : '';
+        html += '<button type="button" class="gf-lin-pill' + invClass + '" onclick="lineditAbrir_(' + idx + ',' + i + ')">' +
+          '<span class="gf-lin-pname">' + p.apodo + invBadge + '</span>' +
+          '<span class="gf-lin-phcp">' + p.hcp + ' / <span class="gf-lin-p85">' + p.hcp85 + '</span></span></button>';
       } else {
-        html += '<div class="gf-lin-pill gf-lin-pill-empty gf-lin-pill-static"></div>';
+        html += '<button type="button" class="gf-lin-pill gf-lin-pill-empty" onclick="lineditAbrir_(' + idx + ',' + i + ')">+</button>';
       }
     }
 
@@ -9274,6 +9268,210 @@ function renderFechaCardAdmin_(lineas){
   });
   html += '</div>';
   return html;
+}
+
+// ── Edición manual de líneas (Tarea 102) ──────────────────────────────────
+function contarJugadores_(linea){
+  return (linea.players || []).filter(function(p){ return p; }).length;
+}
+
+function recalcularMatchesLinea_(linea){
+  const g = (linea.players || []).filter(function(p){ return p; });
+  if(g.length === 2){
+    linea.matches = [{ j1: g[0].matricula, j2: g[1].matricula }];
+  } else if(g.length === 3){
+    linea.matches = [
+      { j1: g[0].matricula, j2: g[1].matricula },
+      { j1: g[0].matricula, j2: g[2].matricula },
+      { j1: g[1].matricula, j2: g[2].matricula },
+    ];
+  } else if(g.length === 4){
+    const divs = [[[0,1],[2,3]],[[0,2],[1,3]],[[0,3],[1,2]]];
+    let best = null, bestScore = Infinity;
+    divs.forEach(function(div){
+      const a = [g[div[0][0]], g[div[0][1]]], b = [g[div[1][0]], g[div[1][1]]];
+      const pairs = [[a[0],b[0]],[a[0],b[1]],[a[1],b[0]],[a[1],b[1]]];
+      const score = pairs.reduce(function(s,mp){ return s + Math.abs((mp[0].hcp||0)-(mp[1].hcp||0)); }, 0);
+      if(score < bestScore){ bestScore = score; best = pairs; }
+    });
+    linea.matches = best.map(function(mp){ return { j1: mp[0].matricula, j2: mp[1].matricula }; });
+  } else {
+    linea.matches = [];
+  }
+}
+
+let LINEDIT_LINES = null;
+let LINEDIT_RERENDER = null;
+let LINEDIT_TARGET = null;
+let LINEDIT_CTX = null;
+
+function lineditIniciar_(lines, rerenderFn, ctx){
+  LINEDIT_LINES = lines; LINEDIT_RERENDER = rerenderFn; LINEDIT_CTX = ctx || {};
+}
+
+function lineditAbrir_(lineIdx, slotIdx){
+  if(!LINEDIT_LINES) return;
+  LINEDIT_TARGET = { lineIdx: lineIdx, slotIdx: slotIdx };
+  const linea = LINEDIT_LINES[lineIdx];
+  const jugadorActual = linea.players[slotIdx];
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">' +
+    (jugadorActual ? '✏ ' + jugadorActual.apodo : '+ Casillero vacío — Línea ' + linea.lineNum) + '</div>';
+  html += '<div style="font-size:12px;color:var(--g4);text-align:center;margin-bottom:10px;">Elegí con quién cambiarlo, o sumá un invitado:</div>';
+  html += '<button class="gf-lin-pill" style="margin-bottom:8px;width:100%;" onclick="lineditAbrirInvitado_()">+ Sumar invitado</button>';
+  html += '<div style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">';
+  LINEDIT_LINES.forEach(function(l, li){
+    (l.players || []).forEach(function(p, si){
+      if(li === lineIdx && si === slotIdx) return;
+      if(!p) return;
+      html += '<button type="button" class="gf-lin-pill" onclick="lineditElegir_(' + li + ',' + si + ')">' +
+        '<span class="gf-lin-pname">' + p.apodo + ' <span style="font-weight:600;color:var(--g4);font-size:11px;">· Línea ' + l.lineNum + '</span></span>' +
+        '<span class="gf-lin-phcp">' + p.hcp + '</span></button>';
+    });
+  });
+  html += '</div><button class="btn-cancel" onclick="closeFloatingModal()" style="width:100%;margin-top:12px;">Cancelar</button>';
+  openFloatingModal(html);
+}
+
+function lineditElegir_(otherLineIdx, otherSlotIdx){
+  if(!LINEDIT_TARGET || !LINEDIT_LINES) return;
+  const lineIdx = LINEDIT_TARGET.lineIdx, slotIdx = LINEDIT_TARGET.slotIdx;
+  const lineaA = LINEDIT_LINES[lineIdx];
+  const lineaB = LINEDIT_LINES[otherLineIdx];
+  if(lineIdx !== otherLineIdx){
+    const teniaA = !!lineaA.players[slotIdx], teniaB = !!lineaB.players[otherSlotIdx];
+    const countA = contarJugadores_(lineaA) - (teniaA ? 1 : 0) + (teniaB ? 1 : 0);
+    const countB = contarJugadores_(lineaB) - (teniaB ? 1 : 0) + (teniaA ? 1 : 0);
+    if(countA < 2 || countB < 2){
+      alert('Ese cambio dejaría una línea con menos de 2 jugadores — no se puede armar un match así.');
+      return;
+    }
+  }
+  const tmp = lineaA.players[slotIdx];
+  lineaA.players[slotIdx] = lineaB.players[otherSlotIdx];
+  lineaB.players[otherSlotIdx] = tmp;
+  recalcularMatchesLinea_(lineaA);
+  if(otherLineIdx !== lineIdx) recalcularMatchesLinea_(lineaB);
+  closeFloatingModal();
+  LINEDIT_TARGET = null;
+  if(LINEDIT_RERENDER) LINEDIT_RERENDER();
+}
+
+function lineditAbrirInvitado_(){
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">+ Sumar invitado</div>' +
+    '<div class="adm-row"><div class="adm-field"><label class="adm-label">Nombre</label>' +
+    '<input type="text" id="lindedit-inv-nombre" class="adm-input" placeholder="Nombre del invitado"></div></div>' +
+    '<div class="adm-row"><div class="adm-field"><label class="adm-label">HCP de juego</label>' +
+    '<input type="number" id="lindedit-inv-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP"></div></div>' +
+    '<div style="display:flex;gap:8px;margin-top:16px;">' +
+    '<button class="adm-btn-primary" onclick="lineditConfirmarInvitado_()" style="flex:2;">Sumar</button>' +
+    '<button class="btn-cancel" onclick="lineditAbrir_(' + LINEDIT_TARGET.lineIdx + ',' + LINEDIT_TARGET.slotIdx + ')" style="flex:1;">Volver</button>' +
+    '</div><div id="lindedit-inv-msg" class="adm-msg" style="display:none;"></div>';
+  openFloatingModal(html);
+}
+
+function lineditConfirmarInvitado_(){
+  const nombreEl = document.getElementById('lindedit-inv-nombre');
+  const hcpEl = document.getElementById('lindedit-inv-hcp');
+  const msg = document.getElementById('lindedit-inv-msg');
+  const nombre = nombreEl ? nombreEl.value.trim() : '';
+  const hcp = hcpEl ? hcpEl.value.trim() : '';
+  if(!nombre){
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el nombre del invitado'; msg.style.display = 'block'; }
+    return;
+  }
+  if(!LINEDIT_TARGET || !LINEDIT_CTX || !LINEDIT_CTX.fecha){
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = 'Error interno: falta contexto de la fecha'; msg.style.display = 'block'; }
+    return;
+  }
+  if(msg){ msg.className = 'adm-msg'; msg.textContent = 'Sumando...'; msg.style.display = 'block'; }
+  ngtApiPost({
+    action: 'agregarInvitadoSuelto', adminKey: ADMIN_KEY_OK, fecha: LINEDIT_CTX.fecha,
+    nombre: nombre, hcp: hcp, canchaId: LINEDIT_CTX.canchaId || '', colorTee: LINEDIT_CTX.colorTee || '',
+  }).then(function(r){
+    if(!r || !r.ok){
+      if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error'); msg.style.display = 'block'; }
+      return;
+    }
+    const lineIdx = LINEDIT_TARGET.lineIdx, slotIdx = LINEDIT_TARGET.slotIdx;
+    const linea = LINEDIT_LINES[lineIdx];
+    linea.players[slotIdx] = { matricula: r.matricula, apodo: nombre.toUpperCase(), hcp: r.hcp || 0, hcp85: Math.round((r.hcp || 0) * 0.85), esInvitado: true };
+    recalcularMatchesLinea_(linea);
+    closeFloatingModal();
+    LINEDIT_TARGET = null;
+    if(LINEDIT_CTX.onInvitadoCreado) LINEDIT_CTX.onInvitadoCreado(r.matricula, nombre, r.hcp || 0);
+    if(LINEDIT_RERENDER) LINEDIT_RERENDER();
+  }).catch(function(e){
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message; msg.style.display = 'block'; }
+  });
+}
+
+function pintarLineasPreview_(containerEl, lines, meta){
+  meta = meta || {};
+  const cardsId = containerEl.id + '-cards';
+  const repeats = meta.repeatCount || 0;
+  const repeatColor = repeats > 0 ? 'var(--red)' : 'var(--navy)';
+  const repeatTxt = repeats > 0
+    ? ' · <span style="color:var(--red);">⚠ ' + repeats + ' match' + (repeats > 1 ? 'es' : '') + ' repetido' + (repeats > 1 ? 's' : '') + '</span>'
+    : ' · <span style="color:green;">✓ sin repeticiones</span>';
+  let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px;">' +
+    '<strong style="color:' + repeatColor + ';">' + lines.length + ' líneas · ' +
+    lines.reduce(function(s,l){ return s + l.matches.length; }, 0) + ' matches' + repeatTxt + '</strong>' +
+    '<div style="display:flex;gap:6px;">' +
+    (meta.onRearmar ? '<button' + (meta.rearmarBtnId ? ' id="' + meta.rearmarBtnId + '"' : '') + ' onclick="' + meta.onRearmar + '" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;">↻ Rearmar</button>' : '') +
+    '<button data-wa-btn="' + cardsId + '" onclick="compartirLineasWhatsapp_(\'' + cardsId + '\',\'' + (meta.fecha || '') + '\')" style="padding:3px 10px;font-size:11px;border-radius:3px;border:1px solid #25D366;background:#25D366;color:#fff;cursor:pointer;">📤 WhatsApp</button>' +
+    '</div></div>' +
+    '<div style="font-size:11px;color:var(--g4);margin:2px 0 8px;">Tocá un jugador para cambiarlo de línea o sumar un invitado.</div>' +
+    '<div id="' + cardsId + '">' +
+    renderFechaCardAdmin_(normalizeLineasArmado_(lines, meta.horario, meta.hoyoSalida, meta.colorTee)) +
+    '</div>';
+  containerEl.innerHTML = html;
+  containerEl.style.display = 'block';
+}
+
+// ── Compartir líneas por WhatsApp como imagen (Tarea 102) ────────────────
+let _H2C_PROMISE = null;
+function cargarHtml2Canvas_(){
+  if(window.html2canvas) return Promise.resolve(window.html2canvas);
+  if(_H2C_PROMISE) return _H2C_PROMISE;
+  _H2C_PROMISE = new Promise(function(resolve, reject){
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = function(){ resolve(window.html2canvas); };
+    s.onerror = function(){ _H2C_PROMISE = null; reject(new Error('No se pudo cargar la librería para generar la imagen')); };
+    document.head.appendChild(s);
+  });
+  return _H2C_PROMISE;
+}
+
+function compartirLineasWhatsapp_(containerId, fecha){
+  const el = document.getElementById(containerId);
+  if(!el){ alert('No se encontraron las líneas para compartir'); return; }
+  const btns = document.querySelectorAll('[data-wa-btn="' + containerId + '"]');
+  btns.forEach(function(b){ b.disabled = true; b.textContent = '⏳ Generando...'; });
+  const restore = function(){ btns.forEach(function(b){ b.disabled = false; b.textContent = '📤 WhatsApp'; }); };
+  cargarHtml2Canvas_().then(function(html2canvas){
+    return html2canvas(el, { backgroundColor: '#f5f4ef', scale: 2, useCORS: true });
+  }).then(function(canvas){
+    return new Promise(function(resolve){ canvas.toBlob(resolve, 'image/png'); });
+  }).then(function(blob){
+    restore();
+    if(!blob){ alert('No se pudo generar la imagen'); return; }
+    const nombreArchivo = 'lineas-fecha-' + (fecha || '') + '.png';
+    const file = new File([blob], nombreArchivo, { type: 'image/png' });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      navigator.share({ files: [file], title: 'Líneas Fecha ' + (fecha || ''), text: '⛳ Líneas y matches — Fecha ' + (fecha || '') }).catch(function(){});
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = nombreArchivo;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
+      alert('Este navegador no permite compartir directo a WhatsApp — se descargó la imagen, así la podés mandar vos desde tu galería.');
+    }
+  }).catch(function(e){
+    restore();
+    alert('No se pudo generar la imagen: ' + e.message);
+  });
 }
 
 // Muestra/oculta el bloque de matches de una línea (flecha rota al abrir/cerrar).

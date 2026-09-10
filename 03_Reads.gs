@@ -1065,6 +1065,7 @@ function getFechaLineas_(fecha) {
   const jugs = getJugadores_();
   const jugMap = {};
   jugs.forEach(function(j) { jugMap[j.matricula] = j; });
+  const invInfo = meta.invitadosInfo || {};
 
   // ── Slopes desde Rating (para mostrar HCP blancas y azules) ─────────────
   const canchaId = meta.canchaId || '';
@@ -1107,7 +1108,9 @@ function getFechaLineas_(fecha) {
   const lineas = meta.lineas.map(function(lineaMats, idx) {
     const lineNum = idx + 1;
     const players = lineaMats.map(function(mat) {
-      const j = jugMap[String(mat)] || {};
+      const matStr = String(mat);
+      const esInv = matStr.indexOf('INV') === 0;
+      const j = jugMap[matStr] || {};
       const hcpIndex = j.hcpIndex || null;
       // Find tee colors
       const teeData = {};
@@ -1121,11 +1124,13 @@ function getFechaLineas_(fecha) {
           rating: r.rating,
         };
       });
+      const nombreInv = esInv ? (invInfo[matStr] || matStr) : '';
       return {
-        matricula: String(mat),
-        nombre: j.nombre || '',
-        apodo:  (j.apodo || (j.nombre ? j.nombre.split(' ')[0] : '') || String(mat)).toUpperCase(),
-        hcp:    hcpMap[String(mat)] || 0,
+        matricula: matStr,
+        nombre: esInv ? nombreInv : (j.nombre || ''),
+        apodo:  esInv ? nombreInv.toUpperCase() : (j.apodo || (j.nombre ? j.nombre.split(' ')[0] : '') || matStr).toUpperCase(),
+        hcp:    hcpMap[matStr] || 0,
+        esInvitado: esInv,
         tees:   teeData, // { BLANCAS: {hcp, pct85, slope, rating}, AZULES: {...} }
       };
     });
@@ -1176,6 +1181,9 @@ function getFechaDetalle_(fecha) {
   const nextEmpty = findNextEmptyRow_(shT, 1);
   if (nextEmpty <= 2) return null;
 
+  const metaDet = getFechaMeta_(fecha);
+  const invInfoDet = (metaDet && metaDet.invitadosInfo) || {};
+
   // A(0)=fecha, B(1)=mat, C(2)=hcp, D(3)=canchaId, E..V(4..21)=H1..H18, W(22)=LD, X(23)=BA, Y(24)=colorTee
   const data = shT.getRange(2, 1, nextEmpty - 2, 25).getValues();
   const jugadores = [];
@@ -1191,7 +1199,7 @@ function getFechaDetalle_(fecha) {
     if (f !== String(fecha) || !m) return;
     if (!cancha && cId) cancha = lookupCanchaName_(cId) || cId;
     if (!colorTee && ct) colorTee = ct.toUpperCase();
-    const n = m.indexOf('INV') === 0 ? m : ((jugMapDet2[m] && jugMapDet2[m].nombre) || m);
+    const n = m.indexOf('INV') === 0 ? (invInfoDet[m] || m) : ((jugMapDet2[m] && jugMapDet2[m].nombre) || m);
     if (m.indexOf('INV') === 0) {
       invitados.push({ matricula: m, nombre: n, row: i + 2 });
     } else {
@@ -1200,7 +1208,6 @@ function getFechaDetalle_(fecha) {
   });
 
   const dobles = getDoblesForFecha_(fecha);
-  const metaDet = getFechaMeta_(fecha);
   const hoyoSalidaDet = (metaDet && metaDet.hoyoSalida) ? metaDet.hoyoSalida : 1;
   const horarioDet = (metaDet && metaDet.horario) ? metaDet.horario : '';
 

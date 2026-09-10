@@ -116,6 +116,7 @@ function crearFecha_(params) {
   audit_('CREAR_FECHA', 'admin', { fecha, canchaId, canchaName, jugadores, dobles, invitados, added, dobleResults });
   const props = PropertiesService.getDocumentProperties();
   const meta = JSON.parse(props.getProperty('FECHA_META') || '{}');
+  const invitadosInfoPrevio = (meta[String(fecha)] && meta[String(fecha)].invitadosInfo) || {};
   meta[String(fecha)] = {
     canchaId,
     canchaName,
@@ -126,6 +127,7 @@ function crearFecha_(params) {
     lineas:     Array.isArray(lineas) ? lineas : [],
     hoyoSalida: parseInt(hoyoSalida) || 1,
     bonusHoyos: (bonusHoyos && typeof bonusHoyos === 'object') ? bonusHoyos : {},
+    invitadosInfo: invitadosInfoPrevio,
   };
   props.setProperty('FECHA_META', JSON.stringify(meta));
 
@@ -1237,6 +1239,41 @@ function agregarJugadorALinea_(params) {
   try { recalcularTotalesScore_(null); } catch(e) {}
   audit_('AGREGAR_JUGADOR_LINEA', 'admin', { fecha: fStr, matricula: mStr, lineNum, slotIndex });
   return { ok: true };
+}
+
+function agregarInvitadoSuelto_(params) {
+  const { adminKey, fecha, nombre, hcp, canchaId, colorTee } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const fStr = String(fecha || '').trim();
+  const n = String(nombre || '').trim();
+  if (!fStr) return { ok: false, error: 'Falta fecha' };
+  if (!n) return { ok: false, error: 'Falta el nombre del invitado' };
+
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
+
+  const hcpVal = (hcp !== undefined && hcp !== null && hcp !== '') ? (parseInt(hcp) || 0) : '';
+  const mat = 'INV' + Date.now() + Math.floor(Math.random() * 1000);
+  const colorFinal = colorTee ? String(colorTee).trim().toUpperCase() : '';
+
+  const nextRow = findNextEmptyRow_(sh, 2);
+  sh.getRange(nextRow, 1).setValue(fStr);
+  sh.getRange(nextRow, 2).setValue(mat);
+  if (hcpVal !== '') sh.getRange(nextRow, 3).setValue(hcpVal);
+  if (canchaId) sh.getRange(nextRow, 4).setValue(canchaId);
+  if (colorFinal) sh.getRange(nextRow, 25).setValue(colorFinal);
+
+  try {
+    const props = PropertiesService.getDocumentProperties();
+    const meta = JSON.parse(props.getProperty('FECHA_META') || '{}');
+    if (!meta[fStr]) meta[fStr] = {};
+    if (!meta[fStr].invitadosInfo) meta[fStr].invitadosInfo = {};
+    meta[fStr].invitadosInfo[mat] = n;
+    props.setProperty('FECHA_META', JSON.stringify(meta));
+  } catch (e) { /* no crítico -- el invitado ya quedó creado en TARJETAS */ }
+
+  audit_('AGREGAR_INVITADO_SUELTO', 'admin', { fecha: fStr, matricula: mat, nombre: n, hcp: hcpVal });
+  return { ok: true, matricula: mat, nombre: n, hcp: hcpVal };
 }
 
 /**
