@@ -14208,3 +14208,784 @@ Reemplazalo por:
 6. Sí: `compartirLineasWhatsapp_` carga `html2canvas` del CDN (si no está ya cargado), captura el `div#...-cards` con escala 2x y fondo `#f5f4ef`, convierte a blob PNG y: si el navegador soporta Web Share API con archivos, llama `navigator.share({files:[file],...})` que abre el selector del sistema; si no (desktop), crea un link de descarga y lo hace click. La imagen captura el grid 2×2 con jugadores, HCPs y matches.
 7. Confirmado en T101 (ya implementado y deployado). El sorteo entre empates en `bestFourDiv` usa `rand_()` cuando `seed > 0`. Con HCPs similares y sin historial, las 3 opciones empatan en 0 y el sorteo varía. ⚠️ Sigue requiriendo deploy de `06_ArmarLineas.gs` si no se hizo antes.
 8. Sin dudas. ⚠️ `04_Writes.gs`, `03_Reads.gs` y `10_Routing.gs` requieren deploy manual de Apps Script.
+
+---
+
+
+
+## 🎯 Tarea para Claude Code — Tarea 103 (4 correcciones sobre la Tarea 102: matches sin invitados, menú de Ajustar HCP / Suma doble / Mover jugador, aviso antes de "Rearmar", imagen de WhatsApp más grande)
+
+### Contexto
+
+Las 4 cosas que reportaste, una por una:
+
+**1. El invitado jugaba matches.** Tenías razón — al sumar un invitado a un casillero, se lo incluía en el sorteo de partidos como a cualquier otro. Lo corregí: ahora, siempre que se recalculan los partidos de una línea (al mover un jugador, sumar un invitado, etc.), los invitados quedan afuera del cálculo. Un invitado ocupa el casillero y juega la vuelta con el grupo, pero el resultado de los matches del torneo se arma solo entre los jugadores registrados. Si en una línea quedan menos de 2 jugadores reales (por ejemplo, 1 real + 3 invitados), esa línea directamente no tiene partido.
+
+**2. El menú de 3 opciones.** Ahora, al tocar un jugador con nombre (no un casillero vacío), se abre un menú con las 3 opciones que pediste: **Ajustar HCP** (para cambiarle el HCP de juego a mano), **Suma doble** (para marcarle o sacarle los puntos dobles de esta fecha — no aparece para invitados, porque ellos no compiten en el campeonato), y **Mover jugador** (lo que ya teníamos: cambiarlo por otro jugador, o completar con un invitado). Tocar un casillero vacío sigue yendo directo a "mover" (ahí no hay nada que ajustar). Esto funciona igual en Crear Fecha y en Gestionar Fecha → Armar líneas.
+
+Un detalle técnico que vale la pena que sepas: "Ajustar HCP" y "Suma doble" se comportan distinto según en qué pantalla estés. En **Gestionar Fecha** (la fecha ya existe) los cambios se guardan al toque, apenas los hacés. En **Crear Fecha** (la fecha todavía no existe) se guardan en el momento en que apretás "Comenzar Partida" al final del asistente — hasta ese momento son solo un borrador en la pantalla.
+
+**3. "Rearmar" borraba el invitado sin avisar.** Esto es porque "Rearmar" vuelve a correr el algoritmo automático desde cero, y ese algoritmo nunca tuvo en cuenta a los invitados ni a ningún cambio manual (son cosas que vos agregás encima, después). No podemos hacer que el algoritmo automático "recuerde" tus cambios manuales sin rehacer la lógica de armado por completo, así que en cambio agregué una alarma: si ya hiciste algún cambio a mano (mover a alguien, sumar un invitado, ajustar un HCP) y tocás "Rearmar", ahora te pregunta primero si estás seguro, explicándote que esos cambios se van a perder. Así no te vuelve a pasar sin que lo sepas. Si no hiciste ningún cambio manual, "Rearmar" sigue andando directo, sin preguntar nada de más.
+
+**4. La imagen de WhatsApp quedaba angosta, larga y se pixelaba.** El problema era que la imagen se generaba calcando el ancho de la tarjeta tal como se ve en el celular (angosta, para entrar en la pantalla chica), lo que daba una imagen muy angosta y larga — y al agrandarla, poca resolución real para tanto texto. Lo solucioné de dos formas juntas: (a) para la imagen que se comparte, armo una copia del contenido con un ancho fijo bastante más grande (no la pantalla angosta del celular), así la imagen queda más "cuadrada" y legible de un vistazo; y (b) subí la resolución con la que se genera la imagen (el triple de nitidez que antes), así al hacer zoom en WhatsApp se ve nítido en vez de pixelado.
+
+### Cambios en `.gs` (backend) — necesitan el deploy manual de siempre
+
+#### Cambio 1 — `crearFecha_` en `04_Writes.gs`: aceptar un HCP ajustado a mano
+
+Buscá:
+
+```javascript
+  const { adminKey, fecha, canchaId, jugadores, dobles, invitados, colorTee,
+          horario, greenFee, lineas, hoyoSalida, bonusHoyos } = params;
+```
+
+Reemplazalo por:
+
+```javascript
+  const { adminKey, fecha, canchaId, jugadores, dobles, invitados, colorTee,
+          horario, greenFee, lineas, hoyoSalida, bonusHoyos, hcpOverrides } = params;
+```
+
+#### Cambio 2 — `crearFecha_` en `04_Writes.gs`: usar el HCP ajustado a mano si lo hay
+
+Buscá:
+
+```javascript
+    sh.getRange(startJug, 3, newJugMats.length, 1)
+      .setValues(newJugMats.map(m => [hcpMap[m] !== undefined ? hcpMap[m] : ''])); // C (HCP de juego)
+```
+
+Reemplazalo por:
+
+```javascript
+    // Si el admin ajustó el HCP a mano en la pantalla de líneas, ese valor
+    // (hcpOverrides) tiene prioridad sobre el HCP calculado automáticamente.
+    const hcpOv = (hcpOverrides && typeof hcpOverrides === 'object') ? hcpOverrides : {};
+    sh.getRange(startJug, 3, newJugMats.length, 1)
+      .setValues(newJugMats.map(m => {
+        const ov = hcpOv[m];
+        const val = (ov !== undefined && ov !== null && ov !== '') ? parseInt(ov) : (hcpMap[m] !== undefined ? hcpMap[m] : '');
+        return [val];
+      })); // C (HCP de juego)
+```
+
+### Cambios en `index.html` (frontend) — se publican solos, sin deploy manual
+
+#### Cambio 3 — `normalizeLineasArmado_`: propagar si un jugador tiene suma doble
+
+Buscá:
+
+```javascript
+    const players = l.players.filter(function(p){ return p; }).map(function(p){
+      const hcp = p.hcp || 0;
+      return { matricula: p.matricula, apodo: p.apodo, hcp: hcp, hcp85: Math.round(hcp * 0.85), esInvitado: !!p.esInvitado };
+    });
+```
+
+Reemplazalo por:
+
+```javascript
+    const players = l.players.filter(function(p){ return p; }).map(function(p){
+      const hcp = p.hcp || 0;
+      return { matricula: p.matricula, apodo: p.apodo, hcp: hcp, hcp85: Math.round(hcp * 0.85), esInvitado: !!p.esInvitado, esDoble: !!p.esDoble };
+    });
+```
+
+#### Cambio 4 — `renderFechaCardAdmin_`: mostrar la etiqueta de suma doble
+
+Buscá:
+
+```javascript
+      if(p){
+        const invClass = p.esInvitado ? ' gf-lin-pill-inv' : '';
+        const invBadge = p.esInvitado ? '<span class="gf-lin-inv-badge">INV</span>' : '';
+        html += '<button type="button" class="gf-lin-pill' + invClass + '" onclick="lineditAbrir_(' + idx + ',' + i + ')">' +
+          '<span class="gf-lin-pname">' + p.apodo + invBadge + '</span>' +
+          '<span class="gf-lin-phcp">' + p.hcp + ' / <span class="gf-lin-p85">' + p.hcp85 + '</span></span></button>';
+```
+
+Reemplazalo por:
+
+```javascript
+      if(p){
+        const invClass = p.esInvitado ? ' gf-lin-pill-inv' : '';
+        const dobleClass = p.esDoble ? ' gf-lin-pill-db' : '';
+        const invBadge = p.esInvitado ? '<span class="gf-lin-inv-badge">INV</span>' : '';
+        const dobleBadge = p.esDoble ? '<span class="gf-lin-db">✌x2</span>' : '';
+        html += '<button type="button" class="gf-lin-pill' + invClass + dobleClass + '" onclick="lineditAbrir_(' + idx + ',' + i + ')">' +
+          '<span class="gf-lin-pname">' + p.apodo + invBadge + dobleBadge + '</span>' +
+          '<span class="gf-lin-phcp">' + p.hcp + ' / <span class="gf-lin-p85">' + p.hcp85 + '</span></span></button>';
+```
+
+#### Cambio 5 — `recalcularMatchesLinea_`: los invitados nunca juegan match
+
+Buscá:
+
+```javascript
+function recalcularMatchesLinea_(linea){
+  const g = (linea.players || []).filter(function(p){ return p; });
+  if(g.length === 2){
+```
+
+Reemplazalo por:
+
+```javascript
+// Los invitados nunca juegan match -- los matches son siempre entre jugadores
+// del torneo. Un invitado solo "ocupa" un casillero de la línea.
+function recalcularMatchesLinea_(linea){
+  const g = (linea.players || []).filter(function(p){ return p && !p.esInvitado; });
+  if(g.length === 2){
+```
+
+#### Cambio 6 — motor de edición de líneas: menú de 3 opciones, Ajustar HCP, Suma doble, y aviso de cambios manuales
+
+Este es el cambio más grande. Buscá TODO este bloque (desde `let LINEDIT_LINES = null;` hasta el cierre de la función `lineditElegir_`):
+
+```javascript
+let LINEDIT_LINES = null;
+let LINEDIT_RERENDER = null;
+let LINEDIT_TARGET = null;
+let LINEDIT_CTX = null;
+
+function lineditIniciar_(lines, rerenderFn, ctx){
+  LINEDIT_LINES = lines; LINEDIT_RERENDER = rerenderFn; LINEDIT_CTX = ctx || {};
+}
+
+function lineditAbrir_(lineIdx, slotIdx){
+  if(!LINEDIT_LINES) return;
+  LINEDIT_TARGET = { lineIdx: lineIdx, slotIdx: slotIdx };
+  const linea = LINEDIT_LINES[lineIdx];
+  const jugadorActual = linea.players[slotIdx];
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">' +
+    (jugadorActual ? '✏ ' + jugadorActual.apodo : '+ Casillero vacío — Línea ' + linea.lineNum) + '</div>';
+  html += '<div style="font-size:12px;color:var(--g4);text-align:center;margin-bottom:10px;">Elegí con quién cambiarlo, o sumá un invitado:</div>';
+  html += '<button class="gf-lin-pill" style="margin-bottom:8px;width:100%;" onclick="lineditAbrirInvitado_()">+ Sumar invitado</button>';
+  html += '<div style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">';
+  LINEDIT_LINES.forEach(function(l, li){
+    (l.players || []).forEach(function(p, si){
+      if(li === lineIdx && si === slotIdx) return;
+      if(!p) return;
+      html += '<button type="button" class="gf-lin-pill" onclick="lineditElegir_(' + li + ',' + si + ')">' +
+        '<span class="gf-lin-pname">' + p.apodo + ' <span style="font-weight:600;color:var(--g4);font-size:11px;">· Línea ' + l.lineNum + '</span></span>' +
+        '<span class="gf-lin-phcp">' + p.hcp + '</span></button>';
+    });
+  });
+  html += '</div><button class="btn-cancel" onclick="closeFloatingModal()" style="width:100%;margin-top:12px;">Cancelar</button>';
+  openFloatingModal(html);
+}
+
+function lineditElegir_(otherLineIdx, otherSlotIdx){
+  if(!LINEDIT_TARGET || !LINEDIT_LINES) return;
+  const lineIdx = LINEDIT_TARGET.lineIdx, slotIdx = LINEDIT_TARGET.slotIdx;
+  const lineaA = LINEDIT_LINES[lineIdx];
+  const lineaB = LINEDIT_LINES[otherLineIdx];
+  if(lineIdx !== otherLineIdx){
+    const teniaA = !!lineaA.players[slotIdx], teniaB = !!lineaB.players[otherSlotIdx];
+    const countA = contarJugadores_(lineaA) - (teniaA ? 1 : 0) + (teniaB ? 1 : 0);
+    const countB = contarJugadores_(lineaB) - (teniaB ? 1 : 0) + (teniaA ? 1 : 0);
+    if(countA < 2 || countB < 2){
+      alert('Ese cambio dejaría una línea con menos de 2 jugadores — no se puede armar un match así.');
+      return;
+    }
+  }
+  const tmp = lineaA.players[slotIdx];
+  lineaA.players[slotIdx] = lineaB.players[otherSlotIdx];
+  lineaB.players[otherSlotIdx] = tmp;
+  recalcularMatchesLinea_(lineaA);
+  if(otherLineIdx !== lineIdx) recalcularMatchesLinea_(lineaB);
+  closeFloatingModal();
+  LINEDIT_TARGET = null;
+  if(LINEDIT_RERENDER) LINEDIT_RERENDER();
+}
+```
+
+Reemplazalo por:
+
+```javascript
+let LINEDIT_LINES = null;
+let LINEDIT_RERENDER = null;
+let LINEDIT_TARGET = null;
+let LINEDIT_CTX = null;
+let LINEDIT_DIRTY = false; // true si hubo algún cambio manual (mover, invitado, hcp) desde el último armado
+
+function lineditIniciar_(lines, rerenderFn, ctx){
+  LINEDIT_LINES = lines; LINEDIT_RERENDER = rerenderFn; LINEDIT_CTX = ctx || {};
+  LINEDIT_DIRTY = false;
+}
+
+// true si hubo algún cambio manual desde el último armado automático — se usa
+// para avisar antes de "Rearmar" (que pisa todo con un armado nuevo).
+function lineditHuboEdicionManual_(){
+  return LINEDIT_DIRTY;
+}
+
+// Tocar un jugador de la línea abre un menú con las 3 acciones posibles.
+// Tocar un casillero vacío va directo a "Mover jugador" (no hay nada que ajustar).
+function lineditAbrir_(lineIdx, slotIdx){
+  if(!LINEDIT_LINES) return;
+  const linea = LINEDIT_LINES[lineIdx];
+  const jugadorActual = linea.players[slotIdx];
+  if(!jugadorActual){ lineditAbrirMover_(lineIdx, slotIdx); return; }
+  LINEDIT_TARGET = { lineIdx: lineIdx, slotIdx: slotIdx };
+  const esDoble = !!jugadorActual.esDoble;
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">' +
+    jugadorActual.apodo + (jugadorActual.esInvitado ? ' <span class="gf-lin-inv-badge">INV</span>' : '') + '</div>';
+  html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+  html += '<button type="button" class="gf-lin-pill" onclick="lineditAbrirHcp_()"><span class="gf-lin-pname">✏ Ajustar HCP</span></button>';
+  if(!jugadorActual.esInvitado){
+    html += '<button type="button" class="gf-lin-pill" onclick="lineditToggleDoble_()"><span class="gf-lin-pname">' +
+      (esDoble ? '✌ Sacar suma doble' : '✌ Marcar suma doble') + '</span></button>';
+  }
+  html += '<button type="button" class="gf-lin-pill" onclick="lineditAbrirMover_(' + lineIdx + ',' + slotIdx + ')"><span class="gf-lin-pname">🔀 Mover jugador</span></button>';
+  html += '</div><button class="btn-cancel" onclick="closeFloatingModal()" style="width:100%;margin-top:12px;">Cerrar</button>';
+  openFloatingModal(html);
+}
+
+// Cambiar por otro jugador de cualquier línea, o completar el casillero con un invitado.
+function lineditAbrirMover_(lineIdx, slotIdx){
+  if(!LINEDIT_LINES) return;
+  LINEDIT_TARGET = { lineIdx: lineIdx, slotIdx: slotIdx };
+  const linea = LINEDIT_LINES[lineIdx];
+  const jugadorActual = linea.players[slotIdx];
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">' +
+    (jugadorActual ? '🔀 ' + jugadorActual.apodo : '+ Casillero vacío — Línea ' + linea.lineNum) + '</div>';
+  html += '<div style="font-size:12px;color:var(--g4);text-align:center;margin-bottom:10px;">Elegí con quién cambiarlo, o sumá un invitado:</div>';
+  html += '<button class="gf-lin-pill" style="margin-bottom:8px;width:100%;" onclick="lineditAbrirInvitado_()">+ Sumar invitado</button>';
+  html += '<div style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">';
+  LINEDIT_LINES.forEach(function(l, li){
+    (l.players || []).forEach(function(p, si){
+      if(li === lineIdx && si === slotIdx) return;
+      if(!p) return;
+      html += '<button type="button" class="gf-lin-pill" onclick="lineditElegir_(' + li + ',' + si + ')">' +
+        '<span class="gf-lin-pname">' + p.apodo + (p.esDoble ? ' ✌' : '') + ' <span style="font-weight:600;color:var(--g4);font-size:11px;">· Línea ' + l.lineNum + '</span></span>' +
+        '<span class="gf-lin-phcp">' + p.hcp + '</span></button>';
+    });
+  });
+  html += '</div><button class="btn-cancel" onclick="closeFloatingModal()" style="width:100%;margin-top:12px;">Cancelar</button>';
+  openFloatingModal(html);
+}
+
+function lineditElegir_(otherLineIdx, otherSlotIdx){
+  if(!LINEDIT_TARGET || !LINEDIT_LINES) return;
+  const lineIdx = LINEDIT_TARGET.lineIdx, slotIdx = LINEDIT_TARGET.slotIdx;
+  const lineaA = LINEDIT_LINES[lineIdx];
+  const lineaB = LINEDIT_LINES[otherLineIdx];
+  if(lineIdx !== otherLineIdx){
+    const teniaA = !!lineaA.players[slotIdx], teniaB = !!lineaB.players[otherSlotIdx];
+    const countA = contarJugadores_(lineaA) - (teniaA ? 1 : 0) + (teniaB ? 1 : 0);
+    const countB = contarJugadores_(lineaB) - (teniaB ? 1 : 0) + (teniaA ? 1 : 0);
+    if(countA < 2 || countB < 2){
+      alert('Ese cambio dejaría una línea con menos de 2 jugadores — no se puede armar un match así.');
+      return;
+    }
+  }
+  const tmp = lineaA.players[slotIdx];
+  lineaA.players[slotIdx] = lineaB.players[otherSlotIdx];
+  lineaB.players[otherSlotIdx] = tmp;
+  recalcularMatchesLinea_(lineaA);
+  if(otherLineIdx !== lineIdx) recalcularMatchesLinea_(lineaB);
+  closeFloatingModal();
+  LINEDIT_TARGET = null;
+  LINEDIT_DIRTY = true;
+  if(LINEDIT_RERENDER) LINEDIT_RERENDER();
+}
+
+// Formulario para ajustar el HCP de juego del jugador tocado.
+function lineditAbrirHcp_(){
+  if(!LINEDIT_TARGET || !LINEDIT_LINES) return;
+  const linea = LINEDIT_LINES[LINEDIT_TARGET.lineIdx];
+  const jugador = linea.players[LINEDIT_TARGET.slotIdx];
+  if(!jugador) return;
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">✏ ' + jugador.apodo + '</div>' +
+    '<div class="adm-row"><div class="adm-field"><label class="adm-label">HCP de juego</label>' +
+    '<input type="number" id="lindedit-hcp-val" class="adm-input" min="0" max="54" inputmode="numeric" value="' + jugador.hcp + '"></div></div>' +
+    '<div style="display:flex;gap:8px;margin-top:16px;">' +
+    '<button class="adm-btn-primary" onclick="lineditGuardarHcp_()" style="flex:2;">Guardar</button>' +
+    '<button class="btn-cancel" onclick="lineditAbrir_(' + LINEDIT_TARGET.lineIdx + ',' + LINEDIT_TARGET.slotIdx + ')" style="flex:1;">Volver</button>' +
+    '</div><div id="lindedit-hcp-msg" class="adm-msg" style="display:none;"></div>';
+  openFloatingModal(html);
+}
+
+function lineditGuardarHcp_(){
+  if(!LINEDIT_TARGET || !LINEDIT_LINES) return;
+  const el = document.getElementById('lindedit-hcp-val');
+  const msg = document.getElementById('lindedit-hcp-msg');
+  const val = el ? el.value.trim() : '';
+  if(val === '' || isNaN(parseInt(val))){
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = 'Ingresá un HCP válido'; msg.style.display = 'block'; }
+    return;
+  }
+  const hcpNum = parseInt(val);
+  const lineIdx = LINEDIT_TARGET.lineIdx, slotIdx = LINEDIT_TARGET.slotIdx;
+  const linea = LINEDIT_LINES[lineIdx];
+  const jugador = linea.players[slotIdx];
+  const aplicarLocal = function(){
+    jugador.hcp = hcpNum;
+    jugador.hcp85 = Math.round(hcpNum * 0.85);
+    closeFloatingModal();
+    LINEDIT_TARGET = null;
+    LINEDIT_DIRTY = true;
+    if(LINEDIT_RERENDER) LINEDIT_RERENDER();
+  };
+  if(LINEDIT_CTX && LINEDIT_CTX.persisted && LINEDIT_CTX.fecha){
+    if(msg){ msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block'; }
+    ngtApiPost({ action: 'cargarTarjeta', adminKey: ADMIN_KEY_OK, fecha: LINEDIT_CTX.fecha, matricula: jugador.matricula, hcp: hcpNum }).then(function(r){
+      if(!r || !r.ok){
+        if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error'); msg.style.display = 'block'; }
+        return;
+      }
+      aplicarLocal();
+    }).catch(function(e){
+      if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message; msg.style.display = 'block'; }
+    });
+  } else {
+    aplicarLocal();
+  }
+}
+
+// Marca o saca "suma doble" del jugador tocado. Los invitados nunca la tienen.
+// Al marcar, verifica contra el servidor que no la haya usado ya en otra fecha.
+function lineditToggleDoble_(){
+  if(!LINEDIT_TARGET || !LINEDIT_LINES) return;
+  const linea = LINEDIT_LINES[LINEDIT_TARGET.lineIdx];
+  const jugador = linea.players[LINEDIT_TARGET.slotIdx];
+  if(!jugador || jugador.esInvitado) return;
+  const mat = String(jugador.matricula);
+  const yaEsDoble = !!jugador.esDoble;
+
+  const aplicar = function(){
+    jugador.esDoble = !yaEsDoble;
+    closeFloatingModal();
+    LINEDIT_TARGET = null;
+    if(LINEDIT_RERENDER) LINEDIT_RERENDER();
+  };
+  const ejecutarToggle = function(){
+    const cb = LINEDIT_CTX && LINEDIT_CTX.onToggleDoble;
+    if(!cb){ aplicar(); return; }
+    Promise.resolve(cb(mat, !yaEsDoble)).then(function(ok){
+      if(ok === false){ alert('No se pudo actualizar el doble. Probá de nuevo.'); return; }
+      aplicar();
+    }).catch(function(){ alert('No se pudo actualizar el doble. Probá de nuevo.'); });
+  };
+
+  if(yaEsDoble){ ejecutarToggle(); return; } // sacar el doble siempre está permitido
+
+  ngtApiGet('jugadoresConDoble').then(function(r){
+    const disponibles = (r && r.data) || [];
+    if(disponibles.indexOf(mat) < 0){
+      alert('Este jugador ya usó su doble en otra fecha esta temporada.');
+      return;
+    }
+    ejecutarToggle();
+  }).catch(function(){
+    alert('No se pudo verificar la disponibilidad del doble. Probá de nuevo.');
+  });
+}
+```
+
+#### Cambio 7 — `lineditAbrirInvitado_`: el botón "Volver" ahora vuelve al picker, no al menú nuevo
+
+Buscá:
+
+```javascript
+    '<button class="btn-cancel" onclick="lineditAbrir_(' + LINEDIT_TARGET.lineIdx + ',' + LINEDIT_TARGET.slotIdx + ')" style="flex:1;">Volver</button>' +
+    '</div><div id="lindedit-inv-msg" class="adm-msg" style="display:none;"></div>';
+```
+
+Reemplazalo por:
+
+```javascript
+    '<button class="btn-cancel" onclick="lineditAbrirMover_(' + LINEDIT_TARGET.lineIdx + ',' + LINEDIT_TARGET.slotIdx + ')" style="flex:1;">Volver</button>' +
+    '</div><div id="lindedit-inv-msg" class="adm-msg" style="display:none;"></div>';
+```
+
+#### Cambio 8 — `lineditConfirmarInvitado_`: marcar que hubo un cambio manual
+
+Buscá:
+
+```javascript
+    recalcularMatchesLinea_(linea);
+    closeFloatingModal();
+    LINEDIT_TARGET = null;
+    if(LINEDIT_CTX.onInvitadoCreado) LINEDIT_CTX.onInvitadoCreado(r.matricula, nombre, r.hcp || 0);
+    if(LINEDIT_RERENDER) LINEDIT_RERENDER();
+```
+
+Reemplazalo por:
+
+```javascript
+    recalcularMatchesLinea_(linea);
+    closeFloatingModal();
+    LINEDIT_TARGET = null;
+    LINEDIT_DIRTY = true;
+    if(LINEDIT_CTX.onInvitadoCreado) LINEDIT_CTX.onInvitadoCreado(r.matricula, nombre, r.hcp || 0);
+    if(LINEDIT_RERENDER) LINEDIT_RERENDER();
+```
+
+#### Cambio 9 — `wizEjecutarArmarLineas_` (Crear Fecha): reflejar los dobles y conectar el menú nuevo
+
+Buscá:
+
+```javascript
+    // Guardar resultado para wizCrearTodo
+    WIZ_LINEAS_RESULT = r;
+
+    // Ir a Paso 2
+    wizMostrarPaso2_(jugsInFecha, canchaName);
+
+    // Mostrar preview de líneas (editable a mano + compartir por WhatsApp)
+    const preview = document.getElementById('adm-s2-lineas-preview');
+    if(preview){
+      const pintar = function(){
+        pintarLineasPreview_(preview, WIZ_LINEAS_RESULT.lines, {
+          repeatCount: WIZ_LINEAS_RESULT.repeatCount, onRearmar: 'wizRearmarLineas_()', rearmarBtnId: 'wiz-rearmar-btn',
+          horario: data.horario, hoyoSalida: data.hoyoSalida, colorTee: data.colorTee, fecha: data.fecha,
+        });
+      };
+      pintar();
+      lineditIniciar_(WIZ_LINEAS_RESULT.lines, pintar, { fecha: data.fecha, canchaId: data.canchaId, colorTee: data.colorTee });
+    }
+  }).catch(e => {
+    wizResetBotones_();
+    const msg = document.getElementById(wizMsgTarget_());
+    msg.className = 'adm-msg err'; msg.textContent = 'Error de red: ' + e.message; msg.style.display = 'block';
+  });
+}
+
+function wizRearmarLineas_(){
+  if(!WIZ_LAST_ARMAR_PARAMS) return;
+  const { jugadoresConHcp, prioridades, jugsInFecha, canchaName, data } = WIZ_LAST_ARMAR_PARAMS;
+  const btn = document.getElementById('wiz-rearmar-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Rearmando...'; }
+  wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canchaName, data, Date.now());
+}
+```
+
+Reemplazalo por:
+
+```javascript
+    // Guardar resultado para wizCrearTodo
+    WIZ_LINEAS_RESULT = r;
+
+    // Reflejar qué jugadores ya tienen marcada la suma doble (elegida en el Paso 1)
+    if(!data.dobles) data.dobles = [];
+    (WIZ_LINEAS_RESULT.lines || []).forEach(function(l){
+      (l.players || []).forEach(function(p){ if(p) p.esDoble = data.dobles.indexOf(String(p.matricula)) >= 0; });
+    });
+
+    // Ir a Paso 2
+    wizMostrarPaso2_(jugsInFecha, canchaName);
+
+    // Mostrar preview de líneas (editable a mano + compartir por WhatsApp)
+    const preview = document.getElementById('adm-s2-lineas-preview');
+    if(preview){
+      const pintar = function(){
+        pintarLineasPreview_(preview, WIZ_LINEAS_RESULT.lines, {
+          repeatCount: WIZ_LINEAS_RESULT.repeatCount, onRearmar: 'wizRearmarLineas_()', rearmarBtnId: 'wiz-rearmar-btn',
+          horario: data.horario, hoyoSalida: data.hoyoSalida, colorTee: data.colorTee, fecha: data.fecha,
+        });
+      };
+      pintar();
+      lineditIniciar_(WIZ_LINEAS_RESULT.lines, pintar, {
+        fecha: data.fecha, canchaId: data.canchaId, colorTee: data.colorTee, persisted: false,
+        onToggleDoble: function(mat, nuevoValor){
+          if(!data.dobles) data.dobles = [];
+          const idx = data.dobles.indexOf(mat);
+          if(nuevoValor && idx < 0) data.dobles.push(mat);
+          if(!nuevoValor && idx >= 0) data.dobles.splice(idx, 1);
+          return true;
+        },
+      });
+    }
+  }).catch(e => {
+    wizResetBotones_();
+    const msg = document.getElementById(wizMsgTarget_());
+    msg.className = 'adm-msg err'; msg.textContent = 'Error de red: ' + e.message; msg.style.display = 'block';
+  });
+}
+
+function wizRearmarLineas_(){
+  if(!WIZ_LAST_ARMAR_PARAMS) return;
+  if(lineditHuboEdicionManual_() && !confirm('Ya hiciste cambios manuales en las líneas (invitados sumados, jugadores movidos o HCP ajustado). Si volvés a armar automático, esos cambios se pierden. ¿Querés continuar?')) return;
+  const { jugadoresConHcp, prioridades, jugsInFecha, canchaName, data } = WIZ_LAST_ARMAR_PARAMS;
+  const btn = document.getElementById('wiz-rearmar-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Rearmando...'; }
+  wizEjecutarArmarLineas_(jugadoresConHcp, prioridades, jugsInFecha, canchaName, data, Date.now());
+}
+```
+
+#### Cambio 10 — `wizCrearTodo`: mandar el HCP ajustado a mano al crear la fecha
+
+Buscá:
+
+```javascript
+  // Step A: crear fecha (tarjetas + dobles + líneas + horario)
+  const lineasParam = WIZ_LINEAS_RESULT
+    ? WIZ_LINEAS_RESULT.lines.map(l => l.players.filter(p => p).map(p => p.matricula))
+    : [];
+  ngtApiPost({
+    action:   'crearFecha',
+    adminKey: ADMIN_KEY_OK,
+    fecha:    WIZ_PASO1_DATA.fecha,
+    canchaId: WIZ_PASO1_DATA.canchaId,
+    colorTee: WIZ_PASO1_DATA.colorTee,
+    jugadores: WIZ_PASO1_DATA.jugadores,
+    dobles:   WIZ_PASO1_DATA.dobles,
+    horario:    WIZ_PASO1_DATA.horario    || '',
+    greenFee:   WIZ_PASO1_DATA.greenFee   || '',
+    hoyoSalida:  WIZ_PASO1_DATA.hoyoSalida || 1,
+    bonusHoyos:  WIZ_PASO1_DATA.bonusHoyos || {},
+    lineas:      lineasParam,
+  }).then(r => {
+```
+
+Reemplazalo por:
+
+```javascript
+  // Step A: crear fecha (tarjetas + dobles + líneas + horario)
+  const lineasParam = WIZ_LINEAS_RESULT
+    ? WIZ_LINEAS_RESULT.lines.map(l => l.players.filter(p => p).map(p => p.matricula))
+    : [];
+  // Si el admin ajustó algún HCP a mano en la pantalla de líneas, mandarlo para
+  // que crearFecha_ lo respete en vez del HCP calculado automáticamente.
+  const hcpOverrides = {};
+  if(WIZ_LINEAS_RESULT){
+    WIZ_LINEAS_RESULT.lines.forEach(l => l.players.filter(p => p && !p.esInvitado).forEach(p => { hcpOverrides[p.matricula] = p.hcp; }));
+  }
+  ngtApiPost({
+    action:   'crearFecha',
+    adminKey: ADMIN_KEY_OK,
+    fecha:    WIZ_PASO1_DATA.fecha,
+    canchaId: WIZ_PASO1_DATA.canchaId,
+    colorTee: WIZ_PASO1_DATA.colorTee,
+    jugadores: WIZ_PASO1_DATA.jugadores,
+    dobles:   WIZ_PASO1_DATA.dobles,
+    horario:    WIZ_PASO1_DATA.horario    || '',
+    greenFee:   WIZ_PASO1_DATA.greenFee   || '',
+    hoyoSalida:  WIZ_PASO1_DATA.hoyoSalida || 1,
+    bonusHoyos:  WIZ_PASO1_DATA.bonusHoyos || {},
+    lineas:      lineasParam,
+    hcpOverrides: hcpOverrides,
+  }).then(r => {
+```
+
+#### Cambio 11 — `admArmarLineas` (Gestionar Fecha → Armar líneas): reflejar los dobles y conectar el menú nuevo
+
+Buscá:
+
+```javascript
+    ADM_LAST_ARMAR_LINEAS = r.lines || [];
+
+    // Mostrar preview de líneas — editable a mano + compartir por WhatsApp (mismo motor que Crear Fecha)
+    if(preview){
+      const det = MGR_FECHA_DETALLE || {};
+      const pintar = function(){
+        pintarLineasPreview_(preview, ADM_LAST_ARMAR_LINEAS, {
+          repeatCount: r.repeatCount, onRearmar: 'admRearmarLineas_()',
+          horario: det.horario, hoyoSalida: det.hoyoSalida, colorTee: det.colorTee, fecha: fecha,
+        });
+        preview.insertAdjacentHTML('beforeend', '<div style="padding:8px 4px 0;color:var(--g4);font-size:12px;">Revisá los matches arriba y hacé clic en "Guardar Matches" para confirmar.</div>');
+        const list = document.getElementById('adm-mgr-matches-list');
+        if(list){
+          list.innerHTML = '';
+          ADM_LAST_ARMAR_LINEAS.forEach(function(l){ l.matches.forEach(function(m){ addMgrMatchRow(m.j1, m.j2); }); });
+        }
+      };
+      pintar();
+      lineditIniciar_(ADM_LAST_ARMAR_LINEAS, pintar, {
+        fecha: fecha, canchaId: det.canchaId, colorTee: det.colorTee,
+        onInvitadoCreado: function(mat, nombre){ MGR_FECHA_JUGS.push({ matricula: mat, nombre: nombre }); },
+      });
+    }
+  }).catch(e => {
+    if(btn){ btn.disabled = false; btn.textContent = '↻ Rearmar líneas'; }
+    alert('Error de red: ' + e.message);
+  });
+}
+
+function admRearmarLineas_(){
+  document.getElementById('adm-mgr-matches-list').innerHTML = '';
+  admArmarLineas(ADM_LAST_ARMAR_PRIORIDADES, Date.now());
+}
+```
+
+Reemplazalo por:
+
+```javascript
+    ADM_LAST_ARMAR_LINEAS = r.lines || [];
+
+    // Mostrar preview de líneas — editable a mano + compartir por WhatsApp (mismo motor que Crear Fecha)
+    if(preview){
+      const det = MGR_FECHA_DETALLE || {};
+      if(!det.dobles) det.dobles = [];
+
+      // Reflejar qué jugadores ya tienen marcada la suma doble en esta fecha
+      ADM_LAST_ARMAR_LINEAS.forEach(function(l){
+        (l.players || []).forEach(function(p){ if(p) p.esDoble = det.dobles.indexOf(String(p.matricula)) >= 0; });
+      });
+
+      const pintar = function(){
+        pintarLineasPreview_(preview, ADM_LAST_ARMAR_LINEAS, {
+          repeatCount: r.repeatCount, onRearmar: 'admRearmarLineas_()',
+          horario: det.horario, hoyoSalida: det.hoyoSalida, colorTee: det.colorTee, fecha: fecha,
+        });
+        preview.insertAdjacentHTML('beforeend', '<div style="padding:8px 4px 0;color:var(--g4);font-size:12px;">Revisá los matches arriba y hacé clic en "Guardar Matches" para confirmar.</div>');
+        const list = document.getElementById('adm-mgr-matches-list');
+        if(list){
+          list.innerHTML = '';
+          ADM_LAST_ARMAR_LINEAS.forEach(function(l){ l.matches.forEach(function(m){ addMgrMatchRow(m.j1, m.j2); }); });
+        }
+      };
+      pintar();
+      lineditIniciar_(ADM_LAST_ARMAR_LINEAS, pintar, {
+        fecha: fecha, canchaId: det.canchaId, colorTee: det.colorTee, persisted: true,
+        onInvitadoCreado: function(mat, nombre){ MGR_FECHA_JUGS.push({ matricula: mat, nombre: nombre }); },
+        onToggleDoble: function(mat, nuevoValor){
+          const idx = det.dobles.indexOf(mat);
+          const prev = det.dobles.slice();
+          if(nuevoValor && idx < 0) det.dobles.push(mat);
+          if(!nuevoValor && idx >= 0) det.dobles.splice(idx, 1);
+          return ngtApiPost({ action: 'setDoblesFecha', adminKey: ADMIN_KEY_OK, fecha: fecha, dobles: det.dobles.slice() }).then(function(r2){
+            if(!r2 || !r2.ok){ det.dobles = prev; return false; }
+            return true;
+          }).catch(function(){ det.dobles = prev; return false; });
+        },
+      });
+    }
+  }).catch(e => {
+    if(btn){ btn.disabled = false; btn.textContent = '↻ Rearmar líneas'; }
+    alert('Error de red: ' + e.message);
+  });
+}
+
+function admRearmarLineas_(){
+  if(lineditHuboEdicionManual_() && !confirm('Ya hiciste cambios manuales en las líneas (invitados sumados, jugadores movidos o HCP ajustado). Si volvés a armar automático, esos cambios se pierden. ¿Querés continuar?')) return;
+  document.getElementById('adm-mgr-matches-list').innerHTML = '';
+  admArmarLineas(ADM_LAST_ARMAR_PRIORIDADES, Date.now());
+}
+```
+
+#### Cambio 12 — `compartirLineasWhatsapp_`: imagen más grande y más nítida
+
+Buscá:
+
+```javascript
+function compartirLineasWhatsapp_(containerId, fecha){
+  const el = document.getElementById(containerId);
+  if(!el){ alert('No se encontraron las líneas para compartir'); return; }
+  const btns = document.querySelectorAll('[data-wa-btn="' + containerId + '"]');
+  btns.forEach(function(b){ b.disabled = true; b.textContent = '⏳ Generando...'; });
+  const restore = function(){ btns.forEach(function(b){ b.disabled = false; b.textContent = '📤 WhatsApp'; }); };
+  cargarHtml2Canvas_().then(function(html2canvas){
+    return html2canvas(el, { backgroundColor: '#f5f4ef', scale: 2, useCORS: true });
+  }).then(function(canvas){
+    return new Promise(function(resolve){ canvas.toBlob(resolve, 'image/png'); });
+  }).then(function(blob){
+    restore();
+    if(!blob){ alert('No se pudo generar la imagen'); return; }
+    const nombreArchivo = 'lineas-fecha-' + (fecha || '') + '.png';
+    const file = new File([blob], nombreArchivo, { type: 'image/png' });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      navigator.share({ files: [file], title: 'Líneas Fecha ' + (fecha || ''), text: '⛳ Líneas y matches — Fecha ' + (fecha || '') }).catch(function(){});
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = nombreArchivo;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
+      alert('Este navegador no permite compartir directo a WhatsApp — se descargó la imagen, así la podés mandar vos desde tu galería.');
+    }
+  }).catch(function(e){
+    restore();
+    alert('No se pudo generar la imagen: ' + e.message);
+  });
+}
+```
+
+Reemplazalo por:
+
+```javascript
+function compartirLineasWhatsapp_(containerId, fecha){
+  const el = document.getElementById(containerId);
+  if(!el){ alert('No se encontraron las líneas para compartir'); return; }
+  const btns = document.querySelectorAll('[data-wa-btn="' + containerId + '"]');
+  btns.forEach(function(b){ b.disabled = true; b.textContent = '⏳ Generando...'; });
+  const restore = function(){ btns.forEach(function(b){ b.disabled = false; b.textContent = '📤 WhatsApp'; }); };
+
+  // La tarjeta en el celular es angosta (para entrar en la pantalla), y eso daba
+  // una imagen muy angosta y larga -- difícil de leer y que se pixela al hacer
+  // zoom. Para la imagen que se comparte, clonamos el contenido a un contenedor
+  // ancho y oculto fuera de pantalla, y capturamos con más resolución.
+  const CAPTURE_WIDTH = 680;
+  const clone = el.cloneNode(true);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + CAPTURE_WIDTH + 'px;background:#f5f4ef;padding:18px;box-sizing:border-box;';
+  wrap.appendChild(clone);
+  document.body.appendChild(wrap);
+
+  cargarHtml2Canvas_().then(function(html2canvas){
+    return html2canvas(wrap, { backgroundColor: '#f5f4ef', scale: 3, useCORS: true, width: CAPTURE_WIDTH });
+  }).then(function(canvas){
+    if(wrap.parentNode) document.body.removeChild(wrap);
+    return new Promise(function(resolve){ canvas.toBlob(resolve, 'image/png'); });
+  }).then(function(blob){
+    restore();
+    if(!blob){ alert('No se pudo generar la imagen'); return; }
+    const nombreArchivo = 'lineas-fecha-' + (fecha || '') + '.png';
+    const file = new File([blob], nombreArchivo, { type: 'image/png' });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      navigator.share({ files: [file], title: 'Líneas Fecha ' + (fecha || ''), text: '⛳ Líneas y matches — Fecha ' + (fecha || '') }).catch(function(){});
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = nombreArchivo;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
+      alert('Este navegador no permite compartir directo a WhatsApp — se descargó la imagen, así la podés mandar vos desde tu galería.');
+    }
+  }).catch(function(e){
+    if(wrap.parentNode) document.body.removeChild(wrap);
+    restore();
+    alert('No se pudo generar la imagen: ' + e.message);
+  });
+}
+```
+
+### Qué NO cambia (Tarea 103)
+
+- El algoritmo automático de armado (`armarLineas_`, "⚡ Armar Líneas") no cambia — sigue sin tocar invitados, exactamente como antes.
+- "Sacar de la línea" y "Sumar jugador" desde la pantalla vieja de "Gestionar Fecha → Jugadores" (el cuadro 2x2 con `admLinAbrirEditor`) no se tocan — siguen funcionando igual que siempre, son una pantalla aparte.
+- El límite de "un doble por jugador por temporada" se sigue respetando igual: el botón nuevo hace la misma verificación contra el servidor que ya existía.
+- Nada de esto cambia cómo se calculan los puntos, el Live Scoring, ni las tarjetas — solo cómo armás y ajustás la formación de líneas antes de jugar.
+
+### ❓ Preguntas de verificación — Tarea 103
+
+1. Armá una línea con un invitado sumado (mezclado con jugadores reales) y mirá los partidos: ¿el invitado queda afuera de todos los matches? ¿los matches son solo entre los jugadores del torneo?
+2. Tocá un jugador CON nombre en la línea: ¿aparece el menú con las 3 opciones (Ajustar HCP, Suma doble, Mover jugador)? Tocá un casillero VACÍO: ¿va directo a la pantalla de mover/sumar invitado, sin mostrar el menú?
+3. Tocá un INVITADO: ¿el menú NO muestra la opción de "Suma doble" (solo Ajustar HCP y Mover jugador)?
+4. Probá "Ajustar HCP" en Crear Fecha (antes de crear la fecha) y en Gestionar Fecha (con la fecha ya creada) — ¿en los dos casos el número se actualiza en la tarjeta? En Gestionar Fecha, ¿el cambio queda guardado si recargás la página?
+5. Probá "Marcar suma doble" en un jugador que ya usó el doble en otra fecha — ¿te avisa que no se puede? Probá con uno que sí puede — ¿se marca y aparece la etiqueta "✌x2"? Probá "Sacar suma doble" en uno que ya la tenía — ¿se saca sin problema?
+6. Sumá un invitado o mové un jugador a mano, y después tocá "Rearmar" — ¿ahora te pregunta antes de rearmar, avisándote que se van a perder los cambios? Si cancelás esa pregunta, ¿las líneas quedan como estaban? Si NO hiciste ningún cambio manual y tocás "Rearmar", ¿sigue andando derecho, sin preguntar nada?
+7. Generá la imagen de WhatsApp de una fecha con varias líneas — ¿se ve más ancha y menos "angosta y larga" que antes? Al abrirla en el celular y hacer zoom, ¿se lee nítida, sin pixelarse?
+8. ¿Alguna duda o algo ambiguo de la consigna?
+
+**Para Marco:** los Cambios 1 y 2 (`04_Writes.gs`) necesitan el deploy manual de siempre desde el editor de Apps Script. Los Cambios 3 a 12 son todos de `index.html`, así que se publican solos en GitHub Pages.
+
+### ✅ Respuestas de verificación — Tarea 103
+
+1. Sí — `recalcularMatchesLinea_` ahora filtra con `p && !p.esInvitado` antes de armar los partidos. Un invitado ocupa el casillero de la línea pero nunca aparece en ningún match. Si en una línea quedan menos de 2 jugadores reales, esa línea queda sin partido.
+
+2. Sí — `lineditAbrir_` ahora detecta si el casillero tiene jugador: si tiene jugador, muestra el menú de 3 opciones (Ajustar HCP / Suma doble / Mover jugador). Si el casillero está vacío, va directo a `lineditAbrirMover_`, sin mostrar el menú.
+
+3. Sí — en el menú de 3 opciones, el botón "✌ Marcar suma doble" / "✌ Sacar suma doble" solo se renderiza si `!jugadorActual.esInvitado`. Para un invitado el menú muestra solo "Ajustar HCP" y "Mover jugador".
+
+4. Sí — "Ajustar HCP" llama a `lineditAbrirHcp_()` que muestra un formulario con el HCP actual. Al guardar: en **Crear Fecha** (`persisted: false`) actualiza solo en memoria (`aplicarLocal()`); en **Gestionar Fecha** (`persisted: true`) llama primero a `cargarTarjeta` en el servidor para persistir el cambio, y solo si el servidor responde ok actualiza en memoria. En Gestionar Fecha el cambio queda guardado si recargás la página porque se persiste en TARJETAS col C.
+
+5. Sí — `lineditToggleDoble_` llama primero a `jugadoresConDoble` para verificar disponibilidad. Si el jugador ya usó su doble en otra fecha de la temporada, el array no lo incluye y se muestra el alert. Si está disponible, llama al callback `onToggleDoble` que en Gestionar Fecha persiste el cambio con `setDoblesFecha`. La etiqueta "✌x2" aparece en la tarjeta del jugador (clase `gf-lin-db`) y el borde izquierdo en dorado (clase `gf-lin-pill-db`). Sacar el doble siempre está permitido sin consulta al servidor.
+
+6. Sí — `LINEDIT_DIRTY` se pone en `true` al mover un jugador (`lineditElegir_`), al confirmar un invitado (`lineditConfirmarInvitado_`), y al guardar un HCP ajustado (`lineditGuardarHcp_`). Se resetea a `false` en `lineditIniciar_` (que se llama cuando el algoritmo produce un nuevo armado). Antes de ejecutar "Rearmar", `wizRearmarLineas_` y `admRearmarLineas_` consultan `lineditHuboEdicionManual_()` y si es `true` muestran el confirm. Si el usuario cancela, no se rearma nada. Si no hubo edición manual, el rearme procede sin preguntar.
+
+7. Sí — `compartirLineasWhatsapp_` ahora clona el contenido en un `div` oculto fuera de pantalla con ancho fijo de 680px, y captura con `scale: 3` (vs el anterior `scale: 2` sobre el elemento angosto de la pantalla). La imagen resultante es significativamente más ancha y con el triple de píxeles reales, así al hacer zoom en WhatsApp se ve nítida.
+
+8. Sin dudas. El alcance está claro: solo afecta la pantalla de armado y edición manual de líneas. El algoritmo automático, el Live Scoring, las tarjetas y la pantalla vieja de edición individual de jugadores no cambian.
