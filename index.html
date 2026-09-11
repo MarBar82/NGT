@@ -9592,7 +9592,7 @@ function pintarLineasPreview_(containerEl, lines, meta){
   containerEl.style.display = 'block';
 }
 
-// ── Compartir líneas por WhatsApp como imagen (Tarea 102) ────────────────
+// ── Compartir líneas por WhatsApp como PDF (Tarea 105) ────────────────────
 let _H2C_PROMISE = null;
 function cargarHtml2Canvas_(){
   if(window.html2canvas) return Promise.resolve(window.html2canvas);
@@ -9607,6 +9607,25 @@ function cargarHtml2Canvas_(){
   return _H2C_PROMISE;
 }
 
+// WhatsApp comprime y "pixela" cualquier imagen (PNG/JPG) que se manda como
+// foto -- eso lo hace WhatsApp de su lado, no importa con qué resolución se
+// genere la imagen acá. La forma de evitarlo es mandar un PDF en vez de una
+// imagen: WhatsApp lo trata como documento y lo transmite tal cual, sin
+// recomprimir, así se ve nítido al hacer zoom.
+let _JSPDF_PROMISE = null;
+function cargarJsPdf_(){
+  if(window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+  if(_JSPDF_PROMISE) return _JSPDF_PROMISE;
+  _JSPDF_PROMISE = new Promise(function(resolve, reject){
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = function(){ resolve(window.jspdf && window.jspdf.jsPDF); };
+    s.onerror = function(){ _JSPDF_PROMISE = null; reject(new Error('No se pudo cargar la librería para generar el PDF')); };
+    document.head.appendChild(s);
+  });
+  return _JSPDF_PROMISE;
+}
+
 function compartirLineasWhatsapp_(containerId, fecha){
   const el = document.getElementById(containerId);
   if(!el){ alert('No se encontraron las líneas para compartir'); return; }
@@ -9615,9 +9634,9 @@ function compartirLineasWhatsapp_(containerId, fecha){
   const restore = function(){ btns.forEach(function(b){ b.disabled = false; b.textContent = '📤 WhatsApp'; }); };
 
   // La tarjeta en el celular es angosta (para entrar en la pantalla), y eso daba
-  // una imagen muy angosta y larga -- difícil de leer y que se pixela al hacer
-  // zoom. Para la imagen que se comparte, clonamos el contenido a un contenedor
-  // ancho y oculto fuera de pantalla, y capturamos con más resolución.
+  // una imagen muy angosta y larga -- difícil de leer. Para lo que se comparte,
+  // clonamos el contenido a un contenedor ancho y oculto fuera de pantalla, y
+  // capturamos con más resolución.
   const CAPTURE_WIDTH = 680;
   const clone = el.cloneNode(true);
   const wrap = document.createElement('div');
@@ -9625,16 +9644,28 @@ function compartirLineasWhatsapp_(containerId, fecha){
   wrap.appendChild(clone);
   document.body.appendChild(wrap);
 
+  let canvasCapturado = null;
+
   cargarHtml2Canvas_().then(function(html2canvas){
     return html2canvas(wrap, { backgroundColor: '#f5f4ef', scale: 3, useCORS: true, width: CAPTURE_WIDTH });
   }).then(function(canvas){
     if(wrap.parentNode) document.body.removeChild(wrap);
-    return new Promise(function(resolve){ canvas.toBlob(resolve, 'image/png'); });
+    canvasCapturado = canvas;
+    return cargarJsPdf_();
+  }).then(function(JsPDFCtor){
+    const canvas = canvasCapturado;
+    const pdf = new JsPDFCtor({
+      orientation: canvas.width >= canvas.height ? 'l' : 'p',
+      unit: 'px',
+      format: [canvas.width, canvas.height],
+    });
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+    return pdf.output('blob');
   }).then(function(blob){
     restore();
-    if(!blob){ alert('No se pudo generar la imagen'); return; }
-    const nombreArchivo = 'lineas-fecha-' + (fecha || '') + '.png';
-    const file = new File([blob], nombreArchivo, { type: 'image/png' });
+    if(!blob){ alert('No se pudo generar el archivo'); return; }
+    const nombreArchivo = 'lineas-fecha-' + (fecha || '') + '.pdf';
+    const file = new File([blob], nombreArchivo, { type: 'application/pdf' });
     if(navigator.canShare && navigator.canShare({ files: [file] })){
       navigator.share({ files: [file], title: 'Líneas Fecha ' + (fecha || ''), text: '⛳ Líneas y matches — Fecha ' + (fecha || '') }).catch(function(){});
     } else {
@@ -9643,12 +9674,12 @@ function compartirLineasWhatsapp_(containerId, fecha){
       a.href = url; a.download = nombreArchivo;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
-      alert('Este navegador no permite compartir directo a WhatsApp — se descargó la imagen, así la podés mandar vos desde tu galería.');
+      alert('Este navegador no permite compartir directo a WhatsApp — se descargó el archivo. Mandalo desde WhatsApp como documento (📎 → Documento), así no pierde calidad.');
     }
   }).catch(function(e){
     if(wrap.parentNode) document.body.removeChild(wrap);
     restore();
-    alert('No se pudo generar la imagen: ' + e.message);
+    alert('No se pudo generar el archivo para compartir: ' + e.message);
   });
 }
 
