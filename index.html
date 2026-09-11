@@ -582,7 +582,7 @@ select.adm-input:disabled{opacity:.55;cursor:not-allowed;background-color:var(--
 .adm-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
 @media(max-width:480px){.adm-row{grid-template-columns:1fr;}}
 .adm-field{display:flex;flex-direction:column;}
-.adm-jugs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;border:1px solid var(--g2);border-radius:3px;padding:10px;max-height:240px;overflow-y:auto;}
+.adm-jugs{display:flex;flex-direction:column;border:1px solid var(--g2);border-radius:3px;max-height:60vh;overflow-y:auto;}
 .adm-jug-item{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:2px;cursor:pointer;}
 .adm-jug-item:hover{background:var(--off);}
 .adm-jug-item input{margin:0;cursor:pointer;}
@@ -1078,13 +1078,14 @@ select.gf-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;pad
 .gf-tar-pill:active{background:var(--off);transform:scale(.98);}
 .gf-tar-pname{font-size:14px;font-weight:800;letter-spacing:.02em;color:var(--navy);}
 .gf-tar-pstat{font-size:11px;font-weight:700;}
-.gf-jug-toggle{display:flex;align-items:center;padding:9px 14px;border:1.5px solid var(--g2);border-radius:20px;cursor:pointer;background:var(--white);transition:.12s;}
+.gf-jug-toggle{display:flex;align-items:center;padding:11px 14px;border:none;border-bottom:1px solid var(--g1);border-radius:0;cursor:pointer;background:var(--white);transition:.12s;}
+.gf-jug-toggle:last-child{border-bottom:none;}
 .gf-jug-toggle input{position:absolute;opacity:0;width:1px;height:1px;margin:-1px;}
 .gf-jug-toggle span{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--text);}
 .gf-jug-toggle span .ap{font-weight:800;text-transform:uppercase;}
-.gf-jug-toggle:hover{border-color:var(--navy);}
-.gf-jug-toggle.on{background:var(--navy);border-color:var(--navy);}
-.gf-jug-toggle.on span{color:#fff;}
+.gf-jug-toggle:hover{background:var(--off);}
+.gf-jug-toggle.on{background:var(--g2);}
+.gf-jug-toggle.on span{color:var(--text);}
 
 @media(max-width:480px){
   .home-fecha-card{padding:18px 16px 14px;max-width:none;}
@@ -3808,7 +3809,7 @@ function applyAdminResults_(jugadores, canchas, fechas, doblesDisponibles){
     if(jl){
       const prevChecked = new Set([...jl.querySelectorAll('input:checked')].map(i => i.value));
       let jugHtml = '';
-      ADM_JUGADORES.filter(j => j.activo !== false).forEach(j => {
+      ADM_JUGADORES.filter(j => j.activo !== false).sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' })).forEach(j => {
         const lbl = formatPlayerLabel(j.nombre);
         jugHtml += '<label class="gf-jug-toggle" for="jug-' + j.matricula + '"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '" onchange="this.closest(\'.gf-jug-toggle\').classList.toggle(\'on\', this.checked)"><span>' + lbl + '</span></label>';
       });
@@ -9638,6 +9639,7 @@ function compartirLineasWhatsapp_(containerId, fecha){
   // clonamos el contenido a un contenedor ancho y oculto fuera de pantalla, y
   // capturamos con más resolución.
   const CAPTURE_WIDTH = 680;
+  const CAPTURE_SCALE = 3;
   const clone = el.cloneNode(true);
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + CAPTURE_WIDTH + 'px;background:#f5f4ef;padding:18px;box-sizing:border-box;';
@@ -9647,19 +9649,26 @@ function compartirLineasWhatsapp_(containerId, fecha){
   let canvasCapturado = null;
 
   cargarHtml2Canvas_().then(function(html2canvas){
-    return html2canvas(wrap, { backgroundColor: '#f5f4ef', scale: 3, useCORS: true, width: CAPTURE_WIDTH });
+    return html2canvas(wrap, { backgroundColor: '#f5f4ef', scale: CAPTURE_SCALE, useCORS: true, width: CAPTURE_WIDTH });
   }).then(function(canvas){
     if(wrap.parentNode) document.body.removeChild(wrap);
     canvasCapturado = canvas;
     return cargarJsPdf_();
   }).then(function(JsPDFCtor){
     const canvas = canvasCapturado;
+    // El canvas está capturado a CAPTURE_SCALE veces la resolución real para que
+    // se vea nítido al hacer zoom. Pero el tamaño de PÁGINA del PDF debe basarse
+    // en el tamaño real (sin multiplicar), si no la página queda física-mente
+    // enorme y los visores de PDF la muestran achicada, obligando a hacer zoom
+    // para leer -- exactamente lo que queremos evitar.
+    const pageWidth = canvas.width / CAPTURE_SCALE;
+    const pageHeight = canvas.height / CAPTURE_SCALE;
     const pdf = new JsPDFCtor({
-      orientation: canvas.width >= canvas.height ? 'l' : 'p',
+      orientation: pageWidth >= pageHeight ? 'l' : 'p',
       unit: 'px',
-      format: [canvas.width, canvas.height],
+      format: [pageWidth, pageHeight],
     });
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageWidth, pageHeight);
     return pdf.output('blob');
   }).then(function(blob){
     restore();
