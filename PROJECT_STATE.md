@@ -15914,3 +15914,182 @@ function compartirLineasWhatsapp_(containerId, fecha){
 4. Sí — en la rama `else` (navegador sin `canShare`) se descarga un `.pdf`. El mensaje ahora dice "se descargó el archivo. Mandalo desde WhatsApp como documento (📎 → Documento), así no pierde calidad."
 
 5. Sin dudas. Es un único cambio de frontend, sin tocar el backend.
+
+## 🎯 Tarea para Claude Code — Tarea 106 (PDF de WhatsApp con tamaño de página normal + lista de jugadores prolija y ordenada)
+
+### Contexto
+
+Dos ajustes sobre cosas que ya estaban funcionando:
+
+**1) El PDF de WhatsApp ahora se ve nítido, pero la página quedaba gigante.**
+En la Tarea 105 arreglamos que la imagen que se manda por WhatsApp no se pixele (mandándola como PDF en vez de foto). Pero al armar el PDF quedó un problema: el tamaño de la "hoja" del PDF se calculó mal, y terminaba siendo una hoja física enorme (¡38 pulgadas de ancho!). Por eso, aunque el contenido se veía nítido al hacer zoom, el celular mostraba la hoja achicada por defecto y había que hacer zoom + mover la pantalla para leer algo.
+
+El arreglo: la hoja del PDF ahora tiene un tamaño normal (proporcional al contenido real, no al de la "foto" de alta resolución que se usa por dentro para que no se pixele). Así el PDF entra bien en la pantalla del celular sin zoom, y si igual querés hacer zoom para ver más grande, sigue viéndose nítido — no se pierde nada de lo que ya arreglamos.
+
+**2) Lista de jugadores en "Crear Fecha" prolija y ordenada.**
+Antes los jugadores aparecían como "pastillas" en una grilla, sin orden particular. Ahora:
+- Aparecen ordenados alfabéticamente (por apellido, que es como ya se muestran).
+- En vez de pastillas, es una lista prolija, un jugador debajo del otro, separados por una línea.
+- Al tocar un jugador para seleccionarlo, se pinta de gris clarito (antes era azul oscuro con letra blanca).
+- La ventana de la lista es más alta (aprovecha más la pantalla), y si hay muchos jugadores, se puede scrollear adentro.
+
+Cómo se probó esto: reconstruí el flujo completo del PDF (con jsPDF real, en un navegador de prueba) y medí el tamaño físico de página resultante con una herramienta de inspección de PDFs — antes daba una hoja de ~38x11 pulgadas, después queda en ~13x4 pulgadas (proporcional al contenido, no a la resolución interna). También probé la lista de jugadores con datos de prueba: confirmé el orden alfabético, que cada jugador es un renglón separado por línea, que al seleccionar se pinta gris clarito, y que el contenedor ahora usa más alto de pantalla (240px → 60% de la altura de pantalla).
+
+### Cambios en `index.html` (frontend) — se publica solo en GitHub Pages, no hace falta ningún deploy
+
+#### Cambio 1 — Tamaño de página del PDF de WhatsApp
+
+Buscá:
+
+```javascript
+  const CAPTURE_WIDTH = 680;
+  const clone = el.cloneNode(true);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + CAPTURE_WIDTH + 'px;background:#f5f4ef;padding:18px;box-sizing:border-box;';
+  wrap.appendChild(clone);
+  document.body.appendChild(wrap);
+
+  let canvasCapturado = null;
+
+  cargarHtml2Canvas_().then(function(html2canvas){
+    return html2canvas(wrap, { backgroundColor: '#f5f4ef', scale: 3, useCORS: true, width: CAPTURE_WIDTH });
+  }).then(function(canvas){
+    if(wrap.parentNode) document.body.removeChild(wrap);
+    canvasCapturado = canvas;
+    return cargarJsPdf_();
+  }).then(function(JsPDFCtor){
+    const canvas = canvasCapturado;
+    const pdf = new JsPDFCtor({
+      orientation: canvas.width >= canvas.height ? 'l' : 'p',
+      unit: 'px',
+      format: [canvas.width, canvas.height],
+    });
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+    return pdf.output('blob');
+```
+
+Reemplazalo por:
+
+```javascript
+  const CAPTURE_WIDTH = 680;
+  const CAPTURE_SCALE = 3;
+  const clone = el.cloneNode(true);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + CAPTURE_WIDTH + 'px;background:#f5f4ef;padding:18px;box-sizing:border-box;';
+  wrap.appendChild(clone);
+  document.body.appendChild(wrap);
+
+  let canvasCapturado = null;
+
+  cargarHtml2Canvas_().then(function(html2canvas){
+    return html2canvas(wrap, { backgroundColor: '#f5f4ef', scale: CAPTURE_SCALE, useCORS: true, width: CAPTURE_WIDTH });
+  }).then(function(canvas){
+    if(wrap.parentNode) document.body.removeChild(wrap);
+    canvasCapturado = canvas;
+    return cargarJsPdf_();
+  }).then(function(JsPDFCtor){
+    const canvas = canvasCapturado;
+    // El canvas está capturado a CAPTURE_SCALE veces la resolución real para que
+    // se vea nítido al hacer zoom. Pero el tamaño de PÁGINA del PDF debe basarse
+    // en el tamaño real (sin multiplicar), si no la página queda física-mente
+    // enorme y los visores de PDF la muestran achicada, obligando a hacer zoom
+    // para leer -- exactamente lo que queremos evitar.
+    const pageWidth = canvas.width / CAPTURE_SCALE;
+    const pageHeight = canvas.height / CAPTURE_SCALE;
+    const pdf = new JsPDFCtor({
+      orientation: pageWidth >= pageHeight ? 'l' : 'p',
+      unit: 'px',
+      format: [pageWidth, pageHeight],
+    });
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageWidth, pageHeight);
+    return pdf.output('blob');
+```
+
+#### Cambio 2 — Lista de jugadores: contenedor (deja de ser grilla, pasa a ser lista)
+
+Buscá:
+
+```javascript
+.adm-jugs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;border:1px solid var(--g2);border-radius:3px;padding:10px;max-height:240px;overflow-y:auto;}
+```
+
+Reemplazalo por:
+
+```javascript
+.adm-jugs{display:flex;flex-direction:column;border:1px solid var(--g2);border-radius:3px;max-height:60vh;overflow-y:auto;}
+```
+
+#### Cambio 3 — Lista de jugadores: cada fila (deja de ser "pastilla", pasa a ser renglón con línea separadora, y el gris clarito al seleccionar)
+
+Buscá:
+
+```javascript
+.gf-jug-toggle{display:flex;align-items:center;padding:9px 14px;border:1.5px solid var(--g2);border-radius:20px;cursor:pointer;background:var(--white);transition:.12s;}
+.gf-jug-toggle input{position:absolute;opacity:0;width:1px;height:1px;margin:-1px;}
+.gf-jug-toggle span{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--text);}
+.gf-jug-toggle span .ap{font-weight:800;text-transform:uppercase;}
+.gf-jug-toggle:hover{border-color:var(--navy);}
+.gf-jug-toggle.on{background:var(--navy);border-color:var(--navy);}
+.gf-jug-toggle.on span{color:#fff;}
+```
+
+Reemplazalo por:
+
+```javascript
+.gf-jug-toggle{display:flex;align-items:center;padding:11px 14px;border:none;border-bottom:1px solid var(--g1);border-radius:0;cursor:pointer;background:var(--white);transition:.12s;}
+.gf-jug-toggle:last-child{border-bottom:none;}
+.gf-jug-toggle input{position:absolute;opacity:0;width:1px;height:1px;margin:-1px;}
+.gf-jug-toggle span{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--text);}
+.gf-jug-toggle span .ap{font-weight:800;text-transform:uppercase;}
+.gf-jug-toggle:hover{background:var(--off);}
+.gf-jug-toggle.on{background:var(--g2);}
+.gf-jug-toggle.on span{color:var(--text);}
+```
+
+#### Cambio 4 — Lista de jugadores: orden alfabético
+
+Buscá:
+
+```javascript
+      ADM_JUGADORES.filter(j => j.activo !== false).forEach(j => {
+        const lbl = formatPlayerLabel(j.nombre);
+        jugHtml += '<label class="gf-jug-toggle" for="jug-' + j.matricula + '"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '" onchange="this.closest(\'.gf-jug-toggle\').classList.toggle(\'on\', this.checked)"><span>' + lbl + '</span></label>';
+```
+
+Reemplazalo por:
+
+```javascript
+      ADM_JUGADORES.filter(j => j.activo !== false).sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' })).forEach(j => {
+        const lbl = formatPlayerLabel(j.nombre);
+        jugHtml += '<label class="gf-jug-toggle" for="jug-' + j.matricula + '"><input type="checkbox" id="jug-' + j.matricula + '" value="' + j.matricula + '" onchange="this.closest(\'.gf-jug-toggle\').classList.toggle(\'on\', this.checked)"><span>' + lbl + '</span></label>';
+```
+
+### Qué NO cambia (Tarea 106)
+
+- No cambia ninguna lógica de datos: quiénes son jugadores activos, cómo se arman las líneas, cómo se firman tarjetas, nada de eso se toca.
+- No cambia el paso "Dobles" del wizard (esa lista de jugadores con doble disponible sigue como pastillas normales — no es lo que se pidió cambiar).
+- No cambia nada del backend (`.gs`) — esta tarea es 100% frontend (`index.html`), así que no hace falta el deploy manual desde Apps Script. Con que se publique el `index.html` en GitHub Pages (automático) alcanza.
+- No cambia el mecanismo de envío por WhatsApp en sí (Web Share / descarga de respaldo) — sigue igual, solo cambia el tamaño de la hoja del PDF que se genera.
+
+### ❓ Preguntas de verificación — Tarea 106
+
+1. ¿El PDF que se comparte por WhatsApp ahora entra en la pantalla del celular sin necesidad de hacer zoom al abrirlo?
+Sí. El tamaño de página del PDF ahora se calcula dividiendo las dimensiones del canvas por CAPTURE_SCALE (3), así que la hoja queda proporcional al contenido real (~13x4 pulgadas) en vez de a la resolución interna (~38x11 pulgadas). Los visores de PDF la muestran a tamaño completo sin necesitar zoom.
+
+2. ¿Sigue viéndose nítido (sin pixelar) si hacés zoom adentro del PDF?
+Sí. La imagen incrustada en el PDF sigue siendo el canvas de alta resolución (capturado a escala 3x), solo que ahora se estira para cubrir una hoja más pequeña en vez de la hoja gigante. El resultado es que la densidad de píxeles en el PDF es la misma de antes — nítido al hacer zoom.
+
+3. En "Crear Fecha → Jugadores", ¿los jugadores aparecen ahora en orden alfabético (por apellido)?
+Sí. Antes del `.forEach` se agrega `.sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }))`, que ordena usando collation en español (maneja acentos y ñ correctamente).
+
+4. ¿La lista se ve como renglones uno debajo del otro con una línea separadora (en vez de pastillas)?
+Sí. `.adm-jugs` pasó de `display:grid` con columnas múltiples a `display:flex;flex-direction:column`. Cada `.gf-jug-toggle` ahora tiene `border:none;border-bottom:1px solid var(--g1);border-radius:0` en vez de el borde redondeado de pastilla, y el último hijo tiene `border-bottom:none`.
+
+5. ¿Al tocar un jugador para seleccionarlo, se pinta de gris clarito (en vez de azul oscuro)?
+Sí. `.gf-jug-toggle.on` ahora tiene `background:var(--g2)` (gris clarito) con `color:var(--text)` (texto oscuro), en vez de `background:var(--navy)` con `color:#fff`.
+
+6. ¿La ventana de la lista se ve más alta que antes, aprovechando mejor la pantalla?
+Sí. `.adm-jugs` pasó de `max-height:240px` a `max-height:60vh`, así que aprovecha el 60% de la altura de pantalla disponible en vez de un máximo fijo de 240 píxeles.
+
+### ¿Alguna duda o algo ambiguo de la consigna?
+No. Los cuatro cambios estaban descriptos con precisión: bloque de código exacto a buscar y reemplazar, y el spec aclaraba explícitamente que la lista de dobles (pastillas del paso "Dobles" del wizard) NO se toca — solo la lista de jugadores al crear fecha.
