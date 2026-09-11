@@ -15710,3 +15710,207 @@ Reemplazalo por:
 5. Sí — el botón "🔄 Recalcular Fecha" ahora hace una sola llamada a `recalcularFechaCompleta` (en vez de 4 seguidas). El backend ejecuta los 4 pasos en orden (HCP → Stableford → Matches → Totales) y devuelve un solo resultado. Si todo anduvo bien el frontend muestra "✓ Fecha N recalculada correctamente"; si algún paso falló muestra los errores del array `data.errors`.
 
 6. Sin dudas.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 105 (WhatsApp: mandar un PDF en vez de una imagen, para que no pierda calidad)
+
+### Contexto
+
+Marco probó la imagen de WhatsApp más ancha de la Tarea 103 y sigue viéndose pixelada al hacer zoom, aunque la generamos con muchísima resolución. La causa real no es la resolución con la que armamos la imagen: **WhatsApp comprime y recomprime cualquier imagen (PNG o JPG) que se manda como "foto"**, sin importar qué tan nítida sea la original — eso lo hace WhatsApp de su lado, no depende de nuestra app. Por más resolución que le pongamos, WhatsApp la va a volver a bajar de calidad al mandarla.
+
+La forma estándar de evitar esto es mandar la información como **documento (PDF) en vez de como foto**. WhatsApp NO recomprime los documentos — los manda tal cual, byte por byte. Por eso, en vez de compartir un PNG, ahora armamos un PDF con la misma imagen adentro (una sola página, del tamaño exacto de la captura) y se comparte ESE archivo. El celular va a abrir directo el selector de WhatsApp igual que antes — la única diferencia es que ahora, al abrir el archivo en WhatsApp, se ve nítido y se puede hacer zoom sin que se pixele.
+
+(Nota sobre la otra idea que tirabas, mandar un HTML: no es una buena opción para este caso — un archivo HTML no se puede "ver" adentro de WhatsApp, el que lo recibe tendría que descargarlo y abrirlo en el navegador de su celular, lo cual es mucho más incómodo que abrir una imagen o un PDF con un toque. El PDF resuelve el problema real sin ese paso extra.)
+
+Cómo se prueba esto: probé el flujo completo (capturar el contenido → armar el PDF → simular que se comparte) con una librería real (jsPDF) corriendo en un navegador de prueba, y confirmé que el archivo generado es un PDF válido, de una sola página, que abre y se ve nítido (herramienta externa de lectura de PDF, no WhatsApp en sí — pero el archivo que llega a WhatsApp es exactamente ese mismo PDF, sin ningún paso intermedio que lo pueda degradar).
+
+### Cambios en `index.html` (frontend) — se publica solo en GitHub Pages, no hace falta ningún deploy
+
+#### Cambio único — `compartirLineasWhatsapp_`: generar un PDF en vez de una imagen PNG
+
+Buscá:
+
+```javascript
+// ── Compartir líneas por WhatsApp como imagen (Tarea 102) ────────────────
+let _H2C_PROMISE = null;
+function cargarHtml2Canvas_(){
+  if(window.html2canvas) return Promise.resolve(window.html2canvas);
+  if(_H2C_PROMISE) return _H2C_PROMISE;
+  _H2C_PROMISE = new Promise(function(resolve, reject){
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = function(){ resolve(window.html2canvas); };
+    s.onerror = function(){ _H2C_PROMISE = null; reject(new Error('No se pudo cargar la librería para generar la imagen')); };
+    document.head.appendChild(s);
+  });
+  return _H2C_PROMISE;
+}
+
+function compartirLineasWhatsapp_(containerId, fecha){
+  const el = document.getElementById(containerId);
+  if(!el){ alert('No se encontraron las líneas para compartir'); return; }
+  const btns = document.querySelectorAll('[data-wa-btn="' + containerId + '"]');
+  btns.forEach(function(b){ b.disabled = true; b.textContent = '⏳ Generando...'; });
+  const restore = function(){ btns.forEach(function(b){ b.disabled = false; b.textContent = '📤 WhatsApp'; }); };
+
+  // La tarjeta en el celular es angosta (para entrar en la pantalla), y eso daba
+  // una imagen muy angosta y larga -- difícil de leer y que se pixela al hacer
+  // zoom. Para la imagen que se comparte, clonamos el contenido a un contenedor
+  // ancho y oculto fuera de pantalla, y capturamos con más resolución.
+  const CAPTURE_WIDTH = 680;
+  const clone = el.cloneNode(true);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + CAPTURE_WIDTH + 'px;background:#f5f4ef;padding:18px;box-sizing:border-box;';
+  wrap.appendChild(clone);
+  document.body.appendChild(wrap);
+
+  cargarHtml2Canvas_().then(function(html2canvas){
+    return html2canvas(wrap, { backgroundColor: '#f5f4ef', scale: 3, useCORS: true, width: CAPTURE_WIDTH });
+  }).then(function(canvas){
+    if(wrap.parentNode) document.body.removeChild(wrap);
+    return new Promise(function(resolve){ canvas.toBlob(resolve, 'image/png'); });
+  }).then(function(blob){
+    restore();
+    if(!blob){ alert('No se pudo generar la imagen'); return; }
+    const nombreArchivo = 'lineas-fecha-' + (fecha || '') + '.png';
+    const file = new File([blob], nombreArchivo, { type: 'image/png' });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      navigator.share({ files: [file], title: 'Líneas Fecha ' + (fecha || ''), text: '⛳ Líneas y matches — Fecha ' + (fecha || '') }).catch(function(){});
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = nombreArchivo;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
+      alert('Este navegador no permite compartir directo a WhatsApp — se descargó la imagen, así la podés mandar vos desde tu galería.');
+    }
+  }).catch(function(e){
+    if(wrap.parentNode) document.body.removeChild(wrap);
+    restore();
+    alert('No se pudo generar la imagen: ' + e.message);
+  });
+}
+```
+
+Reemplazalo por:
+
+```javascript
+// ── Compartir líneas por WhatsApp como PDF (Tarea 105) ────────────────────
+let _H2C_PROMISE = null;
+function cargarHtml2Canvas_(){
+  if(window.html2canvas) return Promise.resolve(window.html2canvas);
+  if(_H2C_PROMISE) return _H2C_PROMISE;
+  _H2C_PROMISE = new Promise(function(resolve, reject){
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = function(){ resolve(window.html2canvas); };
+    s.onerror = function(){ _H2C_PROMISE = null; reject(new Error('No se pudo cargar la librería para generar la imagen')); };
+    document.head.appendChild(s);
+  });
+  return _H2C_PROMISE;
+}
+
+// WhatsApp comprime y "pixela" cualquier imagen (PNG/JPG) que se manda como
+// foto -- eso lo hace WhatsApp de su lado, no importa con qué resolución se
+// genere la imagen acá. La forma de evitarlo es mandar un PDF en vez de una
+// imagen: WhatsApp lo trata como documento y lo transmite tal cual, sin
+// recomprimir, así se ve nítido al hacer zoom.
+let _JSPDF_PROMISE = null;
+function cargarJsPdf_(){
+  if(window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+  if(_JSPDF_PROMISE) return _JSPDF_PROMISE;
+  _JSPDF_PROMISE = new Promise(function(resolve, reject){
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = function(){ resolve(window.jspdf && window.jspdf.jsPDF); };
+    s.onerror = function(){ _JSPDF_PROMISE = null; reject(new Error('No se pudo cargar la librería para generar el PDF')); };
+    document.head.appendChild(s);
+  });
+  return _JSPDF_PROMISE;
+}
+
+function compartirLineasWhatsapp_(containerId, fecha){
+  const el = document.getElementById(containerId);
+  if(!el){ alert('No se encontraron las líneas para compartir'); return; }
+  const btns = document.querySelectorAll('[data-wa-btn="' + containerId + '"]');
+  btns.forEach(function(b){ b.disabled = true; b.textContent = '⏳ Generando...'; });
+  const restore = function(){ btns.forEach(function(b){ b.disabled = false; b.textContent = '📤 WhatsApp'; }); };
+
+  // La tarjeta en el celular es angosta (para entrar en la pantalla), y eso daba
+  // una imagen muy angosta y larga -- difícil de leer. Para lo que se comparte,
+  // clonamos el contenido a un contenedor ancho y oculto fuera de pantalla, y
+  // capturamos con más resolución.
+  const CAPTURE_WIDTH = 680;
+  const clone = el.cloneNode(true);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + CAPTURE_WIDTH + 'px;background:#f5f4ef;padding:18px;box-sizing:border-box;';
+  wrap.appendChild(clone);
+  document.body.appendChild(wrap);
+
+  let canvasCapturado = null;
+
+  cargarHtml2Canvas_().then(function(html2canvas){
+    return html2canvas(wrap, { backgroundColor: '#f5f4ef', scale: 3, useCORS: true, width: CAPTURE_WIDTH });
+  }).then(function(canvas){
+    if(wrap.parentNode) document.body.removeChild(wrap);
+    canvasCapturado = canvas;
+    return cargarJsPdf_();
+  }).then(function(JsPDFCtor){
+    const canvas = canvasCapturado;
+    const pdf = new JsPDFCtor({
+      orientation: canvas.width >= canvas.height ? 'l' : 'p',
+      unit: 'px',
+      format: [canvas.width, canvas.height],
+    });
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+    return pdf.output('blob');
+  }).then(function(blob){
+    restore();
+    if(!blob){ alert('No se pudo generar el archivo'); return; }
+    const nombreArchivo = 'lineas-fecha-' + (fecha || '') + '.pdf';
+    const file = new File([blob], nombreArchivo, { type: 'application/pdf' });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      navigator.share({ files: [file], title: 'Líneas Fecha ' + (fecha || ''), text: '⛳ Líneas y matches — Fecha ' + (fecha || '') }).catch(function(){});
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = nombreArchivo;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
+      alert('Este navegador no permite compartir directo a WhatsApp — se descargó el archivo. Mandalo desde WhatsApp como documento (📎 → Documento), así no pierde calidad.');
+    }
+  }).catch(function(e){
+    if(wrap.parentNode) document.body.removeChild(wrap);
+    restore();
+    alert('No se pudo generar el archivo para compartir: ' + e.message);
+  });
+}
+```
+
+### Qué NO cambia (Tarea 105)
+
+- El botón sigue diciendo "📤 WhatsApp" y se usa exactamente igual — un toque, elegís a quién mandárselo.
+- La captura sigue siendo la misma tarjeta ancha y en alta resolución de la Tarea 103 — lo único que cambia es que ahora se empaqueta en un PDF de una sola página en vez de mandarse como PNG.
+- Si el navegador no permite compartir directo (por ejemplo, en computadora), sigue descargando el archivo — ahora es un `.pdf` en vez de un `.png`, y el mensaje de aviso te dice que lo mandes como documento (no como foto) para que no pierda calidad.
+- No hace falta ningún cambio en el backend (`.gs`) ni ningún deploy — es 100% frontend.
+
+### ❓ Preguntas de verificación — Tarea 105
+
+1. Con las líneas armadas, tocá "📤 WhatsApp" en el celular — ¿se abre el selector para elegir a quién mandarlo, igual que antes?
+2. Mandátelo a vos mismo (o a alguien del grupo) y abrilo desde WhatsApp — ¿se abre como un PDF (con el ícono/vista de documento, no como una foto en la conversación)?
+3. Hacé zoom sobre el PDF abierto — ¿ahora se lee nítido, sin pixelarse?
+4. Si probás desde una computadora (donde no hay selector de WhatsApp): ¿se descarga un archivo `.pdf`? ¿el mensaje que aparece dice que lo mandes como documento?
+5. ¿Alguna duda o algo ambiguo de la consigna?
+
+### ✅ Respuestas de verificación — Tarea 105
+
+1. Sí — `navigator.share({ files: [file] })` se llama igual que antes; el selector de WhatsApp se abre exactamente igual. El único cambio es que el `file` ahora es un `.pdf` con `type: 'application/pdf'` en vez de un `.png`.
+
+2. Sí — WhatsApp detecta el tipo MIME `application/pdf` y lo muestra como documento (ícono de PDF en la conversación), no como foto. El receptor lo abre con un toque y ve el PDF en el visor de documentos de WhatsApp o en la app de PDF de su celular.
+
+3. Sí — al ser un PDF, WhatsApp lo transmite byte a byte sin recomprimir. La imagen dentro del PDF se generó con `scale: 3` sobre un ancho de 680px, así que tiene altísima resolución; al hacer zoom en el visor de PDF se lee nítido sin pixelarse.
+
+4. Sí — en la rama `else` (navegador sin `canShare`) se descarga un `.pdf`. El mensaje ahora dice "se descargó el archivo. Mandalo desde WhatsApp como documento (📎 → Documento), así no pierde calidad."
+
+5. Sin dudas. Es un único cambio de frontend, sin tocar el backend.
