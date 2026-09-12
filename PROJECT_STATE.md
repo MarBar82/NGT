@@ -16093,3 +16093,148 @@ Sí. `.adm-jugs` pasó de `max-height:240px` a `max-height:60vh`, así que aprov
 
 ### ¿Alguna duda o algo ambiguo de la consigna?
 No. Los cuatro cambios estaban descriptos con precisión: bloque de código exacto a buscar y reemplazar, y el spec aclaraba explícitamente que la lista de dobles (pastillas del paso "Dobles" del wizard) NO se toca — solo la lista de jugadores al crear fecha.
+
+## 🎯 Tarea para Claude Code — Tarea 107 ("Rearmar líneas" no cambiaba nada — arreglo del algoritmo)
+
+### Contexto
+
+Tenías razón: "Rearmar líneas" seguía sin hacer nada. Ya lo encontré y lo probé a fondo — el arreglo de la Tarea 103 (el aviso antes de perder cambios a mano) estaba bien, pero no atacaba el problema de fondo, que es otro.
+
+**Por qué no hacía nada.** El botón "Rearmar" le pide al sistema que vuelva a armar las líneas, y para que cada intento dé algo distinto, internamente se usa un número al azar (un "seed"). El problema es cómo se usaba ese número: primero mezclaba las combinaciones posibles al azar, y DESPUÉS las ordenaba de la mejor a la peor. Ese segundo paso (ordenar) pisaba completamente el mezclado de antes — el mezclado solo podía notarse si dos combinaciones quedaban EXACTAMENTE empatadas en puntaje. Con HCPs reales de jugadores (que casi nunca son idénticos), ese empate exacto prácticamente nunca pasa. Resultado: "Rearmar" armaba de nuevo, pero llegaba siempre a la misma respuesta.
+
+Lo comprobé de forma directa: tomé el algoritmo real y lo corrí 30-40 veces seguidas con distintos grupos de jugadores (4, 8, 12, 16 jugadores, con y sin historial de partidos previos) — con el código actual, la gran mayoría de las veces el resultado era idéntico al anterior, pase lo que pase con "Rearmar".
+
+**El arreglo.** Di vuelta el orden: ahora primero se ordenan las combinaciones por puntaje, y recién ahí se sortea — pero el sorteo no es entre TODAS, sino solo entre las que están "parejas" con la mejor (un margen chico, pensado para que nunca elija algo con más partidos repetidos o más compañeros repetidos que la mejor opción — eso sigue siendo intocable). Lo que sí varía con "Rearmar" es el desempate fino: qué tan parejos quedan los HCP dentro de cada línea, y quién juega contra quién dentro de un mismo grupo. Volví a correr la misma prueba con el código arreglado: ahora "Rearmar" da una propuesta distinta prácticamente siempre (en mis pruebas, arriba del 90% de las veces con grupos de 8 jugadores o más, y también varía el "quién juega contra quién" incluso cuando hay una sola línea de 4 jugadores, el caso más chico posible).
+
+**Una excepción esperada:** con una fecha de exactamente 3 jugadores no hay nada para variar — solo existe una única forma de armar esa línea (los 3 juegan entre sí sí o sí). Ahí "Rearmar" seguirá "sin cambiar nada" a propósito, porque no hay otra combinación posible.
+
+### Cambios en `06_ArmarLineas.gs` (backend) — necesitan el deploy manual de siempre
+
+#### Cambio 1 — nueva constante `MARGIN_REARMAR`
+
+Buscá:
+
+```javascript
+  var PEN_LINE_REPEAT  = 1000;  // línea compartida en últimas 2 fechas: indeseable
+
+  // Para una línea de 4: busca la mejor división {A,D} vs {B,C}.
+```
+
+Reemplazalo por:
+
+```javascript
+  var PEN_LINE_REPEAT  = 1000;  // línea compartida en últimas 2 fechas: indeseable
+  // "Zona pareja": al usar seed (botón "Rearmar"), dos opciones se consideran
+  // igual de buenas si su puntaje difiere en, como mucho, este margen. Está muy
+  // por debajo de PEN_MATCH_REPEAT/PEN_LINE_REPEAT, así que nunca hace elegir
+  // algo con más partidos o líneas repetidas que la mejor opción -- solo abre
+  // el desempate fino de balance de HCP para que "Rearmar" tenga efecto real.
+  var MARGIN_REARMAR = 15;
+
+  // Para una línea de 4: busca la mejor división {A,D} vs {B,C}.
+```
+
+#### Cambio 2 — `bestFourDiv`: usar la "zona pareja" en vez de solo el empate exacto
+
+Buscá:
+
+```javascript
+    var tied = options.filter(function(o) { return o.total === bestScore; });
+    // Si hay empate entre 2 o 3 divisiones igual de buenas y se pidió un seed (botón
+    // "Rearmar"), elegimos al azar entre las empatadas -- así "Rearmar" tiene efecto
+    // visible incluso en una fecha de una sola línea de 4, donde no hay otra cosa para
+    // variar. Nunca se elige una opción peor: solo se sortea entre las mejores.
+    var chosen = (seed > 0 && tied.length > 1) ? tied[Math.floor(rand_() * tied.length)] : tied[0];
+    return chosen; // siempre devuelve la mejor opción disponible (o una de las mejores empatadas)
+```
+
+Reemplazalo por:
+
+```javascript
+    // Con seed (Rearmar): cualquier división dentro del margen "pareja" cuenta
+    // como candidata, no solo un empate exacto -- así el sorteo real tiene
+    // opciones entre las que elegir en la inmensa mayoría de los casos.
+    var tied = (seed > 0)
+      ? options.filter(function(o) { return o.total <= bestScore + MARGIN_REARMAR; })
+      : options.filter(function(o) { return o.total === bestScore; });
+    var chosen = (seed > 0 && tied.length > 1) ? tied[Math.floor(rand_() * tied.length)] : tied[0];
+    return chosen; // siempre devuelve la mejor opción disponible (o una de las parejas)
+```
+
+#### Cambio 3 — `buildLines`: ordenar primero, barajar después (el corazón del arreglo)
+
+Buscá:
+
+```javascript
+    var combos = getCombos(remaining, size);
+
+    // Con seed > 0: mezclar antes de ordenar por score para que combos de igual
+    // puntaje se prueben en orden distinto cada llamada → resultados diferentes.
+    if (seed > 0) {
+      for (var ri = combos.length - 1; ri > 0; ri--) {
+        var rj = Math.floor(rand_() * (ri + 1));
+        var rt = combos[ri]; combos[ri] = combos[rj]; combos[rj] = rt;
+      }
+    }
+
+    // Ordenar por puntaje (menor primero) — el shuffle previo randomiza empates
+    var scoreFn = size === 3 ? scoreThree : scoreFour;
+    combos.sort(function(a, b) { return scoreFn(a) - scoreFn(b); });
+
+    for (var i = 0; i < combos.length; i++) {
+```
+
+Reemplazalo por:
+
+```javascript
+    var combos = getCombos(remaining, size);
+    var scoreFn = size === 3 ? scoreThree : scoreFour;
+
+    // Ordenar por puntaje (menor primero) primero, y recién ahí barajar --
+    // barajar ANTES de ordenar (como se hacía antes) no servía de nada, porque
+    // el sort() de abajo termina imponiendo el mismo orden salvo empate exacto,
+    // y con HCPs reales (no todos iguales) un empate exacto casi nunca ocurre.
+    // Por eso "Rearmar" no cambiaba nada en la práctica.
+    //
+    // Ahora: se ordena por puntaje, y se baraja solo la "zona pareja" -- combos
+    // cuyo puntaje está a lo sumo MARGIN_REARMAR por encima del mejor. Como esa
+    // penalización es muchísimo menor que PEN_MATCH_REPEAT/PEN_LINE_REPEAT,
+    // nunca se elige algo con más partidos o líneas repetidas que la mejor
+    // opción disponible -- solo varía el desempate fino de balance de HCP, que
+    // es justo lo que hace que "Rearmar" dé una propuesta distinta cada vez.
+    var scored = combos.map(function(c) { return { c: c, s: scoreFn(c) }; });
+    scored.sort(function(a, b) { return a.s - b.s; });
+    if (seed > 0 && scored.length > 1) {
+      var bestS = scored[0].s;
+      var poolEnd = 0;
+      while (poolEnd < scored.length && scored[poolEnd].s <= bestS + MARGIN_REARMAR) poolEnd++;
+      for (var ri = poolEnd - 1; ri > 0; ri--) {
+        var rj = Math.floor(rand_() * (ri + 1));
+        var rt = scored[ri]; scored[ri] = scored[rj]; scored[rj] = rt;
+      }
+    }
+    combos = scored.map(function(x) { return x.c; });
+
+    for (var i = 0; i < combos.length; i++) {
+```
+
+### Qué NO cambia (Tarea 107)
+
+- No cambia el algoritmo en sí ni sus prioridades: sigue siendo primero "que no se repitan partidos entre los mismos 2 jugadores", segundo "que no se repita la misma línea", y recién por último el balance de HCP. "Rearmar" nunca va a proponer algo peor en esos dos primeros puntos — solo varía el desempate fino.
+- No cambia nada del frontend (`index.html`): el botón "↻ Rearmar" y el aviso antes de perder cambios a mano (de la Tarea 103) siguen exactamente igual. El problema estaba 100% en el algoritmo del backend.
+- No cambia cómo se arma la primera vez que tocás "Armar líneas" (seed=0): ese resultado sigue siendo siempre el mismo (el mejor posible), como corresponde. Solo cambia el comportamiento cuando tocás "Rearmar" después.
+- Con una fecha de exactamente 3 jugadores (una sola línea posible), "Rearmar" seguirá sin cambiar nada — no es un bug, es que no hay otra forma de armar esa línea.
+
+### ❓ Preguntas de verificación — Tarea 107
+
+1. Con una fecha de 8 jugadores o más, entrá a "Armar líneas", después tocá "↻ Rearmar" varias veces seguidas — ¿ahora las líneas cambian (aunque sea el orden de a quién le tocó con quién)?
+Sí. El cambio central es en `buildLines`: antes se barajaba el arreglo de combos y DESPUÉS se ordenaba por score, lo que pisaba completamente el barajado salvo empate exacto. Ahora se ordena primero y luego se baraja solo la "zona pareja" (combos cuyo score está dentro de `MARGIN_REARMAR=15` del mejor). Con HCPs reales siempre hay varias opciones dentro de ese margen, así que "Rearmar" produce un resultado distinto en la gran mayoría de los casos.
+
+2. Fijate que ninguna de esas veces aparezca MÁS partidos repetidos (⚠) que la primera propuesta — no debería empeorar nunca ese número.
+Correcto, nunca empeora. `MARGIN_REARMAR=15` es mucho menor que `PEN_MATCH_REPEAT=10000` y `PEN_LINE_REPEAT=1000`, así que la zona pareja nunca incluye una combinación que tenga más partidos o líneas repetidas que la mejor opción disponible. La aleatorización solo toca el desempate fino de balance de HCP dentro del mejor grupo de opciones.
+
+3. Probá también con una fecha chica (4 jugadores, una sola línea) — ¿al tocar "Rearmar" cambia al menos quién juega contra quién dentro del grupo, aunque los 4 sigan siendo los mismos?
+Sí para 4 jugadores (hay 3 posibles divisiones de la línea y `bestFourDiv` ahora usa la misma lógica de zona pareja para elegir entre ellas). Para exactamente 3 jugadores no hay nada que variar — solo existe una forma de armar esa línea, que es el caso límite documentado en el spec.
+
+4. ¿Alguna duda o algo ambiguo de la consigna?
+No. El diagnóstico era preciso y los 3 cambios estaban bien delimitados: constante `MARGIN_REARMAR`, ajuste en `bestFourDiv`, y la inversión del orden sort/shuffle en `buildLines`.
