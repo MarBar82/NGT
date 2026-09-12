@@ -223,6 +223,12 @@ function armarLineas_(params) {
   // matchedPairs[key] es un CONTADOR: penalizamos en proporción a las veces que jugaron.
   var PEN_MATCH_REPEAT = 10000; // por cada vez que ese par ya jugó: muy indeseable
   var PEN_LINE_REPEAT  = 1000;  // línea compartida en últimas 2 fechas: indeseable
+  // "Zona pareja": al usar seed (botón "Rearmar"), dos opciones se consideran
+  // igual de buenas si su puntaje difiere en, como mucho, este margen. Está muy
+  // por debajo de PEN_MATCH_REPEAT/PEN_LINE_REPEAT, así que nunca hace elegir
+  // algo con más partidos o líneas repetidas que la mejor opción -- solo abre
+  // el desempate fino de balance de HCP para que "Rearmar" tenga efecto real.
+  var MARGIN_REARMAR = 15;
 
   // Para una línea de 4: busca la mejor división {A,D} vs {B,C}.
   // Siempre devuelve la mejor de las 3 opciones (nunca null).
@@ -251,13 +257,14 @@ function armarLineas_(params) {
       return { matches: mps, matchScore: matchScore, lineScore: lineScore, total: matchScore + lineScore };
     });
     var bestScore = Math.min.apply(null, options.map(function(o) { return o.total; }));
-    var tied = options.filter(function(o) { return o.total === bestScore; });
-    // Si hay empate entre 2 o 3 divisiones igual de buenas y se pidió un seed (botón
-    // "Rearmar"), elegimos al azar entre las empatadas -- así "Rearmar" tiene efecto
-    // visible incluso en una fecha de una sola línea de 4, donde no hay otra cosa para
-    // variar. Nunca se elige una opción peor: solo se sortea entre las mejores.
+    // Con seed (Rearmar): cualquier división dentro del margen "pareja" cuenta
+    // como candidata, no solo un empate exacto -- así el sorteo real tiene
+    // opciones entre las que elegir en la inmensa mayoría de los casos.
+    var tied = (seed > 0)
+      ? options.filter(function(o) { return o.total <= bestScore + MARGIN_REARMAR; })
+      : options.filter(function(o) { return o.total === bestScore; });
     var chosen = (seed > 0 && tied.length > 1) ? tied[Math.floor(rand_() * tied.length)] : tied[0];
-    return chosen; // siempre devuelve la mejor opción disponible (o una de las mejores empatadas)
+    return chosen; // siempre devuelve la mejor opción disponible (o una de las parejas)
   }
 
   // Puntaje de un grupo de 3 — nunca Infinity
@@ -285,19 +292,32 @@ function armarLineas_(params) {
     if (threeLeft === 0 && fourLeft === 0) return [];
     var size = threeLeft > 0 ? 3 : 4;
     var combos = getCombos(remaining, size);
+    var scoreFn = size === 3 ? scoreThree : scoreFour;
 
-    // Con seed > 0: mezclar antes de ordenar por score para que combos de igual
-    // puntaje se prueben en orden distinto cada llamada → resultados diferentes.
-    if (seed > 0) {
-      for (var ri = combos.length - 1; ri > 0; ri--) {
+    // Ordenar por puntaje (menor primero) primero, y recién ahí barajar --
+    // barajar ANTES de ordenar (como se hacía antes) no servía de nada, porque
+    // el sort() de abajo termina imponiendo el mismo orden salvo empate exacto,
+    // y con HCPs reales (no todos iguales) un empate exacto casi nunca ocurre.
+    // Por eso "Rearmar" no cambiaba nada en la práctica.
+    //
+    // Ahora: se ordena por puntaje, y se baraja solo la "zona pareja" -- combos
+    // cuyo puntaje está a lo sumo MARGIN_REARMAR por encima del mejor. Como esa
+    // penalización es muchísimo menor que PEN_MATCH_REPEAT/PEN_LINE_REPEAT,
+    // nunca se elige algo con más partidos o líneas repetidas que la mejor
+    // opción disponible -- solo varía el desempate fino de balance de HCP, que
+    // es justo lo que hace que "Rearmar" dé una propuesta distinta cada vez.
+    var scored = combos.map(function(c) { return { c: c, s: scoreFn(c) }; });
+    scored.sort(function(a, b) { return a.s - b.s; });
+    if (seed > 0 && scored.length > 1) {
+      var bestS = scored[0].s;
+      var poolEnd = 0;
+      while (poolEnd < scored.length && scored[poolEnd].s <= bestS + MARGIN_REARMAR) poolEnd++;
+      for (var ri = poolEnd - 1; ri > 0; ri--) {
         var rj = Math.floor(rand_() * (ri + 1));
-        var rt = combos[ri]; combos[ri] = combos[rj]; combos[rj] = rt;
+        var rt = scored[ri]; scored[ri] = scored[rj]; scored[rj] = rt;
       }
     }
-
-    // Ordenar por puntaje (menor primero) — el shuffle previo randomiza empates
-    var scoreFn = size === 3 ? scoreThree : scoreFour;
-    combos.sort(function(a, b) { return scoreFn(a) - scoreFn(b); });
+    combos = scored.map(function(x) { return x.c; });
 
     for (var i = 0; i < combos.length; i++) {
       var group = combos[i];
