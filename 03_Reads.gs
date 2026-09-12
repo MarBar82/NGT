@@ -1050,13 +1050,19 @@ function getFechaLineas_(fecha) {
   // ── Jugadores de esta fecha → hcp de juego (col E TARJETAS) ─────────────
   const shT = getSheet_(SHEETS.TARJETAS);
   const hcpMap = {}; // matricula → hcp de juego (almacenado en tarjeta)
+  // Para un invitado, la columna C de TARJETAS no guarda HCP: guarda su nombre
+  // (ver crearFecha_/editarFecha_). Lo levantamos acá como respaldo del nombre.
+  const tarjetaInvNombre = {};
   if (shT) {
     const ne = findNextEmptyRow_(shT, 1);
     if (ne > 2) {
       shT.getRange(2, 1, ne - 2, 4).getValues().forEach(function(row) {
         const f = String(row[0] || '').trim();
         const m = String(row[1] || '').trim();
-        if (f === String(fecha) && m) hcpMap[m] = parseInt(row[2]) || 0;
+        if (f === String(fecha) && m) {
+          hcpMap[m] = parseInt(row[2]) || 0;
+          if (m.indexOf('INV') === 0 && row[2]) tarjetaInvNombre[m] = String(row[2]).trim();
+        }
       });
     }
   }
@@ -1124,7 +1130,7 @@ function getFechaLineas_(fecha) {
           rating: r.rating,
         };
       });
-      const nombreInv = esInv ? (invInfo[matStr] || matStr) : '';
+      const nombreInv = esInv ? (invInfo[matStr] || tarjetaInvNombre[matStr] || matStr) : '';
       return {
         matricula: matStr,
         nombre: esInv ? nombreInv : (j.nombre || ''),
@@ -1199,7 +1205,7 @@ function getFechaDetalle_(fecha) {
     if (f !== String(fecha) || !m) return;
     if (!cancha && cId) cancha = lookupCanchaName_(cId) || cId;
     if (!colorTee && ct) colorTee = ct.toUpperCase();
-    const n = m.indexOf('INV') === 0 ? (invInfoDet[m] || m) : ((jugMapDet2[m] && jugMapDet2[m].nombre) || m);
+    const n = m.indexOf('INV') === 0 ? (invInfoDet[m] || String(row[2] || '').trim() || m) : ((jugMapDet2[m] && jugMapDet2[m].nombre) || m);
     if (m.indexOf('INV') === 0) {
       invitados.push({ matricula: m, nombre: n, row: i + 2 });
     } else {

@@ -89,9 +89,10 @@ function crearFecha_(params) {
 
   // ── Invitados: batch write (A-B-C together, then E-F and AA) ───────────────
   let invAdded = 0;
+  let newInvRows = []; // { mat, nombre } de los invitados creados en esta llamada -- se usa después para registrar el nombre en invitadosInfo
   if (Array.isArray(invitados)) {
     const baseTs = Date.now();
-    const newInvRows = [];
+    newInvRows = [];
     invitados.forEach((nombre, idx) => {
       const n = String(nombre || '').trim();
       if (!n) return;
@@ -124,6 +125,10 @@ function crearFecha_(params) {
   const props = PropertiesService.getDocumentProperties();
   const meta = JSON.parse(props.getProperty('FECHA_META') || '{}');
   const invitadosInfoPrevio = (meta[String(fecha)] && meta[String(fecha)].invitadosInfo) || {};
+  // Registrar el nombre de los invitados recién creados en esta misma llamada --
+  // si no, cualquier pantalla que busque el nombre por matrícula (líneas,
+  // tarjetas, etc.) no lo encuentra y termina mostrando la matrícula "INV..." cruda.
+  newInvRows.forEach(function(r) { invitadosInfoPrevio[r.mat] = r.nombre; });
   meta[String(fecha)] = {
     canchaId,
     canchaName,
@@ -1285,7 +1290,15 @@ function agregarInvitadoSuelto_(params) {
   if (canchaId) sh.getRange(nextRow, 4).setValue(canchaId);
   if (colorFinal) sh.getRange(nextRow, 25).setValue(colorFinal);
 
+  // Guardamos el nombre bajo un lock: sin esto, si dos pedidos tocaban FECHA_META
+  // casi al mismo tiempo (por ejemplo, sumar un invitado justo cuando otra pestaña
+  // guarda el horario de la misma fecha), uno de los dos podía pisar por completo
+  // los cambios del otro -- y así se perdía el nombre del invitado sin ningún
+  // aviso, quedando solo la matrícula "INV..." para siempre. Con el lock, el
+  // segundo pedido espera a que el primero termine en vez de pisarlo.
+  const metaLock = LockService.getScriptLock();
   try {
+    metaLock.waitLock(5000);
     const props = PropertiesService.getDocumentProperties();
     const meta = JSON.parse(props.getProperty('FECHA_META') || '{}');
     if (!meta[fStr]) meta[fStr] = {};
@@ -1293,6 +1306,7 @@ function agregarInvitadoSuelto_(params) {
     meta[fStr].invitadosInfo[mat] = n;
     props.setProperty('FECHA_META', JSON.stringify(meta));
   } catch (e) { /* no crítico -- el invitado ya quedó creado en TARJETAS */ }
+  finally { try { metaLock.releaseLock(); } catch(e2) {} }
 
   audit_('AGREGAR_INVITADO_SUELTO', 'admin', { fecha: fStr, matricula: mat, nombre: n, hcp: hcpVal });
   return { ok: true, matricula: mat, nombre: n, hcp: hcpVal };
