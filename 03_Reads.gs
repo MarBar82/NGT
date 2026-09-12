@@ -1246,6 +1246,14 @@ function editarFecha_(params) {
 
   const colorFinal = colorTee ? String(colorTee).trim().toUpperCase() : null;
 
+  // Nombres de los invitados ya registrados para esta fecha (FECHA_META.invitadosInfo).
+  // Se necesita ACÁ (no solo al leer/mostrar) porque más abajo se decide si un
+  // invitado existente se "mantiene" o se "borra y se vuelve a crear" comparando
+  // por nombre -- si se compara mal, el invitado se recrea con una matrícula
+  // nueva en cada guardado, aunque no haya cambiado nada de él.
+  const metaEdit0     = getFechaMeta_(fecha) || {};
+  const invInfoEdit   = metaEdit0.invitadosInfo || {};
+
   // Find existing rows for this fecha (read A-D = 4 cols: fecha, mat, hcp, canchaId)
   const nextEmpty = findNextEmptyRow_(sh, 1);
   const existingRows = [];
@@ -1259,7 +1267,16 @@ function editarFecha_(params) {
       const m = String(row[1] || '').trim();
       if (f === String(fecha) && m) {
         if (!existingCanchaId && row[3]) existingCanchaId = String(row[3] || '').trim(); // D
-        const n = m.indexOf('INV') === 0 ? m : ((jugMapEdit[m] && jugMapEdit[m].nombre) || m);
+        // Para un invitado, el NOMBRE real es el que está en invitadosInfo (o, si
+        // no está ahí, el que quedó guardado en la columna C de TARJETAS) -- nunca
+        // la matrícula. Antes acá se usaba directamente "m" (la matrícula) como si
+        // fuera el nombre, así que la comparación de abajo (targetInvitadoNames)
+        // nunca coincidía y CUALQUIER invitado se borraba y se recreaba con una
+        // matrícula nueva en cada guardado de la fecha (perdiendo su HCP y
+        // quedando desconectado de su línea).
+        const n = m.indexOf('INV') === 0
+          ? (invInfoEdit[m] || String(row[2] || '').trim() || m)
+          : ((jugMapEdit[m] && jugMapEdit[m].nombre) || m);
         existingRows.push({
           row: i + 2,
           matricula: m,
@@ -1305,7 +1322,7 @@ function editarFecha_(params) {
   const effColor      = colorFinal || 'BLANCAS';
   let   editHcpMap    = {};
   // Jugadores con el HCP ajustado a mano por un admin — no se pisan acá tampoco.
-  const metaEdit0     = getFechaMeta_(fecha) || {};
+  // (metaEdit0 ya se leyó más arriba, antes de armar existingRows)
   const hcpManualEdit = metaEdit0.hcpManual || {};
   if (canchaName || colorFinal) {
     try {

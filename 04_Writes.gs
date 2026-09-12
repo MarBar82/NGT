@@ -1213,7 +1213,13 @@ function quitarJugadorDeLinea_(params) {
   if (!rLin.ok) return rLin;
   const det = getFechaDetalle_(fStr);
   const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
-  const invitadosActuales = ((det && det.invitados) || []).map(function(j) { return j.nombre; });
+  // Filtramos por matrícula (no por nombre) para que también funcione si hay dos
+  // invitados con el mismo nombre cargado -- antes esta lista se mandaba tal cual,
+  // sin sacar al invitado que se está quitando, así que editarFecha_ lo consideraba
+  // "sigue en la fecha" y nunca borraba su fila de TARJETAS.
+  const invitadosActuales = ((det && det.invitados) || [])
+    .filter(function(j) { return String(j.matricula) !== mStr; })
+    .map(function(j) { return j.nombre; });
   const doblesActuales    = getDoblesForFecha_(fStr);
   const targetJugadores = jugadoresActuales.filter(function(m) { return m !== mStr; });
   const targetDobles    = doblesActuales.filter(function(m) { return String(m) !== mStr; });
@@ -1266,6 +1272,51 @@ function agregarJugadorALinea_(params) {
   try { recalcularTotalesScore_(null); } catch(e) {}
   audit_('AGREGAR_JUGADOR_LINEA', 'admin', { fecha: fStr, matricula: mStr, lineNum, slotIndex });
   return { ok: true };
+}
+
+// Igual que agregarJugadorALinea_, pero para sumar un invitado nuevo directo a un
+// casillero vacío desde "Gestionar Fecha" (antes esa pantalla solo dejaba elegir
+// entre jugadores reales que todavía no estaban en ninguna línea -- no había forma
+// de sumar un invitado ahí, solo desde "Crear Fecha"). Crea el invitado con la
+// misma lógica protegida de agregarInvitadoSuelto_ y lo coloca en el casillero.
+function agregarInvitadoALinea_(params) {
+  const { adminKey, fecha, nombre, hcp, canchaId, colorTee, lineNum, slotIndex } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha || !nombre || !lineNum) return { ok: false, error: 'Faltan datos' };
+  const fStr = String(fecha);
+  if (fechaTieneScoresCargados_(fStr)) return { ok: false, error: 'Ya hay scores cargados en esta fecha — no se puede modificar la línea. Usalo solo antes de que arranque la fecha.' };
+  const meta = getFechaMeta_(fStr);
+  if (!meta || !meta.lineas || !meta.lineas.length) return { ok: false, error: 'Esta fecha no tiene líneas armadas' };
+  const idx = parseInt(lineNum) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= meta.lineas.length) return { ok: false, error: 'Línea inválida' };
+  const lineaActual = meta.lineas[idx] || [];
+  let si = (slotIndex !== undefined && slotIndex !== null && slotIndex !== '') ? parseInt(slotIndex) : lineaActual.indexOf('');
+  if (isNaN(si) || si < 0 || si > 3) return { ok: false, error: 'No hay casillero vacío disponible en esa línea' };
+  if (lineaActual[si] && lineaActual[si] !== '') return { ok: false, error: 'Ese casillero ya está ocupado' };
+
+  const rInv = agregarInvitadoSuelto_({ adminKey: adminKey, fecha: fStr, nombre: nombre, hcp: hcp, canchaId: canchaId, colorTee: colorTee });
+  if (!rInv.ok) return rInv;
+
+  const nuevasLineas = meta.lineas.map(function(l, i) {
+    const copia = (l || []).slice();
+    if (i !== idx) return copia;
+    while (copia.length <= si) copia.push('');
+    copia[si] = rInv.matricula;
+    return copia;
+  });
+  const rLin = setLineasFecha_({ adminKey: adminKey, fecha: fStr, lineas: nuevasLineas });
+  if (!rLin.ok) return rLin;
+
+  const det = getFechaDetalle_(fStr);
+  const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
+  const invitadosActuales = ((det && det.invitados) || []).map(function(j) { return j.nombre; });
+  const doblesActuales    = (det && det.dobles) || [];
+  const rEd = editarFecha_({ adminKey: adminKey, fecha: fStr, jugadores: jugadoresActuales,
+    invitados: invitadosActuales, dobles: doblesActuales, canchaId: meta.canchaId || undefined, colorTee: meta.colorTee || undefined });
+  if (!rEd.ok) return rEd;
+  try { recalcularTotalesScore_(null); } catch(e) {}
+  audit_('AGREGAR_INVITADO_LINEA', 'admin', { fecha: fStr, matricula: rInv.matricula, nombre: nombre, lineNum: lineNum, slotIndex: si });
+  return { ok: true, matricula: rInv.matricula, nombre: nombre };
 }
 
 function agregarInvitadoSuelto_(params) {

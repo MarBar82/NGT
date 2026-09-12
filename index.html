@@ -5397,6 +5397,7 @@ function admLinAbrirPicker(lineNum, slotIndex){
     .sort(function(a, b){ return (a.nombre || '').localeCompare(b.nombre || ''); });
 
   let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">Sumar jugador a Línea ' + lineNum + '</div>';
+  html += '<button class="gf-lin-pill" style="margin-bottom:10px;width:100%;" onclick="admLinAbrirInvitado_()">+ Sumar invitado</button>';
   if(!disponibles.length){
     html += '<div class="s dim" style="text-align:center;padding:20px 0;">No quedan jugadores disponibles.</div>';
   } else {
@@ -5411,6 +5412,54 @@ function admLinAbrirPicker(lineNum, slotIndex){
   html += '<button class="btn-cancel" onclick="closeFloatingModal()" style="width:100%;margin-top:12px;">Cancelar</button>';
   html += '<div id="adm-lin-picker-msg" class="adm-msg" style="display:none;"></div>';
   openFloatingModal(html);
+}
+
+// "+ Sumar invitado" desde "Gestionar Fecha" (antes solo existía este paso en el
+// asistente de "Crear Fecha" -- acá reusamos el mismo casillero vacío que ya
+// estaba eligiendo admLinAbrirPicker).
+function admLinAbrirInvitado_(){
+  const html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">+ Sumar invitado</div>' +
+    '<div class="adm-row"><div class="adm-field"><label class="adm-label">Nombre</label>' +
+    '<input type="text" id="adm-lin-inv-nombre" class="adm-input" placeholder="Nombre del invitado"></div></div>' +
+    '<div class="adm-row"><div class="adm-field"><label class="adm-label">HCP de juego</label>' +
+    '<input type="number" id="adm-lin-inv-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP"></div></div>' +
+    '<div style="display:flex;gap:8px;margin-top:16px;">' +
+    '<button class="adm-btn-primary" onclick="admLinConfirmarInvitado_()" style="flex:2;">Sumar</button>' +
+    '<button class="btn-cancel" onclick="admLinAbrirPicker(' + ADM_LIN_PICKER_LINEA + ',' + ADM_LIN_PICKER_SLOT + ')" style="flex:1;">Volver</button>' +
+    '</div><div id="adm-lin-inv-msg" class="adm-msg" style="display:none;"></div>';
+  openFloatingModal(html);
+}
+
+function admLinConfirmarInvitado_(){
+  const nombreEl = document.getElementById('adm-lin-inv-nombre');
+  const hcpEl = document.getElementById('adm-lin-inv-hcp');
+  const msg = document.getElementById('adm-lin-inv-msg');
+  const nombre = nombreEl ? nombreEl.value.trim() : '';
+  const hcp = hcpEl ? hcpEl.value.trim() : '';
+  if(!nombre){
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el nombre del invitado'; msg.style.display = 'block'; }
+    return;
+  }
+  const fecha = ADM_EDIT_FECHA;
+  const lineNum = ADM_LIN_PICKER_LINEA;
+  const slotIndex = ADM_LIN_PICKER_SLOT;
+  if(msg){ msg.className = 'adm-msg'; msg.textContent = 'Sumando...'; msg.style.display = 'block'; }
+  ngtApiPost({
+    action: 'agregarInvitadoALinea', adminKey: ADMIN_KEY_OK, fecha: fecha,
+    nombre: nombre, hcp: hcp, lineNum: lineNum, slotIndex: slotIndex,
+  }).then(function(r){
+    if(r && r.ok){
+      closeFloatingModal();
+      loadAdmLineasGrid(fecha);
+      loadAdmTarjetas(fecha);
+      if(MGR_FECHA === fecha) loadMatchesForGestion(fecha);
+    } else if(msg){
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(function(e){
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message; }
+  });
 }
 
 function admLinFiltrarPicker_(){
