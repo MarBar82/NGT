@@ -545,13 +545,17 @@ body{font-family:'Barlow',sans-serif;background:#fff;min-height:100vh;color:var(
 .adm-sec-back-btn:hover{border-color:var(--navy);color:var(--navy);}
 .adm-sec-title{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);}
 .adm-tar-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin:10px 0;}
-.adm-holes-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin:8px 0;}
-@media(max-width:380px){.adm-tar-grid,.adm-holes-grid{grid-template-columns:repeat(4,1fr);}}
-.adm-hole-btn{aspect-ratio:1;width:100%;border-radius:50%;border:2px solid var(--g3);background:var(--white);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;box-sizing:border-box;}
+@media(max-width:380px){.adm-tar-grid{grid-template-columns:repeat(4,1fr);}}
+.adm-holes-grid{margin:8px 0;}
+.adm-holes-half{margin-bottom:16px;}
+.adm-holes-half:last-child{margin-bottom:0;}
+.adm-holes-half-lbl{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);margin:0 0 6px 2px;}
+.adm-holes-9{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;justify-items:center;}
+.adm-hole-btn{aspect-ratio:1;width:100%;max-width:120px;border-radius:50%;border:2px solid var(--g3);background:var(--white);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;box-sizing:border-box;}
 .adm-hole-btn:active,.adm-hole-btn.hb-set{border-color:var(--navy);}
-.adm-hole-btn .hb-num{font-family:'Barlow Condensed',sans-serif;font-size:7px;font-weight:700;color:var(--g4);line-height:1;}
-.adm-hole-btn .hb-val{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;color:var(--navy);line-height:1.1;}
-.adm-hole-btn.hb-empty .hb-val{color:var(--g3);font-weight:400;font-size:11px;}
+.adm-hole-btn .hb-num{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;color:var(--g4);line-height:1;}
+.adm-hole-btn .hb-val{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;color:var(--navy);line-height:1.2;margin-top:2px;}
+.adm-hole-btn.hb-empty .hb-val{color:var(--g3);font-weight:400;font-size:12px;}
 #adm-numpad-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:flex-end;justify-content:center;}
 #adm-numpad-panel{background:var(--white);border-radius:16px 16px 0 0;padding:14px 14px 28px;width:100%;max-width:480px;box-sizing:border-box;}
 .adm-np-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;text-transform:uppercase;color:var(--navy);}
@@ -4788,17 +4792,21 @@ function admCanchaSeleccionada(){
 function admRenderHoleCircles(containerId, values, field){
   const cont = document.getElementById(containerId);
   if(!cont) return;
-  let h = '';
-  for(let i = 0; i < 18; i++){
-    const v = values[i] || '';
-    const cls = v ? 'adm-hole-btn hb-set' : 'adm-hole-btn hb-empty';
-    h += '<button type="button" class="' + cls + '" data-hoyo="' + (i+1) + '" data-field="' + field + '" data-val="' + v + '"';
-    h += ' onclick="admNumpadOpen(this,' + (i+1) + ',\'' + field + '\')">';
-    h += '<span class="hb-num">H' + (i+1) + '</span>';
-    h += '<span class="hb-val">' + (v || '-') + '</span>';
-    h += '</button>';
+  function bloque(desde, hasta, titulo){
+    let h = '<div class="adm-holes-half"><div class="adm-holes-half-lbl">' + titulo + '</div><div class="adm-holes-9">';
+    for(let i = desde; i < hasta; i++){
+      const v = values[i] || '';
+      const cls = v ? 'adm-hole-btn hb-set' : 'adm-hole-btn hb-empty';
+      h += '<button type="button" class="' + cls + '" data-hoyo="' + (i+1) + '" data-field="' + field + '" data-val="' + v + '"';
+      h += ' onclick="admNumpadOpen(this,' + (i+1) + ',\'' + field + '\')">';
+      h += '<span class="hb-num">H' + (i+1) + '</span>';
+      h += '<span class="hb-val">' + (v || '-') + '</span>';
+      h += '</button>';
+    }
+    h += '</div></div>';
+    return h;
   }
-  cont.innerHTML = h;
+  cont.innerHTML = bloque(0, 9, 'Ida (hoyos 1-9)') + bloque(9, 18, 'Vuelta (hoyos 10-18)');
 }
 
 function admRenderCanchaEditPanel(c){
@@ -4848,12 +4856,13 @@ function admNumpadRenderPage(page){
     keys.style.gridTemplateColumns = 'repeat(3,1fr)';
   } else if(page === 'hcp1'){
     for(let n = 1; n <= 9; n++) h += '<button class="adm-np-key" onclick="admNumpadSelect(' + n + ')">' + n + '</button>';
-    h += '<button class="adm-np-key np-special" onclick="admNumpadRenderPage(\'hcp2\')">+10 →</button>';
+    h += '<button class="adm-np-key np-special" onclick="admNumpadRenderPage(\'hcp2\')">10-18 →</button>';
     h += '<button class="adm-np-key np-clear" onclick="admNumpadSelect(null)">Borrar</button>';
     keys.style.gridTemplateColumns = 'repeat(3,1fr)';
   } else {
-    for(let n = 11; n <= 18; n++) h += '<button class="adm-np-key" onclick="admNumpadSelect(' + n + ')">' + n + '</button>';
+    for(let n = 10; n <= 18; n++) h += '<button class="adm-np-key" onclick="admNumpadSelect(' + n + ')">' + n + '</button>';
     h += '<button class="adm-np-key np-special" onclick="admNumpadRenderPage(\'hcp1\')">← 1-9</button>';
+    h += '<button class="adm-np-key np-clear" onclick="admNumpadSelect(null)">Borrar</button>';
     keys.style.gridTemplateColumns = 'repeat(3,1fr)';
   }
   keys.innerHTML = h;
