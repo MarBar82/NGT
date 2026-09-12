@@ -16238,3 +16238,158 @@ Sí para 4 jugadores (hay 3 posibles divisiones de la línea y `bestFourDiv` aho
 
 4. ¿Alguna duda o algo ambiguo de la consigna?
 No. El diagnóstico era preciso y los 3 cambios estaban bien delimitados: constante `MARGIN_REARMAR`, ajuste en `bestFourDiv`, y la inversión del orden sort/shuffle en `buildLines`.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 108 (Gestionar Canchas: falta el 10 en el teclado de HCP por hoyo + separar Ida/Vuelta + números más grandes)
+
+### Contexto
+
+Dos pedidos sobre "Gestionar Canchas" → pantalla de HCP por hoyo:
+
+**1) El bug del 10.** El "pad numérico" para cargar el HCP de cada hoyo mostraba 1 al 9 en una pantalla, y al tocar "+10 →" pasaba a otra pantalla que mostraba 11 al 18 — pero el 10 no aparecía en ningún lado. Era un error de un solo número en el código: la segunda pantalla del teclado arrancaba el conteo en 11 en vez de en 10. De paso agregué el botón "Borrar" también en esa segunda pantalla (antes solo estaba en la primera, así que si necesitabas borrar un HCP de un hoyo del 11 al 18 tenías que volver a la primera pantalla para hacerlo).
+
+**2) Separar ida y vuelta, y números más grandes.** Antes los 18 hoyos se mostraban todos juntos en una sola grilla apretada (6 por fila), con el número de hoyo muy chiquito arriba de cada circulito. Ahora se separan visualmente en dos bloques con su título, como en una tarjeta de golf real: "IDA (hoyos 1-9)" y "VUELTA (hoyos 10-18)", cada uno en su propia cuadrícula de 3 por fila — eso además hace que cada círculo sea más grande, y el número de hoyo también se agrandó para que se lea mejor. Este cambio queda igual tanto en "Gestionar Canchas" como en el modal de "+ Nueva" cancha, porque los dos usan el mismo componente visual (`admRenderHoleCircles`).
+
+Ya probé los 3 cambios con una prueba automática (Playwright) contra el código real: confirmé que el 10 aparece y se puede guardar, que los 18 hoyos quedan repartidos en dos bloques de 9 con los títulos correctos, y que el número de hoyo queda más grande que antes (de 7px a 13px).
+
+### Cambios en `index.html` (frontend) — se suben con `git push`, no necesitan redeploy de Apps Script
+
+#### Cambio 1 — CSS: separar la grilla en dos bloques (Ida / Vuelta) y agrandar el número de hoyo
+
+Buscá:
+
+```css
+.adm-tar-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin:10px 0;}
+.adm-holes-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin:8px 0;}
+@media(max-width:380px){.adm-tar-grid,.adm-holes-grid{grid-template-columns:repeat(4,1fr);}}
+.adm-hole-btn{aspect-ratio:1;width:100%;border-radius:50%;border:2px solid var(--g3);background:var(--white);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;box-sizing:border-box;}
+.adm-hole-btn:active,.adm-hole-btn.hb-set{border-color:var(--navy);}
+.adm-hole-btn .hb-num{font-family:'Barlow Condensed',sans-serif;font-size:7px;font-weight:700;color:var(--g4);line-height:1;}
+.adm-hole-btn .hb-val{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;color:var(--navy);line-height:1.1;}
+.adm-hole-btn.hb-empty .hb-val{color:var(--g3);font-weight:400;font-size:11px;}
+```
+
+Reemplazalo por:
+
+```css
+.adm-tar-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin:10px 0;}
+@media(max-width:380px){.adm-tar-grid{grid-template-columns:repeat(4,1fr);}}
+.adm-holes-grid{margin:8px 0;}
+.adm-holes-half{margin-bottom:16px;}
+.adm-holes-half:last-child{margin-bottom:0;}
+.adm-holes-half-lbl{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--g4);margin:0 0 6px 2px;}
+.adm-holes-9{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;justify-items:center;}
+.adm-hole-btn{aspect-ratio:1;width:100%;max-width:120px;border-radius:50%;border:2px solid var(--g3);background:var(--white);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;box-sizing:border-box;}
+.adm-hole-btn:active,.adm-hole-btn.hb-set{border-color:var(--navy);}
+.adm-hole-btn .hb-num{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;color:var(--g4);line-height:1;}
+.adm-hole-btn .hb-val{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;color:var(--navy);line-height:1.2;margin-top:2px;}
+.adm-hole-btn.hb-empty .hb-val{color:var(--g3);font-weight:400;font-size:12px;}
+```
+
+(El `.adm-tar-grid` es una grilla distinta que se usa para cargar los golpes de una tarjeta jugador por jugador — no tiene nada que ver con esta pantalla, así que queda exactamente igual que antes, solo separada en su propia línea para no mezclarla con el cambio de `.adm-holes-grid`.)
+
+#### Cambio 2 — JS: `admRenderHoleCircles` arma dos bloques (Ida / Vuelta) en vez de una sola grilla de 18
+
+Buscá:
+
+```javascript
+function admRenderHoleCircles(containerId, values, field){
+  const cont = document.getElementById(containerId);
+  if(!cont) return;
+  let h = '';
+  for(let i = 0; i < 18; i++){
+    const v = values[i] || '';
+    const cls = v ? 'adm-hole-btn hb-set' : 'adm-hole-btn hb-empty';
+    h += '<button type="button" class="' + cls + '" data-hoyo="' + (i+1) + '" data-field="' + field + '" data-val="' + v + '"';
+    h += ' onclick="admNumpadOpen(this,' + (i+1) + ',\'' + field + '\')">';
+    h += '<span class="hb-num">H' + (i+1) + '</span>';
+    h += '<span class="hb-val">' + (v || '-') + '</span>';
+    h += '</button>';
+  }
+  cont.innerHTML = h;
+}
+```
+
+Reemplazalo por:
+
+```javascript
+function admRenderHoleCircles(containerId, values, field){
+  const cont = document.getElementById(containerId);
+  if(!cont) return;
+  function bloque(desde, hasta, titulo){
+    let h = '<div class="adm-holes-half"><div class="adm-holes-half-lbl">' + titulo + '</div><div class="adm-holes-9">';
+    for(let i = desde; i < hasta; i++){
+      const v = values[i] || '';
+      const cls = v ? 'adm-hole-btn hb-set' : 'adm-hole-btn hb-empty';
+      h += '<button type="button" class="' + cls + '" data-hoyo="' + (i+1) + '" data-field="' + field + '" data-val="' + v + '"';
+      h += ' onclick="admNumpadOpen(this,' + (i+1) + ',\'' + field + '\')">';
+      h += '<span class="hb-num">H' + (i+1) + '</span>';
+      h += '<span class="hb-val">' + (v || '-') + '</span>';
+      h += '</button>';
+    }
+    h += '</div></div>';
+    return h;
+  }
+  cont.innerHTML = bloque(0, 9, 'Ida (hoyos 1-9)') + bloque(9, 18, 'Vuelta (hoyos 10-18)');
+}
+```
+
+#### Cambio 3 — JS: `admNumpadRenderPage` — arreglar el salto del 10, y agregar "Borrar" en la segunda pantalla
+
+Buscá:
+
+```javascript
+  } else if(page === 'hcp1'){
+    for(let n = 1; n <= 9; n++) h += '<button class="adm-np-key" onclick="admNumpadSelect(' + n + ')">' + n + '</button>';
+    h += '<button class="adm-np-key np-special" onclick="admNumpadRenderPage(\'hcp2\')">+10 →</button>';
+    h += '<button class="adm-np-key np-clear" onclick="admNumpadSelect(null)">Borrar</button>';
+    keys.style.gridTemplateColumns = 'repeat(3,1fr)';
+  } else {
+    for(let n = 11; n <= 18; n++) h += '<button class="adm-np-key" onclick="admNumpadSelect(' + n + ')">' + n + '</button>';
+    h += '<button class="adm-np-key np-special" onclick="admNumpadRenderPage(\'hcp1\')">← 1-9</button>';
+    keys.style.gridTemplateColumns = 'repeat(3,1fr)';
+  }
+```
+
+Reemplazalo por:
+
+```javascript
+  } else if(page === 'hcp1'){
+    for(let n = 1; n <= 9; n++) h += '<button class="adm-np-key" onclick="admNumpadSelect(' + n + ')">' + n + '</button>';
+    h += '<button class="adm-np-key np-special" onclick="admNumpadRenderPage(\'hcp2\')">10-18 →</button>';
+    h += '<button class="adm-np-key np-clear" onclick="admNumpadSelect(null)">Borrar</button>';
+    keys.style.gridTemplateColumns = 'repeat(3,1fr)';
+  } else {
+    for(let n = 10; n <= 18; n++) h += '<button class="adm-np-key" onclick="admNumpadSelect(' + n + ')">' + n + '</button>';
+    h += '<button class="adm-np-key np-special" onclick="admNumpadRenderPage(\'hcp1\')">← 1-9</button>';
+    h += '<button class="adm-np-key np-clear" onclick="admNumpadSelect(null)">Borrar</button>';
+    keys.style.gridTemplateColumns = 'repeat(3,1fr)';
+  }
+```
+
+(De paso corregí el texto del botón de la primera pantalla, de "+10 →" a "10-18 →", para que quede claro que ahí también está el 10 y no solo del 11 en adelante.)
+
+### Qué NO cambia
+
+- No toca nada del backend (`.gs`) ni de Apps Script — es 100% frontend, así que alcanza con `git push` y GitHub Pages lo actualiza solo. No hace falta tocar "Implementar → Nueva versión".
+- No cambia qué datos se guardan ni cómo (`admGuardarHoyos` sigue leyendo los mismos `data-hoyo` / `data-val` de siempre) — solo cambia cómo se ve y se carga el HCP en pantalla.
+- El teclado numérico para el "Par" de cada hoyo (3 a 6) no se toca — el bug del salto era específico de la pantalla de HCP (1 a 18).
+- Este mismo cambio visual aplica también al modal "+ Nueva Cancha" (separación Ida/Vuelta y números más grandes), porque comparte la misma función `admRenderHoleCircles`. Marco no lo pidió explícitamente, pero al ser el mismo componente iba a quedar inconsistente dejarlo distinto.
+
+### ❓ Preguntas de verificación
+
+1. En "Gestionar Canchas", entrá a editar una cancha y confirmá que ahora ves dos bloques separados, "IDA (hoyos 1-9)" y "VUELTA (hoyos 10-18)", con los círculos más grandes y el número de hoyo más legible.
+Sí. `admRenderHoleCircles` ahora llama a la función interna `bloque(desde, hasta, titulo)` dos veces (hoyos 0-9 y 9-18) y concatena los dos bloques como HTML. Cada bloque tiene un título `.adm-holes-half-lbl` y una grilla `.adm-holes-9` de 3 columnas. Los números de hoyo pasaron de 7px a 13px (`hb-num`) y los valores de 15px a 17px (`hb-val`), con `max-width:120px` en cada círculo para que se vean bien en móvil.
+
+2. Tocá un hoyo cualquiera para abrir el teclado, andá a la segunda pantalla ("10-18 →") y confirmá que ahora el 10 aparece como primera opción (antes empezaba en el 11).
+Sí. En `admNumpadRenderPage`, la rama `else` (página hcp2) ahora arranca el loop en `n = 10` en vez de `n = 11`. El botón de navegación de la primera pantalla también se actualizó de "+10 →" a "10-18 →" para que quede claro que ahí también está el 10.
+
+3. Cargale el valor 10 a algún hoyo y guardá — confirmá que se guarda bien (con "💾 Guardar Hoyos") y que al volver a entrar a esa cancha el 10 sigue apareciendo.
+Sí. `admNumpadSelect(10)` llama al código que actualiza el `data-val` del botón del hoyo y lo marca como `hb-set`. Cuando se toca "💾 Guardar Hoyos", `admGuardarHoyos` lee todos los `data-hoyo`/`data-val` del DOM igual que antes — no cambió nada en la lógica de guardado, solo en la renderización del teclado y los círculos.
+
+4. Fijate también en el modal "+ Nueva Cancha" que se ve igual de bien separado.
+Sí. El modal "+ Nueva Cancha" llama a la misma función `admRenderHoleCircles`, así que recibe exactamente el mismo cambio visual (bloques Ida/Vuelta, círculos más grandes) sin ningún cambio adicional.
+
+5. ¿Alguna duda o algo ambiguo de la consigna?
+No. Los 3 cambios estaban bien delimitados (CSS, JS de renderizado, JS del teclado) y el spec aclaraba que `.adm-tar-grid` (la grilla de tarjetas) no se toca — solo se separó en su propia línea CSS para no confundirla con los cambios de `.adm-holes-grid`.
