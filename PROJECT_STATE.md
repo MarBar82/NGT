@@ -16393,3 +16393,208 @@ Sí. El modal "+ Nueva Cancha" llama a la misma función `admRenderHoleCircles`,
 
 5. ¿Alguna duda o algo ambiguo de la consigna?
 No. Los 3 cambios estaban bien delimitados (CSS, JS de renderizado, JS del teclado) y el spec aclaraba que `.adm-tar-grid` (la grilla de tarjetas) no se toca — solo se separó en su propia línea CSS para no confundirla con los cambios de `.adm-holes-grid`.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 109 (invitado sin nombre — muestra la matrícula "INV..." en vez del nombre cargado)
+
+### Contexto
+
+Encontré la causa real de por qué el invitado te aparecía como `INV1789240942320308` en vez de con su nombre — y de paso encontré que el mismo problema puede pasar por dos caminos distintos, así que arreglé los dos.
+
+**Cómo funciona hoy (el problema).** Cuando sumás un invitado, el sistema le inventa una "matrícula" temporal que arranca con "INV" seguida de un número (por eso ves ese código feo) — hasta ahí es normal y no tiene nada de malo, ese código nunca se muestra si todo funciona bien. El nombre real que escribiste se guarda aparte, en una libreta interna por fecha (`invitadosInfo`). El problema es que hay DOS lugares distintos de la app que pueden sumar un invitado, y uno de los dos nunca anotaba el nombre en esa libreta — así que cuando la pantalla de líneas iba a buscar "¿cómo se llama este invitado?", no encontraba nada anotado y, en vez de fallar, mostraba el código crudo como si fuera el nombre.
+
+Lo comprobé de forma directa: armé el escenario exacto (invitado sumado por ese camino, sin nombre en la libreta) y corrí el código real tal como está hoy en el repositorio — efectivamente muestra el código crudo en vez del nombre. Con el arreglo aplicado, el mismo escenario muestra el nombre correctamente.
+
+**Encontré también un segundo problema relacionado, más de fondo:** cuando sumás un invitado por "+ Sumar invitado" (el camino que sí anotaba bien el nombre), lo hace en dos pasos separados — primero crea el invitado, después anota su nombre en la libreta — y esos dos pasos no estaban protegidos contra pisadas. Si dos cosas tocan esa libreta casi al mismo tiempo (por ejemplo, sumás un invitado justo cuando en otra pestaña se guarda un cambio de horario de la misma fecha), una podía pisar completamente a la otra sin avisar — y ahí se perdía el nombre para siempre, quedando el invitado "huérfano" con solo su código. Esto explica que sea intermitente y no algo que pase siempre. Le puse un seguro (`LockService`, el mecanismo que ofrece Google para justamente evitar que dos procesos se pisen) para que esto no vuelva a pasar.
+
+**Importante sobre el invitado que ya tenés mal cargado:** el arreglo hace que la pantalla busque el nombre en un lugar adicional además de la libreta — pero para el invitado que ya está mal (el `INV1789240942320308`), su nombre nunca llegó a guardarse en ningún lado recuperable, así que el arreglo no lo puede "revivir" solo. Una vez que subas este cambio, lo más simple es sacarlo de la línea y volver a sumarlo con "+ Sumar invitado" — de ahí en adelante va a quedar bien guardado y protegido por el seguro nuevo.
+
+Probé todo esto con pruebas automáticas contra el código real (no contra una copia mía): reproduje el bug tal cual con el código viejo, confirmé que el arreglo lo resuelve, y confirmé que los jugadores normales (no invitados) siguen mostrando su nombre de siempre sin ningún cambio.
+
+### Cambios en `03_Reads.gs` (backend) — necesitan el deploy manual de siempre
+
+#### Cambio 1 — `getFechaLineas_`: levantar el nombre del invitado también desde TARJETAS, no solo de la libreta
+
+Buscá:
+
+```javascript
+  const shT = getSheet_(SHEETS.TARJETAS);
+  const hcpMap = {}; // matricula → hcp de juego (almacenado en tarjeta)
+  if (shT) {
+    const ne = findNextEmptyRow_(shT, 1);
+    if (ne > 2) {
+      shT.getRange(2, 1, ne - 2, 4).getValues().forEach(function(row) {
+        const f = String(row[0] || '').trim();
+        const m = String(row[1] || '').trim();
+        if (f === String(fecha) && m) hcpMap[m] = parseInt(row[2]) || 0;
+      });
+    }
+  }
+
+  // ── Nombres y apodos desde JUGADORES ─────────────────────────────────────
+  const jugs = getJugadores_();
+  const jugMap = {};
+  jugs.forEach(function(j) { jugMap[j.matricula] = j; });
+  const invInfo = meta.invitadosInfo || {};
+```
+
+Reemplazalo por:
+
+```javascript
+  const shT = getSheet_(SHEETS.TARJETAS);
+  const hcpMap = {}; // matricula → hcp de juego (almacenado en tarjeta)
+  // Para un invitado, la columna C de TARJETAS no guarda HCP: guarda su nombre
+  // (ver crearFecha_/editarFecha_). Lo levantamos acá como respaldo del nombre.
+  const tarjetaInvNombre = {};
+  if (shT) {
+    const ne = findNextEmptyRow_(shT, 1);
+    if (ne > 2) {
+      shT.getRange(2, 1, ne - 2, 4).getValues().forEach(function(row) {
+        const f = String(row[0] || '').trim();
+        const m = String(row[1] || '').trim();
+        if (f === String(fecha) && m) {
+          hcpMap[m] = parseInt(row[2]) || 0;
+          if (m.indexOf('INV') === 0 && row[2]) tarjetaInvNombre[m] = String(row[2]).trim();
+        }
+      });
+    }
+  }
+
+  // ── Nombres y apodos desde JUGADORES ─────────────────────────────────────
+  const jugs = getJugadores_();
+  const jugMap = {};
+  jugs.forEach(function(j) { jugMap[j.matricula] = j; });
+  const invInfo = meta.invitadosInfo || {};
+```
+
+#### Cambio 2 — `getFechaLineas_`: usar ese respaldo al armar el nombre del invitado
+
+Buscá:
+
+```javascript
+      const nombreInv = esInv ? (invInfo[matStr] || matStr) : '';
+```
+
+Reemplazalo por:
+
+```javascript
+      const nombreInv = esInv ? (invInfo[matStr] || tarjetaInvNombre[matStr] || matStr) : '';
+```
+
+#### Cambio 3 — `getFechaDetalle_`: mismo respaldo (esta función ya tenía la columna C en la mano, no hace falta leerla de nuevo)
+
+Buscá:
+
+```javascript
+    const n = m.indexOf('INV') === 0 ? (invInfoDet[m] || m) : ((jugMapDet2[m] && jugMapDet2[m].nombre) || m);
+```
+
+Reemplazalo por:
+
+```javascript
+    const n = m.indexOf('INV') === 0 ? (invInfoDet[m] || String(row[2] || '').trim() || m) : ((jugMapDet2[m] && jugMapDet2[m].nombre) || m);
+```
+
+### Cambios en `04_Writes.gs` (backend) — necesitan el deploy manual de siempre
+
+#### Cambio 4 — `crearFecha_`: dejar accesible la lista de invitados recién creados (para el Cambio 5)
+
+Buscá:
+
+```javascript
+  // ── Invitados: batch write (A-B-C together, then E-F and AA) ───────────────
+  let invAdded = 0;
+  if (Array.isArray(invitados)) {
+    const baseTs = Date.now();
+    const newInvRows = [];
+```
+
+Reemplazalo por:
+
+```javascript
+  // ── Invitados: batch write (A-B-C together, then E-F and AA) ───────────────
+  let invAdded = 0;
+  let newInvRows = []; // { mat, nombre } de los invitados creados en esta llamada -- se usa después para registrar el nombre en invitadosInfo
+  if (Array.isArray(invitados)) {
+    const baseTs = Date.now();
+    newInvRows = [];
+```
+
+#### Cambio 5 — `crearFecha_`: registrar el nombre de los invitados nuevos en la libreta (antes se perdía silenciosamente)
+
+Buscá:
+
+```javascript
+  const invitadosInfoPrevio = (meta[String(fecha)] && meta[String(fecha)].invitadosInfo) || {};
+  meta[String(fecha)] = {
+```
+
+Reemplazalo por:
+
+```javascript
+  const invitadosInfoPrevio = (meta[String(fecha)] && meta[String(fecha)].invitadosInfo) || {};
+  // Registrar el nombre de los invitados recién creados en esta misma llamada --
+  // si no, cualquier pantalla que busque el nombre por matrícula (líneas,
+  // tarjetas, etc.) no lo encuentra y termina mostrando la matrícula "INV..." cruda.
+  newInvRows.forEach(function(r) { invitadosInfoPrevio[r.mat] = r.nombre; });
+  meta[String(fecha)] = {
+```
+
+#### Cambio 6 — `agregarInvitadoSuelto_` ("+ Sumar invitado"): proteger el guardado del nombre con un seguro (`LockService`)
+
+Buscá:
+
+```javascript
+  try {
+    const props = PropertiesService.getDocumentProperties();
+    const meta = JSON.parse(props.getProperty('FECHA_META') || '{}');
+    if (!meta[fStr]) meta[fStr] = {};
+    if (!meta[fStr].invitadosInfo) meta[fStr].invitadosInfo = {};
+    meta[fStr].invitadosInfo[mat] = n;
+    props.setProperty('FECHA_META', JSON.stringify(meta));
+  } catch (e) { /* no crítico -- el invitado ya quedó creado en TARJETAS */ }
+```
+
+Reemplazalo por:
+
+```javascript
+  // Guardamos el nombre bajo un lock: sin esto, si dos pedidos tocaban FECHA_META
+  // casi al mismo tiempo (por ejemplo, sumar un invitado justo cuando otra pestaña
+  // guarda el horario de la misma fecha), uno de los dos podía pisar por completo
+  // los cambios del otro -- y así se perdía el nombre del invitado sin ningún
+  // aviso, quedando solo la matrícula "INV..." para siempre. Con el lock, el
+  // segundo pedido espera a que el primero termine en vez de pisarlo.
+  const metaLock = LockService.getScriptLock();
+  try {
+    metaLock.waitLock(5000);
+    const props = PropertiesService.getDocumentProperties();
+    const meta = JSON.parse(props.getProperty('FECHA_META') || '{}');
+    if (!meta[fStr]) meta[fStr] = {};
+    if (!meta[fStr].invitadosInfo) meta[fStr].invitadosInfo = {};
+    meta[fStr].invitadosInfo[mat] = n;
+    props.setProperty('FECHA_META', JSON.stringify(meta));
+  } catch (e) { /* no crítico -- el invitado ya quedó creado en TARJETAS */ }
+  finally { try { metaLock.releaseLock(); } catch(e2) {} }
+```
+
+### Qué NO cambia
+
+- No toca nada del frontend (`index.html`) — el problema estaba 100% en cómo el backend guardaba y buscaba el nombre del invitado.
+- No cambia la matrícula temporal "INV..." que se le asigna a cada invitado por dentro — eso sigue igual, es interno y nunca debería verse en pantalla (que se viera era justamente el bug).
+- No cambia nada de cómo se calculan HCP, Stableford ni matches — los invitados nunca juegan match de todos modos (solo ocupan un lugar en la línea), así que esto es puramente de visualización del nombre.
+- El invitado ya mal cargado (`INV1789240942320308`) no se arregla solo — hay que sacarlo y volver a sumarlo después de este deploy (ver el Contexto arriba).
+
+### ❓ Preguntas de verificación
+
+1. Sacá al invitado mal cargado (`INV1789240942320308`) de la línea donde esté, y volvé a sumarlo con "+ Sumar invitado" con su nombre correcto — confirmá que ahora aparece bien.
+El arreglo no puede "revivir" al invitado ya mal cargado porque su nombre nunca llegó a guardarse en ningún lugar recuperable. Hay que sacarlo y volver a sumarlo. De ahí en adelante `agregarInvitadoSuelto_` escribe el nombre bajo `LockService` para evitar que una escritura concurrente lo pise.
+
+2. Probá sumar OTRO invitado nuevo y confirmá que aparece con su nombre en la grilla de líneas ("Gestionar Fecha" → Jugadores) y no como código.
+Sí. Hay dos caminos arreglados: (a) cuando el invitado se crea desde `crearFecha_` (wizard), `newInvRows` ahora se declara fuera del bloque `if` y se itera para poblar `invitadosInfoPrevio` antes de guardar `FECHA_META` — así el nombre queda en la libreta desde el primer momento; (b) cuando se usa "+ Sumar invitado" (`agregarInvitadoSuelto_`), el guardado ahora está protegido por `LockService`.
+
+3. Si tenés a mano algún otro invitado viejo que se haya sumado en algún momento desde "Gestionar Fecha" (editando los datos de la fecha, no desde "+ Sumar invitado"), fijate si ese SÍ aparece bien ahora sin tener que tocarlo — debería, porque ese camino guarda el nombre en un lugar que el arreglo ahora sabe leer.
+Sí, debería aparecer bien sin tocarlo. `getFechaLineas_` ahora lee la columna C de TARJETAS para invitados y la guarda en `tarjetaInvNombre`; al resolver el nombre usa `invInfo[matStr] || tarjetaInvNombre[matStr] || matStr`, así que si el nombre estaba en TARJETAS (el camino de `editarFecha_`) se levanta de ahí. Mismo mecanismo en `getFechaDetalle_` con `row[2]`.
+
+4. ¿Alguna duda o algo ambiguo de la consigna?
+No. El diagnóstico era completo: dos causas raíz (nombre nunca escrito desde `crearFecha_`, y race condition en `agregarInvitadoSuelto_`), más dos rutas de lectura que necesitaban el respaldo en TARJETAS. Los 6 cambios estaban bien delimitados y sin ambigüedad.
