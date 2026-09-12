@@ -16598,3 +16598,376 @@ Sí, debería aparecer bien sin tocarlo. `getFechaLineas_` ahora lee la columna 
 
 4. ¿Alguna duda o algo ambiguo de la consigna?
 No. El diagnóstico era completo: dos causas raíz (nombre nunca escrito desde `crearFecha_`, y race condition en `agregarInvitadoSuelto_`), más dos rutas de lectura que necesitaban el respaldo en TARJETAS. Los 6 cambios estaban bien delimitados y sin ambigüedad.
+
+## 🎯 Tarea para Claude Code — Tarea 110 (Gestionar Fecha: falta "+ Sumar invitado" al picker + "Sacar de la línea" no borra al invitado de la fecha + causa de fondo de por qué los invitados se rompen al editar una fecha)
+
+### Contexto
+
+Me pediste dos cosas sobre "Gestionar Fecha" (la pantalla de administrar una fecha que ya existe, distinta del asistente de "Crear Fecha"):
+
+1. Cuando sacás a alguien de una línea y querés volver a sumar a un invitado, no aparece la opción "+ Sumar invitado" — solo te deja elegir entre jugadores reales que todavía no están en ninguna línea.
+2. Cuando sacás a un invitado de la línea, sigue apareciendo en la fecha (no desaparece del todo).
+
+Investigando el segundo punto encontré algo más grave, que en realidad explica mejor varios de los quilombos con invitados que venimos arreglando en las últimas tareas: **cada vez que se guarda cualquier cambio en las líneas de una fecha que tiene algún invitado adentro** (sacar a alguien, sumar a alguien, no importa a quién), el sistema **le inventaba una matrícula nueva a TODOS los invitados que ya estaban ahí**, aunque no tuvieran nada que ver con el cambio que se estaba guardando. La línea seguía apuntando a la matrícula VIEJA del invitado, pero esa fila ya no existía más en la base — quedaba huérfana. En la práctica, el invitado podía seguir viéndose bien en la pantalla de líneas (el nombre se rescata de otro lado), pero si después intentaba cargar su tarjeta de puntaje, el sistema no iba a encontrar dónde guardarla, porque la fila real que le correspondía tenía otra matrícula, sin usar en ninguna línea.
+
+Lo comprobé armando el escenario exacto: sumo un invitado, después hago cualquier otro cambio de línea que no lo toca a él (agregar un jugador distinto), y sin el arreglo, la fila del invitado en la base desaparece y aparece una fila nueva con otra matrícula — con el arreglo, la fila se mantiene intacta, con su matrícula, su HCP y todo.
+
+Esta tarea junta tres arreglos relacionados, todos sobre el mismo circuito de invitados-en-líneas:
+
+- **Arreglo A (el más importante):** la causa de fondo de por qué los invitados "se rompen" al editar una fecha. Una vez arriba, esto también evita que se repita cualquier problema parecido a los de las Tareas 108/109 hacia adelante.
+- **Arreglo B:** "Sacar de la línea" ahora sí borra al invitado de la fecha por completo (no solo de la línea).
+- **Arreglo C:** "Gestionar Fecha" ahora tiene el botón "+ Sumar invitado" en el mismo lugar que "+ Sumar jugador", para cuando querés sumar un invitado nuevo directo a un casillero vacío (sin tener que ir hasta "Crear Fecha").
+
+Probé los tres arreglos juntos con pruebas automáticas contra el código real (no contra una copia mía): armé una fecha con jugadores e invitados, saqué a uno de la línea y confirmé que desaparece del todo, sumé un invitado nuevo directo desde el picker de "Gestionar Fecha" y confirmé que queda bien puesto con su nombre y su HCP, confirmé que sumar un jugador real que ya está en una línea se sigue rechazando igual que siempre (no rompí nada de lo que ya andaba bien), y confirmé que un invitado ajeno al cambio ya no pierde su fila ni su matrícula.
+
+**Importante sobre invitados que ya están mal cargados hoy:** igual que en la Tarea 109, este arreglo frena el problema hacia adelante, pero no puede "revivir" solo a un invitado que ya haya quedado huérfano (matrícula vieja sin fila, fila nueva sin línea) antes de este deploy. Si notás que algún invitado no puede cargar su tarjeta, lo más simple es sacarlo de la línea y volver a sumarlo después de este cambio.
+
+### Cambios en `03_Reads.gs` (backend) — necesita el deploy manual de siempre
+
+#### Cambio 1 — `editarFecha_`: usar el nombre real del invitado (no su matrícula) para decidir si se mantiene o se recrea
+
+Esta es la causa de fondo (Arreglo A). Antes, para decidir si un invitado "sigue estando" en la fecha, el código comparaba usando su propia matrícula como si fuera su nombre — como esa comparación nunca podía coincidir con el nombre real que mandan las otras pantallas, el invitado se borraba y se volvía a crear con una matrícula nueva en cada guardado.
+
+Buscá:
+
+```javascript
+  const colorFinal = colorTee ? String(colorTee).trim().toUpperCase() : null;
+
+  // Find existing rows for this fecha (read A-D = 4 cols: fecha, mat, hcp, canchaId)
+  const nextEmpty = findNextEmptyRow_(sh, 1);
+  const existingRows = [];
+  let existingCanchaId   = '';
+  let existingCanchaName = '';
+  const jugMapEdit = {}; getJugadores_().forEach(function(j){ jugMapEdit[String(j.matricula).trim()] = j; });
+  if (nextEmpty > 2) {
+    const data = sh.getRange(2, 1, nextEmpty - 2, 4).getValues(); // A(0)-D(3)
+    data.forEach((row, i) => {
+      const f = String(row[0] || '').trim();
+      const m = String(row[1] || '').trim();
+      if (f === String(fecha) && m) {
+        if (!existingCanchaId && row[3]) existingCanchaId = String(row[3] || '').trim(); // D
+        const n = m.indexOf('INV') === 0 ? m : ((jugMapEdit[m] && jugMapEdit[m].nombre) || m);
+        existingRows.push({
+          row: i + 2,
+          matricula: m,
+          nombre: n,
+          isInvitado: m.indexOf('INV') === 0,
+        });
+      }
+    });
+    if (existingCanchaId) existingCanchaName = lookupCanchaName_(existingCanchaId) || existingCanchaId;
+  }
+```
+
+Reemplazalo por:
+
+```javascript
+  const colorFinal = colorTee ? String(colorTee).trim().toUpperCase() : null;
+
+  // Nombres de los invitados ya registrados para esta fecha (FECHA_META.invitadosInfo).
+  // Se necesita ACÁ (no solo al leer/mostrar) porque más abajo se decide si un
+  // invitado existente se "mantiene" o se "borra y se vuelve a crear" comparando
+  // por nombre -- si se compara mal, el invitado se recrea con una matrícula
+  // nueva en cada guardado, aunque no haya cambiado nada de él.
+  const metaEdit0     = getFechaMeta_(fecha) || {};
+  const invInfoEdit   = metaEdit0.invitadosInfo || {};
+
+  // Find existing rows for this fecha (read A-D = 4 cols: fecha, mat, hcp, canchaId)
+  const nextEmpty = findNextEmptyRow_(sh, 1);
+  const existingRows = [];
+  let existingCanchaId   = '';
+  let existingCanchaName = '';
+  const jugMapEdit = {}; getJugadores_().forEach(function(j){ jugMapEdit[String(j.matricula).trim()] = j; });
+  if (nextEmpty > 2) {
+    const data = sh.getRange(2, 1, nextEmpty - 2, 4).getValues(); // A(0)-D(3)
+    data.forEach((row, i) => {
+      const f = String(row[0] || '').trim();
+      const m = String(row[1] || '').trim();
+      if (f === String(fecha) && m) {
+        if (!existingCanchaId && row[3]) existingCanchaId = String(row[3] || '').trim(); // D
+        // Para un invitado, el NOMBRE real es el que está en invitadosInfo (o, si
+        // no está ahí, el que quedó guardado en la columna C de TARJETAS) -- nunca
+        // la matrícula. Antes acá se usaba directamente "m" (la matrícula) como si
+        // fuera el nombre, así que la comparación de abajo (targetInvitadoNames)
+        // nunca coincidía y CUALQUIER invitado se borraba y se recreaba con una
+        // matrícula nueva en cada guardado de la fecha (perdiendo su HCP y
+        // quedando desconectado de su línea).
+        const n = m.indexOf('INV') === 0
+          ? (invInfoEdit[m] || String(row[2] || '').trim() || m)
+          : ((jugMapEdit[m] && jugMapEdit[m].nombre) || m);
+        existingRows.push({
+          row: i + 2,
+          matricula: m,
+          nombre: n,
+          isInvitado: m.indexOf('INV') === 0,
+        });
+      }
+    });
+    if (existingCanchaId) existingCanchaName = lookupCanchaName_(existingCanchaId) || existingCanchaId;
+  }
+```
+
+#### Cambio 2 — `editarFecha_`: ya no hace falta volver a leer la libreta de nombres más abajo (se leyó en el Cambio 1)
+
+Buscá:
+
+```javascript
+  let   editHcpMap    = {};
+  // Jugadores con el HCP ajustado a mano por un admin — no se pisan acá tampoco.
+  const metaEdit0     = getFechaMeta_(fecha) || {};
+  const hcpManualEdit = metaEdit0.hcpManual || {};
+```
+
+Reemplazalo por:
+
+```javascript
+  let   editHcpMap    = {};
+  // Jugadores con el HCP ajustado a mano por un admin — no se pisan acá tampoco.
+  // (metaEdit0 ya se leyó más arriba, antes de armar existingRows)
+  const hcpManualEdit = metaEdit0.hcpManual || {};
+```
+
+### Cambios en `04_Writes.gs` (backend) — necesita el deploy manual de siempre
+
+#### Cambio 3 — `quitarJugadorDeLinea_`: sacar también al invitado de la lista que se manda a guardar (Arreglo B)
+
+Antes, al sacar a alguien de una línea, la lista de invitados que se le pasaba a `editarFecha_` para "guardar cómo queda la fecha" incluía TODAVÍA al invitado que se estaba sacando — por eso `editarFecha_` lo consideraba "sigue en la fecha" y nunca borraba su fila.
+
+Buscá:
+
+```javascript
+  const rLin = setLineasFecha_({ adminKey: adminKey, fecha: fStr, lineas: nuevasLineas });
+  if (!rLin.ok) return rLin;
+  const det = getFechaDetalle_(fStr);
+  const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
+  const invitadosActuales = ((det && det.invitados) || []).map(function(j) { return j.nombre; });
+  const doblesActuales    = getDoblesForFecha_(fStr);
+  const targetJugadores = jugadoresActuales.filter(function(m) { return m !== mStr; });
+  const targetDobles    = doblesActuales.filter(function(m) { return String(m) !== mStr; });
+  const rEd = editarFecha_({
+    adminKey: adminKey, fecha: fStr, jugadores: targetJugadores, invitados: invitadosActuales,
+    dobles: targetDobles, canchaId: meta.canchaId || undefined, colorTee: meta.colorTee || undefined,
+  });
+```
+
+Reemplazalo por:
+
+```javascript
+  const rLin = setLineasFecha_({ adminKey: adminKey, fecha: fStr, lineas: nuevasLineas });
+  if (!rLin.ok) return rLin;
+  const det = getFechaDetalle_(fStr);
+  const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
+  // Filtramos por matrícula (no por nombre) para que también funcione si hay dos
+  // invitados con el mismo nombre cargado -- antes esta lista se mandaba tal cual,
+  // sin sacar al invitado que se está quitando, así que editarFecha_ lo consideraba
+  // "sigue en la fecha" y nunca borraba su fila de TARJETAS.
+  const invitadosActuales = ((det && det.invitados) || [])
+    .filter(function(j) { return String(j.matricula) !== mStr; })
+    .map(function(j) { return j.nombre; });
+  const doblesActuales    = getDoblesForFecha_(fStr);
+  const targetJugadores = jugadoresActuales.filter(function(m) { return m !== mStr; });
+  const targetDobles    = doblesActuales.filter(function(m) { return String(m) !== mStr; });
+  const rEd = editarFecha_({
+    adminKey: adminKey, fecha: fStr, jugadores: targetJugadores, invitados: invitadosActuales,
+    dobles: targetDobles, canchaId: meta.canchaId || undefined, colorTee: meta.colorTee || undefined,
+  });
+```
+
+#### Cambio 4 — nueva función `agregarInvitadoALinea_`: sumar un invitado nuevo directo a un casillero vacío desde "Gestionar Fecha" (Arreglo C, backend)
+
+Buscá:
+
+```javascript
+function agregarInvitadoSuelto_(params) {
+```
+
+Reemplazalo por:
+
+```javascript
+// Igual que agregarJugadorALinea_, pero para sumar un invitado nuevo directo a un
+// casillero vacío desde "Gestionar Fecha" (antes esa pantalla solo dejaba elegir
+// entre jugadores reales que todavía no estaban en ninguna línea -- no había forma
+// de sumar un invitado ahí, solo desde "Crear Fecha"). Crea el invitado con la
+// misma lógica protegida de agregarInvitadoSuelto_ y lo coloca en el casillero.
+function agregarInvitadoALinea_(params) {
+  const { adminKey, fecha, nombre, hcp, canchaId, colorTee, lineNum, slotIndex } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  if (!fecha || !nombre || !lineNum) return { ok: false, error: 'Faltan datos' };
+  const fStr = String(fecha);
+  if (fechaTieneScoresCargados_(fStr)) return { ok: false, error: 'Ya hay scores cargados en esta fecha — no se puede modificar la línea. Usalo solo antes de que arranque la fecha.' };
+  const meta = getFechaMeta_(fStr);
+  if (!meta || !meta.lineas || !meta.lineas.length) return { ok: false, error: 'Esta fecha no tiene líneas armadas' };
+  const idx = parseInt(lineNum) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= meta.lineas.length) return { ok: false, error: 'Línea inválida' };
+  const lineaActual = meta.lineas[idx] || [];
+  let si = (slotIndex !== undefined && slotIndex !== null && slotIndex !== '') ? parseInt(slotIndex) : lineaActual.indexOf('');
+  if (isNaN(si) || si < 0 || si > 3) return { ok: false, error: 'No hay casillero vacío disponible en esa línea' };
+  if (lineaActual[si] && lineaActual[si] !== '') return { ok: false, error: 'Ese casillero ya está ocupado' };
+
+  const rInv = agregarInvitadoSuelto_({ adminKey: adminKey, fecha: fStr, nombre: nombre, hcp: hcp, canchaId: canchaId, colorTee: colorTee });
+  if (!rInv.ok) return rInv;
+
+  const nuevasLineas = meta.lineas.map(function(l, i) {
+    const copia = (l || []).slice();
+    if (i !== idx) return copia;
+    while (copia.length <= si) copia.push('');
+    copia[si] = rInv.matricula;
+    return copia;
+  });
+  const rLin = setLineasFecha_({ adminKey: adminKey, fecha: fStr, lineas: nuevasLineas });
+  if (!rLin.ok) return rLin;
+
+  const det = getFechaDetalle_(fStr);
+  const jugadoresActuales = ((det && det.jugadores) || []).map(function(j) { return String(j.matricula); });
+  const invitadosActuales = ((det && det.invitados) || []).map(function(j) { return j.nombre; });
+  const doblesActuales    = (det && det.dobles) || [];
+  const rEd = editarFecha_({ adminKey: adminKey, fecha: fStr, jugadores: jugadoresActuales,
+    invitados: invitadosActuales, dobles: doblesActuales, canchaId: meta.canchaId || undefined, colorTee: meta.colorTee || undefined });
+  if (!rEd.ok) return rEd;
+  try { recalcularTotalesScore_(null); } catch(e) {}
+  audit_('AGREGAR_INVITADO_LINEA', 'admin', { fecha: fStr, matricula: rInv.matricula, nombre: nombre, lineNum: lineNum, slotIndex: si });
+  return { ok: true, matricula: rInv.matricula, nombre: nombre };
+}
+
+function agregarInvitadoSuelto_(params) {
+```
+
+### Cambios en `10_Routing.gs` (backend) — necesita el deploy manual de siempre
+
+#### Cambio 5 — registrar la nueva acción `agregarInvitadoALinea`
+
+Buscá:
+
+```javascript
+      case 'agregarJugadorALinea': result = agregarJugadorALinea_(params); break;
+      case 'agregarInvitadoSuelto':  result = agregarInvitadoSuelto_(params); break;
+```
+
+Reemplazalo por:
+
+```javascript
+      case 'agregarJugadorALinea': result = agregarJugadorALinea_(params); break;
+      case 'agregarInvitadoALinea': result = agregarInvitadoALinea_(params); break;
+      case 'agregarInvitadoSuelto':  result = agregarInvitadoSuelto_(params); break;
+```
+
+### Cambios en `index.html` (frontend) — solo necesita `git push`, no requiere el deploy manual de Apps Script
+
+#### Cambio 6 — botón "+ Sumar invitado" en el picker de "Gestionar Fecha" (Arreglo C, frontend)
+
+Buscá:
+
+```javascript
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">Sumar jugador a Línea ' + lineNum + '</div>';
+  if(!disponibles.length){
+    html += '<div class="s dim" style="text-align:center;padding:20px 0;">No quedan jugadores disponibles.</div>';
+  } else {
+    html += '<input type="text" id="adm-lin-picker-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="admLinFiltrarPicker_()" style="margin-bottom:10px;">';
+    html += '<div id="adm-lin-picker-list" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">';
+    disponibles.forEach(function(j){
+      const lbl = formatPlayerLabel(j.nombre);
+      html += '<button type="button" class="gf-lin-pill adm-lin-picker-item" style="padding:10px 14px;" data-nombre="' + (j.nombre || '').toLowerCase() + '" onclick="admLinElegirJugador(\'' + j.matricula + '\')"><span class="gf-lin-pname">' + lbl + '</span></button>';
+    });
+    html += '</div>';
+  }
+  html += '<button class="btn-cancel" onclick="closeFloatingModal()" style="width:100%;margin-top:12px;">Cancelar</button>';
+  html += '<div id="adm-lin-picker-msg" class="adm-msg" style="display:none;"></div>';
+  openFloatingModal(html);
+}
+
+function admLinFiltrarPicker_(){
+```
+
+Reemplazalo por:
+
+```javascript
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">Sumar jugador a Línea ' + lineNum + '</div>';
+  html += '<button class="gf-lin-pill" style="margin-bottom:10px;width:100%;" onclick="admLinAbrirInvitado_()">+ Sumar invitado</button>';
+  if(!disponibles.length){
+    html += '<div class="s dim" style="text-align:center;padding:20px 0;">No quedan jugadores disponibles.</div>';
+  } else {
+    html += '<input type="text" id="adm-lin-picker-search" class="adm-input" placeholder="🔍 Buscar jugador..." oninput="admLinFiltrarPicker_()" style="margin-bottom:10px;">';
+    html += '<div id="adm-lin-picker-list" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">';
+    disponibles.forEach(function(j){
+      const lbl = formatPlayerLabel(j.nombre);
+      html += '<button type="button" class="gf-lin-pill adm-lin-picker-item" style="padding:10px 14px;" data-nombre="' + (j.nombre || '').toLowerCase() + '" onclick="admLinElegirJugador(\'' + j.matricula + '\')"><span class="gf-lin-pname">' + lbl + '</span></button>';
+    });
+    html += '</div>';
+  }
+  html += '<button class="btn-cancel" onclick="closeFloatingModal()" style="width:100%;margin-top:12px;">Cancelar</button>';
+  html += '<div id="adm-lin-picker-msg" class="adm-msg" style="display:none;"></div>';
+  openFloatingModal(html);
+}
+
+// "+ Sumar invitado" desde "Gestionar Fecha" (antes solo existía este paso en el
+// asistente de "Crear Fecha" -- acá reusamos el mismo casillero vacío que ya
+// estaba eligiendo admLinAbrirPicker).
+function admLinAbrirInvitado_(){
+  const html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">+ Sumar invitado</div>' +
+    '<div class="adm-row"><div class="adm-field"><label class="adm-label">Nombre</label>' +
+    '<input type="text" id="adm-lin-inv-nombre" class="adm-input" placeholder="Nombre del invitado"></div></div>' +
+    '<div class="adm-row"><div class="adm-field"><label class="adm-label">HCP de juego</label>' +
+    '<input type="number" id="adm-lin-inv-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP"></div></div>' +
+    '<div style="display:flex;gap:8px;margin-top:16px;">' +
+    '<button class="adm-btn-primary" onclick="admLinConfirmarInvitado_()" style="flex:2;">Sumar</button>' +
+    '<button class="btn-cancel" onclick="admLinAbrirPicker(' + ADM_LIN_PICKER_LINEA + ',' + ADM_LIN_PICKER_SLOT + ')" style="flex:1;">Volver</button>' +
+    '</div><div id="adm-lin-inv-msg" class="adm-msg" style="display:none;"></div>';
+  openFloatingModal(html);
+}
+
+function admLinConfirmarInvitado_(){
+  const nombreEl = document.getElementById('adm-lin-inv-nombre');
+  const hcpEl = document.getElementById('adm-lin-inv-hcp');
+  const msg = document.getElementById('adm-lin-inv-msg');
+  const nombre = nombreEl ? nombreEl.value.trim() : '';
+  const hcp = hcpEl ? hcpEl.value.trim() : '';
+  if(!nombre){
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el nombre del invitado'; msg.style.display = 'block'; }
+    return;
+  }
+  const fecha = ADM_EDIT_FECHA;
+  const lineNum = ADM_LIN_PICKER_LINEA;
+  const slotIndex = ADM_LIN_PICKER_SLOT;
+  if(msg){ msg.className = 'adm-msg'; msg.textContent = 'Sumando...'; msg.style.display = 'block'; }
+  ngtApiPost({
+    action: 'agregarInvitadoALinea', adminKey: ADMIN_KEY_OK, fecha: fecha,
+    nombre: nombre, hcp: hcp, lineNum: lineNum, slotIndex: slotIndex,
+  }).then(function(r){
+    if(r && r.ok){
+      closeFloatingModal();
+      loadAdmLineasGrid(fecha);
+      loadAdmTarjetas(fecha);
+      if(MGR_FECHA === fecha) loadMatchesForGestion(fecha);
+    } else if(msg){
+      msg.className = 'adm-msg err';
+      msg.textContent = '✗ ' + (r && r.error ? r.error : 'Error');
+    }
+  }).catch(function(e){
+    if(msg){ msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message; }
+  });
+}
+
+function admLinFiltrarPicker_(){
+```
+
+### Qué NO cambia
+
+- Los cambios 1, 2, 3, 4 y 5 son de backend (`03_Reads.gs`, `04_Writes.gs`, `10_Routing.gs`) — **necesitan el deploy manual de siempre en Apps Script** ("Implementar → Nueva versión") para que se vean reflejados en la app. El cambio 6 es de frontend (`index.html`) — con hacer `git push` alcanza, GitHub Pages lo sirve solo.
+- No cambia la matrícula temporal "INV..." que se le asigna a cada invitado — sigue igual, es interno.
+- No toca nada de cómo se calculan HCP, Stableford ni matches para jugadores reales — todo lo tocado es específico del manejo de invitados en líneas.
+- No revive solo a un invitado que ya haya quedado "huérfano" antes de este deploy (ver el Contexto arriba) — a esos hay que sacarlos y volver a sumarlos una vez subido este cambio.
+- La opción "+ Sumar invitado" en "Crear Fecha" (el asistente, `lineditAbrirInvitado_`/`lineditConfirmarInvitado_`) no se toca — sigue funcionando exactamente igual que hasta ahora. Lo nuevo es la misma opción, pero en "Gestionar Fecha".
+
+### ❓ Preguntas de verificación
+
+1. En "Gestionar Fecha", sacá a un invitado de una línea y confirmá que desaparece completamente de la fecha (no solo de la línea) — debería dejar de aparecer en cualquier lista de esa fecha.
+Sí. `quitarJugadorDeLinea_` ahora filtra al invitado de `invitadosActuales` por matrícula antes de mandárselo a `editarFecha_`. Antes le mandaba la lista completa sin sacarlo, así que `editarFecha_` lo consideraba "sigue en la fecha" y nunca borraba su fila de TARJETAS.
+
+2. En "Gestionar Fecha", abrí el picker de un casillero vacío y confirmá que ahora ves el botón "+ Sumar invitado" arriba de la lista de jugadores — probalo sumando un invitado nuevo y confirmá que queda en el casillero con su nombre.
+Sí. En `admLinAbrirPicker` se agrega `html += '<button ... onclick="admLinAbrirInvitado_()">+ Sumar invitado</button>'` antes del listado de jugadores. Al tocar ese botón se abre `admLinAbrirInvitado_` (formulario nombre + HCP), que al confirmar llama a la nueva acción `agregarInvitadoALinea` en el backend. Esa función crea el invitado con `agregarInvitadoSuelto_` (protegido con LockService) y lo coloca en el casillero.
+
+3. Armá una fecha con al menos un invitado, después hacé cualquier otro cambio de línea que no lo toque a él (por ejemplo, sumar o sacar a un jugador real), y confirmá que el invitado sigue mostrando bien su nombre y su HCP después — no debería "resetearse".
+Sí. Este era el bug más grave: `editarFecha_` comparaba cada invitado existente usando su matrícula `INV...` como si fuera su nombre, esa comparación nunca coincidía con el nombre real de `targetInvitadoNames`, y el invitado se borraba y se recreaba con una matrícula nueva en cada guardado. Ahora se lee `invitadosInfo` de `FECHA_META` antes de construir `existingRows`, y la comparación usa el nombre real (o `row[2]` de TARJETAS como respaldo), así que el invitado se reconoce como "ya está" y no se toca.
+
+4. ¿Alguna duda o algo ambiguo de la consigna?
+No. Los tres arreglos estaban bien identificados y relacionados: la causa de fondo (comparación por matrícula en vez de nombre), el síntoma del "sacar no borra" (lista sin filtrar), y la función nueva para sumar invitado desde "Gestionar Fecha". Ningún cambio tocó la lógica de jugadores reales, HCP ni matches.
