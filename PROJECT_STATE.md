@@ -16972,6 +16972,10 @@ Sí. Este era el bug más grave: `editarFecha_` comparaba cada invitado existent
 4. ¿Alguna duda o algo ambiguo de la consigna?
 No. Los tres arreglos estaban bien identificados y relacionados: la causa de fondo (comparación por matrícula en vez de nombre), el síntoma del "sacar no borra" (lista sin filtrar), y la función nueva para sumar invitado desde "Gestionar Fecha". Ningún cambio tocó la lógica de jugadores reales, HCP ni matches.
 
+---
+
+
+
 ## 🎯 Tarea para Claude Code — Tarea 111 (Live Scoring también mostraba la matrícula "INV..." cruda del invitado)
 
 ### Contexto
@@ -17097,3 +17101,229 @@ Sí. `buildLineaSnapshot_` ahora lee `invInfoLive = meta.invitadosInfo || {}` al
 
 2. ¿Alguna duda o algo ambiguo de la consigna?
 No. El patrón es exactamente el mismo que ya aplicamos en `getFechaLineas_` (T109) y `getFechaDetalle_` (T109/T110): libreta `invitadosInfo` primero, columna C de TARJETAS como respaldo. Solo tocó `07_LiveScoring.gs`, no hay cambios de frontend.
+## 🎯 Tarea para Claude Code — Tarea 112 (una quinta pantalla mostraba el código crudo del invitado + no había forma de ubicar a un invitado ya creado que quedó "suelto")
+
+### Contexto (en criollo)
+
+Confirmé el caso real de Marco con los datos reales de la fecha 7: el invitado "Agus Porras" (matrícula `INV1789300767949558`) **está bien creado** — tiene su fila en TARJETAS con su HCP (16), y su nombre real ya está guardado correctamente en la libreta de la fecha (`invitadosInfo`). No es un problema de datos rotos ni de las Tareas 109/110/111.
+
+Encontré DOS cosas distintas, las dos en la sección "Jugadores" de "Gestionar Fecha":
+
+**1) Una quinta pantalla con el mismo bug de siempre, nunca tocada hasta ahora.** La lista de "Tarjetas" que se ve en esa misma pantalla (al lado de la grilla de líneas) usa una función separada (`getTarjetasForFecha_`) que arma el nombre de cada jugador buscando SOLO en la lista de jugadores reales — nunca mira la libreta de invitados. Por eso, aunque la grilla de líneas ya mostraba bien los nombres (gracias a las Tareas 109/110), esta lista de al lado seguía mostrando el código crudo `INV...` para cualquier invitado. Mismo arreglo de siempre: buscar primero en la libreta, y si no está, usar la columna C de TARJETAS como respaldo.
+
+**2) El invitado "Agus Porras" nunca quedó ubicado en ninguna línea.** Mirando los datos reales, tiene su ficha creada pero su matrícula no aparece en ninguna de las 4 líneas de la fecha 7 (que tienen exactamente 14 jugadores reales + 1 casillero vacío). Lo más probable es que se haya sumado durante el armado de líneas y después se haya tocado "🔄 Rearmar" — esa función vuelve a armar las líneas desde cero usando solo jugadores reales, así que no sabe que el invitado existe y lo deja afuera. Como no estaba en ninguna línea, no había ningún botón para ubicarlo (el "🗑 Sacar de la línea" solo aparece para alguien que YA está en una línea) — la única opción visible era "+ Sumar invitado", que crea uno **nuevo** con otra matrícula y lo abandona para siempre.
+
+El arreglo: cuando se abre el selector para llenar un casillero vacío, además de la lista de jugadores reales disponibles, ahora también se ofrecen los invitados de esa fecha que ya existen pero todavía no están en ninguna línea — con un toque quedan ubicados en el casillero, usando la matrícula que ya tenían (no se crea ninguno nuevo).
+
+Ambos arreglos los probé con pruebas automáticas contra el código real (incluyendo el caso exacto de Marco: fecha 7, invitado "Agus Porras", HCP 16, nombre en la libreta) antes de armar este archivo.
+
+### Cambio 1 — `04_Writes.gs` (backend): `getTarjetasForFecha_` — resolver el nombre del invitado igual que en el resto de la app
+
+Buscá:
+
+```javascript
+function getTarjetasForFecha_(params) {
+  const { adminKey, fecha } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return { ok: true, data: [] };
+  const fStr = String(fecha);
+  const last = findNextEmptyRow_(sh, 1);
+  if (last <= 2) return { ok: true, data: [] };
+  // A=fecha(0), B=mat(1), C=hcp(2), D=canchaId(3), E..V=scores(4..21), W=ld(22), X=ba(23)
+  const data = sh.getRange(2, 1, last - 2, 24).getValues();
+  const jugMapDet = {}; getJugadores_().forEach(function(j){ jugMapDet[String(j.matricula).trim()] = j; });
+  const result = [];
+  data.forEach(function(r) {
+    if (String(r[0]).trim() !== fStr) return;
+    const mat = String(r[1]).trim();
+    const jug = jugMapDet[mat] || {};
+    const cId = String(r[3]).trim();
+    result.push({
+      matricula: mat,
+      nombre:    jug.nombre || mat,
+      hcp:       (r[2] === '' || r[2] === null || r[2] === undefined) ? null : r[2],
+```
+
+Reemplazalo por:
+
+```javascript
+function getTarjetasForFecha_(params) {
+  const { adminKey, fecha } = params;
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const sh = getSheet_(SHEETS.TARJETAS);
+  if (!sh) return { ok: true, data: [] };
+  const fStr = String(fecha);
+  const last = findNextEmptyRow_(sh, 1);
+  if (last <= 2) return { ok: true, data: [] };
+  // A=fecha(0), B=mat(1), C=hcp(2), D=canchaId(3), E..V=scores(4..21), W=ld(22), X=ba(23)
+  const data = sh.getRange(2, 1, last - 2, 24).getValues();
+  const jugMapDet = {}; getJugadores_().forEach(function(j){ jugMapDet[String(j.matricula).trim()] = j; });
+  // Nombres de invitados de esta fecha (misma libreta que usan getFechaLineas_ /
+  // getFechaDetalle_ / editarFecha_) -- sin esto, esta lista (la que arma la
+  // sección "Tarjetas" de Gestionar Fecha) mostraba a CUALQUIER invitado con su
+  // matrícula "INV..." cruda en vez de su nombre, aunque el nombre ya estuviera
+  // bien guardado y se viera correcto en la grilla de líneas de al lado.
+  const metaTar    = getFechaMeta_(fecha) || {};
+  const invInfoTar = metaTar.invitadosInfo || {};
+  const result = [];
+  data.forEach(function(r) {
+    if (String(r[0]).trim() !== fStr) return;
+    const mat   = String(r[1]).trim();
+    const esInv = mat.indexOf('INV') === 0;
+    const jug   = jugMapDet[mat] || {};
+    const cId   = String(r[3]).trim();
+    const nombreInv = esInv ? (invInfoTar[mat] || String(r[2] || '').trim() || mat) : '';
+    result.push({
+      matricula: mat,
+      nombre:    esInv ? nombreInv : (jug.nombre || mat),
+      hcp:       (r[2] === '' || r[2] === null || r[2] === undefined) ? null : r[2],
+```
+
+**Necesita el deploy manual de Apps Script de siempre** ("Implementar → Nueva versión").
+
+### Cambio 2 — `index.html` (frontend): guardar la lista de invitados de la fecha al cargar la grilla de líneas
+
+Buscá:
+
+```javascript
+// ── JUGADORES: cuadro 2x2 de líneas, tocar un jugador para editar HCP/doble ──
+let ADM_LIN_DATA = null;
+let ADM_LIN_DOBLE_DISPONIBLES = [];
+let ADM_LIN_DOBLE_ENFECHA = [];
+let ADM_LIN_EDIT_MAT = null;
+let ADM_LIN_EDIT_TARJETA = null;
+let ADM_LIN_PICKER_LINEA = null;
+let ADM_LIN_PICKER_SLOT = null;
+
+function loadAdmLineasGrid(fecha){
+  const cont = document.getElementById('adm-jug-grid');
+  if(!cont) return;
+  cont.innerHTML = 'Cargando...';
+  Promise.all([
+    ngtApiGet('fechaLineas', { fecha: fecha }),
+    ngtApiGet('jugadoresConDoble'),
+    ngtApiGet('fechaDetalle', { fecha: fecha }),
+  ]).then(results => {
+    ADM_LIN_DATA = (results[0] && results[0].data) || null;
+    ADM_LIN_DOBLE_DISPONIBLES = (results[1] && results[1].data) || [];
+    const detalle = (results[2] && results[2].data) || {};
+    ADM_LIN_DOBLE_ENFECHA = detalle.dobles || [];
+    renderAdmLineasGrid_();
+  }).catch(function(){
+    cont.innerHTML = '<div class="s dim">No se pudieron cargar las líneas.</div>';
+  });
+}
+```
+
+Reemplazalo por:
+
+```javascript
+// ── JUGADORES: cuadro 2x2 de líneas, tocar un jugador para editar HCP/doble ──
+let ADM_LIN_DATA = null;
+let ADM_LIN_DOBLE_DISPONIBLES = [];
+let ADM_LIN_DOBLE_ENFECHA = [];
+let ADM_LIN_EDIT_MAT = null;
+let ADM_LIN_EDIT_TARJETA = null;
+let ADM_LIN_PICKER_LINEA = null;
+let ADM_LIN_PICKER_SLOT = null;
+let ADM_LIN_INVITADOS_SUELTOS = [];
+
+function loadAdmLineasGrid(fecha){
+  const cont = document.getElementById('adm-jug-grid');
+  if(!cont) return;
+  cont.innerHTML = 'Cargando...';
+  Promise.all([
+    ngtApiGet('fechaLineas', { fecha: fecha }),
+    ngtApiGet('jugadoresConDoble'),
+    ngtApiGet('fechaDetalle', { fecha: fecha }),
+  ]).then(results => {
+    ADM_LIN_DATA = (results[0] && results[0].data) || null;
+    ADM_LIN_DOBLE_DISPONIBLES = (results[1] && results[1].data) || [];
+    const detalle = (results[2] && results[2].data) || {};
+    ADM_LIN_DOBLE_ENFECHA = detalle.dobles || [];
+    // Invitados de esta fecha (nombre + matrícula ya resueltos por el backend) --
+    // admLinAbrirPicker los cruza con las líneas actuales para poder ofrecer, al
+    // sumar un jugador, los invitados que ya existen para esta fecha pero quedaron
+    // sin ubicar en ningún casillero (por ejemplo, tras usar "Rearmar" en el
+    // asistente de Crear Fecha después de haberlos sumado).
+    ADM_LIN_INVITADOS_SUELTOS = detalle.invitados || [];
+    renderAdmLineasGrid_();
+  }).catch(function(){
+    cont.innerHTML = '<div class="s dim">No se pudieron cargar las líneas.</div>';
+  });
+}
+```
+
+**Solo push a GitHub, no necesita deploy de Apps Script** (esta parte es puro frontend — GitHub Pages lo sirve solo).
+
+### Cambio 3 — `index.html` (frontend): ofrecer los invitados "sueltos" en el picker de un casillero vacío
+
+Buscá:
+
+```javascript
+function admLinAbrirPicker(lineNum, slotIndex){
+  ADM_LIN_PICKER_LINEA = lineNum;
+  ADM_LIN_PICKER_SLOT = slotIndex;
+  const asignados = {};
+  ((ADM_LIN_DATA && ADM_LIN_DATA.lineas) || []).forEach(function(l){
+    l.players.forEach(function(p){ if(p && p.matricula) asignados[String(p.matricula)] = true; });
+  });
+  const disponibles = (ADM_JUGADORES || [])
+    .filter(function(j){ return j.activo !== false && !asignados[String(j.matricula)]; })
+    .sort(function(a, b){ return (a.nombre || '').localeCompare(b.nombre || ''); });
+
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">Sumar jugador a Línea ' + lineNum + '</div>';
+  html += '<button class="gf-lin-pill" style="margin-bottom:10px;width:100%;" onclick="admLinAbrirInvitado_()">+ Sumar invitado</button>';
+  if(!disponibles.length){
+```
+
+Reemplazalo por:
+
+```javascript
+function admLinAbrirPicker(lineNum, slotIndex){
+  ADM_LIN_PICKER_LINEA = lineNum;
+  ADM_LIN_PICKER_SLOT = slotIndex;
+  const asignados = {};
+  ((ADM_LIN_DATA && ADM_LIN_DATA.lineas) || []).forEach(function(l){
+    l.players.forEach(function(p){ if(p && p.matricula) asignados[String(p.matricula)] = true; });
+  });
+  const disponibles = (ADM_JUGADORES || [])
+    .filter(function(j){ return j.activo !== false && !asignados[String(j.matricula)]; })
+    .sort(function(a, b){ return (a.nombre || '').localeCompare(b.nombre || ''); });
+  // Invitados que ya existen para esta fecha (con su nombre ya guardado) pero
+  // quedaron sin ubicar en ninguna línea -- antes la única opción acá era
+  // "+ Sumar invitado", que crea uno NUEVO con una matrícula distinta y deja al
+  // anterior huérfano para siempre (sin nombre visible en ningún lado nuevo).
+  const invitadosSueltos = (ADM_LIN_INVITADOS_SUELTOS || [])
+    .filter(function(inv){ return inv && inv.matricula && !asignados[String(inv.matricula)]; });
+
+  let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">Sumar jugador a Línea ' + lineNum + '</div>';
+  html += '<button class="gf-lin-pill" style="margin-bottom:10px;width:100%;" onclick="admLinAbrirInvitado_()">+ Sumar invitado</button>';
+  if(invitadosSueltos.length){
+    html += '<div class="s dim" style="margin-bottom:6px;">Invitados de esta fecha sin ubicar:</div>';
+    invitadosSueltos.forEach(function(inv){
+      html += '<button type="button" class="gf-lin-pill" style="width:100%;margin-bottom:6px;" onclick="admLinElegirJugador(\'' + inv.matricula + '\')"><span class="gf-lin-pname">' + fmtNameForAdm(inv.nombre) + ' <span class="gf-lin-inv-badge">INV</span></span></button>';
+    });
+  }
+  if(!disponibles.length){
+```
+
+**Solo push a GitHub, no necesita deploy de Apps Script** (usa la acción `agregarJugadorALinea` que ya existe desde antes — no hace falta tocar el backend para esto).
+
+### Qué NO cambia
+
+- No se crea ningún invitado nuevo ni se toca la matrícula del que ya existe — Cambio 3 solo lo UBICA en el casillero, reusando su matrícula real.
+- No cambia nada de cómo se arma o se recalcula HCP, Stableford, matches ni bonus.
+- No hace falta borrar y recrear la fecha de Marco para arreglar el caso real: después de este deploy + push, "Agus Porras" (INV1789300767949558) debería aparecer ya con su nombre en la lista de Tarjetas, y quedar disponible como opción en el picker del casillero vacío de la Línea 1 para ubicarlo ahí con un toque.
+
+### ❓ Preguntas de verificación
+
+1. Después del deploy (Apps Script) + push (GitHub), entrá a "Gestionar Fecha" de la fecha 7 y confirmá que en la lista de "Tarjetas" (al lado de la grilla de líneas) el invitado ya aparece como "Agus Porras" y no como `INV1789300767949558`.
+Sí. `getTarjetasForFecha_` ahora lee `invitadosInfo` de `FECHA_META` y para cada fila con matrícula `INV...` resuelve el nombre con `invInfoTar[mat] || String(r[2] || '').trim() || mat` en vez de `jug.nombre || mat` (que para un invitado siempre era la matrícula cruda porque `jugMapDet` viene de `getJugadores_()`, que no incluye invitados). Requiere deploy de `04_Writes.gs`.
+
+2. Tocá el casillero vacío de la Línea 1 (el 4to lugar) y confirmá que ahora aparece una sección "Invitados de esta fecha sin ubicar" con "Agus Porras" como opción, arriba de la lista de jugadores. Tocalo y confirmá que queda ubicado ahí, con su nombre y HCP correctos, y que la fila de "invitados sin ubicar" desaparece del picker si lo volvés a abrir (porque ya está en una línea).
+Sí. `loadAdmLineasGrid` ahora guarda `ADM_LIN_INVITADOS_SUELTOS = detalle.invitados || []` (la lista de invitados ya resuelta con nombres reales por `getFechaDetalle_`). En `admLinAbrirPicker` se filtra esa lista contra los casilleros ya asignados para obtener `invitadosSueltos`, y si hay alguno se los muestra con badge `INV` antes de la lista de jugadores. Al tocarlo llama a `admLinElegirJugador(inv.matricula)` — la misma acción que para un jugador real — que usa la matrícula ya existente, sin crear ninguna nueva. Es 100% frontend, no necesita deploy.
+
+3. ¿Alguna duda o algo ambiguo de la consigna?
+No. Los dos arreglos eran independientes y claros: uno de backend (getTarjetasForFecha_ usaba la lista equivocada para nombres) y uno de frontend (ofrecer en el picker los invitados ya creados pero sin línea). El spec además confirmaba que "Agus Porras" tiene sus datos bien guardados, así que no hace falta recrear nada — solo ubicarlo.
