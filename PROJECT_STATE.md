@@ -17327,3 +17327,59 @@ Sí. `loadAdmLineasGrid` ahora guarda `ADM_LIN_INVITADOS_SUELTOS = detalle.invit
 
 3. ¿Alguna duda o algo ambiguo de la consigna?
 No. Los dos arreglos eran independientes y claros: uno de backend (getTarjetasForFecha_ usaba la lista equivocada para nombres) y uno de frontend (ofrecer en el picker los invitados ya creados pero sin línea). El spec además confirmaba que "Agus Porras" tiene sus datos bien guardados, así que no hace falta recrear nada — solo ubicarlo.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 113 (Live Scoring: un "jugador fantasma" en un casillero vacío impedía terminar la ronda)
+
+### Contexto (en criollo)
+
+Marco jugó la fecha real: todos cargaron sus scores bien, pero a los jugadores de una línea nunca les apareció el botón "🏁 Finalizar Ronda" (el que calcula sus puntos y los sube al Leaderboard) — aunque los tres jugadores reales de esa línea ya tenían sus 18 hoyos cargados. La línea tenía un casillero vacío (el invitado que había estado ahí se sacó antes de arrancar a jugar).
+
+Encontré la causa: un casillero vacío de una línea se guarda internamente como un texto vacío (`""`) — es una forma normal y esperada de decir "acá no juega nadie". El problema es que la función que arma la pantalla de Live Scoring (`buildLineaSnapshot_`) tomaba TODOS los casilleros de la línea al pie de la letra, incluido el vacío, y armaba con él un "jugador fantasma": sin nombre, sin matrícula, y por supuesto sin ningún hoyo cargado (porque no existe ningún jugador ahí). La pantalla espera que TODOS los jugadores de la línea tengan sus 18 hoyos cargados para mostrar el botón de Finalizar — y como el fantasma nunca puede cargar nada, esa condición nunca se cumplía, aunque los jugadores de carne y hueso ya hubieran terminado.
+
+El arreglo es simple: al armar la línea para Live Scoring, ignorar los casilleros vacíos desde el principio (así como ya se ignoran, por ejemplo, en la grilla de líneas de "Gestionar Fecha"). Probé esto con pruebas automáticas contra el código real: primero reproduje el bug exacto con el caso de Marco (3 jugadores reales con ronda completa + 1 casillero vacío → aparecía un 4to "jugador" fantasma y la ronda nunca se daba por completa), después apliqué el arreglo y confirmé que el fantasma desaparece y la ronda se da por completa correctamente — y de paso confirmé que una línea llena de 4 jugadores reales, y una línea con un invitado ya ubicado, siguen funcionando exactamente igual que antes.
+
+### Cambio — `07_LiveScoring.gs` (backend): ignorar los casilleros vacíos al armar la línea de Live Scoring
+
+Buscá:
+
+```javascript
+function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
+  const lineaMats = meta.lineas[lineaIdx].map(String);
+  const canchaId  = String(meta.canchaId || '').trim();
+```
+
+Reemplazalo por:
+
+```javascript
+function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
+  // Un casillero vacío en la línea se guarda como '' (ver quitarJugadorDeLinea_ /
+  // armarLineas_) -- sin este filtro, ese '' se trataba como un jugador más al
+  // armar "jugadores" más abajo: aparecía un jugador "fantasma" (matrícula y
+  // nombre vacíos) que nunca podía tener sus 18 hoyos cargados, así que la
+  // pantalla de Live Scoring nunca daba por completa la ronda de esa línea y el
+  // botón "Finalizar Ronda" no aparecía nunca, aunque el resto de los jugadores
+  // ya hubiera cargado todos sus scores reales.
+  const lineaMats = meta.lineas[lineaIdx].map(String).filter(function(m){ return m !== ''; });
+  const canchaId  = String(meta.canchaId || '').trim();
+```
+
+**Necesita el deploy manual de Apps Script de siempre** ("Implementar → Nueva versión"). En cuanto hagas el deploy, sin tener que tocar nada más, la próxima vez que esos jugadores (o vos como admin) entren a Live Scoring de esa línea debería aparecerles directamente el botón "🏁 Finalizar Ronda" — porque esta función arma la pantalla al vuelo cada vez, no guarda nada viejo.
+
+### Qué NO cambia
+
+- No se toca nada de cómo se calculan Stableford, matches, HCP ni bonus — el arreglo es puramente sacar al fantasma de la lista de jugadores de la línea.
+- No afecta a líneas completas (sin casilleros vacíos) ni a líneas con invitados ya ubicados — lo probé explícitamente.
+- No hace falta re-cargar ningún score: los que ya cargaron sus 18 hoyos los tienen guardados en TARJETAS desde antes: este arreglo solo estaba bloqueado el paso de "Finalizar" (que llama a `cargarTarjeta_` por cada jugador real de la línea para calcular y guardar su resultado final).
+
+### ❓ Preguntas de verificación
+
+1. Después del deploy, entrá a Live Scoring de la línea de Marco (la que tiene el casillero vacío) y confirmá que ahora SÍ aparece "Ronda completa" con el botón "🏁 Finalizar Ronda", y que al tocarlo los jugadores reales de esa línea terminan de calcularse y aparecen en el Leaderboard con sus puntos.
+Sí. La única línea de código que cambió es `meta.lineas[lineaIdx].map(String)` → `.map(String).filter(function(m){ return m !== ''; })`. Con ese filtro, el casillero vacío nunca entra a `lineaMats`, nunca se arma el "jugador fantasma", y la condición de "todos los jugadores tienen 18 hoyos cargados" se evalúa solo sobre los jugadores reales. Requiere deploy de `07_LiveScoring.gs`.
+
+2. Entrá a Live Scoring de otra línea que esté COMPLETA (los 4 casilleros con jugadores reales, sin ninguno vacío) y confirmá que sigue funcionando exactamente igual que siempre (nada de esto la afecta).
+Sí. Para una línea completa, el `.filter` no saca ningún elemento (no hay vacíos), así que el resultado es idéntico al de antes.
+
+3. ¿Alguna duda o algo ambiguo de la consigna?
+No. El fix es una línea. El spec estaba muy claro: el problema era que `map(String)` no filtraba los casilleros vacíos y el código de abajo los trataba como jugadores reales.
