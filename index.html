@@ -5271,6 +5271,7 @@ let ADM_LIN_EDIT_MAT = null;
 let ADM_LIN_EDIT_TARJETA = null;
 let ADM_LIN_PICKER_LINEA = null;
 let ADM_LIN_PICKER_SLOT = null;
+let ADM_LIN_INVITADOS_SUELTOS = [];
 
 function loadAdmLineasGrid(fecha){
   const cont = document.getElementById('adm-jug-grid');
@@ -5285,6 +5286,12 @@ function loadAdmLineasGrid(fecha){
     ADM_LIN_DOBLE_DISPONIBLES = (results[1] && results[1].data) || [];
     const detalle = (results[2] && results[2].data) || {};
     ADM_LIN_DOBLE_ENFECHA = detalle.dobles || [];
+    // Invitados de esta fecha (nombre + matrícula ya resueltos por el backend) --
+    // admLinAbrirPicker los cruza con las líneas actuales para poder ofrecer, al
+    // sumar un jugador, los invitados que ya existen para esta fecha pero quedaron
+    // sin ubicar en ningún casillero (por ejemplo, tras usar "Rearmar" en el
+    // asistente de Crear Fecha después de haberlos sumado).
+    ADM_LIN_INVITADOS_SUELTOS = detalle.invitados || [];
     renderAdmLineasGrid_();
   }).catch(function(){
     cont.innerHTML = '<div class="s dim">No se pudieron cargar las líneas.</div>';
@@ -5395,9 +5402,21 @@ function admLinAbrirPicker(lineNum, slotIndex){
   const disponibles = (ADM_JUGADORES || [])
     .filter(function(j){ return j.activo !== false && !asignados[String(j.matricula)]; })
     .sort(function(a, b){ return (a.nombre || '').localeCompare(b.nombre || ''); });
+  // Invitados que ya existen para esta fecha (con su nombre ya guardado) pero
+  // quedaron sin ubicar en ninguna línea -- antes la única opción acá era
+  // "+ Sumar invitado", que crea uno NUEVO con una matrícula distinta y deja al
+  // anterior huérfano para siempre (sin nombre visible en ningún lado nuevo).
+  const invitadosSueltos = (ADM_LIN_INVITADOS_SUELTOS || [])
+    .filter(function(inv){ return inv && inv.matricula && !asignados[String(inv.matricula)]; });
 
   let html = '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:14px;">Sumar jugador a Línea ' + lineNum + '</div>';
   html += '<button class="gf-lin-pill" style="margin-bottom:10px;width:100%;" onclick="admLinAbrirInvitado_()">+ Sumar invitado</button>';
+  if(invitadosSueltos.length){
+    html += '<div class="s dim" style="margin-bottom:6px;">Invitados de esta fecha sin ubicar:</div>';
+    invitadosSueltos.forEach(function(inv){
+      html += '<button type="button" class="gf-lin-pill" style="width:100%;margin-bottom:6px;" onclick="admLinElegirJugador(\'' + inv.matricula + '\')"><span class="gf-lin-pname">' + fmtNameForAdm(inv.nombre) + ' <span class="gf-lin-inv-badge">INV</span></span></button>';
+    });
+  }
   if(!disponibles.length){
     html += '<div class="s dim" style="text-align:center;padding:20px 0;">No quedan jugadores disponibles.</div>';
   } else {

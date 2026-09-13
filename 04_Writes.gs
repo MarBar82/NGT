@@ -202,15 +202,24 @@ function getTarjetasForFecha_(params) {
   // A=fecha(0), B=mat(1), C=hcp(2), D=canchaId(3), E..V=scores(4..21), W=ld(22), X=ba(23)
   const data = sh.getRange(2, 1, last - 2, 24).getValues();
   const jugMapDet = {}; getJugadores_().forEach(function(j){ jugMapDet[String(j.matricula).trim()] = j; });
+  // Nombres de invitados de esta fecha (misma libreta que usan getFechaLineas_ /
+  // getFechaDetalle_ / editarFecha_) -- sin esto, esta lista (la que arma la
+  // sección "Tarjetas" de Gestionar Fecha) mostraba a CUALQUIER invitado con su
+  // matrícula "INV..." cruda en vez de su nombre, aunque el nombre ya estuviera
+  // bien guardado y se viera correcto en la grilla de líneas de al lado.
+  const metaTar    = getFechaMeta_(fecha) || {};
+  const invInfoTar = metaTar.invitadosInfo || {};
   const result = [];
   data.forEach(function(r) {
     if (String(r[0]).trim() !== fStr) return;
-    const mat = String(r[1]).trim();
-    const jug = jugMapDet[mat] || {};
-    const cId = String(r[3]).trim();
+    const mat   = String(r[1]).trim();
+    const esInv = mat.indexOf('INV') === 0;
+    const jug   = jugMapDet[mat] || {};
+    const cId   = String(r[3]).trim();
+    const nombreInv = esInv ? (invInfoTar[mat] || String(r[2] || '').trim() || mat) : '';
     result.push({
       matricula: mat,
-      nombre:    jug.nombre || mat,
+      nombre:    esInv ? nombreInv : (jug.nombre || mat),
       hcp:       (r[2] === '' || r[2] === null || r[2] === undefined) ? null : r[2],
       canchaId:  cId,
       cancha:    lookupCanchaName_(cId) || cId,
