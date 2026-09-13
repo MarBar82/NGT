@@ -6,7 +6,14 @@
  * snapshot fresco como respuesta, req 6.2).
  */
 function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
-  const lineaMats = meta.lineas[lineaIdx].map(String);
+  // Un casillero vacío en la línea se guarda como '' (ver quitarJugadorDeLinea_ /
+  // armarLineas_) -- sin este filtro, ese '' se trataba como un jugador más al
+  // armar "jugadores" más abajo: aparecía un jugador "fantasma" (matrícula y
+  // nombre vacíos) que nunca podía tener sus 18 hoyos cargados, así que la
+  // pantalla de Live Scoring nunca daba por completa la ronda de esa línea y el
+  // botón "Finalizar Ronda" no aparecía nunca, aunque el resto de los jugadores
+  // ya hubiera cargado todos sus scores reales.
+  const lineaMats = meta.lineas[lineaIdx].map(String).filter(function(m){ return m !== ''; });
   const canchaId  = String(meta.canchaId || '').trim();
   // Nombres de invitados para esta fecha (mismo respaldo que getFechaLineas_ /
   // getFechaDetalle_: primero la libreta invitadosInfo, después la columna C de
