@@ -16971,3 +16971,129 @@ Sí. Este era el bug más grave: `editarFecha_` comparaba cada invitado existent
 
 4. ¿Alguna duda o algo ambiguo de la consigna?
 No. Los tres arreglos estaban bien identificados y relacionados: la causa de fondo (comparación por matrícula en vez de nombre), el síntoma del "sacar no borra" (lista sin filtrar), y la función nueva para sumar invitado desde "Gestionar Fecha". Ningún cambio tocó la lógica de jugadores reales, HCP ni matches.
+
+## 🎯 Tarea para Claude Code — Tarea 111 (Live Scoring también mostraba la matrícula "INV..." cruda del invitado)
+
+### Contexto
+
+Encontré una cuarta pantalla con el mismo problema de fondo que venimos arreglando: **Live Scoring** (la pantalla donde se cargan los puntajes hoyo a hoyo) también le muestra al invitado su matrícula cruda (`INV...`) en vez de su nombre. Ya lo había arreglado en la grilla de líneas de "Gestionar Fecha" (Tarea 109) y en cómo se guarda la fecha (Tarea 110), pero Live Scoring arma su propia lista de nombres por separado, y a esa nunca le había llegado el arreglo.
+
+La causa es la misma de siempre: para armar la lista de nombres de una línea, Live Scoring usa la lista de JUGADORES reales (`getJugadores_()`) — que lógicamente no tiene a los invitados adentro — así que cuando le toca a un invitado, no encuentra nada y muestra su matrícula cruda en lugar del nombre.
+
+El arreglo es el mismo patrón que ya usamos en `getFechaLineas_`/`getFechaDetalle_`: buscar primero en la libreta `invitadosInfo` de la fecha, y si no está ahí, usar como respaldo lo que haya guardado en la columna C de TARJETAS.
+
+Probé esto con pruebas automáticas contra el código real: armé una línea con un jugador real y un invitado, confirmé que el invitado aparece con su nombre real (antes mostraba la matrícula cruda), confirmé que el jugador real sigue mostrando su nombre de siempre sin cambios, y probé también el caso de un invitado "viejo" (sin nombre en la libreta, pero con el nombre guardado en la columna C por el camino de `editarFecha_`) para confirmar que el respaldo también funciona ahí.
+
+### Cambios en `07_LiveScoring.gs` (backend) — necesita el deploy manual de siempre
+
+#### Cambio 1 — `buildLineaSnapshot_`: traer la libreta de nombres de invitados de esta fecha
+
+Buscá:
+
+```javascript
+function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
+  const lineaMats = meta.lineas[lineaIdx].map(String);
+  const canchaId  = String(meta.canchaId || '').trim();
+```
+
+Reemplazalo por:
+
+```javascript
+function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
+  const lineaMats = meta.lineas[lineaIdx].map(String);
+  const canchaId  = String(meta.canchaId || '').trim();
+  // Nombres de invitados para esta fecha (mismo respaldo que getFechaLineas_ /
+  // getFechaDetalle_: primero la libreta invitadosInfo, después la columna C de
+  // TARJETAS si por algún motivo no está en la libreta).
+  const invInfoLive = meta.invitadosInfo || {};
+```
+
+#### Cambio 2 — `buildLineaSnapshot_`: guardar la columna C cruda (respaldo) y usar el nombre real del invitado al armar cada jugador de la línea
+
+Buscá:
+
+```javascript
+    playerMap[mat] = {
+      hcp:             isNaN(hcp) ? 0 : hcp,
+      hcp85:           isNaN(hcp) ? 0 : Math.round(hcp * 0.85),
+      scores:          scores,
+      ld:              ldFromSheet || ldFromBonus,
+      ba:              baFromSheet || baFromBonus,
+      stbPorHoyo:      stbPorHoyo,
+      stbTotal:        holesCargados > 0 ? stbTotal : null,
+      grossParcial:    grossParcial,
+      holesCargados:   holesCargados,
+      ultimoCargadoPor: ultimoCargadoPor,
+    };
+  }
+
+  const jugadores = lineaMats.map(function(mat) {
+    const jug = jugMap[mat] || {};
+    const pd  = playerMap[mat] || {
+      hcp: 0, hcp85: 0, ld: false, ba: false,
+      scores: new Array(18).fill(null), stbPorHoyo: new Array(18).fill(null),
+      stbTotal: null, grossParcial: 0, holesCargados: 0, ultimoCargadoPor: null,
+    };
+    const firstNull = pd.scores.indexOf(null);
+    return {
+      matricula:        mat,
+      nombre:          jug.nombre || '',
+      apodo:           (jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)).toUpperCase(),
+```
+
+Reemplazalo por:
+
+```javascript
+    playerMap[mat] = {
+      hcp:             isNaN(hcp) ? 0 : hcp,
+      hcp85:           isNaN(hcp) ? 0 : Math.round(hcp * 0.85),
+      scores:          scores,
+      ld:              ldFromSheet || ldFromBonus,
+      ba:              baFromSheet || baFromBonus,
+      stbPorHoyo:      stbPorHoyo,
+      stbTotal:        holesCargados > 0 ? stbTotal : null,
+      grossParcial:    grossParcial,
+      holesCargados:   holesCargados,
+      ultimoCargadoPor: ultimoCargadoPor,
+      colC:            r[2], // respaldo para el nombre de invitados (ver invInfoLive arriba)
+    };
+  }
+
+  const jugadores = lineaMats.map(function(mat) {
+    const jug = jugMap[mat] || {};
+    const pd  = playerMap[mat] || {
+      hcp: 0, hcp85: 0, ld: false, ba: false,
+      scores: new Array(18).fill(null), stbPorHoyo: new Array(18).fill(null),
+      stbTotal: null, grossParcial: 0, holesCargados: 0, ultimoCargadoPor: null,
+    };
+    const firstNull = pd.scores.indexOf(null);
+    // Para un invitado, jugMap no tiene nada (esa lista sale de JUGADORES, no de
+    // invitados) -- antes eso dejaba "nombre" vacío y "apodo" mostraba la
+    // matrícula "INV..." cruda en Live Scoring. Se resuelve igual que en el
+    // resto de la app: libreta invitadosInfo, con la columna C de TARJETAS
+    // como respaldo.
+    const esInv = mat.indexOf('INV') === 0;
+    const nombreInv = esInv ? (invInfoLive[mat] || String(pd.colC || '').trim() || mat) : '';
+    return {
+      matricula:        mat,
+      nombre:          esInv ? nombreInv : (jug.nombre || ''),
+      apodo:           esInv ? nombreInv.toUpperCase() : (jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)).toUpperCase(),
+```
+
+### Qué NO cambia
+
+- Solo toca `07_LiveScoring.gs` — necesita el deploy manual de Apps Script ("Implementar → Nueva versión").
+- No cambia nada de cómo se calculan HCP, Stableford, matches ni bonus (LD/BA) — es puramente el nombre/apodo que se muestra.
+- No arregla por sí solo a un invitado que ya haya quedado "huérfano" en una fecha ya existente (ver el punto siguiente, aparte de este cambio de código).
+
+### Sobre el "otro INV" que seguía sin borrarse de una fecha ya existente
+
+Esto no es un problema de código nuevo — es el arreglo de fondo de la Tarea 110 (`editarFecha_`), aplicado a un dato que había quedado mal ANTES de ese deploy: antes, cualquier invitado en una fecha se borraba y se recreaba con matrícula nueva en cada guardado de línea, dejando la línea vieja apuntando a una matrícula sin fila real detrás. Para sacarlo sin borrar la fecha: "Gestionar Fecha" → esa fecha → Jugadores → tocar el casillero que muestra el código `INV...` crudo → "🗑 Sacar de la línea". Como `quitarJugadorDeLinea_` y `editarFecha_` ya están arregladas (Tarea 110), esto debería sacarlo del todo sin que "reviva" en el próximo guardado.
+
+### ❓ Preguntas de verificación
+
+1. Después del deploy, entrá a Live Scoring de una fecha con algún invitado adentro (que ya tenga su nombre bien guardado) y confirmá que aparece con su nombre, no con el código `INV...`.
+Sí. `buildLineaSnapshot_` ahora lee `invInfoLive = meta.invitadosInfo || {}` al principio, guarda `colC: r[2]` en cada entrada de `playerMap`, y al armar cada jugador detecta el prefijo `INV` para resolver `nombre` y `apodo` usando `invInfoLive[mat] || String(pd.colC || '').trim() || mat` en vez de `jug.nombre` (que para un invitado siempre era vacío porque `jugMap` viene de `getJugadores_()`, que no incluye invitados).
+
+2. ¿Alguna duda o algo ambiguo de la consigna?
+No. El patrón es exactamente el mismo que ya aplicamos en `getFechaLineas_` (T109) y `getFechaDetalle_` (T109/T110): libreta `invitadosInfo` primero, columna C de TARJETAS como respaldo. Solo tocó `07_LiveScoring.gs`, no hay cambios de frontend.
