@@ -8,6 +8,10 @@
 function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
   const lineaMats = meta.lineas[lineaIdx].map(String);
   const canchaId  = String(meta.canchaId || '').trim();
+  // Nombres de invitados para esta fecha (mismo respaldo que getFechaLineas_ /
+  // getFechaDetalle_: primero la libreta invitadosInfo, después la columna C de
+  // TARJETAS si por algún motivo no está en la libreta).
+  const invInfoLive = meta.invitadosInfo || {};
 
   const cd = canchaId
     ? cachedRead_('cp2_' + canchaId, 600, function(){ return getCanchaPares_(canchaId); })
@@ -90,6 +94,7 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
       grossParcial:    grossParcial,
       holesCargados:   holesCargados,
       ultimoCargadoPor: ultimoCargadoPor,
+      colC:            r[2], // respaldo para el nombre de invitados (ver invInfoLive arriba)
     };
   }
 
@@ -101,10 +106,17 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
       stbTotal: null, grossParcial: 0, holesCargados: 0, ultimoCargadoPor: null,
     };
     const firstNull = pd.scores.indexOf(null);
+    // Para un invitado, jugMap no tiene nada (esa lista sale de JUGADORES, no de
+    // invitados) -- antes eso dejaba "nombre" vacío y "apodo" mostraba la
+    // matrícula "INV..." cruda en Live Scoring. Se resuelve igual que en el
+    // resto de la app: libreta invitadosInfo, con la columna C de TARJETAS
+    // como respaldo.
+    const esInv = mat.indexOf('INV') === 0;
+    const nombreInv = esInv ? (invInfoLive[mat] || String(pd.colC || '').trim() || mat) : '';
     return {
       matricula:        mat,
-      nombre:          jug.nombre || '',
-      apodo:           (jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)).toUpperCase(),
+      nombre:          esInv ? nombreInv : (jug.nombre || ''),
+      apodo:           esInv ? nombreInv.toUpperCase() : (jug.apodo || (jug.nombre ? jug.nombre.split(' ')[0] : mat)).toUpperCase(),
       hcpJuego:        pd.hcp,
       scores:          pd.scores,
       stbPorHoyo:      pd.stbPorHoyo,
