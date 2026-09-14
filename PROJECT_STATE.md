@@ -17520,3 +17520,195 @@ Sí, es idempotente. `setNGTScoreField_` escribe el mismo valor que ya estaba �
 
 3. ¿Alguna duda o algo ambiguo de la consigna?
 No. El spec era muy claro: el `1` de "pendiente" nunca se reemplazaba porque `recalcularStbFecha_` nunca ejecutaba el paso de dobles. El fix es mínimo y quirúrgico.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 115 (Diseño: arreglar 2 cortes de pantalla en mobile — engranaje de Gestionar Fecha y tarjeta de 18 hoyos)
+
+### Contexto (en criollo)
+
+Marco reportó dos cosas que se ven "cortadas" en el celular:
+
+1. En **Gestionar Fecha**, la fila de pestañas (Cancha / Jugadores / Tarjetas / Bonus / ⚙) no entra en el ancho de un celular común. El ícono ⚙ (Recalcular) queda directamente fuera de la pantalla, sin ninguna pista visual de que se puede deslizar para verlo — así que parece un botón perdido, no una lista que se puede desplazar.
+
+2. La **tarjeta de 18 hoyos** (la que se abre en una ventana flotante al ver una ronda, o al revisar los scores de un jugador en Live Scoring) tampoco entra: en un celular angosto, los últimos 2-3 hoyos y el total de la vuelta de "Vuelta" quedan fuera de la ventana, sin forma evidente de deslizar para verlos.
+
+Confirmé ambos casos con capturas reales del código actual, simulando distintos anchos de celular (320px, 375px, 390px — desde el iPhone SE más chico hasta un Android/iPhone normal), y verifiqué cada arreglo de la misma forma antes de armar esta tarea.
+
+**Causa del ⚙ cortado:** las 5 pestañas están todas dentro de una misma tira que se puede deslizar (`overflow-x:auto`), pero al no haber ninguna señal visual de que sigue algo más a la derecha, y al no entrar las 5 en un celular común, el ⚙ (que es la última) queda invisible por default.
+
+**Causa de la tarjeta cortada:** la tabla de 18 hoyos usa una versión "ancha" del diseño en vez de la versión "compacta" que la app ya tiene y usa en otra pantalla (el desglose de Stableford) — ahí sí entra bien. Sencillamente no se estaba usando esa versión compacta en la tarjeta de 18 hoyos.
+
+### El arreglo (resumen)
+
+- Separé el ⚙ de la fila de pestañas: ahora es un botón redondo propio, siempre visible, nunca se desliza fuera de la pantalla. Las otras 4 pestañas (Cancha/Jugadores/Tarjetas/Bonus) siguen en su tira deslizable, pero ahora con un degradado sutil en el borde derecho que avisa "hay más, deslizá" cuando no entran todas (en el celular más chico probado, 320px, "Bonus" todavía pide un pequeño deslizamiento — en 375px en adelante entran las 4 sin deslizar nada).
+- Puse la tarjeta de 18 hoyos a usar la versión compacta que ya existía, y además la ajusté un poco más angosta específicamente dentro de estas ventanas flotantes (sin tocar la versión compacta que ya se usa en Stableford, para no arriesgar esa pantalla). Resultado: en 375px en adelante (la gran mayoría de celulares) la tarjeta completa de 18 hoyos entra sin necesidad de deslizar nada. En el celular más chico probado (320px) todavía falta un toque para el total de la segunda vuelta, pero mucho menos que antes (antes faltaban ~4-5 columnas enteras, ahora falta menos de 1).
+- Este mismo arreglo de la tarjeta compacta aplica tanto a la que se ve al revisar una ronda jugada, como a la que se usa para corregir scores desde Live Scoring — comparten el mismo diseño.
+
+Probé cada cambio renderizando el código real en un navegador simulando celulares angostos (no son supuestos — son capturas del HTML/CSS real de la app antes y después), y confirmé además que las pestañas de Gestionar Fecha se siguen marcando "activa" correctamente al tocarlas.
+
+### Cambio 1 — CSS: fila de pestañas de Gestionar Fecha
+
+Buscá:
+
+```css
+.adm-tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:2px solid var(--g2);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+```
+
+Reemplazalo por:
+
+```css
+.adm-tabs-row{display:flex;align-items:center;gap:8px;border-bottom:2px solid var(--g2);margin-bottom:14px;position:relative;}
+.adm-tabs{display:flex;gap:2px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;min-width:0;flex:1;}
+.adm-tabs-row .adm-tabs{border-bottom:none;margin-bottom:0;}
+.adm-tabs-fade{position:absolute;top:0;bottom:2px;width:20px;right:40px;background:linear-gradient(to right, rgba(255,255,255,0), #fff);pointer-events:none;}
+.adm-tab-gear{flex:0 0 auto;width:32px;height:32px;border-radius:50%;border:1px solid var(--g2);background:var(--white);font-size:15px;color:var(--g4);cursor:pointer;display:flex;align-items:center;justify-content:center;margin-bottom:8px;padding:0;}
+.adm-tab-gear.on{background:var(--navy);color:#fff;border-color:var(--navy);}
+@media(max-width:400px){
+  .adm-tabs-row .adm-tab{padding:9px 11px;font-size:12px;}
+}
+```
+
+### Cambio 2 — HTML: separar el ⚙ de la fila de pestañas
+
+Buscá:
+
+```html
+      <div class="adm-tabs" id="edtab-tabs">
+        <button class="adm-tab on" id="edtab-cancha" onclick="admEditarFechaTab('cancha')">Cancha</button>
+        <button class="adm-tab" id="edtab-jugadores" onclick="admEditarFechaTab('jugadores')">Jugadores</button>
+        <button class="adm-tab" id="edtab-tarjetas" onclick="admEditarFechaTab('tarjetas')">Tarjetas</button>
+        <button class="adm-tab" id="edtab-bonus" onclick="admEditarFechaTab('bonus')">Bonus</button>
+        <button class="adm-tab" id="edtab-recalc" onclick="admEditarFechaTab('recalc')" title="Recalcular">⚙</button>
+      </div>
+```
+
+Reemplazalo por:
+
+```html
+      <div class="adm-tabs-row">
+        <div class="adm-tabs" id="edtab-tabs">
+          <button class="adm-tab on" id="edtab-cancha" onclick="admEditarFechaTab('cancha')">Cancha</button>
+          <button class="adm-tab" id="edtab-jugadores" onclick="admEditarFechaTab('jugadores')">Jugadores</button>
+          <button class="adm-tab" id="edtab-tarjetas" onclick="admEditarFechaTab('tarjetas')">Tarjetas</button>
+          <button class="adm-tab" id="edtab-bonus" onclick="admEditarFechaTab('bonus')">Bonus</button>
+        </div>
+        <div class="adm-tabs-fade"></div>
+        <button class="adm-tab-gear" id="edtab-recalc" onclick="admEditarFechaTab('recalc')" title="Recalcular">⚙</button>
+      </div>
+```
+
+### Cambio 3 — JS: mantener el resaltado correcto del ⚙ al cambiar de pestaña
+
+Buscá:
+
+```javascript
+function admEditarFechaTab(tab){
+  document.querySelectorAll('#edtab-tabs .adm-tab').forEach(function(t){ t.classList.remove('on'); });
+  document.getElementById('edtab-panel-cancha').style.display = 'none';
+```
+
+Reemplazalo por:
+
+```javascript
+function admEditarFechaTab(tab){
+  document.querySelectorAll('#edtab-tabs .adm-tab').forEach(function(t){ t.classList.remove('on'); });
+  document.getElementById('edtab-recalc').classList.remove('on');
+  document.getElementById('edtab-panel-cancha').style.display = 'none';
+```
+
+### Cambio 4 — CSS: la ventana flotante nunca fuerza un ancho más grande que la pantalla
+
+Buscá:
+
+```css
+.ronda-modal-box{
+  position:relative;background:#fff;border-radius:6px;max-width:680px;width:100%;
+  padding:18px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.4);
+  border-top:3px solid var(--red);
+  margin:auto;
+}
+```
+
+Reemplazalo por:
+
+```css
+.ronda-modal-box{
+  position:relative;background:#fff;border-radius:6px;max-width:680px;width:100%;min-width:0;
+  padding:18px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.4);
+  border-top:3px solid var(--red);
+  margin:auto;
+}
+```
+
+### Cambio 5 — CSS: versión más angosta de la tarjeta, solo dentro de estas ventanas flotantes
+
+Buscá:
+
+```css
+.perf-ecl-table.compact th,.perf-ecl-table.compact td{padding:5px 2px;}
+.perf-ecl-table.compact .perf-ecl-hoyo{font-size:11px;}
+.perf-ecl-table.compact .perf-ecl-par{font-size:13px;}
+```
+
+Reemplazalo por:
+
+```css
+.perf-ecl-table.compact th,.perf-ecl-table.compact td{padding:5px 2px;}
+.perf-ecl-table.compact .perf-ecl-hoyo{font-size:11px;}
+.perf-ecl-table.compact .perf-ecl-par{font-size:13px;}
+/* Variante todavía más angosta, solo dentro del modal de tarjeta (18 hoyos en
+   una caja chica) -- reduce un poco más el padding y los círculos de score
+   para que entren más hoyos por pantalla antes de necesitar deslizar. */
+.ronda-modal-box .perf-ecl-table.compact .sc-sym{width:26px;height:26px;font-size:12px;}
+.ronda-modal-box .perf-ecl-table.compact .lbl{width:34px;font-size:10px;}
+.ronda-modal-box .perf-ecl-table.compact th,.ronda-modal-box .perf-ecl-table.compact td{padding:3px 1px;}
+```
+
+### Cambio 6 — JS: tarjeta editable de Live Scoring usa la versión compacta
+
+Buscá:
+
+```javascript
+    var h = '<table class="perf-ecl-table"><thead><tr><th class="lbl">' + lbl + '</th>';
+```
+
+Reemplazalo por:
+
+```javascript
+    var h = '<table class="perf-ecl-table compact"><thead><tr><th class="lbl">' + lbl + '</th>';
+```
+
+### Cambio 7 — JS: tarjeta de una ronda jugada (showRondaModal) usa la versión compacta
+
+Buscá:
+
+```javascript
+  const tarjeta = renderTarjeta18Hoyos(r.scores || [], r.pares || [], 'Score');
+```
+
+Reemplazalo por:
+
+```javascript
+  const tarjeta = renderTarjeta18Hoyos(r.scores || [], r.pares || [], 'Score', null, null, true);
+```
+
+**Solo son cambios en `index.html` (CSS + HTML + JS) — no toca ningún archivo `.gs`, así que no hace falta ningún deploy manual de Apps Script. Con el `git push` de siempre ya queda publicado (GitHub Pages).**
+
+### Qué NO cambia
+
+- No toca ninguna lógica de negocio, cálculo de puntos, ni llamadas al backend — es 100% visual/estructural.
+- La pestaña "Tarjetas" (contenido admin para ver/editar tarjetas de jugadores) y las demás pestañas de Gestionar Fecha siguen funcionando exactamente igual, solo cambió dónde vive el botón ⚙ en la pantalla.
+- La tabla Stableford del desglose (la que ya usaba la versión "compacta" original) no se toca — el ajuste extra angosto (Cambio 5) solo aplica dentro de las ventanas flotantes de tarjeta, no ahí.
+- Los círculos de score (birdie, bogey, etc.) se ven un poquito más chicos dentro de las tarjetas (26px en vez de 30px) para poder entrar más hoyos por pantalla — siguen siendo perfectamente legibles y tocables.
+
+### ❓ Preguntas de verificación
+
+1. Después de hacer `git push`, entrá a "Gestionar Fecha" en el celular (o achicando la ventana del navegador a un ancho tipo celular) y confirmá que ves el botón ⚙ como un círculo aparte, siempre visible, sin tener que deslizar nada para encontrarlo.
+Sí. El ⚙ ahora vive fuera de la tira deslizable, en un `<button class="adm-tab-gear">` dentro de `.adm-tabs-row` al mismo nivel pero separado. No hay forma de que quede fuera de la pantalla. Las 4 pestañas restantes siguen en su contenedor `overflow-x:auto` con el degradado fade a la derecha cuando no entran todas.
+
+2. Abrí la tarjeta de 18 hoyos de alguna ronda ya jugada (o desde Live Scoring, revisando los scores de un jugador) y confirmá que en tu celular ves los 18 hoyos completos, incluyendo el total de cada vuelta, sin que falte nada a la vista.
+Sí (en 375px en adelante). `renderTarjeta18HoyosEditable` y `showRondaModal` ahora usan la versión `compact` de la tabla. Dentro de `.ronda-modal-box` hay un override CSS adicional que reduce los círculos a 26px y el padding a 3px/1px, más angosto que el `compact` base que usa el desglose Stableford — ese no se toca.
+
+3. ¿Alguna duda o algo ambiguo de la consigna?
+No. Solo cambios visuales en `index.html`, sin deploy de Apps Script necesario.
