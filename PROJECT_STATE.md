@@ -18016,3 +18016,62 @@ No. Un cambio de una línea, bien acotado.
 **Nota aparte, no es parte de esta Tarea:** de paso vi que la tarjeta de "Match Play" que aparece dentro del detalle de Fecha (`.rc-match`) tiene una esquina rara — el borde de arriba redondeado pero el de abajo recto — que puede ser intencional (para pegarse a algo debajo) o puede ser un resto de una versión vieja. Esa misma clase también se usa en la pantalla de "Match" (Etapa 3, todavía no la audité), así que prefiero mirarla junto con esa pantalla en vez de tocarla ahora a medias. Te aviso cuando llegue a esa etapa.
 
 Con esta Tarea se cierra la **Etapa 2** completa (Leaderboard ✅ ya estaba bien, Mi Tarjeta/Live Scoring ✅ Tarea 117, Fechas ✅ esta Tarea). Cuando la apliques seguimos con la **Etapa 3** (Historia y Match).
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 119 (La tarjeta de 18 hoyos en el modal sigue cortando el borde derecho en celulares angostos)
+
+### Contexto (en criollo)
+
+Marco reportó que la tarjeta que se despliega al tocar un nombre "se sigue cortando del lado derecho" — a pesar de que la Tarea 115 ya había arreglado un problema parecido. Investigué a fondo y encontré la causa: **el arreglo de la Tarea 115 achicó la tarjeta lo suficiente para que entre bien en pantallas de 375px o más anchas (la mayoría de los celulares modernos), pero no para pantallas más angostas (320-360px, como un iPhone SE viejo o algunos Android más chicos)** — ahí, la última columna (H9, y a veces "Tot") sigue quedando afuera de la pantalla.
+
+Esto afecta a **dos pantallas que comparten el mismo modal**, así que un solo cambio de CSS arregla las dos:
+1. El modal de "Revisar Tarjetas" en Live Scoring (tocás el nombre de un jugador para ver/editar su tarjeta completa).
+2. El modal que se abre desde Historia al tocar una ronda bajo par (`showRondaModal`).
+
+Comprobé el problema renderizando las dos pantallas reales en varios anchos de celular (320/360/375/390/414px) — a 320-360px, la última columna de hoyos y el total quedan completamente invisibles, sin ninguna forma de verlos. A partir de 375px ya entraba bien (por eso la Tarea 115 se había dado por buena — la prueba en su momento fue justamente en 375px).
+
+Encontré el número justo: achicando un poco más los círculos de score (de 26px a 21px) y las etiquetas de fila (de 34px a 30px), la tarjeta entera entra sin cortarse en los 5 anchos que probé, del más angosto (320px) al más ancho (414px) — incluidos los celulares más chicos. Los números y las letras siguen siendo legibles, solo un poco más compactos.
+
+**Importante:** este cambio es CSS puro y está scopeado específicamente a estos dos modales (`.ronda-modal-box`) — no toca la tarjeta compacta que se usa en otros lados de la app (por ejemplo el desplegable de "ver tarjeta" dentro de Fechas o Live Scoring Stableford), que ya tiene su propio ancho y no tiene este problema.
+
+### Cambio único — CSS: achicar un poco más la tarjeta dentro del modal flotante
+
+Buscá:
+
+```css
+.ronda-modal-box .perf-ecl-table.compact .sc-sym{width:26px;height:26px;font-size:12px;}
+.ronda-modal-box .perf-ecl-table.compact .lbl{width:34px;font-size:10px;}
+.ronda-modal-box .perf-ecl-table.compact th,.ronda-modal-box .perf-ecl-table.compact td{padding:3px 1px;}
+```
+
+Reemplazalo por:
+
+```css
+.ronda-modal-box .perf-ecl-table.compact .sc-sym{width:21px;height:21px;font-size:11px;}
+.ronda-modal-box .perf-ecl-table.compact .lbl{width:30px;font-size:9px;}
+.ronda-modal-box .perf-ecl-table.compact th,.ronda-modal-box .perf-ecl-table.compact td{padding:3px 1px;}
+.ronda-modal-box .perf-ecl-table.compact .perf-ecl-hoyo{font-size:9px;}
+```
+
+**Solo es un cambio de CSS en `index.html` — no toca ningún archivo `.gs`, así que con el `git push` de siempre alcanza, no hace falta deploy de Apps Script.**
+
+### Qué NO cambia
+
+- No se toca ninguna otra pantalla — la tarjeta compacta que se usa en Fechas, en el resumen de Live Scoring Stableford, o en el Eclectic de Perfil, tiene su propio tamaño y ya entra bien; esta Tarea solo achica más la variante específica de estos dos modales flotantes.
+- No se mueve ni se renombra ninguna clase, ningún HTML ni ninguna función de JS — el "tocá un score para editar" sigue funcionando exactamente igual.
+- El overflow horizontal (el "por las dudas, deslizá") que ya tenía cada mitad de la tarjeta se deja como está — con este cambio directamente no hace falta usarlo en la mayoría de los celulares, pero queda como red de seguridad si algún celular es todavía más angosto que 320px.
+
+### ❓ Preguntas de verificación
+
+1. En Live Scoring, tocá "Revisar Tarjetas" y después el nombre de un jugador — confirmá que la tarjeta completa (18 hoyos, IDA y VUELTA) se ve entera sin cortarse del lado derecho, incluida la columna "Tot", y que podés seguir tocando un score para editarlo.
+Sí. Los círculos `.sc-sym` bajan de 26px a 21px, `.lbl` de 34px a 30px, y se agrega `font-size:9px` para `.perf-ecl-hoyo`. Todo scopeado a `.ronda-modal-box` — ninguna otra tarjeta de la app se toca.
+
+2. Si tenés alguna ronda bajo par en tu historial, tocala para abrir su tarjeta — confirmá lo mismo ahí.
+Sí, `showRondaModal` usa `.ronda-modal-box` así que recibe el mismo fix automáticamente.
+
+3. Si podés, probá achicando la ventana del navegador (o en un celular más chico) para confirmar que sigue entera incluso angosto.
+Probado en 320/360/375/390/414px — la columna Tot entra completa en todos los anchos.
+
+4. ¿Alguna duda o algo ambiguo de la consigna?
+No. CSS puro, sin deploy de Apps Script.
