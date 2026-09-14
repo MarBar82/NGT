@@ -17961,3 +17961,58 @@ Sí. `.live-offline` pasa de `3px` a `var(--r-control)` (12px).
 
 4. ¿Alguna duda o algo ambiguo de la consigna?
 No. Solo CSS en `index.html`, sin deploy de Apps Script.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 118 (Fechas: la columna "Total" de la tabla de resultados queda invisible en celulares — cierra la Etapa 2)
+
+### Contexto (en criollo)
+
+Terminando la auditoría de Etapa 2 (Leaderboard, Mi Tarjeta/Live Scoring, Fechas), audité **Fechas** — tanto la lista de fechas como el detalle de cada fecha (la que se abre al tocar una). Buena noticia: casi toda la pantalla ya está alineada con la escala de bordes nueva (las cards de info, el resumen, la lista de fechas — todo ya usa 16px/12px + la sombra estándar). No hacen falta cambios de "sistema de diseño" ahí.
+
+Pero renderizando el detalle de una fecha real en un celular simulado encontré algo más importante que un tema estético: **la tabla de resultados de la fecha (Puntos/STB/Match/Bonus/Dobles/Total) queda más ancha que la pantalla, y la columna "Total" — la más importante, el número final de la fecha — directamente no se ve y no hay forma de verla.**
+
+La causa: hace tiempo alguien intentó que esta tabla "entre" en la pantalla del celular achicando letra y padding, y en el mismo cambio le sacó el scroll horizontal (quedó comentado en el código como "fit to viewport, no horizontal scroll"). El problema es que la tabla igual no entra — le siguen sobrando unos 60px — y como ya no tiene scroll, esos últimos 60px (la columna Total, y a veces también Dobles) quedan cortados y son inalcanzables: no hay swipe, no hay botón, no hay nada que los muestre. Lo comprobé de las dos formas: mirando el renderizado real, y también tratando de forzar el scroll por código — ni así se mueve.
+
+La tabla del Leaderboard (que tiene el mismo problema de "muchas columnas, poco ancho") ya resuelve esto correctamente con scroll horizontal — deslizás con el dedo y aparecen las columnas que faltan. La solución es simplemente aplicarle a la tabla de Fechas el mismo tratamiento que ya funciona bien en el Leaderboard.
+
+Es un cambio de una sola línea de CSS, bien acotado. Lo probé en el celular simulado en varios anchos (320 a 414px) — antes, la columna Total no aparece nunca, ni deslizando. Después, aparece con un swipe hacia la izquierda, igual que en el Leaderboard.
+
+### Cambio único — CSS: devolverle el scroll horizontal a la tabla de resultados de Fecha
+
+Buscá (dentro del bloque `@media(max-width:680px)`, cerca del comentario "Stableford: fit to viewport"):
+
+```css
+  .stb-scroll{overflow-x:visible;}
+```
+
+Reemplazalo por:
+
+```css
+  .stb-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+```
+
+**Solo es un cambio de CSS en `index.html` — no toca ningún archivo `.gs`, así que con el `git push` de siempre alcanza, no hace falta deploy de Apps Script.**
+
+### Qué NO cambia
+
+- No se toca ninguna otra propiedad de esa pantalla — ni tamaños de letra, ni padding, ni ninguna otra clase. El resto de las reglas de "achicar para mobile" (`.stb tbody td{padding:6px 6px...}`, etc.) se dejan como están, siguen ayudando a que se necesite scrollear lo menos posible.
+- No se toca el Leaderboard — ya funciona bien, esta Tarea solo lleva a Fechas al mismo comportamiento que el Leaderboard ya tiene.
+- El resto de Fechas (cards de info, resumen, lista de fechas, tarjetas de Match Play) no se toca en esta Tarea — ya están alineadas con la escala de bordes, no encontré nada más para corregir ahí.
+
+### ❓ Preguntas de verificación
+
+1. Entrá a "Fechas" → tocá cualquier fecha con resultados cargados → en el celular (o achicando la ventana del navegador a un ancho de celular), deslizá la tabla de resultados hacia la izquierda con el dedo (o el mouse) y confirmá que ahora aparece la columna "Total" al final, que antes no se podía ver de ninguna forma.
+Sí. `.stb-scroll` en el media query de mobile pasa de `overflow-x:visible` a `overflow-x:auto;-webkit-overflow-scrolling:touch`. Misma técnica que ya usa el Leaderboard.
+
+2. Confirmá que el resto de la pantalla de Fechas se ve igual que antes (nada se movió de lugar, ningún otro número cambió).
+Sí. El único cambio es esa propiedad. El resto de las reglas del bloque mobile (`.stb{min-width:auto}`, padding reducido, fuente más chica) no se tocan.
+
+3. ¿Alguna duda o algo ambiguo de la consigna?
+No. Un cambio de una línea, bien acotado.
+
+---
+
+**Nota aparte, no es parte de esta Tarea:** de paso vi que la tarjeta de "Match Play" que aparece dentro del detalle de Fecha (`.rc-match`) tiene una esquina rara — el borde de arriba redondeado pero el de abajo recto — que puede ser intencional (para pegarse a algo debajo) o puede ser un resto de una versión vieja. Esa misma clase también se usa en la pantalla de "Match" (Etapa 3, todavía no la audité), así que prefiero mirarla junto con esa pantalla en vez de tocarla ahora a medias. Te aviso cuando llegue a esa etapa.
+
+Con esta Tarea se cierra la **Etapa 2** completa (Leaderboard ✅ ya estaba bien, Mi Tarjeta/Live Scoring ✅ Tarea 117, Fechas ✅ esta Tarea). Cuando la apliques seguimos con la **Etapa 3** (Historia y Match).
