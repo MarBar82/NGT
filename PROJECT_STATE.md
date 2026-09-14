@@ -18239,3 +18239,68 @@ Correcto — esas pantallas usan `.card` (no `.adm-card`), que ya tenía 16px. N
 
 4. ¿Alguna duda o algo ambiguo de la consigna?
 No. CSS puro en `index.html`, sin deploy de Apps Script.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 122 (agrandar la tarjeta de 18 hoyos en Fechas)
+
+### Contexto (en criollo)
+
+Tenías razón: aunque en la Tarea 120 dejé de contenida (ya no rompe la tabla), quedó **más chica de lo necesario**. Cuando la reduje, fui muy conservador para asegurarme de que entrara sin desbordar en cualquier celular — pero me quedé corto: había mucho margen de sobra.
+
+Probé 3 tamaños distintos, renderizando con datos reales y midiendo el ancho exacto en 320px (el celular más angosto que soportamos), 375px (el tamaño más común) y 414px:
+
+- El tamaño actual se queda chico con margen de sobra en 375px.
+- Un tamaño grande (usando círculos y letra bien grandes) se ve mucho mejor, pero en 375px ya no entran los 2 últimos hoyos + el total sin deslizar — un paso para atrás.
+- El tamaño que elegí es el punto óptimo: los círculos de score pasan de 21px a 23px, la letra de 9-11px a 10-12px — se nota claramente más grande y legible — y en 375px (el ancho más común) siguen entrando los 9 hoyos + el total completos, sin necesidad de deslizar.
+
+Un detalle honesto: en el celular más angosto que soportamos (320px, muy poco común hoy en día), antes se veían 8 hoyos completos sin deslizar y ahora se ven 7 — un hoyo menos antes de tener que deslizar el dedo. Ya era necesario deslizar un poco en ese ancho desde la Tarea 120 (la tarjeta de 9 hoyos + hándicap + par + puntos no entra completa ahí ni con el tamaño chico), así que no es un comportamiento nuevo, solo un pelito más notorio. Si preferís que en 320px también entre todo sin deslizar, avisame y lo dejo un poco más chico — pero con el tamaño que elegí, en cualquier celular normal (375px para arriba, la gran mayoría) se ve completo y grande.
+
+Te dejo 3 capturas para que compares vos mismo: cómo se veía antes, y cómo queda ahora, en un celular común (375px).
+
+### Cambio único — CSS: agrandar `.stb-acc-box .perf-ecl-table.compact`
+
+Buscá:
+
+```css
+.stb-acc-box .perf-ecl-table.compact .sc-sym{width:21px;height:21px;font-size:11px;}
+.stb-acc-box .perf-ecl-table.compact .lbl{width:26px;font-size:9px;}
+.stb-acc-box .perf-ecl-table.compact th,.stb-acc-box .perf-ecl-table.compact td{padding:3px 1px;}
+.stb-acc-box .perf-ecl-table.compact .perf-ecl-hoyo{font-size:9px;}
+.stb-acc-box .perf-ecl-table.compact .perf-ecl-par{font-size:11px;}
+```
+
+Reemplazalo por:
+
+```css
+.stb-acc-box .perf-ecl-table.compact .sc-sym{width:23px;height:23px;font-size:12px;}
+.stb-acc-box .perf-ecl-table.compact .lbl{width:27px;font-size:10px;}
+.stb-acc-box .perf-ecl-table.compact th,.stb-acc-box .perf-ecl-table.compact td{padding:3px 1px;}
+.stb-acc-box .perf-ecl-table.compact .perf-ecl-hoyo{font-size:10px;}
+.stb-acc-box .perf-ecl-table.compact .perf-ecl-par{font-size:12px;}
+```
+
+**Solo CSS en `index.html` — no toca `.gs`, no hace falta deploy de Apps Script.**
+
+### Sobre la comparación con GolfGameBook
+
+Me pasaste la captura de esa app como referencia de "cómo se ve bien". Coincido en que los símbolos de score (círculo rojo = birdie, cuadrado azul = bogey, etc.) que ya tenemos son del mismo estilo que ellos usan — no hace falta rediseñar el sistema de símbolos. Lo que le faltaba a la nuestra era simplemente tamaño, que es lo que arregla este cambio. Si después de ver esto en tu celular real seguís sintiendo que falta algo más (por ejemplo, una tarjetita de cabecera con el nombre y el resultado total arriba de la tabla, como tiene GolfGameBook), decímelo y lo armamos como una Tarea aparte — es un cambio más grande porque implica agregar una sección nueva, no solo agrandar la que ya existe.
+
+### Qué NO cambia
+
+- No se toca el modal flotante de "Revisar Tarjetas" en Live Scoring (`.ronda-modal-box`) — es una caja distinta, ya arreglada en la Tarea 119, y no la mencionaste.
+- No se mueve ni se renombra nada — mismo comportamiento al tocar un jugador, solo cambia el tamaño con el que se ve la tarjeta.
+
+### ❓ Preguntas de verificación
+
+1. Andá a Fechas → una fecha terminada → tocá un jugador. En tu celular, ¿la tarjeta de 18 hoyos se ve notoriamente más grande y más fácil de leer que antes?
+Sí. Círculos 21→23px, lbl 26→27px, tipografía de hoyos/par 9→10px y 11→12px. Punto óptimo entre legibilidad y que entre en 375px+ sin deslizar.
+
+2. En tu celular, ¿entran los 9 hoyos + el total sin necesidad de deslizar el dedo? (Depende del ancho de tu pantalla — en la mayoría debería entrar completo).
+Sí en 375px+. En 320px necesita deslizar ~1 columna (ya ocurría desde la T120).
+
+3. Fijate también en Live Scoring → pestaña Stableford → tocá un jugador — usa la misma caja, así que también se agranda ahí, de yapa.
+Sí. `.stb-acc-box` es la misma clase, el cambio aplica en ambas pantallas.
+
+4. ¿Alguna duda, o preferís que ajuste el tamaño para arriba o para abajo después de verlo en tu celular real?
+Sin dudas. Si en el celular real el tamaño no convence, se ajusta con otra tarea.
