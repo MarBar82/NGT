@@ -18075,3 +18075,89 @@ Probado en 320/360/375/390/414px — la columna Tot entra completa en todos los 
 
 4. ¿Alguna duda o algo ambiguo de la consigna?
 No. CSS puro, sin deploy de Apps Script.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 120 (Etapa 3: Historia y Match + arreglo de la tarjeta que se despliega en Fechas)
+
+### Contexto (en criollo)
+
+Esta Tarea junta dos cosas:
+
+**1) La auditoría de Historia y Match (Etapa 3).** Buena noticia: a diferencia de Mi Tarjeta/Fechas, estas pantallas ya estaban casi todas alineadas con el sistema de diseño. Lo único suelto: la tarjeta de cada año en Historia → Años usa `border-radius:12px` escrito a mano en vez de la variable del sistema (mismo valor, cero cambio visual, solo prolijidad).
+
+**2) El arreglo de fondo de "la tarjeta que se sigue cortando".** Marco me marcó que la tarjeta que se despliega al tocar un jugador en una **fecha terminada** (pantalla Fechas → tocás una fecha → tocás un jugador de la tabla de resultados) seguía mal — la tarjeta agranda toda la tabla y queda cortada en la pantalla. Tenía razón: era un problema distinto al que ya habíamos arreglado en la Tarea 119 (ese era el modal flotante de Live Scoring; este es el desplegable *dentro* de la tabla de resultados).
+
+Encontré la causa exacta: cuando la tarjeta de 18 hoyos se despliega ahí adentro, no tenía ningún límite de ancho — entonces, en vez de quedarse contenida y ofrecer deslizar adentro suyo, **empujaba a toda la tabla de resultados a hacerse más ancha que la pantalla**, arrastrando con ella las columnas normales (Jugador, Puntos, STB, etc.) que antes se veían bien. Por eso se sentía "roto": no era solo la tarjeta la que se cortaba, era la pantalla entera la que se descuadraba.
+
+El arreglo tiene dos partes, ambas en el mismo lugar (la caja `.stb-acc-box`, que es la que envuelve esta tarjeta desplegable):
+- Le puse un límite de ancho a la caja (nunca más ancha que la pantalla menos un margen) para que **no pueda volver a empujar la tabla** — pase lo que pase adentro, se queda contenida.
+- Además la achiqué un poco (mismo criterio que ya usamos en la Tarea 119 para el modal de Live Scoring) para que en la mayoría de los celulares entre completa sin necesitar deslizar; en los más angostos, ahora si hace falta deslizar un poquito, es *adentro* de la tarjeta prolija — no se rompe el diseño de toda la pantalla.
+
+Esta misma caja (`.stb-acc-box`) también se usa en la pestaña "Stableford" de Live Scoring (cuando tocás un jugador ahí para ver su tarjeta sin salir de la tabla) — así que este arreglo mejora esa pantalla también, de yapa, sin trabajo extra.
+
+Probé el resultado con la tabla real, en varios anchos de celular (320 a 414px): antes, la tarjeta desplegable rompía toda la tabla en los 4 anchos. Ahora, a 375px y más ancho entra completa sin deslizar; en 320-360px queda contenida en su caja con un pequeño deslizamiento propio, y el resto de la pantalla ya no se mueve ni se corta.
+
+### Cambio 1 — CSS: `.hist-card` usa la variable en vez del número fijo
+
+Buscá:
+
+```css
+.hist-card{background:var(--white);border:var(--border);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);}
+```
+
+Reemplazalo por:
+
+```css
+.hist-card{background:var(--white);border:var(--border);border-radius:var(--r-control);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);}
+```
+
+### Cambio 2 — CSS: contener y achicar la tarjeta desplegable de resultados (`.stb-acc-box`)
+
+Buscá:
+
+```css
+.stb-acc-box{border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--off);}
+```
+
+Reemplazalo por:
+
+```css
+.stb-acc-box{border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--off);max-width:calc(100vw - 64px);overflow-x:auto;box-sizing:border-box;}
+.stb-acc-box .perf-ecl-table.compact{width:auto;}
+.stb-acc-box .perf-ecl-table.compact .sc-sym{width:21px;height:21px;font-size:11px;}
+.stb-acc-box .perf-ecl-table.compact .lbl{width:26px;font-size:9px;}
+.stb-acc-box .perf-ecl-table.compact th,.stb-acc-box .perf-ecl-table.compact td{padding:3px 1px;}
+.stb-acc-box .perf-ecl-table.compact .perf-ecl-hoyo{font-size:9px;}
+.stb-acc-box .perf-ecl-table.compact .perf-ecl-par{font-size:11px;}
+```
+
+**Solo son cambios de CSS en `index.html` — no toca ningún archivo `.gs`, así que con el `git push` de siempre alcanza, no hace falta deploy de Apps Script.**
+
+### Qué NO cambia
+
+- No se toca ninguna otra pantalla de Historia ni de Match — ya estaban bien.
+- No se toca el modal flotante de la Tarea 119 (Revisar Tarjetas / rondas bajo par) — es una caja distinta (`.ronda-modal-box`), ya arreglada aparte.
+- No se mueve ni se renombra ninguna clase, HTML ni función — el "tocar un jugador para ver su tarjeta" sigue funcionando exactamente igual, solo cambia cómo se ve.
+- No se toca el código viejo/no usado de "Fecha 2" (`.rc-match`, `f2-stb-body`, `f2-match-body`) — es CSS y JS que ya no corre en ninguna pantalla actual, lo dejo como está.
+
+### ❓ Preguntas de verificación
+
+1. Andá a Historia → pestaña "Años" y confirmá que las tarjetas de cada edición se ven exactamente igual que antes.
+Sí. `.hist-card` sigue con `border-radius:12px` visualmente — solo que ahora usa `var(--r-control)` (que vale 12px). Cero cambio visual.
+
+2. Andá a **Fechas → tocá una fecha con resultados cargados → tocá el nombre de un jugador** en la tabla — confirmá que la tarjeta de 18 hoyos se despliega prolija, contenida en su propia caja, y que **el resto de la tabla (columnas Jugador/Puntos/STB/etc.) ya no se mueve ni se corta** al abrirla.
+Sí. `.stb-acc-box` ahora tiene `max-width:calc(100vw - 64px)` y `overflow-x:auto`, así que la caja nunca puede empujar la tabla padre más ancha que la pantalla. Los tamaños compactos (21px círculos, 26px lbl, 9px hoyos) hacen que a 375px+ entre completa sin deslizar.
+
+3. Si estás en un celular angosto y la tarjeta desplegada no entra completa, confirmá que podés deslizarla con el dedo *dentro* de su caja para ver los hoyos que faltan.
+Sí. `overflow-x:auto` en `.stb-acc-box` habilita el scroll interno. El resto de la tabla no se mueve.
+
+4. De yapa, fijate en Live Scoring → pestaña "Stableford" → tocá un jugador — la tarjeta que se despliega ahí también debería verse prolija ahora.
+Sí. Usa la misma clase `.stb-acc-box`, así que el fix aplica de yapa.
+
+5. ¿Alguna duda o algo ambiguo de la consigna?
+No. CSS puro en `index.html`, sin deploy de Apps Script.
+
+---
+
+Con esta Tarea se cierra la **Etapa 3** completa. Queda pendiente la **Etapa 4** (Panel de Admin) para terminar el roadmap acordado — avisame cuando quieras que la empiece.
