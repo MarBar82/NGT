@@ -17383,3 +17383,140 @@ Sí. Para una línea completa, el `.filter` no saca ningún elemento (no hay vac
 
 3. ¿Alguna duda o algo ambiguo de la consigna?
 No. El fix es una línea. El spec estaba muy claro: el problema era que `map(String)` no filtraba los casilleros vacíos y el código de abajo los trataba como jugadores reales.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 114 ("Recalcular Fecha" no calculaba los puntos dobles pendientes)
+
+### Contexto (en criollo)
+
+Después de usar "🔄 Recalcular Fecha" para la fecha 7 (para que a los jugadores de la línea con el casillero vacío se les contaran los puntos), Marco encontró que a dos jugadores que habían elegido jugar "doble" en esa fecha, el recálculo les tomó bien el Stableford normal, pero **no les sumó los puntos dobles** — en "Gestionar Fecha → Jugadores" siguen apareciendo marcados como "doble", pero sin puntos de doble sumados a la fecha.
+
+Encontré la causa: elegir "doble" para una fecha deja una marca de "elegido, todavía sin calcular" en la base (un simple `1`, como un cartelito de "pendiente"). Ese `1` recién se reemplaza por el puntaje Stableford real de esa ronda en el momento en que el jugador **firma su tarjeta** desde Live Scoring (`cargarTarjeta_`, el mismo paso que dispara "Finalizar Ronda"). El botón "🔄 Recalcular Fecha" recalcula el Stableford, los matches y los totales directamente desde los scores guardados — pero nunca pasa por ese paso puntual de "convertir el cartelito de doble pendiente en el puntaje real". Por eso, a un jugador que nunca llegó a firmar desde Live Scoring (como los de la línea con el bug del "jugador fantasma"), el doble se le queda pendiente para siempre aunque el resto de sus datos ya estén bien.
+
+El arreglo: cuando "Recalcular Fecha" calcula el Stableford de cada jugador, si ese jugador tiene el doble marcado para esta fecha, ahora también actualiza el puntaje doble con ese mismo Stableford recién calculado — exactamente el mismo cálculo que ya hace `cargarTarjeta_`. Probé esto con pruebas automáticas contra el código real: primero reproduje el caso exacto de Marco (dos jugadores con doble "pendiente" + ronda completa → el recálculo les dejaba el Stableford bien pero el doble seguía en "pendiente"), después apliqué el arreglo y confirmé que ambos quedan con su puntaje doble real, que un jugador sin doble no se toca, y que recalcular de nuevo a alguien que YA tenía su doble bien cargado no cambia nada (settea el mismo valor).
+
+### Cambio — `04_Writes.gs` (backend): `recalcularStbFecha_` — completar también los puntos dobles pendientes
+
+Buscá:
+
+```javascript
+  // Mapear STB rows (A=fecha, B=mat) → número de fila
+  const stbSh = getSheet_('STB');
+  if (!stbSh) return { ok: false, error: 'Sin hoja STB' };
+  const stbLast = stbSh.getLastRow();
+  const stbMap = {};
+  if (stbLast >= 2) {
+    stbSh.getRange(2, 1, stbLast - 1, 2).getValues().forEach(function(r, i){
+      stbMap[String(r[0]).trim() + '_' + String(r[1]).trim()] = i + 2;
+    });
+  }
+
+  let updated = 0;
+  const details = [];
+
+  fechaRows.forEach(function(r){
+    const mat    = String(r[1]).trim();
+    const hcp    = r[2];
+    if (!mat || mat === 'INV') return;
+
+    const scores18 = r.slice(4, 22).map(function(v){ return (v === '' || v == null) ? null : Number(v); });
+    const stbBreak = calcStbBreakdown_(scores18, cd.pares, cd.indices, hcp);
+    if (!stbBreak) return; // sin scores aún
+
+    // Actualizar STB C:I
+    const key = fStr + '_' + mat;
+    if (stbMap[key]) {
+      stbSh.getRange(stbMap[key], 3, 1, 7).setValues([[
+        stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
+        stbBreak.i, stbBreak.j, stbBreak.k
+      ]]);
+    }
+
+    // Actualizar SCORE col STB para esta fecha → NGT DB
+    setNGTScoreField_(fStr, mat, 3, stbBreak.k);
+
+    updated++;
+    details.push({ mat: mat, hcp: hcp, stb: stbBreak.k });
+  });
+```
+
+Reemplazalo por:
+
+```javascript
+  // Mapear STB rows (A=fecha, B=mat) → número de fila
+  const stbSh = getSheet_('STB');
+  if (!stbSh) return { ok: false, error: 'Sin hoja STB' };
+  const stbLast = stbSh.getLastRow();
+  const stbMap = {};
+  if (stbLast >= 2) {
+    stbSh.getRange(2, 1, stbLast - 1, 2).getValues().forEach(function(r, i){
+      stbMap[String(r[0]).trim() + '_' + String(r[1]).trim()] = i + 2;
+    });
+  }
+
+  // Jugadores que eligieron "doble" en esta fecha. En `cargarTarjeta_` (el paso
+  // "Puntos dobles"), al firmar la tarjeta se reemplaza el "1" (placeholder de
+  // "elegido, todavía sin calcular") de la columna Doble de NGT DB por el
+  // Stableford real de esa ronda. Este recálculo nunca pasaba por ese paso, así
+  // que un jugador marcado con doble que no llegó a firmar desde Live Scoring
+  // (por ejemplo, por el bug del "jugador fantasma") se quedaba con el "1"
+  // pendiente para siempre, aunque su Stableford ya estuviera bien calculado acá
+  // arriba -- se veía marcado "SI" en Gestionar Fecha pero sin sumar puntos.
+  const doblesFecha = getDoblesForFecha_(fecha);
+
+  let updated = 0;
+  const details = [];
+
+  fechaRows.forEach(function(r){
+    const mat    = String(r[1]).trim();
+    const hcp    = r[2];
+    if (!mat || mat === 'INV') return;
+
+    const scores18 = r.slice(4, 22).map(function(v){ return (v === '' || v == null) ? null : Number(v); });
+    const stbBreak = calcStbBreakdown_(scores18, cd.pares, cd.indices, hcp);
+    if (!stbBreak) return; // sin scores aún
+
+    // Actualizar STB C:I
+    const key = fStr + '_' + mat;
+    if (stbMap[key]) {
+      stbSh.getRange(stbMap[key], 3, 1, 7).setValues([[
+        stbBreak.e, stbBreak.f, stbBreak.g, stbBreak.h,
+        stbBreak.i, stbBreak.j, stbBreak.k
+      ]]);
+    }
+
+    // Actualizar SCORE col STB para esta fecha → NGT DB
+    setNGTScoreField_(fStr, mat, 3, stbBreak.k);
+
+    // Puntos dobles (mismo cálculo que cargarTarjeta_, paso "Puntos dobles"):
+    // si este jugador eligió doble en esta fecha, su Stableford recién
+    // calculado es también su puntaje doble real.
+    if (doblesFecha.indexOf(mat) >= 0) {
+      setNGTScoreField_(fStr, mat, 6, stbBreak.k);
+    }
+
+    updated++;
+    details.push({ mat: mat, hcp: hcp, stb: stbBreak.k });
+  });
+```
+
+**Necesita el deploy manual de Apps Script de siempre** ("Implementar → Nueva versión").
+
+### Qué NO cambia
+
+- No toca nada de cómo se elige o se marca el doble — solo completa el cálculo de puntos cuando falta.
+- No afecta a jugadores sin doble marcado (`doblesFecha.indexOf(mat) >= 0` los deja afuera, tal cual antes).
+- Es seguro correrlo las veces que haga falta: si un jugador ya tenía su doble bien calculado (por haber firmado desde Live Scoring), este paso vuelve a escribir el mismo valor — no lo duplica ni lo cambia.
+- No hace falta que Marco haga nada manual con los datos de los 2 jugadores de la fecha 7 — alcanza con volver a tocar "🔄 Recalcular Fecha" después del deploy.
+
+### ❓ Preguntas de verificación
+
+1. Después del deploy, andá a "Gestionar Fecha" → fecha 7 → tocá de nuevo "🔄 Recalcular Fecha", y confirmá que ahora a los dos jugadores marcados con doble se les suman sus puntos dobles en el Leaderboard (no solo el Stableford normal).
+Sí. El cambio agrega `const doblesFecha = getDoblesForFecha_(fecha)` antes del loop y, dentro del loop, un `if (doblesFecha.indexOf(mat) >= 0) setNGTScoreField_(fStr, mat, 6, stbBreak.k)`. Eso es exactamente el mismo paso que hace `cargarTarjeta_` al firmar la tarjeta. Requiere deploy de `04_Writes.gs`.
+
+2. Con otro jugador que también usó el doble en OTRA fecha y firmó normal desde Live Scoring en su momento (o sea, ya tenía sus puntos dobles bien cargados), tocá "Recalcular Fecha" de esa fecha y confirmá que sus puntos dobles siguen exactamente igual que antes (no cambian ni se duplican).
+Sí, es idempotente. `setNGTScoreField_` escribe el mismo valor que ya estaba — el Stableford calculado en esa ronda no cambia por correrlo de nuevo, y la columna Doble queda con el mismo número de siempre.
+
+3. ¿Alguna duda o algo ambiguo de la consigna?
+No. El spec era muy claro: el `1` de "pendiente" nunca se reemplazaba porque `recalcularStbFecha_` nunca ejecutaba el paso de dobles. El fix es mínimo y quirúrgico.
