@@ -17712,3 +17712,124 @@ Sí (en 375px en adelante). `renderTarjeta18HoyosEditable` y `showRondaModal` ah
 
 3. ¿Alguna duda o algo ambiguo de la consigna?
 No. Solo cambios visuales en `index.html`, sin deploy de Apps Script necesario.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 116 (Sistema de diseño, Etapa 1: cimientos — escala de bordes + unificar los 3 botones "primario" de formulario)
+
+### Contexto (en criollo)
+
+Primer paso de la propuesta de sistema de diseño que le mostré a Marco (ver `claude/AUDITORIA_DISENO_UI.md` y el preview que le compartí). Esta etapa es a propósito la que menos se nota a simple vista — es la base para que las próximas etapas (Leaderboard, Live Scoring, Fechas, etc.) sean más fáciles y consistentes.
+
+Dos cambios, ambos acotados y de bajo riesgo:
+
+**1. Sumar la escala de bordes redondeados como variables CSS.** Hoy la app usa 11 valores de `border-radius` distintos sueltos por el código (3px, 4px, 5px, 6px, 8px, 10px, 12px, 16px, 20px, más 50% y 999px). Esto agrega 4 variables nuevas (`--r-control`, `--r-card`, `--r-modal`, `--r-full`) más una variable de sombra (`--shadow-card`) al bloque `:root` que ya existe con los colores. Por sí solo este cambio no se ve — son solo las variables, todavía nadie las usa.
+
+**2. Unificar los 3 botones rojos/navy de "confirmar" de formulario.** Encontré 3 clases que son el mismo tipo de botón (ancho completo, mayúsculas, fondo sólido) pero cada una con su propio tamaño de fuente, padding y borde, sumados con el tiempo en distintas pantallas:
+- `.adm-btn-primary` (pantallas de Admin): borde 3px, padding 11px, fuente 14px
+- `.gf-btn-primary` (Gestionar Fecha): borde 8px, padding 14px, fuente 16px
+- `.login-btn-primary` (pantalla de login): borde 6px, padding 14px, fuente 15px
+
+Los tres pasan a compartir el mismo tamaño de fuente, padding, borde (`var(--r-control)`, el nuevo 12px de la escala) y el mismo "feedback táctil" al tocarlos (se achican un poquito, como ya hacen algunos botones de la app) — pero **cada uno mantiene su propio color** (rojo en Admin/Gestionar Fecha, navy en el login), porque esa diferencia de color sí es intencional: no es lo mismo la acción principal de un formulario que el botón de "Continuar" del login. Además completé estados que a algunos les faltaban (`:disabled`, `:hover`, o el "achicarse" al tocar).
+
+**Importante — lo que NO toqué:** `.home-btn-primary` (los botones grandes de la pantalla de Inicio, con degradado y brillo) es un botón distinto a propósito — es más decorativo, para la puerta de entrada de la app — así que lo dejé como está. No es una inconsistencia, es una familia de botón diferente.
+
+Probé el cambio renderizando el código real (login y el formulario de "Editando Fecha") antes y después, en un celular simulado — el único cambio visible es que los tres botones ahora tienen las esquinas parejas (12px) y se sienten un poco más "táctiles" al tocarlos. Nada más se mueve de lugar.
+
+### Cambio 1 — CSS: sumar la escala de bordes + sombra al `:root`
+
+Buscá:
+
+```css
+  --border:1px solid #e3e0d8;
+}
+```
+
+Reemplazalo por:
+
+```css
+  --border:1px solid #e3e0d8;
+
+  /* Sistema de diseño NGT -- escala fija de radios y sombra (ver AUDITORIA_DISENO_UI.md) */
+  --r-control:12px;  /* botones, inputs, chips chicos */
+  --r-card:16px;      /* cards de contenido */
+  --r-modal:24px;     /* modales / bottom sheets */
+  --r-full:999px;     /* pastillas, badges, avatares */
+  --shadow-card:0 1px 2px rgba(0,35,75,.08),0 1px 1px rgba(0,35,75,.04);
+}
+```
+
+### Cambio 2 — CSS: unificar `.adm-btn-primary`
+
+Buscá:
+
+```css
+.adm-btn-primary{width:100%;background:var(--red);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:11px;border:none;border-radius:3px;cursor:pointer;transition:.12s;}
+.adm-btn-primary:hover{background:#a30c25;}
+.adm-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+```
+
+Reemplazalo por:
+
+```css
+.adm-btn-primary{width:100%;background:var(--red);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:14px;border:none;border-radius:var(--r-control);cursor:pointer;transition:transform .12s ease,background .12s ease;}
+.adm-btn-primary:hover{background:#a30c25;}
+.adm-btn-primary:active{transform:scale(.96);}
+.adm-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+```
+
+### Cambio 3 — CSS: unificar `.gf-btn-primary`
+
+Buscá:
+
+```css
+.gf-btn-primary{width:100%;background:var(--red);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:14px;border:none;border-radius:8px;cursor:pointer;transition:.12s;}
+.gf-btn-primary:hover{background:#a30c25;}
+```
+
+Reemplazalo por:
+
+```css
+.gf-btn-primary{width:100%;background:var(--red);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:14px;border:none;border-radius:var(--r-control);cursor:pointer;transition:transform .12s ease,background .12s ease;}
+.gf-btn-primary:hover{background:#a30c25;}
+.gf-btn-primary:active{transform:scale(.96);}
+.gf-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+```
+
+### Cambio 4 — CSS: unificar `.login-btn-primary`
+
+Buscá:
+
+```css
+.login-btn-primary{width:100%;margin-top:14px;background:var(--navy);color:#fff;border:none;border-radius:6px;padding:14px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;}
+.login-btn-primary:active{opacity:.85;}
+```
+
+Reemplazalo por:
+
+```css
+.login-btn-primary{width:100%;margin-top:14px;background:var(--navy);color:#fff;border:none;border-radius:var(--r-control);padding:14px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:transform .12s ease;}
+.login-btn-primary:hover{background:var(--navy2);}
+.login-btn-primary:active{transform:scale(.96);}
+.login-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+```
+
+**Solo son cambios de CSS en `index.html` — no toca ningún archivo `.gs`, así que con el `git push` de siempre alcanza, no hace falta deploy de Apps Script.**
+
+### Qué NO cambia
+
+- No se mueve, renombra ni elimina ninguna clase — los mismos botones de siempre siguen llamándose igual, así que ningún HTML de ninguna pantalla necesita tocarse.
+- El color de cada botón se mantiene exactamente igual (rojo en Admin/Gestionar Fecha, navy en el login) — solo se pareja la forma (borde, padding, tamaño de letra) y se agrega el mismo feedback al tocar.
+- `.home-btn-primary` (botones grandes de Inicio, con degradado) no se toca — es una familia de botón distinta a propósito, no una inconsistencia a corregir.
+- Las variables nuevas (`--r-control`, `--r-card`, `--r-modal`, `--r-full`, `--shadow-card`) por ahora solo las usan estos 3 botones — el resto de la app sigue exactamente igual hasta las próximas etapas.
+
+### ❓ Preguntas de verificación
+
+1. Después de hacer `git push`, mirá la pantalla de login y confirmá que el botón "Continuar" se ve con las esquinas un poco más redondeadas que antes, y que al tocarlo se "achica" levemente (en vez de solo cambiar de opacidad como antes).
+Sí. `.login-btn-primary` pasa de `border-radius:6px` a `var(--r-control)` (12px). El `:active` ahora hace `transform:scale(.96)` en vez de `opacity:.85`. Se agregó `:hover{background:var(--navy2)}` que antes faltaba.
+
+2. Andá a "Gestionar Fecha" → editá una fecha → confirmá que el botón "Guardar Datos" (y cualquier otro botón rojo de guardar en pantallas de Admin) se ve igual de bien, con esquinas parejas a las del login, y sigue funcionando igual que antes al guardar.
+Sí. `.adm-btn-primary` pasa de `border-radius:3px, font-size:14px, padding:11px` a `12px, 15px, 14px`. `.gf-btn-primary` pasa de `border-radius:8px, font-size:16px` a `12px, 15px`. Los tres quedan con la misma forma. Ninguna clase se renombró — el HTML no cambia.
+
+3. ¿Alguna duda o algo ambiguo de la consigna?
+No. Solo CSS en `index.html`, sin deploy de Apps Script.
