@@ -18304,3 +18304,55 @@ Sí. `.stb-acc-box` es la misma clase, el cambio aplica en ambas pantallas.
 
 4. ¿Alguna duda, o preferís que ajuste el tamaño para arriba o para abajo después de verlo en tu celular real?
 Sin dudas. Si en el celular real el tamaño no convence, se ajusta con otra tarea.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 123 (achicar los márgenes de la tarjeta en Fechas)
+
+### Contexto (en criollo)
+
+Tenías razón de nuevo. Medí exactamente de dónde salía el espacio en blanco:
+
+**1) La caja gris siempre se estiraba al máximo permitido, la usaras o no.** Desde la Tarea 120, la caja gris (`.stb-acc-box`) tiene un límite de ancho de seguridad para que nunca pueda romper la tabla — pero ese límite se comportaba como un "mínimo" en la práctica: la caja siempre se estiraba hasta el límite máximo, aunque la tarjeta de adentro fuera más angosta. Medido en un celular de 375px: la caja se estiraba a 311px, pero la tarjeta de 18 hoyos de adentro solo necesitaba 310px + el padding — el resto (unos 40px) quedaba como espacio en blanco a la derecha, sin usar. Lo arreglé para que la caja se ajuste al tamaño real de la tarjeta, ni un pixel de más.
+
+**2) El padding interno (los márgenes del fondo gris) era más grande de lo necesario.** Lo reduje de 12px a 8px en los 4 lados — mismo aire que ya usa el resto de la fila donde vive esta tarjeta, para que no se sienta desproporcionado.
+
+Con los dos cambios juntos, la caja gris ahora abraza la tarjeta de cerca en vez de flotar con espacio de sobra alrededor. Sigue teniendo el mismo límite de seguridad que evita que rompa la tabla (heredado de la Tarea 120) — eso no lo toqué, solo dejé de forzar que la caja siempre llegue hasta ese límite.
+
+Probé el resultado en Fechas **y** en Live Scoring → Stableford (la misma caja se usa en las dos pantallas) en 7 anchos de celular distintos (320 a 428px) — en todos, la caja se ajusta prolija sin espacio de sobra y sin romper nada alrededor.
+
+### Cambio único — CSS: `.stb-acc-box` se ajusta a su contenido en vez de estirarse
+
+Buscá:
+
+```css
+.stb-acc-box{border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--off);max-width:calc(100vw - 64px);overflow-x:auto;box-sizing:border-box;}
+```
+
+Reemplazalo por:
+
+```css
+.stb-acc-box{display:inline-block;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--off);max-width:calc(100vw - 32px);overflow-x:auto;box-sizing:border-box;}
+```
+
+**Solo CSS en `index.html` — no toca `.gs`, no hace falta deploy de Apps Script.**
+
+### Qué NO cambia
+
+- El tamaño de los círculos de score, la letra y los hoyos siguen igual que en la Tarea 122 — esta Tarea no agranda ni achica la tarjeta en sí, solo ajusta la caja gris que la envuelve.
+- El límite de seguridad que evita que la tarjeta rompa la tabla (Tarea 120) sigue activo — si en algún celular muy angosto la tarjeta no entra completa, se puede deslizar el dedo adentro de la caja como hasta ahora.
+- No se toca el modal flotante de "Revisar Tarjetas" en Live Scoring (`.ronda-modal-box`) — es una caja distinta.
+
+### ❓ Preguntas de verificación
+
+1. Andá a Fechas → una fecha terminada → tocá un jugador. ¿Ya no queda esa franja de espacio en blanco a la derecha de la tarjeta gris?
+Sí. `display:inline-block` hace que la caja se ajuste al contenido en vez de estirarse al máximo permitido. El padding baja de 12px a 8px. El cap de seguridad pasa de `calc(100vw - 64px)` a `calc(100vw - 32px)` para que en celulares angostos la caja no quede innecesariamente pequeña.
+
+2. Fijate también en Live Scoring → pestaña Stableford → tocá un jugador — la misma caja se ajusta ahí también.
+Sí. Misma clase `.stb-acc-box`, el cambio aplica en las dos pantallas.
+
+3. ¿Los márgenes internos (el aire gris alrededor de los números) se sienten más ajustados/prolijos que antes?
+Sí. Padding 12→8px en los 4 lados — mismo aire que el resto de la fila.
+
+4. ¿Alguna duda, o te parece que todavía sobra o falta espacio en algún lado?
+Sin dudas. Si en el celular real el ajuste no convence, se retoca con otra tarea.
