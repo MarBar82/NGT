@@ -624,7 +624,15 @@ select.adm-input:disabled{opacity:.55;cursor:not-allowed;background-color:var(--
   50%{box-shadow:0 0 0 6px rgba(200,16,46,0);}
 }
 .adm-msg.err{background:#fee;color:#c8102e;border-left:3px solid var(--red);}
-.adm-tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:2px solid var(--g2);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.adm-tabs-row{display:flex;align-items:center;gap:8px;border-bottom:2px solid var(--g2);margin-bottom:14px;position:relative;}
+.adm-tabs{display:flex;gap:2px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;min-width:0;flex:1;}
+.adm-tabs-row .adm-tabs{border-bottom:none;margin-bottom:0;}
+.adm-tabs-fade{position:absolute;top:0;bottom:2px;width:20px;right:40px;background:linear-gradient(to right, rgba(255,255,255,0), #fff);pointer-events:none;}
+.adm-tab-gear{flex:0 0 auto;width:32px;height:32px;border-radius:50%;border:1px solid var(--g2);background:var(--white);font-size:15px;color:var(--g4);cursor:pointer;display:flex;align-items:center;justify-content:center;margin-bottom:8px;padding:0;}
+.adm-tab-gear.on{background:var(--navy);color:#fff;border-color:var(--navy);}
+@media(max-width:400px){
+  .adm-tabs-row .adm-tab{padding:9px 11px;font-size:12px;}
+}
 .adm-tabs::-webkit-scrollbar{display:none;}
 .adm-tab{background:none;border:none;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--g4);padding:10px 16px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;flex:0 0 auto;}
 .adm-tab.on{color:var(--navy);border-bottom-color:var(--red);}
@@ -1459,7 +1467,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   position:absolute;inset:0;background:rgba(0,18,42,.7);backdrop-filter:blur(4px);
 }
 .ronda-modal-box{
-  position:relative;background:#fff;border-radius:6px;max-width:680px;width:100%;
+  position:relative;background:#fff;border-radius:6px;max-width:680px;width:100%;min-width:0;
   padding:18px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.4);
   border-top:3px solid var(--red);
   margin:auto;
@@ -1571,6 +1579,12 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
 .perf-ecl-table.compact th,.perf-ecl-table.compact td{padding:5px 2px;}
 .perf-ecl-table.compact .perf-ecl-hoyo{font-size:11px;}
 .perf-ecl-table.compact .perf-ecl-par{font-size:13px;}
+/* Variante todavía más angosta, solo dentro del modal de tarjeta (18 hoyos en
+   una caja chica) -- reduce un poco más el padding y los círculos de score
+   para que entren más hoyos por pantalla antes de necesitar deslizar. */
+.ronda-modal-box .perf-ecl-table.compact .sc-sym{width:26px;height:26px;font-size:12px;}
+.ronda-modal-box .perf-ecl-table.compact .lbl{width:34px;font-size:10px;}
+.ronda-modal-box .perf-ecl-table.compact th,.ronda-modal-box .perf-ecl-table.compact td{padding:3px 1px;}
 /* ══════════ end PERFILES ══════════ */
 
 /* Confirm modal */
@@ -2385,12 +2399,15 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <span class="adm-sec-title">Editando Fecha <span id="adm-edit-panel-num"></span></span>
       </div>
 
-      <div class="adm-tabs" id="edtab-tabs">
-        <button class="adm-tab on" id="edtab-cancha" onclick="admEditarFechaTab('cancha')">Cancha</button>
-        <button class="adm-tab" id="edtab-jugadores" onclick="admEditarFechaTab('jugadores')">Jugadores</button>
-        <button class="adm-tab" id="edtab-tarjetas" onclick="admEditarFechaTab('tarjetas')">Tarjetas</button>
-        <button class="adm-tab" id="edtab-bonus" onclick="admEditarFechaTab('bonus')">Bonus</button>
-        <button class="adm-tab" id="edtab-recalc" onclick="admEditarFechaTab('recalc')" title="Recalcular">⚙</button>
+      <div class="adm-tabs-row">
+        <div class="adm-tabs" id="edtab-tabs">
+          <button class="adm-tab on" id="edtab-cancha" onclick="admEditarFechaTab('cancha')">Cancha</button>
+          <button class="adm-tab" id="edtab-jugadores" onclick="admEditarFechaTab('jugadores')">Jugadores</button>
+          <button class="adm-tab" id="edtab-tarjetas" onclick="admEditarFechaTab('tarjetas')">Tarjetas</button>
+          <button class="adm-tab" id="edtab-bonus" onclick="admEditarFechaTab('bonus')">Bonus</button>
+        </div>
+        <div class="adm-tabs-fade"></div>
+        <button class="adm-tab-gear" id="edtab-recalc" onclick="admEditarFechaTab('recalc')" title="Recalcular">⚙</button>
       </div>
 
       <div id="edtab-panel-cancha">
@@ -5608,6 +5625,7 @@ function cerrarEditPanel(){
 
 function admEditarFechaTab(tab){
   document.querySelectorAll('#edtab-tabs .adm-tab').forEach(function(t){ t.classList.remove('on'); });
+  document.getElementById('edtab-recalc').classList.remove('on');
   document.getElementById('edtab-panel-cancha').style.display = 'none';
   document.getElementById('edtab-panel-jugadores').style.display = 'none';
   document.getElementById('edtab-panel-tarjetas').style.display = 'none';
@@ -7624,7 +7642,7 @@ function renderTarjeta18HoyosEditable(jug, pares, indices){
   var mat = jug.matricula;
   var scores = jug.scores || [];
   function nine(from, to, lbl){
-    var h = '<table class="perf-ecl-table"><thead><tr><th class="lbl">' + lbl + '</th>';
+    var h = '<table class="perf-ecl-table compact"><thead><tr><th class="lbl">' + lbl + '</th>';
     for(var i = from; i < to; i++) h += '<th><div class="perf-ecl-hoyo">H' + (i+1) + '</div></th>';
     h += '<th><div class="perf-ecl-hoyo">Tot</div></th></tr></thead><tbody>';
     // Par row
@@ -8983,7 +9001,7 @@ function showRondaModal(idx){
   const fechaStr = r.fecha ? new Date(r.fecha).toLocaleDateString('es-AR') : (r.anio || '');
   const diffStr = r.diff < 0 ? r.diff : ('+' + r.diff);
 
-  const tarjeta = renderTarjeta18Hoyos(r.scores || [], r.pares || [], 'Score');
+  const tarjeta = renderTarjeta18Hoyos(r.scores || [], r.pares || [], 'Score', null, null, true);
 
   const modal = document.getElementById('ronda-modal') || document.createElement('div');
   modal.id = 'ronda-modal';
