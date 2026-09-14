@@ -1415,6 +1415,16 @@ function recalcularStbFecha_(params) {
     });
   }
 
+  // Jugadores que eligieron "doble" en esta fecha. En `cargarTarjeta_` (el paso
+  // "Puntos dobles"), al firmar la tarjeta se reemplaza el "1" (placeholder de
+  // "elegido, todavía sin calcular") de la columna Doble de NGT DB por el
+  // Stableford real de esa ronda. Este recálculo nunca pasaba por ese paso, así
+  // que un jugador marcado con doble que no llegó a firmar desde Live Scoring
+  // (por ejemplo, por el bug del "jugador fantasma") se quedaba con el "1"
+  // pendiente para siempre, aunque su Stableford ya estuviera bien calculado acá
+  // arriba -- se veía marcado "SI" en Gestionar Fecha pero sin sumar puntos.
+  const doblesFecha = getDoblesForFecha_(fecha);
+
   let updated = 0;
   const details = [];
 
@@ -1438,6 +1448,13 @@ function recalcularStbFecha_(params) {
 
     // Actualizar SCORE col STB para esta fecha → NGT DB
     setNGTScoreField_(fStr, mat, 3, stbBreak.k);
+
+    // Puntos dobles (mismo cálculo que cargarTarjeta_, paso "Puntos dobles"):
+    // si este jugador eligió doble en esta fecha, su Stableford recién
+    // calculado es también su puntaje doble real.
+    if (doblesFecha.indexOf(mat) >= 0) {
+      setNGTScoreField_(fStr, mat, 6, stbBreak.k);
+    }
 
     updated++;
     details.push({ mat: mat, hcp: hcp, stb: stbBreak.k });
