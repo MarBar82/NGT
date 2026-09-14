@@ -17833,3 +17833,131 @@ Sí. `.adm-btn-primary` pasa de `border-radius:3px, font-size:14px, padding:11px
 
 3. ¿Alguna duda o algo ambiguo de la consigna?
 No. Solo CSS en `index.html`, sin deploy de Apps Script.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 117 (Sistema de diseño, Etapa 2: Mi Tarjeta / Live Scoring — parejar bordes con la escala)
+
+### Contexto (en criollo)
+
+Seguimos con la Etapa 2 del sistema de diseño (Leaderboard, Mi Tarjeta/Live Scoring y Fechas — las pantallas que más usan los jugadores). Empecé auditando el Leaderboard, pero ya está prácticamente al día con la nueva escala (ya usa 16px y la sombra estándar), así que no hace falta tocarlo ahora.
+
+Donde sí encontré inconsistencia real es en **Mi Tarjeta** (la planilla que carga cada jugador) y en el **modal de anotar score** (el que aparece cada vez que tocás un hoyo para poner el número, tanto en Live Scoring como en la carga manual de Admin). Seis elementos seguían con el borde viejo de 3px o 6px sueltos, en vez de usar las variables que sumamos en la Tarea 116:
+
+- La caja de "Gané el Long Drive / Best Approach"
+- La caja resumen (GROSS / HCP / STABLEFORD / NETO) que aparece al final de la planilla
+- El chip de bonus deshabilitado (cuando ya no podés marcar el long drive/best approach)
+- El aviso rojo de "no se pudo conectar" en Live Scoring
+- **El modal de anotar score en sí** (la ventana que se abre al tocar un hoyo) — este es el más visible, aparece decenas de veces por ronda
+- Los botones numéricos del teclado de ese modal
+
+Antes de tocar nada confirmé con el código real cuáles de estas clases se usan de verdad (hay otras 4 clases parecidas — `.mit-fecha-card`, `.mit-fecha-card-locked`, `.mit-fecha-num`, `.live-toggle-wrap` — que están en el CSS pero **no las usa ninguna pantalla actual**, quedaron de una versión vieja del flujo de "elegir fecha pendiente". Esas las dejo como están, no tiene sentido tocar código que no se ve).
+
+Probé el cambio renderizando el código real (la planilla de Mi Tarjeta y el modal de anotar score) antes y después, en un celular simulado — el único cambio visible son las esquinas: pasan de casi rectas a redondeadas, en línea con el resto de la escala. Nada se mueve de lugar, ningún texto ni botón cambia de función.
+
+### Cambio 1 — CSS: chip de bonus deshabilitado
+
+Buscá:
+
+```css
+.mit-bonus-chk.disabled{opacity:.55;cursor:not-allowed;background:var(--off);padding:6px 10px;border-radius:3px;border:1px dashed var(--g3);}
+```
+
+Reemplazalo por:
+
+```css
+.mit-bonus-chk.disabled{opacity:.55;cursor:not-allowed;background:var(--off);padding:6px 10px;border-radius:var(--r-control);border:1px dashed var(--g3);}
+```
+
+### Cambio 2 — CSS: caja resumen (GROSS/HCP/STABLEFORD/NETO)
+
+Buscá:
+
+```css
+.mit-summary{background:var(--off);border:var(--border);border-radius:3px;padding:14px 18px;margin-top:18px;}
+```
+
+Reemplazalo por:
+
+```css
+.mit-summary{background:var(--off);border:var(--border);border-radius:var(--r-card);padding:14px 18px;margin-top:18px;}
+```
+
+### Cambio 3 — CSS: caja de Long Drive / Best Approach
+
+Buscá:
+
+```css
+.mit-bonus{display:flex;flex-direction:column;gap:8px;margin-top:16px;padding:10px;background:var(--off);border-radius:3px;}
+```
+
+Reemplazalo por:
+
+```css
+.mit-bonus{display:flex;flex-direction:column;gap:8px;margin-top:16px;padding:10px;background:var(--off);border-radius:var(--r-control);}
+```
+
+### Cambio 4 — CSS: modal de anotar score (el más visible — se usa en Live Scoring, carga de Admin, avisos de bonus y confirmación de firma)
+
+Buscá:
+
+```css
+.sm-box{background:var(--white);border-radius:6px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:320px;width:100%;overflow:hidden;position:relative;}
+```
+
+Reemplazalo por:
+
+```css
+.sm-box{background:var(--white);border-radius:var(--r-modal);box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:320px;width:100%;overflow:hidden;position:relative;}
+```
+
+### Cambio 5 — CSS: botones del teclado numérico (dentro de ese mismo modal)
+
+Buscá:
+
+```css
+.sm-keypad button{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--navy);background:var(--off);border:1px solid var(--g2);border-radius:6px;padding:16px 8px;cursor:pointer;transition:.1s;min-height:54px;}
+```
+
+Reemplazalo por:
+
+```css
+.sm-keypad button{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--navy);background:var(--off);border:1px solid var(--g2);border-radius:var(--r-control);padding:16px 8px;cursor:pointer;transition:.1s;min-height:54px;}
+```
+
+### Cambio 6 — CSS: aviso de "no se pudo conectar" en Live Scoring
+
+Buscá:
+
+```css
+.live-offline{background:#fee;border-radius:3px;padding:8px 12px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--red);margin-top:8px;text-align:center;}
+```
+
+Reemplazalo por:
+
+```css
+.live-offline{background:#fee;border-radius:var(--r-control);padding:8px 12px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--red);margin-top:8px;text-align:center;}
+```
+
+**Solo son cambios de CSS en `index.html` — no toca ningún archivo `.gs`, así que con el `git push` de siempre alcanza, no hace falta deploy de Apps Script.**
+
+### Qué NO cambia
+
+- No se mueve, renombra ni elimina ninguna clase, ningún HTML ni ninguna función de JS — solo el radio de las esquinas de estos 6 selectores.
+- El modal de score (`.sm-box`) se usa en 5 lugares distintos (anotar score en Live Scoring, teclado de Admin, aviso de llegada a hoyo bonus, elegir ganador de bonus, confirmar firma de tarjeta) — como todos comparten la misma clase, el cambio se ve parejo en los 5 automáticamente, no hace falta tocar cada uno por separado.
+- Dejé sin tocar 4 clases parecidas (`.mit-fecha-card`, `.mit-fecha-card-locked`, `.mit-fecha-num`, `.live-toggle-wrap`) porque verifiqué que ninguna pantalla actual las usa — es CSS de una versión vieja del flujo de "elegir fecha pendiente" que ya no existe. Tocarlas no cambiaría nada visible, así que no suma valor y sí agrega riesgo.
+- El Leaderboard no se toca en esta Tarea — ya está alineado con la escala nueva.
+
+### ❓ Preguntas de verificación
+
+1. Entrá a "Mi Tarjeta", cargá algunos scores, y confirmá que la caja de "Gané el Long Drive/Best Approach" y la caja de resumen (GROSS/HCP/STABLEFORD/NETO) al final se ven con las esquinas redondeadas (antes eran casi rectas).
+Sí. `.mit-bonus` pasa de `3px` a `var(--r-control)` (12px). `.mit-summary` pasa de `3px` a `var(--r-card)` (16px). `.mit-bonus-chk.disabled` también pasa de `3px` a `var(--r-control)`.
+
+2. Tocá cualquier hoyo para anotar un score (en Live Scoring de una fecha activa, o en la carga de Admin) y confirmá que el modal que aparece — el de fondo blanco con el teclado numérico — tiene las esquinas bien redondeadas, y que el teclado sigue funcionando igual (tocar un número anota y cierra, la ✕ borra, "10+" muestra los números altos).
+Sí. `.sm-box` pasa de `6px` a `var(--r-modal)` (24px), y `.sm-keypad button` de `6px` a `var(--r-control)` (12px). Sin cambios de JS ni HTML — la lógica del teclado no se toca.
+
+3. Si en algún momento ves el aviso rojo de "no se pudo conectar" en Live Scoring, confirmá que también tiene las esquinas redondeadas.
+Sí. `.live-offline` pasa de `3px` a `var(--r-control)` (12px).
+
+4. ¿Alguna duda o algo ambiguo de la consigna?
+No. Solo CSS en `index.html`, sin deploy de Apps Script.
