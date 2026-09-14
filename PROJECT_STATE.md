@@ -18161,3 +18161,81 @@ No. CSS puro en `index.html`, sin deploy de Apps Script.
 ---
 
 Con esta Tarea se cierra la **Etapa 3** completa. Queda pendiente la **Etapa 4** (Panel de Admin) para terminar el roadmap acordado — avisame cuando quieras que la empiece.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 121 (Sistema de diseño, Etapa 4: Panel de Admin — cards e inputs)
+
+### Contexto (en criollo)
+
+Arranca la última etapa del roadmap: el **Panel de Admin** (Crear Fecha, Editar Fecha, Canchas, Jugadores). Encontré dos cosas que afectan pantallas donde pasás bastante tiempo vos como organizador — ambas de alto impacto porque son componentes que se repiten en TODAS las pantallas de Admin:
+
+**1) Las tarjetas de contenido (`.adm-card`)** — la caja blanca que envuelve cada formulario. En el menú principal de Admin, en Match y en Historia ya se ven con esquinas redondeadas prolijas (16px, la escala que venimos usando). Pero en **Crear Fecha, Canchas y Jugadores** específicamente, esa misma tarjeta se quedó con un borde viejo de apenas 3px — casi recto — y una sombra distinta más pesada. Es una inconsistencia que se nota apenas entrás a esas pantallas después de haber visto las demás ya prolijas.
+
+**2) Los campos de texto (`.adm-input`)** — usados en TODOS los formularios de Admin (37 lugares: matrícula, nombre, cancha, fecha, etc.). Tenían esquinas de apenas 3px, mientras que los botones de esos mismos formularios (que ya arreglamos en la Tarea 116) tienen esquinas de 12px — el resultado es que en una misma pantalla el botón se ve "redondeado" y el campo de arriba se ve "cuadrado", como si fueran de dos apps distintas. Los `<select>` (los desplegables) tenían un tercer valor más (8px), ni parecido al de los inputs de texto ni al de los botones.
+
+Con este cambio, tarjetas, inputs, selects y botones de Admin quedan todos con la misma esquina (12px para controles, 16px para tarjetas) — se nota mucho más prolijo. Renderié la pantalla de "Nuevo Jugador" (formulario típico de Admin) antes y después para confirmarlo — te mando las capturas.
+
+### Cambio 1 — CSS: unificar `.adm-card`
+
+Buscá:
+
+```css
+.adm-card{background:var(--white);border:var(--border);border-radius:3px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 20px rgba(0,0,0,.06);margin-bottom:14px;}
+```
+
+Reemplazalo por:
+
+```css
+.adm-card{background:var(--white);border:var(--border);border-radius:var(--r-card);overflow:hidden;box-shadow:var(--shadow-card);margin-bottom:14px;}
+```
+
+### Cambio 2 — CSS: unificar `.adm-input` (campos de texto)
+
+Buscá:
+
+```css
+.adm-input{width:100%;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;color:var(--navy);padding:8px 12px;border:1px solid var(--g3);border-radius:3px;background:var(--white);box-sizing:border-box;}
+```
+
+Reemplazalo por:
+
+```css
+.adm-input{width:100%;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;color:var(--navy);padding:8px 12px;border:1px solid var(--g3);border-radius:var(--r-control);background:var(--white);box-sizing:border-box;}
+```
+
+### Cambio 3 — CSS: unificar `select.adm-input` (desplegables)
+
+Buscá:
+
+```css
+select.adm-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;border-radius:8px;padding-right:32px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a8780' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:12px 8px;}
+```
+
+Reemplazalo por:
+
+```css
+select.adm-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;border-radius:var(--r-control);padding-right:32px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a8780' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:12px 8px;}
+```
+
+**Solo son cambios de CSS en `index.html` — no toca ningún archivo `.gs`, así que con el `git push` de siempre alcanza, no hace falta deploy de Apps Script.**
+
+### Qué NO cambia
+
+- No se mueve, renombra ni elimina ninguna clase — los mismos formularios de siempre, con el mismo comportamiento al guardar/validar.
+- Las pantallas que YA tenían la tarjeta a 16px (menú de Admin, Match, Historia, Mi Tarjeta) no cambian — ya coincidían con el valor nuevo.
+- No se toca ningún otro componente de Admin todavía (botones secundarios, chips, el menú desplegable de fechas, etc.) — eso puede ser una próxima Tarea si querés seguir puliendo esta etapa.
+
+### ❓ Preguntas de verificación
+
+1. Andá a Admin → Jugadores → "+ Nuevo" y confirmá que la tarjeta blanca y los 3 campos de texto (Matrícula/Nombre/Apodo) más el desplegable de Rol se ven con esquinas redondeadas parejas entre sí y con el botón rojo de abajo.
+Sí. `.adm-card` pasa de `3px` a `var(--r-card)` (16px) y `--shadow-card`. `.adm-input` y `select.adm-input` pasan de `3px`/`8px` a `var(--r-control)` (12px) — igual que los botones desde la Tarea 116.
+
+2. Fijate lo mismo en Admin → Canchas y en Crear Fecha (Admin → +Nueva Fecha) — cualquier formulario debería verse igual de prolijo.
+Sí. `.adm-card` y `.adm-input` se usan en todas las pantallas de Admin, así que el cambio aplica automáticamente en todas.
+
+3. Confirmá que el menú principal de Admin, Match e Historia se ven exactamente igual que antes (no deberían cambiar, ya estaban en 16px).
+Correcto — esas pantallas usan `.card` (no `.adm-card`), que ya tenía 16px. No se tocan.
+
+4. ¿Alguna duda o algo ambiguo de la consigna?
+No. CSS puro en `index.html`, sin deploy de Apps Script.
