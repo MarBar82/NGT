@@ -8291,7 +8291,7 @@ function renderFechaDinamica(data){
       const dbl = (row.db > 1) ? row.db : 0;
       const tot = row.stb + ma + pb + dbl;
 
-      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="liveStbToggle(\'' + row.matricula + '\')">' +
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFechaTarjetaModal(\'' + row.matricula + '\')">' +
         '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
         '<td>' + nombreHtml + '</td>' +
         '<td class="c"><span class="s" style="color:var(--red);font-weight:700;">' + (row.puntosAntes || 0) + '</span></td>' +
@@ -8300,11 +8300,6 @@ function renderFechaDinamica(data){
         '<td class="c"><span class="s" style="color:' + (pb > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (pb > 0 ? '+'+pb : '—') + '</span></td>' +
         '<td class="c"><span class="s" style="color:' + (dbl > 0 ? 'var(--gold)' : 'var(--g4)') + ';font-weight:' + (dbl > 0 ? '800' : '400') + ';">' + (dbl > 0 ? '+'+dbl : '—') + '</span></td>' +
         '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + tot + '</span></td>' +
-      '</tr>' +
-      '<tr id="stb-acc-' + row.matricula + '" style="display:none;border-bottom:1px solid var(--border);">' +
-        '<td colspan="8" style="padding:12px 8px;" id="stb-acc-inner-' + row.matricula + '">' +
-          '<div style="color:var(--g4);font-size:13px;font-family:\'Barlow Condensed\',sans-serif;">Cargando tarjeta...</div>' +
-        '</td>' +
       '</tr>';
     });
   }
@@ -8354,17 +8349,37 @@ function loadMatchResultsForFecha(fecha, matches){
   });
 }
 
+var FECHA_STB_CACHE = null;
 function loadFechaStbAccordion(fecha){
   ngtApiGet('getStbFecha', { fecha: String(fecha) }).then(function(r){
     if(!r || !r.ok || !r.data) return;
-    const pares   = r.pares   || [];
-    const indices = r.indices || [];
-    r.data.forEach(function(p){
-      var inner = document.getElementById('stb-acc-inner-' + p.matricula);
-      if(!inner) return;
-      inner.innerHTML = '<div class="stb-acc-box">' + renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true, p.hcp) + '</div>';
-    });
+    FECHA_STB_CACHE = { pares: r.pares || [], indices: r.indices || [], byMat: {} };
+    r.data.forEach(function(p){ FECHA_STB_CACHE.byMat[p.matricula] = p; });
   }).catch(function(){});
+}
+
+function showFechaTarjetaModal(matricula){
+  if(!FECHA_STB_CACHE) return;
+  var p = FECHA_STB_CACHE.byMat[matricula];
+  if(!p) return;
+  var tarjeta = renderTarjeta18Hoyos(p.scores || [], FECHA_STB_CACHE.pares, 'Score', FECHA_STB_CACHE.indices, p.stbPorHoyo || [], true, p.hcp);
+  var modal = document.getElementById('ronda-modal') || document.createElement('div');
+  modal.id = 'ronda-modal';
+  modal.className = 'ronda-modal';
+  modal.innerHTML = '<div class="ronda-modal-bg" onclick="closeRondaModal()"></div>' +
+    '<div class="ronda-modal-box">' +
+      '<button class="ronda-modal-close" onclick="closeRondaModal()">×</button>' +
+      '<div class="ronda-modal-hdr">' +
+        '<div class="ronda-modal-diff">' + (p.stbTotal !== null && p.stbTotal !== undefined ? p.stbTotal : '—') + '</div>' +
+        '<div class="ronda-modal-info">' +
+          '<div class="ronda-modal-cancha">' + (p.apodo || '') + '</div>' +
+          '<div class="ronda-modal-meta">' + (p.hcp !== null && p.hcp !== undefined ? 'HCP ' + hcp85(p.hcp) : '') + (p.holesCargados !== undefined ? ' · ' + p.holesCargados + '/18 hoyos' : '') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="ronda-modal-card">' + tarjeta + '</div>' +
+    '</div>';
+  if(!modal.parentNode) document.body.appendChild(modal);
+  setTimeout(function(){ modal.classList.add('open'); }, 10);
 }
 
 function fechaMatchRender(pendingMatches, fullData){
