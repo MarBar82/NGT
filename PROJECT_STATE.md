@@ -18405,3 +18405,55 @@ Sí. Misma clase `.stb-acc-box`, aplica igual en las dos pantallas.
 
 3. ¿Alguna duda, o todavía ves algo desalineado?
 Sin dudas. El `overflow-x:auto` sigue como red de seguridad si el contenido fuera más ancho que la caja en algún celular muy angosto.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 125 (agrandar la tarjeta de 18 hoyos para usar todo el espacio nuevo)
+
+### Contexto (en criollo)
+
+Tenías razón otra vez, y esta era la pieza que faltaba. La Tarea 124 arregló el recuadro gris (ahora llega justo hasta la columna Total) — pero la tarjeta de 18 hoyos de ADENTRO se había quedado con el tamaño de la Tarea 122, que en su momento calculé para un recuadro mucho más chico. Medí exactamente cuánto sobraba: **76 píxeles en blanco a la derecha de la tarjeta, siempre, sin importar el celular** (porque ahora sabemos que el ancho del recuadro es fijo, no depende de la pantalla).
+
+Ahora que tenemos ese número exacto, agrandé la tarjeta para que use ese espacio: los círculos de score pasan de 23px a 27px, la letra de 10-12px a 11-13px. Con esto la tarjeta ocupa el recuadro casi por completo (quedan menos de 9px sin usar, contra los 76px de antes) — se nota mucho más grande y clara, sin dejar de entrar bien.
+
+Un detalle para tener en cuenta: esta tarjeta más grande también se usa en Live Scoring → Stableford, donde el recuadro es más angosto (esa pantalla tiene una tabla con menos columnas). Ahí la tarjeta va a necesitar deslizar el dedo un poco para ver todos los hoyos — no rompe nada (lo probé), simplemente en esa pantalla el recuadro es más chico de entrada. Si preferís que en Live Scoring se vea más chica para que entre sin deslizar, se puede separar el tamaño entre las dos pantallas — avisame.
+
+### Cambio único — CSS: agrandar `.stb-acc-box .perf-ecl-table.compact`
+
+Buscá:
+
+```css
+.stb-acc-box .perf-ecl-table.compact .sc-sym{width:23px;height:23px;font-size:12px;}
+.stb-acc-box .perf-ecl-table.compact .lbl{width:27px;font-size:10px;}
+.stb-acc-box .perf-ecl-table.compact th,.stb-acc-box .perf-ecl-table.compact td{padding:3px 1px;}
+.stb-acc-box .perf-ecl-table.compact .perf-ecl-hoyo{font-size:10px;}
+.stb-acc-box .perf-ecl-table.compact .perf-ecl-par{font-size:12px;}
+```
+
+Reemplazalo por:
+
+```css
+.stb-acc-box .perf-ecl-table.compact .sc-sym{width:27px;height:27px;font-size:13px;}
+.stb-acc-box .perf-ecl-table.compact .lbl{width:30px;font-size:11px;}
+.stb-acc-box .perf-ecl-table.compact th,.stb-acc-box .perf-ecl-table.compact td{padding:4px 2px;}
+.stb-acc-box .perf-ecl-table.compact .perf-ecl-hoyo{font-size:11px;}
+.stb-acc-box .perf-ecl-table.compact .perf-ecl-par{font-size:13px;}
+```
+
+**Solo CSS en `index.html` — no toca `.gs`, no hace falta deploy de Apps Script.**
+
+### Qué NO cambia
+
+- El recuadro gris en sí (tamaño y posición, arreglado en la Tarea 124) no se toca.
+- No se toca el modal flotante de "Revisar Tarjetas" en Live Scoring (`.ronda-modal-box`).
+
+### ❓ Preguntas de verificación
+
+1. Andá a Fechas → una fecha terminada → tocá un jugador. ¿La tarjeta ahora se ve notoriamente más grande, ocupando prácticamente todo el recuadro gris hasta la columna Total, sin espacio de sobra?
+Sí. Círculos 23→27px, lbl 27→30px, padding 3/1→4/2px, hoyo/par 10→11px y 12→13px. Calculado para dejar menos de 9px sin usar contra los 76px que sobraban antes de la Tarea 124.
+
+2. Fijate en Live Scoring → pestaña Stableford → tocá un jugador. Ahí el recuadro es más angosto — ¿hace falta deslizar el dedo para ver todos los hoyos? Contame si te molesta o te parece bien así.
+En Live Scoring el recuadro es más chico (tabla con menos columnas), así que probablemente haga falta deslizar un poco. Si molesta, se puede separar el tamaño en las dos pantallas con una tarea aparte.
+
+3. ¿Alguna duda?
+No. CSS puro, sin deploy de Apps Script.
