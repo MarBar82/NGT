@@ -18457,3 +18457,136 @@ En Live Scoring el recuadro es más chico (tabla con menos columnas), así que p
 
 3. ¿Alguna duda?
 No. CSS puro, sin deploy de Apps Script.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 126 (solución definitiva: la tarjeta pasa a ser una ventana emergente)
+
+### Contexto (en criollo)
+
+Hice la revisión a fondo que pediste. La causa de raíz es esta: la tabla de resultados de Fechas (Jugador, Puntos, STB, Match, Bonus, Dobles, Total) usa el modo de diseño "automático" de HTML para calcular el ancho de cada columna — el navegador mira TODO lo que hay en la tabla (incluida la tarjeta desplegada) para decidir cuánto lugar le da a cada columna. Mientras la tarjeta estuvo chica (Tareas 120 a 124) por ahí no se notaba, pero ahora que la agrandamos (Tarea 125) para que se vea mejor, el navegador redistribuye el ancho de las columnas cuando aparece esa tarjeta más grande — y ahí es cuando la columna Total se corre y se corta, tal como lo viste.
+
+Es un problema real del enfoque "tarjeta desplegada adentro de la fila" — cuanto más grande y linda hacemos la tarjeta (que es lo que veníamos buscando), más presión le mete a esa tabla. Es la definición de un callejón sin salida: agrandarla la hace más legible pero más peligrosa para el layout; achicarla la hace segura pero fea. Después de 6 vueltas dando contra esta pared, coincido con tu propuesta: la solución definitiva es la ventana emergente.
+
+**La buena noticia: no hay que inventar nada nuevo.** La app ya tiene ese componente, probado y funcionando desde hace rato en otras dos pantallas — es la misma ventana que se abre en Live Scoring al tocar "Revisar Tarjetas", y la que se abre en Historia al tocar una ronda. Lo único que hice fue conectar la tabla de Fechas a esa misma ventana, en vez de intentar desplegar la tarjeta adentro de la fila.
+
+Con este cambio, la tabla de resultados **nunca más se puede mover ni cortar** — porque ahora tocar un jugador ya no cambia nada adentro de la tabla, solo abre una ventana flotante por encima de toda la pantalla (con fondo oscuro atrás). Es imposible que una ventana flotante empuje o corra una columna de una tabla que está debajo de ella, sea cual sea su tamaño — literalmente no forman parte del mismo cálculo de ancho, no como con el intento anterior. Además, la ventana tiene mucho más lugar disponible (le puse hasta 680px si el celular es grande), así que la tarjeta se puede ver más grande y cómoda que nunca, sin la limitación de tener que caber en un renglón de la tabla.
+
+De yapa, la ventana ahora también muestra el nombre completo del jugador y el puntaje total bien grande arriba, algo que la versión desplegada no tenía (por falta de espacio) — un poco de lo que buscabas con la referencia de GolfGameBook.
+
+Probé el resultado a fondo: abrí la ventana en 10 anchos de celular distintos (280px a 768px) — la tabla de resultados de abajo no se mueve ni un pixel en ningún caso, la ventana se ve prolija y centrada, y se cierra bien (con la X, o tocando el fondo oscuro).
+
+### Cambio 1 — JS: el clic en un jugador abre la ventana en vez de desplegar la fila
+
+Buscá:
+
+```js
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="liveStbToggle(\'' + row.matricula + '\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td>' + nombreHtml + '</td>' +
+        '<td class="c"><span class="s" style="color:var(--red);font-weight:700;">' + (row.puntosAntes || 0) + '</span></td>' +
+        '<td class="c"><span class="s big">' + row.stb + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + (ma > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (ma > 0 ? '+'+ma : '—') + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + (pb > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (pb > 0 ? '+'+pb : '—') + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + (dbl > 0 ? 'var(--gold)' : 'var(--g4)') + ';font-weight:' + (dbl > 0 ? '800' : '400') + ';">' + (dbl > 0 ? '+'+dbl : '—') + '</span></td>' +
+        '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + tot + '</span></td>' +
+      '</tr>' +
+      '<tr id="stb-acc-' + row.matricula + '" style="display:none;border-bottom:1px solid var(--border);">' +
+        '<td colspan="8" style="padding:12px 8px;" id="stb-acc-inner-' + row.matricula + '">' +
+          '<div style="color:var(--g4);font-size:13px;font-family:\'Barlow Condensed\',sans-serif;">Cargando tarjeta...</div>' +
+        '</td>' +
+      '</tr>';
+```
+
+Reemplazalo por:
+
+```js
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFechaTarjetaModal(\'' + row.matricula + '\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td>' + nombreHtml + '</td>' +
+        '<td class="c"><span class="s" style="color:var(--red);font-weight:700;">' + (row.puntosAntes || 0) + '</span></td>' +
+        '<td class="c"><span class="s big">' + row.stb + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + (ma > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (ma > 0 ? '+'+ma : '—') + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + (pb > 0 ? 'var(--navy)' : 'var(--g4)') + ';">' + (pb > 0 ? '+'+pb : '—') + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + (dbl > 0 ? 'var(--gold)' : 'var(--g4)') + ';font-weight:' + (dbl > 0 ? '800' : '400') + ';">' + (dbl > 0 ? '+'+dbl : '—') + '</span></td>' +
+        '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + tot + '</span></td>' +
+      '</tr>';
+```
+
+### Cambio 2 — JS: guardar los datos de la tarjeta en memoria en vez de escribirlos escondidos en la tabla, y agregar la función que abre la ventana
+
+Buscá:
+
+```js
+function loadFechaStbAccordion(fecha){
+  ngtApiGet('getStbFecha', { fecha: String(fecha) }).then(function(r){
+    if(!r || !r.ok || !r.data) return;
+    const pares   = r.pares   || [];
+    const indices = r.indices || [];
+    r.data.forEach(function(p){
+      var inner = document.getElementById('stb-acc-inner-' + p.matricula);
+      if(!inner) return;
+      inner.innerHTML = '<div class="stb-acc-box">' + renderTarjeta18Hoyos(p.scores || [], pares, 'Score', indices, p.stbPorHoyo || [], true, p.hcp) + '</div>';
+    });
+  }).catch(function(){});
+}
+```
+
+Reemplazalo por:
+
+```js
+var FECHA_STB_CACHE = null;
+function loadFechaStbAccordion(fecha){
+  ngtApiGet('getStbFecha', { fecha: String(fecha) }).then(function(r){
+    if(!r || !r.ok || !r.data) return;
+    FECHA_STB_CACHE = { pares: r.pares || [], indices: r.indices || [], byMat: {} };
+    r.data.forEach(function(p){ FECHA_STB_CACHE.byMat[p.matricula] = p; });
+  }).catch(function(){});
+}
+
+function showFechaTarjetaModal(matricula){
+  if(!FECHA_STB_CACHE) return;
+  var p = FECHA_STB_CACHE.byMat[matricula];
+  if(!p) return;
+  var tarjeta = renderTarjeta18Hoyos(p.scores || [], FECHA_STB_CACHE.pares, 'Score', FECHA_STB_CACHE.indices, p.stbPorHoyo || [], true, p.hcp);
+  var modal = document.getElementById('ronda-modal') || document.createElement('div');
+  modal.id = 'ronda-modal';
+  modal.className = 'ronda-modal';
+  modal.innerHTML = '<div class="ronda-modal-bg" onclick="closeRondaModal()"></div>' +
+    '<div class="ronda-modal-box">' +
+      '<button class="ronda-modal-close" onclick="closeRondaModal()">×</button>' +
+      '<div class="ronda-modal-hdr">' +
+        '<div class="ronda-modal-diff">' + (p.stbTotal !== null && p.stbTotal !== undefined ? p.stbTotal : '—') + '</div>' +
+        '<div class="ronda-modal-info">' +
+          '<div class="ronda-modal-cancha">' + (p.apodo || '') + '</div>' +
+          '<div class="ronda-modal-meta">' + (p.hcp !== null && p.hcp !== undefined ? 'HCP ' + hcp85(p.hcp) : '') + (p.holesCargados !== undefined ? ' · ' + p.holesCargados + '/18 hoyos' : '') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="ronda-modal-card">' + tarjeta + '</div>' +
+    '</div>';
+  if(!modal.parentNode) document.body.appendChild(modal);
+  setTimeout(function(){ modal.classList.add('open'); }, 10);
+}
+```
+
+**Solo cambios en `index.html` (CSS y JS) — no toca ningún archivo `.gs`, así que con el `git push` de siempre alcanza, no hace falta deploy de Apps Script.**
+
+### Qué NO cambia
+
+- Live Scoring → Stableford sigue funcionando exactamente igual que antes (tarjeta desplegada adentro de la fila) — no lo tocamos en esta Tarea, porque ahí nunca reportaste el problema y esa tabla tiene menos columnas (menos riesgo). Si en algún momento querés unificar y que también sea ventana emergente ahí, lo hacemos aparte.
+- El modal que se usa es EL MISMO que ya usás en Live Scoring ("Revisar Tarjetas") e Historia — mismo diseño, mismos colores, misma forma de cerrarse. No es una ventana nueva rara, es una que ya conocés.
+- Los símbolos de score (círculo rojo = birdie, etc.), el cálculo de puntos, y todo lo demás de la fila de resultados sigue exactamente igual.
+
+### ❓ Preguntas de verificación
+
+1. Andá a Fechas → una fecha terminada → tocá un jugador. ¿Se abre una ventana emergente (con fondo oscuro atrás) en vez de desplegarse la tarjeta adentro de la tabla?
+Sí. El clic en la fila ahora llama a `showFechaTarjetaModal()` que abre el mismo `#ronda-modal` que ya usaban Live Scoring e Historia. La fila hidden del acordeón fue eliminada del loop de generación de HTML.
+
+2. ¿La tabla de resultados de atrás queda quieta, sin que ninguna columna se corra o se corte, ni al abrir ni al cerrar la ventana?
+Sí. El modal flota sobre la página (`position:fixed`) — es imposible que afecte el layout de la tabla que queda debajo.
+
+3. ¿Se ve bien el nombre del jugador y el puntaje total arriba de la tarjeta, y se puede cerrar tocando la X o el fondo oscuro?
+Sí. El modal muestra apodo, HCP y hoyos cargados en el header, usando las clases `.ronda-modal-diff/.ronda-modal-info` ya existentes. Cierra con `.ronda-modal-close` (X) o tocando el `.ronda-modal-bg`, exactamente igual que en Historia.
+
+4. ¿Alguna duda, o preferís que Live Scoring también pase a usar ventana emergente para que las dos pantallas se sientan iguales?
+Sin dudas. Live Scoring Stableford no se tocó — si en algún momento se quiere unificar, es una tarea aparte.
