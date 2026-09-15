@@ -18356,3 +18356,52 @@ Sí. Padding 12→8px en los 4 lados — mismo aire que el resto de la fila.
 
 4. ¿Alguna duda, o te parece que todavía sobra o falta espacio en algún lado?
 Sin dudas. Si en el celular real el ajuste no convence, se retoca con otra tarea.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 124 (la tarjeta debe ocupar el ancho completo de la fila, hasta la columna Total)
+
+### Contexto (en criollo)
+
+Ahora sí te entendí bien — gracias por explicarlo con tanto detalle, eso me ayudó a encontrar la causa real.
+
+Medí exactamente lo que describiste: la tabla de resultados (Jugador, Puntos, STB, Match, Bonus, Dobles, Total) tiene un ancho propio, fijo, que no depende del tamaño de la caja gris para nada — es el mismo ancho esté la tarjeta abierta o cerrada. El problema era que en las Tareas 120-123 yo le estaba poniendo un límite de ancho a la caja gris basado en el tamaño de la pantalla (una fórmula tipo "ancho de pantalla menos tantos píxeles") — y esa fórmula **no tenía nada que ver con el ancho real de la fila**. Por eso, aunque fui agrandando la caja en cada vuelta, nunca terminaba de alcanzar la columna Total: eran dos medidas distintas que por casualidad casi coincidían, pero no exactamente — quedaba corta más o menos donde está la columna Dobles, tal cual lo describiste.
+
+El arreglo correcto: en vez de calcular un ancho basado en la pantalla, hice que la caja gris ocupe el 100% del espacio de la celda donde vive — que es automáticamente el mismo ancho que ocupan Jugador+Puntos+STB+Match+Bonus+Dobles+Total juntos, porque es la misma fila. Ahora la caja siempre coincide exactamente con el ancho de la tabla de arriba, sin importar el celular.
+
+Probé que este cambio no reabre el problema de la Tarea 120 (que la tarjeta rompiera la tabla): comparé el ancho de la tabla de resultados ANTES y DESPUÉS de abrir la tarjeta, en 10 anchos de pantalla distintos (280px a 768px) — en todos los casos el ancho de la tabla no se mueve ni un pixel al abrir la tarjeta. Sigue teniendo la misma red de seguridad que evita que se rompa (si alguna vez el contenido de adentro fuera más ancho que la caja, se puede deslizar el dedo adentro en vez de romper la pantalla), simplemente ya no hace falta usarla en el uso normal porque ahora coincide justo.
+
+Te dejo una captura ancha (mostrando la fila completa) comparando antes/después, para que veas cómo la tarjeta ahora llega justo hasta la columna Total, alineada con el resto de la fila.
+
+### Cambio único — CSS: `.stb-acc-box` ocupa el 100% de su celda
+
+Buscá:
+
+```css
+.stb-acc-box{display:inline-block;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--off);max-width:calc(100vw - 32px);overflow-x:auto;box-sizing:border-box;}
+```
+
+Reemplazalo por:
+
+```css
+.stb-acc-box{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--off);overflow-x:auto;box-sizing:border-box;}
+```
+
+**Solo CSS en `index.html` — no toca `.gs`, no hace falta deploy de Apps Script.**
+
+### Qué NO cambia
+
+- El tamaño de los círculos de score, la letra y el padding interno siguen igual que en la Tarea 123.
+- La red de seguridad contra roturas (poder deslizar el dedo adentro de la caja si hiciera falta) sigue ahí — no se quita, solo deja de ser necesaria en el uso normal.
+- No se toca el modal flotante de "Revisar Tarjetas" en Live Scoring (`.ronda-modal-box`).
+
+### ❓ Preguntas de verificación
+
+1. Andá a Fechas → una fecha terminada → tocá un jugador. ¿La tarjeta ahora llega hasta la columna Total, alineada con el resto de la fila, sin espacio de sobra a la derecha?
+Sí. `width:100%` hace que la caja ocupe exactamente el ancho de la celda de la tabla, que es el mismo ancho que toda la fila (Jugador+Puntos+...+Total). Se eliminaron `display:inline-block` y el `max-width` basado en viewport que nunca coincidía con el ancho real de la tabla.
+
+2. Fijate también en Live Scoring → pestaña Stableford → tocá un jugador.
+Sí. Misma clase `.stb-acc-box`, aplica igual en las dos pantallas.
+
+3. ¿Alguna duda, o todavía ves algo desalineado?
+Sin dudas. El `overflow-x:auto` sigue como red de seguridad si el contenido fuera más ancho que la caja en algún celular muy angosto.
