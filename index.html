@@ -2260,10 +2260,92 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <button class="adm-big-btn" onclick="pg('admin-jugadores',null)">
           <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Gestionar Jugadores
         </button>
+        <button class="adm-big-btn" onclick="pg('admin-final',null)">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></span>Fecha Final
+        </button>
       </div>
     </div>
 
   </div>
+</div>
+</div>
+
+<!-- ════ ADMIN — FECHA FINAL ════ -->
+<div class="pg" id="pg-admin-final">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+  <div class="adm-sec-back">
+    <button class="btn-back" onclick="pg('admin',null)">←</button>
+    <span class="adm-sec-title">Fecha Final</span>
+  </div>
+
+  <div id="final-sin-crear">
+    <div class="adm-card">
+      <div class="adm-card-hdr">🏆 Día 1</div>
+      <div class="adm-card-body">
+        <div class="adm-row">
+          <div class="adm-field">
+            <label class="adm-label">Cancha</label>
+            <select id="final-cancha1" class="adm-input" onchange="finalLoadColores(1)">
+              <option value="">Seleccionar cancha...</option>
+            </select>
+          </div>
+          <div class="adm-field">
+            <label class="adm-label">Color de Salidas</label>
+            <select id="final-color1" class="adm-input">
+              <option value="BLANCAS">Blancas (default)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="adm-card" style="margin-top:14px;">
+      <div class="adm-card-hdr">🏆 Día 2</div>
+      <div class="adm-card-body">
+        <div class="adm-row">
+          <div class="adm-field">
+            <label class="adm-label">Cancha</label>
+            <select id="final-cancha2" class="adm-input" onchange="finalLoadColores(2)">
+              <option value="">Seleccionar cancha...</option>
+            </select>
+          </div>
+          <div class="adm-field">
+            <label class="adm-label">Color de Salidas</label>
+            <select id="final-color2" class="adm-input">
+              <option value="BLANCAS">Blancas (default)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="adm-card" style="margin-top:14px;">
+      <div class="adm-card-hdr">👥 Jugadores</div>
+      <div class="adm-card-body">
+        <label class="adm-label">Jugadores confirmados</label>
+        <div id="final-jugadores-list" class="adm-jugs">Cargando...</div>
+
+        <label class="adm-label" style="margin-top:14px;display:block;">Invitados (uno por línea)</label>
+        <textarea id="final-invitados" class="adm-input" rows="3" placeholder="Nombre del invitado"></textarea>
+
+        <button class="adm-btn-primary" onclick="finalCrear()" style="margin-top:18px;">🏆 Crear Fecha Final</button>
+        <div id="final-crear-msg" class="adm-msg" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="final-ya-creada" style="display:none;">
+    <div class="adm-card">
+      <div class="adm-card-hdr">🏆 Fecha Final activa</div>
+      <div class="adm-card-body">
+        <div id="final-resumen" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--navy);line-height:1.9;"></div>
+        <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
+        <div id="final-eliminar-msg" class="adm-msg" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
 </div>
 </div>
 
@@ -3727,6 +3809,7 @@ function pg(id,btn){
   if(id==='admin-editar') renderFechasGrid();
   if(id==='admin-canchas') admLoadCanchas();
   if(id==='admin-jugadores') admLoadJugadores();
+  if(id==='admin-final') finalLoad();
   if(id==='fechas') loadFechasScreen();
   if(fechaNum) loadFechaDinamica(fechaNum);
   // Show/hide fecha activa strip — hidden inside Live Scoring (pg-mit), visible elsewhere
@@ -3986,7 +4069,114 @@ function loadColoresCanchaEdit(){
   applyColoresCancha_(sel.value.trim(), colorSel, hint);
 }
 
+// ══ FECHA FINAL (36 hoyos, Medal Play) ══
+function finalLoad(){
+  const cs1 = document.getElementById('final-cancha1');
+  const cs2 = document.getElementById('final-cancha2');
+  [cs1, cs2].forEach(function(cs){
+    if(!cs) return;
+    const prev = cs.value;
+    cs.innerHTML = '<option value="">Seleccionar cancha...</option>';
+    (ADM_CANCHAS || []).forEach(function(c){ cs.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>'; });
+    if(prev) cs.value = prev;
+  });
+
+  const jl = document.getElementById('final-jugadores-list');
+  if(jl){
+    let jugHtml = '';
+    (ADM_JUGADORES || []).filter(function(j){ return j.activo !== false; })
+      .sort(function(a,b){ return String(a.nombre||'').localeCompare(String(b.nombre||''), 'es', {sensitivity:'base'}); })
+      .forEach(function(j){
+        const lbl = formatPlayerLabel(j.nombre);
+        jugHtml += '<label class="gf-jug-toggle" for="finaljug-' + j.matricula + '"><input type="checkbox" id="finaljug-' + j.matricula + '" value="' + j.matricula + '" onchange="this.closest(\'.gf-jug-toggle\').classList.toggle(\'on\', this.checked)"><span>' + lbl + '</span></label>';
+      });
+    jl.innerHTML = jugHtml;
+  }
+
+  ngtApiGet('finalMeta').then(function(r){
+    const meta = r && r.data;
+    const sinCrear = document.getElementById('final-sin-crear');
+    const yaCreada = document.getElementById('final-ya-creada');
+    if(meta && meta.estado){
+      if(sinCrear) sinCrear.style.display = 'none';
+      if(yaCreada) yaCreada.style.display = 'block';
+      const resumen = document.getElementById('final-resumen');
+      if(resumen){
+        const nJug = (meta.jugadores || []).length + Object.keys(meta.invitadosInfo || {}).length;
+        resumen.innerHTML =
+          '<div><b>Día 1:</b> ' + (meta.canchaName1 || '') + ' (' + (meta.colorTee1 || '') + ', par ' + (meta.par1 || '—') + ')</div>' +
+          '<div><b>Día 2:</b> ' + (meta.canchaName2 || '') + ' (' + (meta.colorTee2 || '') + ', par ' + (meta.par2 || '—') + ')</div>' +
+          '<div><b>Jugadores:</b> ' + nJug + '</div>' +
+          '<div><b>Estado:</b> ' + meta.estado + '</div>';
+      }
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+    }
+  }).catch(function(){});
+}
+
+function finalLoadColores(dia){
+  const sel = document.getElementById('final-cancha' + dia);
+  const colorSel = document.getElementById('final-color' + dia);
+  if(!sel || !colorSel) return;
+  applyColoresCancha_(sel.value.trim(), colorSel, null);
+}
+
+function finalCrear(){
+  const canchaId1 = document.getElementById('final-cancha1').value.trim();
+  const colorTee1 = document.getElementById('final-color1').value.trim();
+  const canchaId2 = document.getElementById('final-cancha2').value.trim();
+  const colorTee2 = document.getElementById('final-color2').value.trim();
+  const jugadores = [...document.querySelectorAll('#final-jugadores-list input:checked')].map(function(i){ return i.value; });
+  const invitados = (document.getElementById('final-invitados').value || '').split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+
+  const msg = document.getElementById('final-crear-msg');
+  msg.style.display = 'none';
+
+  if(!canchaId1 || !canchaId2){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Elegí las 2 canchas (Día 1 y Día 2).';
+    return;
+  }
+  if(!jugadores.length && !invitados.length){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Seleccioná al menos un jugador o invitado.';
+    return;
+  }
+
+  ngtApiPost({
+    action: 'crearFechaFinal',
+    adminKey: ADMIN_KEY_OK,
+    canchaId1: canchaId1, colorTee1: colorTee1,
+    canchaId2: canchaId2, colorTee2: colorTee2,
+    jugadores: jugadores, invitados: invitados,
+  }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al crear la Fecha Final';
+    }
+  }).catch(function(){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red';
+  });
+}
+
+function finalEliminar(){
+  if(!confirm('⚠️ ¿Borrar la Fecha Final por completo?\n\nSe eliminan las tarjetas de los 2 días.\nEsta acción no se puede deshacer.')) return;
+  const msg = document.getElementById('final-eliminar-msg');
+  msg.style.display = 'none';
+  ngtApiPost({ action: 'eliminarFechaFinal', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al eliminar';
+    }
+  }).catch(function(){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red';
+  });
+}
+
 // ══ CREAR FECHA WIZARD ══
+
 let WIZ_PASO1_DATA = null;
 
 // Load available tee colors for the selected course — reads from ADM_COLORES_MAP (no API call).
