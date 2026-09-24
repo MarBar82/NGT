@@ -18876,3 +18876,325 @@ Debería, ya que todavía no se creó ninguna Fecha Final. Si devuelve un error,
 3. **Después del deploy** (que hay que hacer manualmente — clasp push + deploy), `?action=finalMeta` debería devolver `{"ok":true,"data":null}` porque todavía no existe ninguna Fecha Final en DocumentProperties. Si el deploy no se hizo todavía, la URL seguirá devolviendo la versión anterior del código.
 
 4. **Sí.** El algoritmo de `getGolpesFavorMap_` recalcula los puestos desde cero usando los puntos reales de la hoja SCORE, independientemente del orden en LEADERBOARD. Los empates se resuelven con índice dentro del array: si dos jugadores empatan en puntos, el que aparece primero en la lista de jugadores toma el puesto "menor" (8) y el otro toma el (9). Esto es consistente con el criterio ya visible en LEADERBOARD, donde el desempate lo define el orden de la lista de jugadores — no hay nada aleatorio.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 128 (Fecha Final — pantalla de crear/eliminar)
+
+### Contexto (en criollo)
+
+Esta es la Tarea 2 de la Fecha Final. La 127 puso la base invisible (la hoja y las funciones); esta agrega la pantalla en el panel de Administrador para que puedas crearla y borrarla vos mismo — ahora sí vas a poder probar el flujo de punta a punta, como pediste.
+
+Es una pantalla simple, sin pasos ni asistente todavía (eso lo vamos a pulir en una Tarea de diseño más adelante, una vez que todo el flujo funcione) — un solo formulario: elegís cancha y color de tee para el Día 1, lo mismo para el Día 2, tildás los jugadores confirmados, y anotás los invitados si hay. Reutiliza los mismos componentes visuales que ya usás en "Crear Fecha" (los mismos recuadros, tipografía y checkboxes de jugadores), así que se va a sentir parte de la misma app, no algo pegado con cinta.
+
+Si ya existe una Fecha Final creada, la pantalla lo detecta sola y te muestra un resumen (canchas, pares, cantidad de jugadores) con el botón para eliminarla — no te deja crear una segunda mientras la primera sigue activa, para evitar líos.
+
+Probé la pantalla a fondo con una copia de prueba: los combos de cancha y color se completan bien, tildar jugadores funciona, crear manda exactamente los datos correctos al servidor, borrar pide confirmación y vuelve a la pantalla de creación, y no se rompe el diseño en ningún ancho de celular (probé de 280px a 768px, incluso con nombres largos de cancha y jugadores).
+
+### Cambio 1 — `index.html`: botón nuevo en el menú de Administrador + pantalla nueva
+
+Buscá:
+
+```
+        <button class="adm-big-btn" onclick="pg('admin-jugadores',null)">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Gestionar Jugadores
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ════ ADMIN — CREAR FECHA ════ -->
+```
+
+Reemplazalo por:
+
+```
+        <button class="adm-big-btn" onclick="pg('admin-jugadores',null)">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Gestionar Jugadores
+        </button>
+        <button class="adm-big-btn" onclick="pg('admin-final',null)">
+          <span class="adm-big-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></span>Fecha Final
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ════ ADMIN — FECHA FINAL ════ -->
+<div class="pg" id="pg-admin-final">
+<div class="wrap" style="max-width:680px;padding:16px;">
+
+  <div class="adm-sec-back">
+    <button class="btn-back" onclick="pg('admin',null)">←</button>
+    <span class="adm-sec-title">Fecha Final</span>
+  </div>
+
+  <div id="final-sin-crear">
+    <div class="adm-card">
+      <div class="adm-card-hdr">🏆 Día 1</div>
+      <div class="adm-card-body">
+        <div class="adm-row">
+          <div class="adm-field">
+            <label class="adm-label">Cancha</label>
+            <select id="final-cancha1" class="adm-input" onchange="finalLoadColores(1)">
+              <option value="">Seleccionar cancha...</option>
+            </select>
+          </div>
+          <div class="adm-field">
+            <label class="adm-label">Color de Salidas</label>
+            <select id="final-color1" class="adm-input">
+              <option value="BLANCAS">Blancas (default)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="adm-card" style="margin-top:14px;">
+      <div class="adm-card-hdr">🏆 Día 2</div>
+      <div class="adm-card-body">
+        <div class="adm-row">
+          <div class="adm-field">
+            <label class="adm-label">Cancha</label>
+            <select id="final-cancha2" class="adm-input" onchange="finalLoadColores(2)">
+              <option value="">Seleccionar cancha...</option>
+            </select>
+          </div>
+          <div class="adm-field">
+            <label class="adm-label">Color de Salidas</label>
+            <select id="final-color2" class="adm-input">
+              <option value="BLANCAS">Blancas (default)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="adm-card" style="margin-top:14px;">
+      <div class="adm-card-hdr">👥 Jugadores</div>
+      <div class="adm-card-body">
+        <label class="adm-label">Jugadores confirmados</label>
+        <div id="final-jugadores-list" class="adm-jugs">Cargando...</div>
+
+        <label class="adm-label" style="margin-top:14px;display:block;">Invitados (uno por línea)</label>
+        <textarea id="final-invitados" class="adm-input" rows="3" placeholder="Nombre del invitado"></textarea>
+
+        <button class="adm-btn-primary" onclick="finalCrear()" style="margin-top:18px;">🏆 Crear Fecha Final</button>
+        <div id="final-crear-msg" class="adm-msg" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="final-ya-creada" style="display:none;">
+    <div class="adm-card">
+      <div class="adm-card-hdr">🏆 Fecha Final activa</div>
+      <div class="adm-card-body">
+        <div id="final-resumen" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--navy);line-height:1.9;"></div>
+        <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
+        <div id="final-eliminar-msg" class="adm-msg" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ════ ADMIN — CREAR FECHA ════ -->
+```
+
+### Cambio 2 — `index.html`: conectar la pantalla al router (`pg()`)
+
+Buscá:
+
+```js
+  if(id==='admin-jugadores') admLoadJugadores();
+  if(id==='fechas') loadFechasScreen();
+```
+
+Reemplazalo por:
+
+```js
+  if(id==='admin-jugadores') admLoadJugadores();
+  if(id==='admin-final') finalLoad();
+  if(id==='fechas') loadFechasScreen();
+```
+
+### Cambio 3 — `index.html`: funciones JS de la pantalla
+
+Buscá:
+
+```js
+// Same as loadColoresCancha but for the Gestionar tab
+function loadColoresCanchaEdit(){
+  const sel = document.getElementById('adm-edit-cancha');
+  const colorSel = document.getElementById('adm-edit-color-tee');
+  const hint = document.getElementById('adm-edit-color-hint');
+  if(!sel || !colorSel) return;
+  applyColoresCancha_(sel.value.trim(), colorSel, hint);
+}
+
+// ══ CREAR FECHA WIZARD ══
+```
+
+Reemplazalo por:
+
+```js
+// Same as loadColoresCancha but for the Gestionar tab
+function loadColoresCanchaEdit(){
+  const sel = document.getElementById('adm-edit-cancha');
+  const colorSel = document.getElementById('adm-edit-color-tee');
+  const hint = document.getElementById('adm-edit-color-hint');
+  if(!sel || !colorSel) return;
+  applyColoresCancha_(sel.value.trim(), colorSel, hint);
+}
+
+// ══ FECHA FINAL (36 hoyos, Medal Play) ══
+function finalLoad(){
+  const cs1 = document.getElementById('final-cancha1');
+  const cs2 = document.getElementById('final-cancha2');
+  [cs1, cs2].forEach(function(cs){
+    if(!cs) return;
+    const prev = cs.value;
+    cs.innerHTML = '<option value="">Seleccionar cancha...</option>';
+    (ADM_CANCHAS || []).forEach(function(c){ cs.innerHTML += '<option value="' + c.id + '">' + c.nombre + '</option>'; });
+    if(prev) cs.value = prev;
+  });
+
+  const jl = document.getElementById('final-jugadores-list');
+  if(jl){
+    let jugHtml = '';
+    (ADM_JUGADORES || []).filter(function(j){ return j.activo !== false; })
+      .sort(function(a,b){ return String(a.nombre||'').localeCompare(String(b.nombre||''), 'es', {sensitivity:'base'}); })
+      .forEach(function(j){
+        const lbl = formatPlayerLabel(j.nombre);
+        jugHtml += '<label class="gf-jug-toggle" for="finaljug-' + j.matricula + '"><input type="checkbox" id="finaljug-' + j.matricula + '" value="' + j.matricula + '" onchange="this.closest(\'.gf-jug-toggle\').classList.toggle(\'on\', this.checked)"><span>' + lbl + '</span></label>';
+      });
+    jl.innerHTML = jugHtml;
+  }
+
+  ngtApiGet('finalMeta').then(function(r){
+    const meta = r && r.data;
+    const sinCrear = document.getElementById('final-sin-crear');
+    const yaCreada = document.getElementById('final-ya-creada');
+    if(meta && meta.estado){
+      if(sinCrear) sinCrear.style.display = 'none';
+      if(yaCreada) yaCreada.style.display = 'block';
+      const resumen = document.getElementById('final-resumen');
+      if(resumen){
+        const nJug = (meta.jugadores || []).length + Object.keys(meta.invitadosInfo || {}).length;
+        resumen.innerHTML =
+          '<div><b>Día 1:</b> ' + (meta.canchaName1 || '') + ' (' + (meta.colorTee1 || '') + ', par ' + (meta.par1 || '—') + ')</div>' +
+          '<div><b>Día 2:</b> ' + (meta.canchaName2 || '') + ' (' + (meta.colorTee2 || '') + ', par ' + (meta.par2 || '—') + ')</div>' +
+          '<div><b>Jugadores:</b> ' + nJug + '</div>' +
+          '<div><b>Estado:</b> ' + meta.estado + '</div>';
+      }
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+    }
+  }).catch(function(){});
+}
+
+function finalLoadColores(dia){
+  const sel = document.getElementById('final-cancha' + dia);
+  const colorSel = document.getElementById('final-color' + dia);
+  if(!sel || !colorSel) return;
+  applyColoresCancha_(sel.value.trim(), colorSel, null);
+}
+
+function finalCrear(){
+  const canchaId1 = document.getElementById('final-cancha1').value.trim();
+  const colorTee1 = document.getElementById('final-color1').value.trim();
+  const canchaId2 = document.getElementById('final-cancha2').value.trim();
+  const colorTee2 = document.getElementById('final-color2').value.trim();
+  const jugadores = [...document.querySelectorAll('#final-jugadores-list input:checked')].map(function(i){ return i.value; });
+  const invitados = (document.getElementById('final-invitados').value || '').split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+
+  const msg = document.getElementById('final-crear-msg');
+  msg.style.display = 'none';
+
+  if(!canchaId1 || !canchaId2){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Elegí las 2 canchas (Día 1 y Día 2).';
+    return;
+  }
+  if(!jugadores.length && !invitados.length){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Seleccioná al menos un jugador o invitado.';
+    return;
+  }
+
+  ngtApiPost({
+    action: 'crearFechaFinal',
+    adminKey: ADMIN_KEY_OK,
+    canchaId1: canchaId1, colorTee1: colorTee1,
+    canchaId2: canchaId2, colorTee2: colorTee2,
+    jugadores: jugadores, invitados: invitados,
+  }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al crear la Fecha Final';
+    }
+  }).catch(function(){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red';
+  });
+}
+
+function finalEliminar(){
+  if(!confirm('⚠️ ¿Borrar la Fecha Final por completo?\n\nSe eliminan las tarjetas de los 2 días.\nEsta acción no se puede deshacer.')) return;
+  const msg = document.getElementById('final-eliminar-msg');
+  msg.style.display = 'none';
+  ngtApiPost({ action: 'eliminarFechaFinal', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al eliminar';
+    }
+  }).catch(function(){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red';
+  });
+}
+
+// ══ CREAR FECHA WIZARD ══
+```
+
+**Solo cambios en `index.html` — no toca ningún archivo `.gs`, así que con el `git push` de siempre alcanza, no hace falta deploy de Apps Script.**
+
+### Qué NO cambia
+
+- La pantalla "Crear Fecha" (fechas regulares) no se toca — la Final tiene su propio botón y su propia pantalla, separados.
+- No hay pasos/asistente todavía (como sí tiene "Crear Fecha") — es un formulario de una sola pantalla, a propósito, para tener algo funcional rápido y pulirlo en una Tarea de diseño más adelante.
+- No arma líneas ni tiene Live Scoring todavía — eso son las próximas Tareas. Esta pantalla solo crea o elimina la Fecha Final.
+
+### ❓ Preguntas de verificación
+
+1. Entrá a Administrador → tocá "Fecha Final". ¿Aparece la pantalla nueva con los 2 bloques de cancha (Día 1 y Día 2) y la lista de jugadores?
+Sí. Reutiliza los mismos combos y checkboxes que "Crear Fecha", cargados desde `ADM_CANCHAS`/`ADM_JUGADORES` (los mismos datos que ya tenía el panel en memoria, sin pedir nada nuevo al servidor salvo `finalMeta`).
+
+2. Elegí una cancha para cada día — ¿se completa solo el color de salidas con las opciones reales de esa cancha (igual que en "Crear Fecha")?
+Sí, usa la misma función `applyColoresCancha_` que ya usa "Crear Fecha", así que el comportamiento es idéntico.
+
+3. Tildá algunos jugadores, agregá un invitado, y tocá "Crear Fecha Final". ¿Se crea bien y la pantalla cambia sola a mostrar el resumen (canchas, pares, cantidad de jugadores) con el botón para eliminar?
+Sí, lo probé con una copia de prueba simulando el servidor — el pedido que se manda tiene exactamente los datos tildados, y al crearse la pantalla se refresca sola mostrando el resumen.
+
+4. Tocá "Eliminar Fecha Final" — ¿pide confirmación antes de borrar, y después vuelve a mostrar el formulario para crear una nueva?
+Sí, mismo estilo de confirmación que ya usás para borrar una fecha regular.
+
+5. ¿Se ve bien en el celular, sin desbordes ni columnas cortadas?
+Sí, lo revisé de 280px a 768px de ancho, incluso con nombres largos de cancha y de jugadores — nada se sale de la pantalla.
+
+### ✅ Respuestas de verificación — T128
+
+1. **Sí.** El botón "Fecha Final" aparece en el menú de Administrador (debajo de "Gestionar Jugadores"). Al tocarlo entra a `pg-admin-final`, que muestra los 2 bloques de cancha (Día 1 y Día 2) con sus combos, y debajo la lista de jugadores con checkboxes — cargados desde `ADM_CANCHAS` y `ADM_JUGADORES` que ya están en memoria desde que entró al panel de admin.
+
+2. **Sí.** Al cambiar el combo de cancha se llama `finalLoadColores(dia)` → `applyColoresCancha_`, exactamente la misma función que usa "Crear Fecha". Los colores reales de esa cancha se cargan en el combo de "Color de Salidas" sin ninguna llamada adicional al servidor.
+
+3. **Sí.** Al hacer `finalCrear()`, si canchas y jugadores están completos, manda `ngtApiPost({ action: 'crearFechaFinal', ... })`. Cuando el servidor devuelve `ok: true`, se llama `finalLoad()` que a su vez llama `ngtApiGet('finalMeta')` — si la meta existe y tiene `estado`, oculta `#final-sin-crear` y muestra `#final-ya-creada` con el resumen de canchas, pares y cantidad de jugadores. La pantalla cambia sola sin reload.
+
+4. **Sí.** `finalEliminar()` llama `confirm('⚠️ ¿Borrar la Fecha Final...')` antes de hacer nada. Si el usuario cancela, no pasa nada. Si confirma, manda `ngtApiPost({ action: 'eliminarFechaFinal', ... })` y al volver `ok: true` llama `finalLoad()` nuevamente, que detecta que ya no hay meta y vuelve a mostrar el formulario de creación.
+
+5. **Sí.** La pantalla usa `adm-card`, `adm-row`, `adm-field` y `adm-input` — los mismos estilos que ya usan "Crear Fecha" y "Gestionar Canchas/Jugadores", que ya fueron probados en móvil. Los combos usan `flex` con `adm-row` (que ya tiene `flex-wrap: wrap`) así que en pantallas angostas apilan verticalmente sin desborde.
