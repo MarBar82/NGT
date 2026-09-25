@@ -315,3 +315,286 @@ function armarLineasFinalDia1_(params) {
 
   return { ok: true, lineas: lineas };
 }
+
+/**
+ * Guarda el score de un hoyo del Día 1 o Día 2 de la Final, durante la ronda.
+ * Mismo patrón de mutex por jugador que cargarHoyoLive_ (fechas regulares),
+ * pero apuntando a TARJETAS FINAL (columnas DIA/MATRICULA/HCP/.../18 hoyos)
+ * en vez de TARJETAS. No hay matches ni hoyos de bonus en la Final -- el
+ * snapshot devuelto es más simple (solo golpes + diferencia a par).
+ */
+function cargarHoyoLiveFinal_(params) {
+  const { dia, matriculaJugador, matriculaCargador, token, adminKey, hoyo, score } = params || {};
+  const diaNum = parseInt(dia);
+  if (diaNum !== 1 && diaNum !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+  if (!matriculaJugador || !hoyo) return { ok: false, error: 'Faltan parámetros' };
+
+  const hoyoNum = parseInt(hoyo);
+  if (isNaN(hoyoNum) || hoyoNum < 1 || hoyoNum > 18) return { ok: false, error: 'Hoyo inválido (1-18)' };
+
+  const jugStr  = String(matriculaJugador).trim();
+  const cargStr = String(matriculaCargador || '').trim();
+  if (!cargStr) return { ok: false, error: 'Falta matriculaCargador' };
+
+  // Auth: matriculaCargador tiene que estar realmente logueado como esa matrícula
+  // (o ser Admin) antes de dejarlo cargar en la línea — mismo criterio que
+  // cargarHoyoLive_ para las fechas regulares.
+  const isAdmin = adminKey && checkAdmin_(adminKey);
+  if (!isAdmin) {
+    const sess = validarSesion_(String(token || '').trim());
+    if (!sess || String(sess.mat) !== cargStr) return { ok: false, error: 'Sesión inválida — volvé a iniciar sesión' };
+  }
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineaKey = 'lineasDia' + diaNum;
+  const lineas = meta[lineaKey];
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día ' + diaNum };
+
+  let lineaIdx = -1;
+  for (let i = 0; i < lineas.length; i++) {
+    const mats = lineas[i].players.map(function(p) { return p.matricula; });
+    if (mats.indexOf(jugStr) >= 0 && (isAdmin || mats.indexOf(cargStr) >= 0)) { lineaIdx = i; break; }
+  }
+  if (lineaIdx < 0) return { ok: false, error: 'No autorizado para cargar en esta línea' };
+
+  // score: null/'' borra; entero 1-15 guarda
+  let scoreVal;
+  if (score === null || score === '' || score === undefined) {
+    scoreVal = '';
+  } else {
+    scoreVal = parseInt(score);
+    if (isNaN(scoreVal) || scoreVal < 1 || scoreVal > 15) return { ok: false, error: 'Score inválido' };
+  }
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  if (!sh) return { ok: false, error: 'Hoja ' + FINAL_SHEET_NAME + ' no encontrada' };
+
+  // Índice de fila en cache (evita re-escanear TARJETAS FINAL en cada tap)
+  const cache = CacheService.getScriptCache();
+  const rowCacheKey = 'tfRow_' + diaNum + '_' + jugStr;
+  let rowIdx = parseInt(cache.get(rowCacheKey) || '0');
+
+  if (rowIdx < 2) {
+    const lastRow = sh.getLastRow();
+    if (lastRow <= 1) return { ok: false, error: 'Sin tarjetas' };
+    const ab = sh.getRange(2, 1, lastRow - 1, 2).getValues(); // DIA, MATRICULA
+    for (let i = 0; i < ab.length; i++) {
+      if (String(ab[i][0]) === String(diaNum) && String(ab[i][1]).trim() === jugStr) {
+        rowIdx = i + 2;
+        try { cache.put(rowCacheKey, String(rowIdx), 21600); } catch(e) {}
+        break;
+      }
+    }
+  }
+  if (rowIdx < 2) return { ok: false, error: 'Tarjeta no encontrada para ' + jugStr + ' (Día ' + diaNum + ')' };
+
+  // Mutex por jugador vía CacheService — mismo criterio que cargarHoyoLive_.
+  const lockKey = 'pflk_' + diaNum + '_' + jugStr;
+  const lockId  = String(Date.now()) + '_' + Math.floor(Math.random() * 1e9);
+  let lockAcquired = false;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (!cache.get(lockKey)) {
+      cache.put(lockKey, lockId, 8);
+      Utilities.sleep(30);
+      if (cache.get(lockKey) === lockId) { lockAcquired = true; break; }
+    }
+    Utilities.sleep(300);
+  }
+  if (!lockAcquired) return { ok: false, error: 'Servidor ocupado, reintentá' };
+
+  try {
+    sh.getRange(rowIdx, 5 + hoyoNum).setValue(scoreVal); // col 6=HOYO1 ... col 23=HOYO18
+    SpreadsheetApp.flush();
+  } finally {
+    try { cache.remove(lockKey); } catch(e) {}
+  }
+
+  if (scoreVal !== '') {
+    const jugMap = {};
+    cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+    const cargJug = jugMap[cargStr] || {};
+    const apodoCarg = (cargJug.apodo || (cargJug.nombre ? cargJug.nombre.split(' ')[0] : cargStr) || cargStr).toUpperCase();
+    try {
+      cache.put('lastCargFinal_' + diaNum + '_' + jugStr,
+        JSON.stringify({ hoyo: hoyoNum, matricula: cargStr, apodo: apodoCarg }), 21600);
+    } catch(e) {}
+  }
+
+  // Devolver snapshot fresco de la línea (mismo shape que getLineaLiveFinal_)
+  const snap = buildLineaSnapshotFinal_(diaNum, lineaIdx, meta);
+  return Object.assign({ ok: true }, snap || {});
+}
+
+/**
+ * Snapshot en vivo de una línea del Día 1 o Día 2 de la Final: golpes
+ * cargados por hoyo + diferencia a par acumulada (solo sobre los hoyos ya
+ * jugados, no contra el par de los 18). Sin matches ni hoyos de bonus — no
+ * aplican en la Final.
+ */
+function buildLineaSnapshotFinal_(dia, lineaIdx, meta) {
+  const lineaKey = 'lineasDia' + dia;
+  const linea = (meta[lineaKey] || [])[lineaIdx];
+  if (!linea) return null;
+  const lineaPlayers = linea.players || [];
+  const lineaMats = lineaPlayers.map(function(p) { return p.matricula; });
+
+  const canchaId   = dia === 1 ? meta.canchaId1   : meta.canchaId2;
+  const canchaName = dia === 1 ? meta.canchaName1 : meta.canchaName2;
+  const colorTee   = dia === 1 ? meta.colorTee1   : meta.colorTee2;
+  const par        = dia === 1 ? meta.par1        : meta.par2;
+
+  const cd = canchaId
+    ? cachedRead_('cp2_' + canchaId, 600, function(){ return getCanchaPares_(canchaId); })
+    : null;
+  const cpPares = (cd && cd.pares) || [];
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const scoresByMat = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues(); // DIA..HOYO18
+      rows.forEach(function(r) {
+        if (String(r[0]) !== String(dia)) return;
+        const mat = String(r[1]).trim();
+        if (lineaMats.indexOf(mat) < 0) return;
+        scoresByMat[mat] = r.slice(5, 23).map(function(v) {
+          return (v === '' || v === null || v === undefined) ? null : Number(v);
+        });
+      });
+    }
+  }
+
+  const cache = CacheService.getScriptCache();
+  const jugadores = lineaPlayers.map(function(p) {
+    const scores = scoresByMat[p.matricula] || new Array(18).fill(null);
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    const grossParcial  = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    let parParcial = 0;
+    scores.forEach(function(s, h) { if (s !== null) parParcial += (cpPares[h] || 0); });
+    const diffParcial = holesCargados > 0 ? (grossParcial - parParcial) : null;
+    const firstNull = scores.indexOf(null);
+
+    let ultimoCargadoPor = null;
+    try {
+      const raw = cache.get('lastCargFinal_' + dia + '_' + p.matricula);
+      if (raw) ultimoCargadoPor = JSON.parse(raw);
+    } catch(e) {}
+
+    return {
+      matricula:        p.matricula,
+      apodo:             p.apodo,
+      hcp:               p.hcp,
+      invitado:          !!p.invitado,
+      scores:            scores,
+      holesCargados:     holesCargados,
+      grossParcial:      grossParcial,
+      diffParcial:       diffParcial, // null hasta el primer hoyo cargado
+      ultimoCargadoPor:  ultimoCargadoPor,
+      nextHoyo:          firstNull >= 0 ? firstNull + 1 : 19,
+    };
+  });
+
+  return {
+    dia:          dia,
+    lineaNum:     lineaIdx + 1,
+    totalLineas:  (meta[lineaKey] || []).length,
+    cancha:       { id: canchaId, nombre: canchaName, colorTee: colorTee || 'BLANCAS' },
+    par:          par,
+    pares:        cpPares,
+    updatedAt:    Date.now(),
+    jugadores:    jugadores,
+  };
+}
+
+/**
+ * Devuelve el snapshot en vivo de la línea del Día 1/2 de la Final a la que
+ * pertenece `matricula`, o (con lineaNum explícito) esa línea puntual en
+ * modo solo lectura. Pensado para sondear cada 5-8s, igual que getLineaLive_.
+ */
+function getLineaLiveFinal_(params) {
+  const dia = parseInt(params && params.dia);
+  if (dia !== 1 && dia !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineaKey = 'lineasDia' + dia;
+  const lineas = meta[lineaKey];
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día ' + dia };
+
+  if (params.lineaNum) {
+    const idx = parseInt(params.lineaNum) - 1;
+    if (idx < 0 || idx >= lineas.length) return { ok: false, error: 'Línea ' + params.lineaNum + ' no existe' };
+    const snap = buildLineaSnapshotFinal_(dia, idx, meta);
+    return Object.assign({ ok: true, soloLectura: true }, snap || {});
+  }
+
+  const matStr = String(params.matricula || '').trim();
+  if (!matStr) return { ok: false, error: 'Faltan parámetros' };
+  let lineaIdx = -1;
+  for (let i = 0; i < lineas.length; i++) {
+    if (lineas[i].players.some(function(p) { return p.matricula === matStr; })) { lineaIdx = i; break; }
+  }
+  if (lineaIdx < 0) return { ok: false, error: 'No pertenecés a ninguna línea del Día ' + dia };
+
+  const snap = buildLineaSnapshotFinal_(dia, lineaIdx, meta);
+  return Object.assign({ ok: true, soloLectura: false }, snap || {});
+}
+
+/**
+ * Tabla general del Día 1 de la Final (golpes brutos + diferencia a par).
+ * Se mantiene OCULTA (completo:false, sin datos) hasta que las tarjetas de
+ * TODOS los jugadores del Día 1 tengan los 18 hoyos cargados -- así nadie ve
+ * quién va ganando a mitad de ronda.
+ */
+function getFinalStandingsDia1_() {
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineas = meta.lineasDia1;
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día 1' };
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const scoresByMat = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues();
+      rows.forEach(function(r) {
+        if (String(r[0]) !== '1') return;
+        scoresByMat[String(r[1]).trim()] = r.slice(5, 23).map(function(v) {
+          return (v === '' || v === null || v === undefined) ? null : Number(v);
+        });
+      });
+    }
+  }
+
+  const cd = meta.canchaId1
+    ? cachedRead_('cp2_' + meta.canchaId1, 600, function(){ return getCanchaPares_(meta.canchaId1); })
+    : null;
+  const cpPares = (cd && cd.pares) || [];
+  const parTotal = cpPares.reduce(function(t, pr){ return t + (pr || 0); }, 0);
+
+  const allPlayers = [];
+  lineas.forEach(function(l) { (l.players || []).forEach(function(p) { allPlayers.push(p); }); });
+
+  let completo = true;
+  const filas = allPlayers.map(function(p) {
+    const scores = scoresByMat[p.matricula] || new Array(18).fill(null);
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    if (holesCargados < 18) completo = false;
+    const gross = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    return {
+      matricula: p.matricula,
+      apodo:     p.apodo,
+      invitado:  !!p.invitado,
+      gross:     gross,
+      diff:      gross - parTotal,
+    };
+  });
+
+  if (!completo) return { ok: true, completo: false };
+
+  filas.sort(function(a, b) { return a.gross - b.gross; });
+  return { ok: true, completo: true, standings: filas };
+}

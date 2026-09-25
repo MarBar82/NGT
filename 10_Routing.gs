@@ -66,6 +66,8 @@ function doGet(e) {
       case 'getBonusEstado':   result = getBonusEstado_(params); break;
       case 'getStbFecha':      result = getStbFecha_(params); break;
       case 'finalMeta':        result = { ok: true, data: getFinalMeta_() }; break;
+      case 'getLineaLiveFinal':     result = getLineaLiveFinal_(params); break;
+      case 'getFinalStandingsDia1': result = getFinalStandingsDia1_(); break;
       default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }
@@ -194,6 +196,7 @@ function doPost(e) {
       case 'crearFechaFinal':       result = crearFechaFinal_(params); break;
       case 'eliminarFechaFinal':    result = eliminarFechaFinal_(params); break;
       case 'armarLineasFinalDia1':  result = armarLineasFinalDia1_(params); break;
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }
