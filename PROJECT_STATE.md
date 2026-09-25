@@ -21116,3 +21116,230 @@ function smShowHigh(){
 
 6. Sí. El router `pg()` tiene `if(id !== 'final-live-view' && FINAL_PUBLIC_MODE){ finalPublicPollStop(); FINAL_PUBLIC_MODE=false; }`, así que al volver al Leaderboard se corta el timer anterior. Al entrar de nuevo a `final-live-view`, `startFinalPublicView()` hace `FINAL_PUBLIC_MODE = true` y `finalPublicPollStart()` llama primero `finalPublicPollStop()` (limpia cualquier timer previo) antes de arrancar uno nuevo — sin duplicación.
 
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 133 (Fecha Final — cierre del Día 1: resultado NETO)
+
+### Contexto (en criollo)
+
+Esta es la Tarea 7 de la Fecha Final. Hasta ahora, la tabla de resultados del Día 1 (la que aparece en "Ver en Vivo" apenas se completan las 3 líneas) ordenaba por golpes brutos nomás — era un cálculo provisorio, a propósito, solo para saber CUÁNDO mostrar algo. Esta Tarea la reemplaza por el resultado que realmente importa: el **NETO**, es decir golpes brutos menos el hándicap de juego de cada uno (ya calculado y guardado en la tarjeta de cada jugador al crear la Fecha Final) menos los golpes a favor que se congelaron en ese mismo momento según la clasificación de la temporada.
+
+No hace falta ningún paso manual de "cerrar el día" — apenas las 3 (o las que sean) líneas completan sus 18 hoyos, la tabla se recalcula sola con el NETO y aparece ordenada de mejor a peor, igual que ya pasaba con los golpes brutos. Mantengo esto así a propósito, para no romper la lógica ya probada de "se revela solo, nadie tiene que tocar nada".
+
+Un detalle importante que verifiqué a fondo (y que casi se me pasa, así que lo cuento): los "golpes a favor" están guardados en la planilla LEADERBOARD ya en formato "listo para sumar" — un número negativo significa descuento. Es decir, si a alguien le tocan −8 golpes a favor, hay que SUMARLE ese −8 al resultado (lo cual lo hace más bajo, mejor), no restárselo. Armé un test que fuerza este caso a propósito (un jugador con el peor puntaje bruto del grupo, pero con un descuento enorme) para confirmar que efectivamente termina primero — así no quedaba ninguna duda de que el signo está bien aplicado.
+
+Sobre los empates en NETO: esta tabla del Día 1 no hace ningún desempate especial — un empate ahí solo define el orden de salida del Día 2 (que armamos en la próxima Tarea), no declara ningún "ganador". El desempate a cancha (playoff) que ya charlamos que existe, aplica sobre el resultado GENERAL de la Final a las 36 hoyos, no acá. Si en algún momento preferís que el Día 1 también tenga su propio desempate, decímelo y lo agregamos — por ahora seguí así porque me dijiste "Sigamos" y esta es la interpretación más simple y coherente con cómo armamos todo lo demás.
+
+La tabla ahora muestra el NETO como número principal (grande, en negro), con la diferencia a par ya calculada sobre el neto arriba a la derecha (por ejemplo "-3"), y abajo del nombre de cada jugador dejé el dato bruto como referencia secundaria ("Bruto 82 · +12") — por si alguien quiere comparar.
+
+Probé todo a fondo: el backend con un script que carga golpes reales para 9 jugadores con hándicaps y golpes a favor conocidos, confirma que el NETO de cada uno da exactamente lo esperado, que la tabla queda ordenada por NETO (no por bruto), y con un caso forzado especial confirmé que el signo del descuento está aplicado en la dirección correcta. Y la pantalla completa con un test automático en un navegador real, con datos armados a propósito para que el orden por NETO fuera DISTINTO al orden por golpes brutos — así quedó probado que la pantalla realmente usa el neto para ordenar y no el bruto, y que cada fila muestra el neto como dato principal y el bruto como secundario.
+
+**Esta Tarea toca `13_FechaFinal.gs` (backend) e `index.html` (frontend) — hace falta el deploy de Apps Script (clasp push + deploy) Y el `git push` / redeploy de GitHub Pages, no alcanza con uno solo. No toca `10_Routing.gs` porque no agrega ninguna acción nueva, solo cambia lo que ya devuelve `getFinalStandingsDia1_`.**
+
+### Cambio 1 — `13_FechaFinal.gs`: `getFinalStandingsDia1_` ahora calcula y ordena por NETO
+
+Buscá:
+
+```
+/**
+ * Tabla general del Día 1 de la Final (golpes brutos + diferencia a par).
+ * Se mantiene OCULTA (completo:false, sin datos) hasta que las tarjetas de
+ * TODOS los jugadores del Día 1 tengan los 18 hoyos cargados -- así nadie ve
+ * quién va ganando a mitad de ronda.
+ */
+function getFinalStandingsDia1_() {
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineas = meta.lineasDia1;
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día 1' };
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const scoresByMat = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues();
+      rows.forEach(function(r) {
+        if (String(r[0]) !== '1') return;
+        scoresByMat[String(r[1]).trim()] = r.slice(5, 23).map(function(v) {
+          return (v === '' || v === null || v === undefined) ? null : Number(v);
+        });
+      });
+    }
+  }
+
+  const cd = meta.canchaId1
+    ? cachedRead_('cp2_' + meta.canchaId1, 600, function(){ return getCanchaPares_(meta.canchaId1); })
+    : null;
+  const cpPares = (cd && cd.pares) || [];
+  const parTotal = cpPares.reduce(function(t, pr){ return t + (pr || 0); }, 0);
+
+  const allPlayers = [];
+  lineas.forEach(function(l) { (l.players || []).forEach(function(p) { allPlayers.push(p); }); });
+
+  let completo = true;
+  const filas = allPlayers.map(function(p) {
+    const scores = scoresByMat[p.matricula] || new Array(18).fill(null);
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    if (holesCargados < 18) completo = false;
+    const gross = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    return {
+      matricula: p.matricula,
+      apodo:     p.apodo,
+      invitado:  !!p.invitado,
+      gross:     gross,
+      diff:      gross - parTotal,
+    };
+  });
+
+  if (!completo) return { ok: true, completo: false };
+
+  filas.sort(function(a, b) { return a.gross - b.gross; });
+  return { ok: true, completo: true, standings: filas };
+}
+```
+
+Reemplazalo por:
+
+```
+/**
+ * Tabla general del Día 1 de la Final -- resultado NETO (golpes brutos menos
+ * hándicap de juego menos golpes a favor, estos últimos ya congelados al
+ * armar las líneas del Día 1). También devuelve golpes brutos y diferencia a
+ * par bruta como datos secundarios. Se mantiene OCULTA (completo:false, sin
+ * datos) hasta que las tarjetas de TODOS los jugadores del Día 1 tengan los
+ * 18 hoyos cargados -- así nadie ve quién va ganando a mitad de ronda.
+ * No aplica desempate especial ante empate en neto: esta tabla ordena la
+ * salida del Día 2, no declara un "ganador" -- el desempate a cancha del
+ * resultado general de la Final se resuelve aparte, sobre las 36 hoyos.
+ */
+function getFinalStandingsDia1_() {
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineas = meta.lineasDia1;
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día 1' };
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const scoresByMat = {};
+  const hcpByMat = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues();
+      rows.forEach(function(r) {
+        if (String(r[0]) !== '1') return;
+        const mat = String(r[1]).trim();
+        scoresByMat[mat] = r.slice(5, 23).map(function(v) {
+          return (v === '' || v === null || v === undefined) ? null : Number(v);
+        });
+        hcpByMat[mat] = (r[2] === '' || r[2] === null || r[2] === undefined) ? 0 : Number(r[2]);
+      });
+    }
+  }
+
+  const cd = meta.canchaId1
+    ? cachedRead_('cp2_' + meta.canchaId1, 600, function(){ return getCanchaPares_(meta.canchaId1); })
+    : null;
+  const cpPares = (cd && cd.pares) || [];
+  const parTotal = cpPares.reduce(function(t, pr){ return t + (pr || 0); }, 0);
+
+  const golpesFavor = meta.golpesFavor || {};
+
+  const allPlayers = [];
+  lineas.forEach(function(l) { (l.players || []).forEach(function(p) { allPlayers.push(p); }); });
+
+  let completo = true;
+  const filas = allPlayers.map(function(p) {
+    const scores = scoresByMat[p.matricula] || new Array(18).fill(null);
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    if (holesCargados < 18) completo = false;
+    const gross = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    const hcpJuego = hcpByMat[p.matricula] || 0;
+    // golpesFavor ya viene en formato "listo para sumar" (negativo = descuento) --
+    // ver comentario de getGolpesFavorMap_ -- por eso se SUMA, no se resta.
+    const favor = golpesFavor[p.matricula] || 0;
+    const neto = gross - hcpJuego + favor;
+    return {
+      matricula:   p.matricula,
+      apodo:       p.apodo,
+      invitado:    !!p.invitado,
+      gross:       gross,
+      diff:        gross - parTotal,
+      hcpJuego:    hcpJuego,
+      golpesFavor: favor,
+      neto:        neto,
+      diffNeto:    neto - parTotal,
+    };
+  });
+
+  if (!completo) return { ok: true, completo: false };
+
+  filas.sort(function(a, b) { return a.neto - b.neto; });
+  return { ok: true, completo: true, standings: filas };
+}
+```
+
+### Cambio 2 — `index.html`: la tabla de resultados de "Ver en Vivo" muestra el NETO
+
+Buscá:
+
+```
+    var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Resultados Día ' + FINAL_PUBLIC_DIA + '</div><div class="adm-card-body" style="padding:0;">';
+    stR.standings.forEach(function(s, i){
+      html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
+        '<div style="flex:1;font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diff) + '</div>' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-left:8px;">' + s.gross + '</div>' +
+      '</div>';
+    });
+```
+
+Reemplazalo por:
+
+```
+    var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Resultados Día ' + FINAL_PUBLIC_DIA + ' — NETO</div><div class="adm-card-body" style="padding:0;">';
+    stR.standings.forEach(function(s, i){
+      html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
+        '<div style="flex:1;">' +
+          '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+          '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">Bruto ' + s.gross + ' · ' + finalPublicDiffTxt_(s.diff) + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diffNeto) + '</div>' +
+          '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.neto + '</div>' +
+        '</div>' +
+      '</div>';
+    });
+```
+
+### Qué NO cambia
+
+- No hay ningún paso manual de "cerrar el Día 1" — sigue revelándose solo, apenas se completan los 18 hoyos de todos, igual que antes.
+- No se toca la pantalla de carga de scores (Tarea 131) ni `getAllLineasLiveFinal_` (Tarea 132) — el progreso en vivo de cada línea (golpes, diferencia a par, hoyos cargados) se sigue mostrando exactamente igual, con los mismos números brutos de siempre. Lo único que cambia es la tabla de resultados finales una vez que se completa todo.
+- No se toca el hándicap de juego ni los golpes a favor en sí — ambos ya estaban calculados y guardados desde que se creó la Fecha Final (Tarea 128/129); esta Tarea solo los lee y los aplica al cálculo del resultado.
+- No hay ningún desempate especial para empates en NETO del Día 1 — si dos o más jugadores empatan, quedan en el orden en que ya venían (por línea de salida), y ese empate solo importa para definir el orden de salida del Día 2, no declara ningún resultado.
+- Esta Tarea toca `.gs` (backend) — hace falta el deploy de Apps Script (clasp push + deploy) ADEMÁS del `git push` / redeploy de GitHub Pages.
+
+### ❓ Preguntas de verificación
+
+1. Con una Fecha Final en curso donde ya sabés (o podés calcular a mano) el hándicap de juego y los golpes a favor de algún jugador, cuando se completan los 18 hoyos de todos, ¿el número grande que aparece primero en la tabla de resultados es el NETO (golpes brutos menos hándicap, más los golpes a favor) y no el bruto?
+
+2. ¿Abajo del nombre de cada jugador aparece el dato "Bruto X · diferencia" como referencia secundaria, más chico?
+
+3. ¿El orden de la tabla (de arriba hacia abajo) corresponde al NETO de mejor a peor, y no a los golpes brutos? (si algún jugador tiene golpes a favor grandes, puede terminar arriba en la tabla aunque su bruto no haya sido el más bajo)
+
+4. Si en algún caso dos jugadores empatan en NETO, ¿la app no rompe ni muestra nada raro — simplemente los deja en algún orden entre ellos, sin marcar ningún desempate especial?
+
+### ✅ Respuestas de verificación — Tarea 133
+
+1. Sí. `getFinalStandingsDia1_` ahora lee `hcpByMat[mat]` de la columna HCP de TARJETAS FINAL y `golpesFavor` de `meta.golpesFavor` (congelado al armar líneas). Calcula `neto = gross - hcpJuego + favor` — el favor viene negativo para descuentos, por eso se suma. El número grande en cada fila es `s.neto`.
+
+2. Sí. Debajo del nombre de cada jugador aparece `<div ...>Bruto X · diff</div>` en tipografía más chica (Barlow Condensed 12px, color `var(--g4)`).
+
+3. Sí. `filas.sort(function(a, b) { return a.neto - b.neto; })` — ordena de menor a mayor neto. Un jugador con golpes a favor grandes puede terminar primero aunque su bruto no sea el más bajo.
+
+4. Sí. En empate, `sort` es estable en motores modernos y los deja en el orden que ya tenían (por línea de salida). No hay lógica de desempate especial; no se muestra nada extra.
+
