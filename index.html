@@ -2448,6 +2448,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       <div class="adm-card-body">
         <div id="final-resumen" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--navy);line-height:1.9;"></div>
         <div id="final-lineas-dia1-wrap"></div>
+        <div id="final-lineas-dia2-wrap"></div>
         <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
         <div id="final-eliminar-msg" class="adm-msg" style="display:none;"></div>
       </div>
@@ -4223,11 +4224,14 @@ function finalLoad(){
           '<div><b>Estado:</b> ' + meta.estado + '</div>';
       }
       renderFinalLineasDia1_(meta);
+      renderFinalLineasDia2_(meta);
     } else {
       if(sinCrear) sinCrear.style.display = 'block';
       if(yaCreada) yaCreada.style.display = 'none';
       const wrap = document.getElementById('final-lineas-dia1-wrap');
       if(wrap) wrap.innerHTML = '';
+      const wrap2 = document.getElementById('final-lineas-dia2-wrap');
+      if(wrap2) wrap2.innerHTML = '';
     }
   }).catch(function(){});
 }
@@ -4325,6 +4329,64 @@ function finalArmarLineas(){
   const msg = document.getElementById('final-lineas-msg');
   if(msg) msg.style.display = 'none';
   ngtApiPost({ action: 'armarLineasFinalDia1', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg) {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al armar las líneas';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// Dibuja, dentro de la Fecha Final ya creada, el bloque del Día 2: nada
+// mientras el Día 1 no arrancó, un aviso de "esperando" mientras el Día 1
+// está en curso (consultando getFinalStandingsDia1_ para saber si ya se
+// puede armar -- se reutiliza tal cual, sin duplicar el cálculo de si ya
+// está completo), el botón para armar apenas el Día 1 termina, o las líneas
+// ya armadas una vez que existen.
+function renderFinalLineasDia2_(meta){
+  const wrap = document.getElementById('final-lineas-dia2-wrap');
+  if(!wrap) return;
+
+  if(meta.estado === 'armada'){
+    wrap.innerHTML = '';
+    return;
+  }
+
+  if(meta.estado === 'dia1_en_curso'){
+    wrap.innerHTML = '<div class="adm-msg" style="display:block;margin-top:18px;">Día 2: esperando a que termine el Día 1…</div>';
+    ngtApiGet('getFinalStandingsDia1').then(function(r){
+      if(r && r.ok && r.completo){
+        wrap.innerHTML =
+          '<button class="adm-btn-primary" onclick="finalArmarLineasDia2()" style="margin-top:18px;width:100%;">⚡ Armar Líneas Día 2</button>' +
+          '<div id="final-lineas-dia2-msg" class="adm-msg" style="display:none;"></div>';
+      }
+    }).catch(function(){});
+    return;
+  }
+
+  const lineas = meta.lineasDia2 || [];
+  if(!lineas.length){ wrap.innerHTML = ''; return; }
+  let html = '<div style="margin-top:18px;"><div class="adm-label" style="margin-bottom:8px;">Líneas de salida — Día 2</div>';
+  lineas.forEach(function(l){
+    html += '<div class="gf-lin-linea"><div class="gf-lin-hdr">Línea ' + l.lineNum + '</div><div class="gf-lin-players">';
+    (l.players || []).forEach(function(p){
+      html += '<div class="gf-lin-pill' + (p.invitado ? ' gf-lin-pill-inv' : '') + '">' +
+        '<span class="gf-lin-pname">' + p.apodo + (p.invitado ? ' (invitado)' : '') + '</span>' +
+        '<span style="font-size:12px;color:var(--g4);">HCP ' + (p.hcp !== '' && p.hcp !== null && p.hcp !== undefined ? p.hcp : '—') + '</span>' +
+        '</div>';
+    });
+    html += '</div></div>';
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function finalArmarLineasDia2(){
+  const msg = document.getElementById('final-lineas-dia2-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'armarLineasFinalDia2', adminKey: ADMIN_KEY_OK }).then(function(r){
     if(r && r.ok){
       finalLoad();
     } else if(msg) {

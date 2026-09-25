@@ -317,6 +317,81 @@ function armarLineasFinalDia1_(params) {
 }
 
 /**
+ * armarLineasFinalDia2_ — arma las líneas de salida del Día 2 de la Final.
+ * Orden: por el resultado NETO del Día 1 (getFinalStandingsDia1_, reutilizada
+ * tal cual -- no se duplica el cálculo de quién terminó y con qué neto),
+ * peor NETO primero. A diferencia del Día 1 -- donde los invitados no tenían
+ * ningún puesto de temporada y por eso iban directo al fondo -- acá todos,
+ * clasificados e invitados por igual, ya jugaron una ronda real: se ordenan
+ * solo por su NETO real, sin ningún trato especial para invitados. Mismo
+ * criterio de grupos y de salida que el Día 1: se arman preferentemente de a
+ * 4 (calcularTamanosGruposFinal_) y el grupo con el peor resultado sale
+ * primero (Línea 1), los líderes salen últimos.
+ */
+function armarLineasFinalDia2_(params) {
+  const { adminKey } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  if (meta.estado !== 'dia1_en_curso') {
+    return { ok: false, error: 'Las líneas del Día 2 no se pueden armar todavía (estado actual: ' + meta.estado + ')' };
+  }
+
+  const st = getFinalStandingsDia1_();
+  if (!st.ok) return { ok: false, error: st.error || 'No se pudo calcular el resultado del Día 1' };
+  if (!st.completo) return { ok: false, error: 'Todavía no se completaron los 18 hoyos del Día 1 de todos los jugadores' };
+
+  const ordered = st.standings; // ya viene ordenado mejor a peor NETO, con apodo/invitado incluidos
+  const n = ordered.length;
+  if (n < 2) return { ok: false, error: 'Se necesitan al menos 2 jugadores para armar líneas' };
+
+  // HCP del Día 2, ya calculado y guardado en TARJETAS FINAL al crear la fecha
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const hcpDia2 = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 3).getValues(); // DIA, MATRICULA, HCP
+      rows.forEach(function(r) {
+        if (String(r[0]) === '2') hcpDia2[String(r[1])] = r[2];
+      });
+    }
+  }
+
+  const sizes = calcularTamanosGruposFinal_(n); // mejor NETO → peor NETO
+  const blocks = [];
+  let idx = 0;
+  sizes.forEach(function(size) {
+    blocks.push(ordered.slice(idx, idx + size));
+    idx += size;
+  });
+  blocks.reverse(); // Línea 1 = peor NETO (sale primero) ... última línea = líderes
+
+  const lineas = blocks.map(function(grp, i) {
+    return {
+      lineNum: i + 1,
+      players: grp.map(function(row) {
+        return {
+          matricula: row.matricula,
+          apodo: row.apodo,
+          hcp: hcpDia2[row.matricula] !== undefined ? hcpDia2[row.matricula] : '',
+          invitado: row.invitado,
+        };
+      }),
+    };
+  });
+
+  meta.lineasDia2 = lineas;
+  meta.estado = 'dia2_en_curso';
+  saveFinalMeta_(meta);
+
+  audit_('ARMAR_LINEAS_FINAL_DIA2', 'admin', { lineas: lineas.length, jugadores: n });
+
+  return { ok: true, lineas: lineas };
+}
+
+/**
  * Guarda el score de un hoyo del Día 1 o Día 2 de la Final, durante la ronda.
  * Mismo patrón de mutex por jugador que cargarHoyoLive_ (fechas regulares),
  * pero apuntando a TARJETAS FINAL (columnas DIA/MATRICULA/HCP/.../18 hoyos)

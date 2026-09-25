@@ -197,6 +197,7 @@ function doPost(e) {
       case 'crearFechaFinal':       result = crearFechaFinal_(params); break;
       case 'eliminarFechaFinal':    result = eliminarFechaFinal_(params); break;
       case 'armarLineasFinalDia1':  result = armarLineasFinalDia1_(params); break;
+      case 'armarLineasFinalDia2':  result = armarLineasFinalDia2_(params); break;
       case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
