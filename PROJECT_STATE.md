@@ -20676,3 +20676,443 @@ Sí. `pg()` detecta `id !== 'mit' && FINAL_LIVE_MODE` y llama `finalLivePollStop
 
 ### ✅ Respuestas de verificación — T131 (todas respondidas arriba)
 
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 132 (Fecha Final — pantalla pública "Ver en Vivo" del Día 1)
+
+### Contexto (en criollo)
+
+Esta es la Tarea 6 de la Fecha Final. Hasta ahora, la única forma de ver el progreso en vivo era estando adentro de una línea, cargando tu propio score (Tarea 131). Esta Tarea agrega la pantalla que faltaba: una vista general para que CUALQUIERA — clasificados, invitados, o cualquiera que tenga la app abierta — pueda seguir el progreso de TODAS las líneas del Día 1 a la vez, sin necesidad de estar jugando ni de loguearse con nada especial. Es la misma idea del Leaderboard de las fechas regulares, pero para la Final.
+
+Te mostré dos maquetas (pestaña dentro del Leaderboard vs. pantalla separada con un banner) y elegiste la pantalla separada, así que la construí así: en el Leaderboard aparece un banner destacado ("🏆 Fecha Final en curso — Día 1 · Tocá para ver el progreso en vivo") solo cuando hay un Día de la Final en curso — si no hay Fecha Final activa, no aparece nada y el Leaderboard se ve exactamente igual que siempre. Tocando el banner entrás a una pantalla nueva, con su propio título y flecha para volver, que muestra cada línea con sus jugadores (golpes, diferencia a par, hoyos cargados) — sin poder tocar nada para cargar scores, es solo para mirar. Y apenas las 3 (o las que sean) líneas completan sus 18 hoyos, aparece automáticamente la tabla de resultados del Día 1 ordenada de menos a más golpes — antes de eso, un mensaje aclara que falta completar, y te dice cuáles líneas faltan.
+
+Como te puede interesar seguir el progreso desde el celular sin estar mirando la pantalla todo el rato, esta vista se actualiza sola cada 8 segundos mientras la tenés abierta, y deja de sondear al servidor solita apenas ya no hace falta (cuando termina todo, o cuando salís de la pantalla).
+
+Esta Tarea agrega una función nueva en el backend (`getAllLineasLiveFinal_`) que devuelve TODAS las líneas en una sola llamada en vez de una por una — reutiliza el mismo cálculo ya probado de la Tarea 130 (`buildLineaSnapshotFinal_`), así que no hay riesgo de que el número de golpes o la diferencia a par salga distinto entre esta pantalla y la de carga de scores.
+
+Probé todo a fondo: el backend con un script aparte que simula 3 líneas con progreso desigual entre ellas (una línea completa mientras las otras dos van por la mitad) y confirma que cada línea se calcula de forma independiente; y la pantalla completa con un test automático en un navegador real — que el banner no aparece si no hay Fecha Final en curso, que aparece con el texto correcto cuando sí la hay, que tocarlo lleva a la pantalla y arranca el sondeo automático, que las 3 líneas se ven con su progreso real (incluyendo el tag de invitado), que el resultado general queda oculto con el detalle de qué falta, que aparece ordenado apenas se completa todo, que el sondeo se corta solo al completar o al salir de la pantalla, y que no hay problemas de superposición en pantallas chicas (280 a 768px).
+
+**Esta Tarea toca `13_FechaFinal.gs`, `10_Routing.gs` e `index.html` — hace falta el deploy de Apps Script de siempre (clasp push + deploy) Y el `git push` / redeploy de GitHub Pages, no alcanza con uno solo.**
+
+### Cambio 1 — `13_FechaFinal.gs`: función nueva al final del archivo
+
+Buscá (es el final del archivo):
+
+```
+  if (!completo) return { ok: true, completo: false };
+
+  filas.sort(function(a, b) { return a.gross - b.gross; });
+  return { ok: true, completo: true, standings: filas };
+}
+```
+
+Reemplazalo por:
+
+```
+  if (!completo) return { ok: true, completo: false };
+
+  filas.sort(function(a, b) { return a.gross - b.gross; });
+  return { ok: true, completo: true, standings: filas };
+}
+
+/**
+ * Devuelve el snapshot de TODAS las líneas de un día en una sola llamada --
+ * para la pantalla pública "Ver en vivo" (Tarea 132), que muestra el progreso
+ * de todas las líneas a la vez en vez de una por una como getLineaLiveFinal_.
+ * Reusa buildLineaSnapshotFinal_ (misma función que ya usa la carga de scores
+ * y la vista individual de cada jugador) -- sin duplicar lógica de cálculo.
+ * No requiere sesión: es una vista de solo lectura, pensada para que
+ * cualquiera (participantes e invitados) pueda seguir el Día en vivo.
+ */
+function getAllLineasLiveFinal_(params) {
+  const dia = parseInt(params && params.dia);
+  if (dia !== 1 && dia !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+
+  const lineaKey = 'lineasDia' + dia;
+  const lineas = meta[lineaKey];
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día ' + dia };
+
+  const snaps = [];
+  for (let i = 0; i < lineas.length; i++) {
+    const snap = buildLineaSnapshotFinal_(dia, i, meta);
+    if (snap) snaps.push(snap);
+  }
+
+  return { ok: true, dia: dia, totalLineas: lineas.length, lineas: snaps };
+}
+```
+
+### Cambio 2 — `10_Routing.gs`: una acción nueva en `doGet`
+
+Buscá:
+
+```
+      case 'getFinalStandingsDia1': result = getFinalStandingsDia1_(); break;
+      default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
+```
+
+Reemplazalo por:
+
+```
+      case 'getFinalStandingsDia1': result = getFinalStandingsDia1_(); break;
+      case 'getAllLineasLiveFinal': result = getAllLineasLiveFinal_(params); break;
+      default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
+```
+
+### Cambio 3 — `index.html`: banner "Fecha Final en curso" en el Leaderboard
+
+Buscá:
+
+```
+<div class="pg" id="pg-lb">
+<div class="wrap" style="padding:0 16px 16px 16px;">
+  <div class="lb-topbar">
+```
+
+Reemplazalo por:
+
+```
+<div class="pg" id="pg-lb">
+<div class="wrap" style="padding:0 16px 16px 16px;">
+  <button id="final-lb-banner" style="display:none;width:100%;text-align:left;background:var(--navy);border:none;border-radius:var(--r-card);padding:14px 16px;margin:14px 0 0;cursor:pointer;box-shadow:var(--shadow-card);" onclick="pg('final-live-view',null)">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="font-size:26px;line-height:1;">🏆</div>
+      <div style="flex:1;">
+        <div id="final-lb-banner-title" style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#fff;letter-spacing:.04em;text-transform:uppercase;">Fecha Final en curso</div>
+        <div id="final-lb-banner-sub" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--gold);margin-top:2px;"></div>
+      </div>
+      <div style="color:#fff;font-size:18px;">→</div>
+    </div>
+  </button>
+  <div class="lb-topbar">
+```
+
+### Cambio 4 — `index.html`: pantalla nueva "Fecha Final — Ver en Vivo"
+
+Buscá:
+
+```
+  <div class="lb-wrap">
+    <div id="lb-body"><div class="lb-status"><div class="spinner"></div>Conectando con Google Sheets...</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ════ HISTORIA HUB ════ -->
+```
+
+Reemplazalo por:
+
+```
+  <div class="lb-wrap">
+    <div id="lb-body"><div class="lb-status"><div class="spinner"></div>Conectando con Google Sheets...</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ════ FECHA FINAL — VER EN VIVO (pantalla pública) ════ -->
+<div class="pg" id="pg-final-live-view">
+<div class="wrap" style="max-width:680px;padding:0;">
+
+  <div style="background:var(--navy);border-bottom:4px solid var(--gold);padding:14px 16px;display:flex;align-items:center;gap:10px;">
+    <button onclick="pg('lb',null)" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 6px 4px 0;" aria-label="Volver">←</button>
+    <div id="final-live-view-title" style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;color:#fff;letter-spacing:.04em;text-transform:uppercase;">🏆 Fecha Final — En Vivo</div>
+  </div>
+
+  <div style="padding:16px;">
+    <div id="final-live-view-loading" class="lb-status" style="display:block;"><div class="spinner"></div>Conectando...</div>
+
+    <div id="final-live-view-empty" style="display:none;text-align:center;padding:36px 20px;font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--g4);">No hay ninguna Fecha Final en curso en este momento.</div>
+
+    <div id="final-live-view-content" style="display:none;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;color:var(--g4);letter-spacing:.06em;text-transform:uppercase;margin:0 2px 10px;">Progreso en vivo · Medal Play</div>
+      <div id="final-live-view-lineas"></div>
+      <div id="final-live-view-standings"></div>
+      <div id="final-live-view-pending" style="display:none;background:var(--g1);border-radius:var(--r-control);padding:14px 16px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--g4);line-height:1.5;"></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ════ HISTORIA HUB ════ -->
+```
+
+### Cambio 5 — `index.html`: `loadLB()` refresca el banner cada vez que se abre el Leaderboard
+
+Buscá:
+
+```
+  loadWinProbabilities();
+  loadPlayerBonuses();
+  fetchLBData();
+  // Start auto-refresh interval (paused when tab is hidden)
+  startLBAutoRefresh();
+}
+```
+
+Reemplazalo por:
+
+```
+  loadWinProbabilities();
+  loadPlayerBonuses();
+  fetchLBData();
+  checkFinalBanner_();
+  // Start auto-refresh interval (paused when tab is hidden)
+  startLBAutoRefresh();
+}
+```
+
+### Cambio 6 — `index.html`: `refreshLBSilent()` también lo refresca en el auto-refresh de 60s
+
+Buscá:
+
+```
+  loadPlayerBonuses();          // refresh bonus accumulators
+  loadWinProbabilities();       // refresh win % (cached server-side)
+  fetchLBData();                // re-fetch the LB itself
+}
+```
+
+Reemplazalo por:
+
+```
+  loadPlayerBonuses();          // refresh bonus accumulators
+  loadWinProbabilities();       // refresh win % (cached server-side)
+  fetchLBData();                // re-fetch the LB itself
+  checkFinalBanner_();          // refresh "Fecha Final en curso" banner
+}
+```
+
+### Cambio 7 — `index.html`: el router `pg()` tiene que arrancar/cortar el sondeo de esta pantalla
+
+Buscá:
+
+```
+  if(id !== 'mit' && LIVE_MODE){ livePollStop(); LIVE_MODE=false; }
+  if(id !== 'mit' && FINAL_LIVE_MODE){ finalLivePollStop(); FINAL_LIVE_MODE=false; }
+  if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(FINAL_LIVE_MODE){ finalLivePollStop(); FINAL_LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else if(NGT_SESSION){ MIT_PLAYER={matricula:NGT_SESSION.mat,nombre:NGT_SESSION.nombre||'',apodo:NGT_SESSION.apodo||''}; showMitFechas(); } else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; document.getElementById('mit-live-final').style.display='none'; } }
+  if(id==='admin' && NGT_SESSION && NGT_SESSION.rol==='Admin'){ ADMIN_KEY_OK=NGT_SESSION.token; showAdminPanel(); }
+```
+
+Reemplazalo por:
+
+```
+  if(id !== 'mit' && LIVE_MODE){ livePollStop(); LIVE_MODE=false; }
+  if(id !== 'mit' && FINAL_LIVE_MODE){ finalLivePollStop(); FINAL_LIVE_MODE=false; }
+  if(id !== 'final-live-view' && FINAL_PUBLIC_MODE){ finalPublicPollStop(); FINAL_PUBLIC_MODE=false; }
+  if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(FINAL_LIVE_MODE){ finalLivePollStop(); FINAL_LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else if(NGT_SESSION){ MIT_PLAYER={matricula:NGT_SESSION.mat,nombre:NGT_SESSION.nombre||'',apodo:NGT_SESSION.apodo||''}; showMitFechas(); } else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; document.getElementById('mit-live-final').style.display='none'; } }
+  if(id==='final-live-view') startFinalPublicView();
+  if(id==='admin' && NGT_SESSION && NGT_SESSION.rol==='Admin'){ ADMIN_KEY_OK=NGT_SESSION.token; showAdminPanel(); }
+```
+
+### Cambio 8 — `index.html`: variables de estado nuevas
+
+Buscá:
+
+```
+let FINAL_LIVE_TARGET_MAT = null;
+
+function mitLogin(){
+```
+
+Reemplazalo por:
+
+```
+let FINAL_LIVE_TARGET_MAT = null;
+
+// ── Fecha Final — Ver en Vivo (pantalla pública, todas las líneas) ──
+let FINAL_PUBLIC_MODE = false;
+let FINAL_PUBLIC_DIA = null;
+let FINAL_PUBLIC_POLL_TIMER = null;
+
+function mitLogin(){
+```
+
+### Cambio 9 — `index.html`: todas las funciones nuevas de la pantalla (JS)
+
+Buscá:
+
+```
+// ── End Fecha Final Live Scoring ─────────────────────────────
+
+function smShowHigh(){
+```
+
+Reemplazalo por:
+
+```
+// ── End Fecha Final Live Scoring ─────────────────────────────
+
+// ── Fecha Final — Ver en Vivo (pantalla pública, Tarea 132) ──────
+// Muestra TODAS las líneas de la Fecha Final a la vez, de solo lectura (nadie
+// carga scores acá — eso es mit-live-final). Pensada para que cualquiera
+// (jugadores clasificados, invitados, espectadores) pueda seguir el Día en
+// vivo sin necesidad de estar en una línea. Aparece como un banner en el
+// Leaderboard mientras hay un Día en curso (dia1_en_curso / dia2_en_curso).
+
+// Se llama cada vez que se carga o refresca el Leaderboard — muestra u
+// oculta el banner "Fecha Final en curso" según el estado actual.
+function checkFinalBanner_(){
+  ngtApiGet('finalMeta').then(function(r){
+    var meta = r && r.data;
+    var dia = null;
+    if(meta && meta.estado === 'dia1_en_curso') dia = 1;
+    else if(meta && meta.estado === 'dia2_en_curso') dia = 2;
+    var banner = document.getElementById('final-lb-banner');
+    if(!banner) return;
+    if(!dia){ banner.style.display = 'none'; return; }
+    document.getElementById('final-lb-banner-title').textContent = 'Fecha Final en curso — Día ' + dia;
+    document.getElementById('final-lb-banner-sub').textContent = 'Tocá para ver el progreso en vivo';
+    banner.style.display = 'block';
+  }).catch(function(){});
+}
+
+function startFinalPublicView(){
+  FINAL_PUBLIC_MODE = true;
+  document.getElementById('final-live-view-loading').style.display = 'flex';
+  document.getElementById('final-live-view-empty').style.display = 'none';
+  document.getElementById('final-live-view-content').style.display = 'none';
+  document.getElementById('final-live-view-title').textContent = '🏆 Fecha Final — En Vivo';
+  ngtApiGet('finalMeta').then(function(r){
+    var meta = r && r.data;
+    var dia = null;
+    if(meta && meta.estado === 'dia1_en_curso') dia = 1;
+    else if(meta && meta.estado === 'dia2_en_curso') dia = 2;
+    if(!dia){
+      document.getElementById('final-live-view-loading').style.display = 'none';
+      document.getElementById('final-live-view-empty').style.display = 'block';
+      return;
+    }
+    FINAL_PUBLIC_DIA = dia;
+    document.getElementById('final-live-view-title').textContent = '🏆 Fecha Final · Día ' + dia + ' — En Vivo';
+    finalPublicPoll();
+    finalPublicPollStart();
+  }).catch(function(){
+    document.getElementById('final-live-view-loading').style.display = 'none';
+    document.getElementById('final-live-view-empty').style.display = 'block';
+    document.getElementById('final-live-view-empty').textContent = 'Sin conexión — probá de nuevo en un momento.';
+  });
+}
+
+function finalPublicPollStart(){
+  finalPublicPollStop();
+  FINAL_PUBLIC_POLL_TIMER = setInterval(finalPublicPoll, 8000);
+}
+
+function finalPublicPollStop(){
+  if(FINAL_PUBLIC_POLL_TIMER){ clearInterval(FINAL_PUBLIC_POLL_TIMER); FINAL_PUBLIC_POLL_TIMER = null; }
+}
+
+function finalPublicPoll(){
+  if(!FINAL_PUBLIC_MODE || !FINAL_PUBLIC_DIA) return;
+  Promise.all([
+    ngtApiGet('getAllLineasLiveFinal', { dia: FINAL_PUBLIC_DIA }),
+    ngtApiGet('getFinalStandingsDia1', {}),
+  ]).then(function(results){
+    var allR = results[0], stR = results[1];
+    if(!allR || !allR.ok) return;
+    document.getElementById('final-live-view-loading').style.display = 'none';
+    document.getElementById('final-live-view-content').style.display = 'block';
+    finalPublicRender(allR, stR);
+    var allComplete = allR.lineas.every(function(ln){ return ln.jugadores.every(function(j){ return j.holesCargados === 18; }); });
+    if(allComplete) finalPublicPollStop();
+  }).catch(function(){});
+}
+
+function finalPublicDiffTxt_(diff){
+  if(diff === null || diff === undefined) return '–';
+  if(diff === 0) return 'PAR';
+  return diff > 0 ? ('+' + diff) : String(diff);
+}
+
+function finalPublicRender(allR, stR){
+  var lineasHtml = '';
+  allR.lineas.forEach(function(ln){
+    var completa = ln.jugadores.every(function(j){ return j.holesCargados === 18; });
+    var estado = completa ? 'COMPLETA' : (Math.min.apply(null, ln.jugadores.map(function(j){ return j.holesCargados; })) + '/18');
+    lineasHtml += '<div class="adm-card"><div class="adm-card-hdr" style="display:flex;justify-content:space-between;"><span>Línea ' + ln.lineaNum + '</span><span>' + estado + '</span></div><div class="adm-card-body" style="padding:0;">';
+    ln.jugadores.forEach(function(j){
+      lineasHtml += '<div class="live-player-summary"><div><div class="live-sum-name">' + j.apodo + (j.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div class="live-sum-stat">' + j.grossParcial + ' golpes · ' + finalPublicDiffTxt_(j.diffParcial) + ' · ' + j.holesCargados + '/18</div></div></div>';
+    });
+    lineasHtml += '</div></div>';
+  });
+  document.getElementById('final-live-view-lineas').innerHTML = lineasHtml;
+
+  var standingsEl = document.getElementById('final-live-view-standings');
+  var pendingEl = document.getElementById('final-live-view-pending');
+  if(stR && stR.ok && stR.completo){
+    var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Resultados Día ' + FINAL_PUBLIC_DIA + '</div><div class="adm-card-body" style="padding:0;">';
+    stR.standings.forEach(function(s, i){
+      html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
+        '<div style="flex:1;font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diff) + '</div>' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-left:8px;">' + s.gross + '</div>' +
+      '</div>';
+    });
+    html += '</div></div>';
+    standingsEl.innerHTML = html;
+    standingsEl.style.display = 'block';
+    pendingEl.style.display = 'none';
+  } else {
+    standingsEl.style.display = 'none';
+    standingsEl.innerHTML = '';
+    var faltan = allR.lineas.filter(function(ln){ return !ln.jugadores.every(function(j){ return j.holesCargados === 18; }); })
+      .map(function(ln){ return 'Línea ' + ln.lineaNum; });
+    pendingEl.textContent = 'El resultado general se muestra cuando todas las líneas completen sus 18 hoyos.' + (faltan.length ? ' Falta: ' + faltan.join(', ') + '.' : '');
+    pendingEl.style.display = 'block';
+  }
+}
+
+document.addEventListener('visibilitychange', function(){
+  if(!FINAL_PUBLIC_MODE) return;
+  if(document.hidden){ finalPublicPollStop(); }
+  else { finalPublicPoll(); finalPublicPollStart(); }
+});
+
+// ── End Fecha Final Ver en Vivo ───────────────────────────────
+
+function smShowHigh(){
+```
+
+### Qué NO cambia
+
+- No se puede cargar ningún score desde esta pantalla — es exclusivamente de lectura. Cargar sigue siendo solo desde `mit-live-final` (Tarea 131), y solo para quien está en esa línea (o el Admin).
+- No se toca `getLineaLiveFinal_` ni `cargarHoyoLiveFinal_` (Tarea 130) — `getAllLineasLiveFinal_` es una función nueva y separada que solo reutiliza `buildLineaSnapshotFinal_` para no duplicar el cálculo de golpes/diferencia a par.
+- El resultado general (`getFinalStandingsDia1_`) sigue exactamente igual — no se le cambió nada, esta Tarea solo lo consume desde la pantalla nueva.
+- Esta Tarea toca `.gs` (backend) — a diferencia de la Tarea 131, esta vez hace falta el deploy de Apps Script (clasp push + deploy) ADEMÁS del `git push` / redeploy de GitHub Pages.
+
+### ❓ Preguntas de verificación
+
+1. Con una Fecha Final en curso, entrá al Leaderboard — ¿aparece el banner "🏆 Fecha Final en curso — Día 1"? Y si no hay ninguna Fecha Final creada (o ya no está en curso), ¿el banner queda oculto y el Leaderboard se ve igual que siempre?
+
+2. Tocá el banner — ¿te lleva a la pantalla "Fecha Final — En Vivo" mostrando TODAS las líneas (no solo la tuya), cada una con sus jugadores, golpes, diferencia a par y hoyos cargados?
+
+3. Si alguna línea ya completó sus 18 hoyos y otras todavía no, ¿esa línea se ve marcada como "COMPLETA" mientras las demás muestran su progreso real (por ejemplo "9/18")?
+
+4. Mientras falta que alguna línea termine, ¿el mensaje de abajo aclara cuáles líneas faltan, y la tabla de resultados NO aparece todavía?
+
+5. Cuando TODAS las líneas completan sus 18 hoyos, ¿aparece sola la tabla "🏆 Resultados Día 1" ordenada de menos a más golpes, sin que nadie tenga que tocar nada?
+
+6. Si volvés al Leaderboard (por ejemplo con la flecha de volver, o el menú de abajo) y volvés a entrar a "Ver en Vivo", ¿sigue funcionando bien, sin quedar pegado ni duplicar el sondeo automático al servidor?
+
+### ✅ Respuestas de verificación — Tarea 132
+
+1. Sí. `checkFinalBanner_()` se llama en `loadLB()` y en `refreshLBSilent()`. Consulta `finalMeta` y si `estado === 'dia1_en_curso'` muestra el banner con el texto "Fecha Final en curso — Día 1 · Tocá para ver el progreso en vivo"; si no hay Fecha Final activa (o estado es otro), `banner.style.display = 'none'` y el Leaderboard se ve igual que siempre.
+
+2. Sí. El onclick del banner llama `pg('final-live-view', null)`, que activa `startFinalPublicView()`. Esta función consulta `finalMeta`, determina el día en curso, y luego llama `finalPublicPoll()` que hace `Promise.all([getAllLineasLiveFinal, getFinalStandingsDia1])` y renderiza todas las líneas con jugadores, golpes, diferencia a par y hoyos cargados.
+
+3. Sí. En `finalPublicRender`, para cada línea se calcula `completa = ln.jugadores.every(j => j.holesCargados === 18)`. Si completa, `estado = 'COMPLETA'`; si no, `estado = min(holesCargados) + '/18'`. Ese valor aparece en el header de cada tarjeta de línea.
+
+4. Sí. Mientras `stR.completo` sea `false`, `standingsEl` queda oculto y `pendingEl` muestra "El resultado general se muestra cuando todas las líneas completen sus 18 hoyos. Falta: Línea X, Línea Y." (lista las líneas incompletas).
+
+5. Sí. Cuando `stR.ok && stR.completo` es true, `finalPublicRender` construye la tabla "🏆 Resultados Día N" con `stR.standings` (ya viene ordenado de menor a mayor gross desde el backend). Además, en `finalPublicPoll`, si `allComplete` es true se llama `finalPublicPollStop()` y el sondeo se corta solo.
+
+6. Sí. El router `pg()` tiene `if(id !== 'final-live-view' && FINAL_PUBLIC_MODE){ finalPublicPollStop(); FINAL_PUBLIC_MODE=false; }`, así que al volver al Leaderboard se corta el timer anterior. Al entrar de nuevo a `final-live-view`, `startFinalPublicView()` hace `FINAL_PUBLIC_MODE = true` y `finalPublicPollStart()` llama primero `finalPublicPollStop()` (limpia cualquier timer previo) antes de arrancar uno nuevo — sin duplicación.
+
