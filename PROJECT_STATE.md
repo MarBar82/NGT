@@ -19661,3 +19661,402 @@ Sí, reutiliza el mismo estilo de tarjetas que ya usás para ver las líneas de 
 4. **Sí.** Los invitados se concatenan al final de `ordered` (después de `clasificados`), así que siempre quedan en los últimos bloques antes del reverse — es decir, en las primeras líneas de salida (junto con los peores puestos o en su propio bloque si hay suficientes).
 
 5. **Sí.** El render usa las mismas clases `gf-lin-linea`, `gf-lin-hdr`, `gf-lin-players`, `gf-lin-pill` que ya usa el armado de líneas de las fechas regulares (ya probadas en móvil). Los invitados quedan con clase extra `gf-lin-pill-inv`. El HCP viene resuelto desde el backend (ya calculado al crear la Fecha Final) — no hay llamada adicional al servidor.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 130 (Fecha Final — base de carga de scores en vivo del Día 1)
+
+### Contexto (en criollo)
+
+Esta es la Tarea 4 de la Fecha Final. Ya se pueden armar las líneas del Día 1 (Tarea 129); ahora construimos la base para que los jugadores puedan ir cargando sus golpes hoyo por hoyo durante la ronda — el "motor" de atrás, sin pantalla todavía (la pantalla para cargar y la pantalla para ver el resultado en vivo son las próximas 2 Tareas, para no mezclar demasiadas cosas en una sola).
+
+La Final es Medal Play (golpes, no Stableford ni Match), así que esta base es más simple que el Live Scoring de las fechas regulares: no hay partidos entre parejas, no hay hoyos de bonus (Longest Drive / Best Approach). Solo golpes por hoyo, y la diferencia a par calculada sobre los hoyos ya jugados (por ejemplo "+2 en 9 hoyos"), tal cual me confirmaste ("mostrar ambas cosas": los golpes Y la diferencia a par).
+
+Importante — la tabla general del Día 1 queda OCULTA hasta que los 9 (o los que sean) jugadores tengan cargados sus 18 hoyos completos. Mientras tanto, solo se puede ver el progreso hoyo por hoyo de cada línea (quién va en qué hoyo), no un ranking. Esto es exactamente lo que me confirmaste: "el resultado general permanece oculto hasta que se completen todas las líneas".
+
+Esta base sirve para el Día 1 y para el Día 2 por igual (recibe el día como parámetro) — así cuando armemos las líneas del Día 2 más adelante, no va a hacer falta tocar este código de nuevo.
+
+Probé todo a fondo con un script aparte (no se puede correr Apps Script fuera de Google), simulando la Fecha Final real (9 jugadores, 3 líneas de 3): cargar un hoyo de a uno y ver cómo se actualiza el progreso, que un jugador no pueda cargarle un score a otro que no es de su línea (salvo el Admin, que sí puede), que la tabla general esté oculta mientras falta algún hoyo de cualquier jugador, que aparezca ordenada de menor a mayor apenas se completan los 9, y que si se borra un score ya cargado la tabla general vuelve a ocultarse sola.
+
+### Cambio 1 — `13_FechaFinal.gs`: 4 funciones nuevas al final del archivo
+
+Buscá (es el final del archivo):
+
+```
+  meta.lineasDia1 = lineas;
+  meta.estado = 'dia1_en_curso';
+  saveFinalMeta_(meta);
+
+  audit_('ARMAR_LINEAS_FINAL_DIA1', 'admin', { lineas: lineas.length, jugadores: n });
+
+  return { ok: true, lineas: lineas };
+}
+```
+
+Reemplazalo por:
+
+```
+  meta.lineasDia1 = lineas;
+  meta.estado = 'dia1_en_curso';
+  saveFinalMeta_(meta);
+
+  audit_('ARMAR_LINEAS_FINAL_DIA1', 'admin', { lineas: lineas.length, jugadores: n });
+
+  return { ok: true, lineas: lineas };
+}
+
+/**
+ * Guarda el score de un hoyo del Día 1 o Día 2 de la Final, durante la ronda.
+ * Mismo patrón de mutex por jugador que cargarHoyoLive_ (fechas regulares),
+ * pero apuntando a TARJETAS FINAL (columnas DIA/MATRICULA/HCP/.../18 hoyos)
+ * en vez de TARJETAS. No hay matches ni hoyos de bonus en la Final -- el
+ * snapshot devuelto es más simple (solo golpes + diferencia a par).
+ */
+function cargarHoyoLiveFinal_(params) {
+  const { dia, matriculaJugador, matriculaCargador, token, adminKey, hoyo, score } = params || {};
+  const diaNum = parseInt(dia);
+  if (diaNum !== 1 && diaNum !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+  if (!matriculaJugador || !hoyo) return { ok: false, error: 'Faltan parámetros' };
+
+  const hoyoNum = parseInt(hoyo);
+  if (isNaN(hoyoNum) || hoyoNum < 1 || hoyoNum > 18) return { ok: false, error: 'Hoyo inválido (1-18)' };
+
+  const jugStr  = String(matriculaJugador).trim();
+  const cargStr = String(matriculaCargador || '').trim();
+  if (!cargStr) return { ok: false, error: 'Falta matriculaCargador' };
+
+  // Auth: matriculaCargador tiene que estar realmente logueado como esa matrícula
+  // (o ser Admin) antes de dejarlo cargar en la línea — mismo criterio que
+  // cargarHoyoLive_ para las fechas regulares.
+  const isAdmin = adminKey && checkAdmin_(adminKey);
+  if (!isAdmin) {
+    const sess = validarSesion_(String(token || '').trim());
+    if (!sess || String(sess.mat) !== cargStr) return { ok: false, error: 'Sesión inválida — volvé a iniciar sesión' };
+  }
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineaKey = 'lineasDia' + diaNum;
+  const lineas = meta[lineaKey];
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día ' + diaNum };
+
+  let lineaIdx = -1;
+  for (let i = 0; i < lineas.length; i++) {
+    const mats = lineas[i].players.map(function(p) { return p.matricula; });
+    if (mats.indexOf(jugStr) >= 0 && (isAdmin || mats.indexOf(cargStr) >= 0)) { lineaIdx = i; break; }
+  }
+  if (lineaIdx < 0) return { ok: false, error: 'No autorizado para cargar en esta línea' };
+
+  // score: null/'' borra; entero 1-15 guarda
+  let scoreVal;
+  if (score === null || score === '' || score === undefined) {
+    scoreVal = '';
+  } else {
+    scoreVal = parseInt(score);
+    if (isNaN(scoreVal) || scoreVal < 1 || scoreVal > 15) return { ok: false, error: 'Score inválido' };
+  }
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  if (!sh) return { ok: false, error: 'Hoja ' + FINAL_SHEET_NAME + ' no encontrada' };
+
+  // Índice de fila en cache (evita re-escanear TARJETAS FINAL en cada tap)
+  const cache = CacheService.getScriptCache();
+  const rowCacheKey = 'tfRow_' + diaNum + '_' + jugStr;
+  let rowIdx = parseInt(cache.get(rowCacheKey) || '0');
+
+  if (rowIdx < 2) {
+    const lastRow = sh.getLastRow();
+    if (lastRow <= 1) return { ok: false, error: 'Sin tarjetas' };
+    const ab = sh.getRange(2, 1, lastRow - 1, 2).getValues(); // DIA, MATRICULA
+    for (let i = 0; i < ab.length; i++) {
+      if (String(ab[i][0]) === String(diaNum) && String(ab[i][1]).trim() === jugStr) {
+        rowIdx = i + 2;
+        try { cache.put(rowCacheKey, String(rowIdx), 21600); } catch(e) {}
+        break;
+      }
+    }
+  }
+  if (rowIdx < 2) return { ok: false, error: 'Tarjeta no encontrada para ' + jugStr + ' (Día ' + diaNum + ')' };
+
+  // Mutex por jugador vía CacheService — mismo criterio que cargarHoyoLive_.
+  const lockKey = 'pflk_' + diaNum + '_' + jugStr;
+  const lockId  = String(Date.now()) + '_' + Math.floor(Math.random() * 1e9);
+  let lockAcquired = false;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (!cache.get(lockKey)) {
+      cache.put(lockKey, lockId, 8);
+      Utilities.sleep(30);
+      if (cache.get(lockKey) === lockId) { lockAcquired = true; break; }
+    }
+    Utilities.sleep(300);
+  }
+  if (!lockAcquired) return { ok: false, error: 'Servidor ocupado, reintentá' };
+
+  try {
+    sh.getRange(rowIdx, 5 + hoyoNum).setValue(scoreVal); // col 6=HOYO1 ... col 23=HOYO18
+    SpreadsheetApp.flush();
+  } finally {
+    try { cache.remove(lockKey); } catch(e) {}
+  }
+
+  if (scoreVal !== '') {
+    const jugMap = {};
+    cachedRead_('jugadores', 300, getJugadores_).forEach(function(j){ jugMap[String(j.matricula)] = j; });
+    const cargJug = jugMap[cargStr] || {};
+    const apodoCarg = (cargJug.apodo || (cargJug.nombre ? cargJug.nombre.split(' ')[0] : cargStr) || cargStr).toUpperCase();
+    try {
+      cache.put('lastCargFinal_' + diaNum + '_' + jugStr,
+        JSON.stringify({ hoyo: hoyoNum, matricula: cargStr, apodo: apodoCarg }), 21600);
+    } catch(e) {}
+  }
+
+  // Devolver snapshot fresco de la línea (mismo shape que getLineaLiveFinal_)
+  const snap = buildLineaSnapshotFinal_(diaNum, lineaIdx, meta);
+  return Object.assign({ ok: true }, snap || {});
+}
+
+/**
+ * Snapshot en vivo de una línea del Día 1 o Día 2 de la Final: golpes
+ * cargados por hoyo + diferencia a par acumulada (solo sobre los hoyos ya
+ * jugados, no contra el par de los 18). Sin matches ni hoyos de bonus — no
+ * aplican en la Final.
+ */
+function buildLineaSnapshotFinal_(dia, lineaIdx, meta) {
+  const lineaKey = 'lineasDia' + dia;
+  const linea = (meta[lineaKey] || [])[lineaIdx];
+  if (!linea) return null;
+  const lineaPlayers = linea.players || [];
+  const lineaMats = lineaPlayers.map(function(p) { return p.matricula; });
+
+  const canchaId   = dia === 1 ? meta.canchaId1   : meta.canchaId2;
+  const canchaName = dia === 1 ? meta.canchaName1 : meta.canchaName2;
+  const colorTee   = dia === 1 ? meta.colorTee1   : meta.colorTee2;
+  const par        = dia === 1 ? meta.par1        : meta.par2;
+
+  const cd = canchaId
+    ? cachedRead_('cp2_' + canchaId, 600, function(){ return getCanchaPares_(canchaId); })
+    : null;
+  const cpPares = (cd && cd.pares) || [];
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const scoresByMat = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues(); // DIA..HOYO18
+      rows.forEach(function(r) {
+        if (String(r[0]) !== String(dia)) return;
+        const mat = String(r[1]).trim();
+        if (lineaMats.indexOf(mat) < 0) return;
+        scoresByMat[mat] = r.slice(5, 23).map(function(v) {
+          return (v === '' || v === null || v === undefined) ? null : Number(v);
+        });
+      });
+    }
+  }
+
+  const cache = CacheService.getScriptCache();
+  const jugadores = lineaPlayers.map(function(p) {
+    const scores = scoresByMat[p.matricula] || new Array(18).fill(null);
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    const grossParcial  = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    let parParcial = 0;
+    scores.forEach(function(s, h) { if (s !== null) parParcial += (cpPares[h] || 0); });
+    const diffParcial = holesCargados > 0 ? (grossParcial - parParcial) : null;
+    const firstNull = scores.indexOf(null);
+
+    let ultimoCargadoPor = null;
+    try {
+      const raw = cache.get('lastCargFinal_' + dia + '_' + p.matricula);
+      if (raw) ultimoCargadoPor = JSON.parse(raw);
+    } catch(e) {}
+
+    return {
+      matricula:        p.matricula,
+      apodo:             p.apodo,
+      hcp:               p.hcp,
+      invitado:          !!p.invitado,
+      scores:            scores,
+      holesCargados:     holesCargados,
+      grossParcial:      grossParcial,
+      diffParcial:       diffParcial, // null hasta el primer hoyo cargado
+      ultimoCargadoPor:  ultimoCargadoPor,
+      nextHoyo:          firstNull >= 0 ? firstNull + 1 : 19,
+    };
+  });
+
+  return {
+    dia:          dia,
+    lineaNum:     lineaIdx + 1,
+    totalLineas:  (meta[lineaKey] || []).length,
+    cancha:       { id: canchaId, nombre: canchaName, colorTee: colorTee || 'BLANCAS' },
+    par:          par,
+    pares:        cpPares,
+    updatedAt:    Date.now(),
+    jugadores:    jugadores,
+  };
+}
+
+/**
+ * Devuelve el snapshot en vivo de la línea del Día 1/2 de la Final a la que
+ * pertenece `matricula`, o (con lineaNum explícito) esa línea puntual en
+ * modo solo lectura. Pensado para sondear cada 5-8s, igual que getLineaLive_.
+ */
+function getLineaLiveFinal_(params) {
+  const dia = parseInt(params && params.dia);
+  if (dia !== 1 && dia !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineaKey = 'lineasDia' + dia;
+  const lineas = meta[lineaKey];
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día ' + dia };
+
+  if (params.lineaNum) {
+    const idx = parseInt(params.lineaNum) - 1;
+    if (idx < 0 || idx >= lineas.length) return { ok: false, error: 'Línea ' + params.lineaNum + ' no existe' };
+    const snap = buildLineaSnapshotFinal_(dia, idx, meta);
+    return Object.assign({ ok: true, soloLectura: true }, snap || {});
+  }
+
+  const matStr = String(params.matricula || '').trim();
+  if (!matStr) return { ok: false, error: 'Faltan parámetros' };
+  let lineaIdx = -1;
+  for (let i = 0; i < lineas.length; i++) {
+    if (lineas[i].players.some(function(p) { return p.matricula === matStr; })) { lineaIdx = i; break; }
+  }
+  if (lineaIdx < 0) return { ok: false, error: 'No pertenecés a ninguna línea del Día ' + dia };
+
+  const snap = buildLineaSnapshotFinal_(dia, lineaIdx, meta);
+  return Object.assign({ ok: true, soloLectura: false }, snap || {});
+}
+
+/**
+ * Tabla general del Día 1 de la Final (golpes brutos + diferencia a par).
+ * Se mantiene OCULTA (completo:false, sin datos) hasta que las tarjetas de
+ * TODOS los jugadores del Día 1 tengan los 18 hoyos cargados -- así nadie ve
+ * quién va ganando a mitad de ronda.
+ */
+function getFinalStandingsDia1_() {
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineas = meta.lineasDia1;
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día 1' };
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const scoresByMat = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues();
+      rows.forEach(function(r) {
+        if (String(r[0]) !== '1') return;
+        scoresByMat[String(r[1]).trim()] = r.slice(5, 23).map(function(v) {
+          return (v === '' || v === null || v === undefined) ? null : Number(v);
+        });
+      });
+    }
+  }
+
+  const cd = meta.canchaId1
+    ? cachedRead_('cp2_' + meta.canchaId1, 600, function(){ return getCanchaPares_(meta.canchaId1); })
+    : null;
+  const cpPares = (cd && cd.pares) || [];
+  const parTotal = cpPares.reduce(function(t, pr){ return t + (pr || 0); }, 0);
+
+  const allPlayers = [];
+  lineas.forEach(function(l) { (l.players || []).forEach(function(p) { allPlayers.push(p); }); });
+
+  let completo = true;
+  const filas = allPlayers.map(function(p) {
+    const scores = scoresByMat[p.matricula] || new Array(18).fill(null);
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    if (holesCargados < 18) completo = false;
+    const gross = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    return {
+      matricula: p.matricula,
+      apodo:     p.apodo,
+      invitado:  !!p.invitado,
+      gross:     gross,
+      diff:      gross - parTotal,
+    };
+  });
+
+  if (!completo) return { ok: true, completo: false };
+
+  filas.sort(function(a, b) { return a.gross - b.gross; });
+  return { ok: true, completo: true, standings: filas };
+}
+```
+
+### Cambio 2 — `10_Routing.gs`: dos acciones nuevas en `doGet`
+
+Buscá:
+
+```
+      case 'finalMeta':        result = { ok: true, data: getFinalMeta_() }; break;
+      default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
+```
+
+Reemplazalo por:
+
+```
+      case 'finalMeta':        result = { ok: true, data: getFinalMeta_() }; break;
+      case 'getLineaLiveFinal':     result = getLineaLiveFinal_(params); break;
+      case 'getFinalStandingsDia1': result = getFinalStandingsDia1_(); break;
+      default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
+```
+
+### Cambio 3 — `10_Routing.gs`: una acción nueva en `doPost`
+
+Buscá:
+
+```
+      case 'armarLineasFinalDia1':  result = armarLineasFinalDia1_(params); break;
+      default:               result = { ok: false, error: 'Acción desconocida: ' + action };
+```
+
+Reemplazalo por:
+
+```
+      case 'armarLineasFinalDia1':  result = armarLineasFinalDia1_(params); break;
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+      default:               result = { ok: false, error: 'Acción desconocida: ' + action };
+```
+
+**Esta Tarea toca archivos `.gs` — hace falta el deploy de Apps Script de siempre (clasp push + deploy), no alcanza con el `git push`.**
+
+### Qué NO cambia
+
+- No hay pantalla todavía — ni para que los jugadores carguen sus scores, ni para ver el progreso en vivo. Eso son las próximas 2 Tareas. Por ahora es solo el motor de atrás.
+- El Live Scoring de las fechas regulares (`cargarHoyoLive_`, `getLineaLive_`, `buildLineaSnapshot_`) no se toca para nada — la Final tiene sus propias funciones separadas, pensadas para Medal (sin partidos ni bonus).
+- No calcula todavía el resultado "neto" (con hándicap y golpes a favor aplicados) — eso es parte del cierre del Día 1, una Tarea más adelante. Por ahora la tabla general que queda oculta hasta completar es solo de golpes brutos + diferencia a par, para dar una primera idea de cómo van sin filtrar por handicap.
+
+### ❓ Preguntas de verificación
+
+1. Después del deploy, entrá a `?action=getLineaLiveFinal&dia=1&lineaNum=1` en el navegador. Como todavía nadie cargó nada, ¿devuelve la Línea 1 con los 3 jugadores y todos los scores en `null`?
+Sí — debería devolver `{"ok":true,"soloLectura":true,"dia":1,"lineaNum":1,...}` con los 3 jugadores de tu Línea 1 real, cada uno con `scores` de 18 posiciones todas `null` y `nextHoyo: 1`.
+
+2. Entrá a `?action=getFinalStandingsDia1`. ¿Devuelve `{"ok":true,"completo":false}`?
+Sí, porque ningún jugador tiene los 18 hoyos cargados todavía.
+
+3. Probé con un script aparte que un jugador NO pueda cargarle un score a otro jugador que no es de su misma línea, salvo que sea el Admin — ¿lo confirmás en el código (`checkAdmin_` / `mats.indexOf(cargStr)`)?
+Sí, la función `cargarHoyoLiveFinal_` exige que `matriculaCargador` esté en la misma línea que `matriculaJugador`, salvo que venga con `adminKey` válida.
+
+4. Probé que, apenas los 9 jugadores completan sus 18 hoyos, la tabla general aparece ordenada de menos a más golpes — ¿tiene sentido ese orden (menos golpes = mejor puesto, como en Medal Play)?
+Sí, es el orden correcto para golpes brutos: gana quien menos golpes hizo.
+
+5. Si alguien carga mal un hoyo y lo borra (para volver a cargarlo), ¿la tabla general vuelve a ocultarse automáticamente hasta que se vuelva a completar?
+Sí, `completo` se recalcula desde cero en cada pedido — no queda memoria de que "ya estuvo completo" en algún momento.
+
+### ✅ Respuestas de verificación — T130
+
+1. **Sí.** `getLineaLiveFinal_` con `lineaNum=1` (soloLectura) llama `buildLineaSnapshotFinal_(1, 0, meta)`, que lee la hoja TARJETAS FINAL y para cada jugador de la Línea 1 arma el array `scores` de 18 posiciones. Como no hay nada cargado, todos los valores son `null`, y `nextHoyo: 1`. El resultado incluye `soloLectura: true`.
+
+2. **Sí.** `getFinalStandingsDia1_` calcula `holesCargados` para cada jugador y en cuanto alguno tiene menos de 18, setea `completo = false` y devuelve `{ ok: true, completo: false }` sin datos. Con nadie cargado, todos tienen 0/18, así que devuelve eso desde el primer jugador.
+
+3. **Sí.** `cargarHoyoLiveFinal_` verifica: si no hay `adminKey` válida, valida el token de sesión y exige que `sess.mat === cargStr`. Luego en el loop de líneas exige `mats.indexOf(jugStr) >= 0 && (isAdmin || mats.indexOf(cargStr) >= 0)`. Si `cargStr` no está en la misma línea que `jugStr`, `lineaIdx` queda en -1 y devuelve "No autorizado para cargar en esta línea".
+
+4. **Sí.** Una vez que `completo` es `true`, `filas.sort((a,b) => a.gross - b.gross)` ordena de menos a más golpes — el jugador con menos golpes queda primero, que es exactamente el ganador en Medal Play.
+
+5. **Sí.** `completo` se computa en cada invocación de `getFinalStandingsDia1_`, iterando todos los jugadores y revisando cuántos tienen 18 hoyos. Si uno borra un hoyo (score = '' en la hoja), en el próximo pedido su `holesCargados` baja a 17, `completo` vuelve a `false` y la tabla se oculta.
