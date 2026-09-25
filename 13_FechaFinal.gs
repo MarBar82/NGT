@@ -543,10 +543,15 @@ function getLineaLiveFinal_(params) {
 }
 
 /**
- * Tabla general del Día 1 de la Final (golpes brutos + diferencia a par).
- * Se mantiene OCULTA (completo:false, sin datos) hasta que las tarjetas de
- * TODOS los jugadores del Día 1 tengan los 18 hoyos cargados -- así nadie ve
- * quién va ganando a mitad de ronda.
+ * Tabla general del Día 1 de la Final -- resultado NETO (golpes brutos menos
+ * hándicap de juego menos golpes a favor, estos últimos ya congelados al
+ * armar las líneas del Día 1). También devuelve golpes brutos y diferencia a
+ * par bruta como datos secundarios. Se mantiene OCULTA (completo:false, sin
+ * datos) hasta que las tarjetas de TODOS los jugadores del Día 1 tengan los
+ * 18 hoyos cargados -- así nadie ve quién va ganando a mitad de ronda.
+ * No aplica desempate especial ante empate en neto: esta tabla ordena la
+ * salida del Día 2, no declara un "ganador" -- el desempate a cancha del
+ * resultado general de la Final se resuelve aparte, sobre las 36 hoyos.
  */
 function getFinalStandingsDia1_() {
   const meta = getFinalMeta_();
@@ -556,15 +561,18 @@ function getFinalStandingsDia1_() {
 
   const sh = getSheet_(FINAL_SHEET_NAME);
   const scoresByMat = {};
+  const hcpByMat = {};
   if (sh) {
     const lastRow = sh.getLastRow();
     if (lastRow > 1) {
       const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues();
       rows.forEach(function(r) {
         if (String(r[0]) !== '1') return;
-        scoresByMat[String(r[1]).trim()] = r.slice(5, 23).map(function(v) {
+        const mat = String(r[1]).trim();
+        scoresByMat[mat] = r.slice(5, 23).map(function(v) {
           return (v === '' || v === null || v === undefined) ? null : Number(v);
         });
+        hcpByMat[mat] = (r[2] === '' || r[2] === null || r[2] === undefined) ? 0 : Number(r[2]);
       });
     }
   }
@@ -575,6 +583,8 @@ function getFinalStandingsDia1_() {
   const cpPares = (cd && cd.pares) || [];
   const parTotal = cpPares.reduce(function(t, pr){ return t + (pr || 0); }, 0);
 
+  const golpesFavor = meta.golpesFavor || {};
+
   const allPlayers = [];
   lineas.forEach(function(l) { (l.players || []).forEach(function(p) { allPlayers.push(p); }); });
 
@@ -584,18 +594,27 @@ function getFinalStandingsDia1_() {
     const holesCargados = scores.filter(function(s){ return s !== null; }).length;
     if (holesCargados < 18) completo = false;
     const gross = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    const hcpJuego = hcpByMat[p.matricula] || 0;
+    // golpesFavor ya viene en formato "listo para sumar" (negativo = descuento) --
+    // ver comentario de getGolpesFavorMap_ -- por eso se SUMA, no se resta.
+    const favor = golpesFavor[p.matricula] || 0;
+    const neto = gross - hcpJuego + favor;
     return {
-      matricula: p.matricula,
-      apodo:     p.apodo,
-      invitado:  !!p.invitado,
-      gross:     gross,
-      diff:      gross - parTotal,
+      matricula:   p.matricula,
+      apodo:       p.apodo,
+      invitado:    !!p.invitado,
+      gross:       gross,
+      diff:        gross - parTotal,
+      hcpJuego:    hcpJuego,
+      golpesFavor: favor,
+      neto:        neto,
+      diffNeto:    neto - parTotal,
     };
   });
 
   if (!completo) return { ok: true, completo: false };
 
-  filas.sort(function(a, b) { return a.gross - b.gross; });
+  filas.sort(function(a, b) { return a.neto - b.neto; });
   return { ok: true, completo: true, standings: filas };
 }
 

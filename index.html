@@ -8747,13 +8747,18 @@ function finalPublicRender(allR, stR){
   var standingsEl = document.getElementById('final-live-view-standings');
   var pendingEl = document.getElementById('final-live-view-pending');
   if(stR && stR.ok && stR.completo){
-    var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Resultados Día ' + FINAL_PUBLIC_DIA + '</div><div class="adm-card-body" style="padding:0;">';
+    var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Resultados Día ' + FINAL_PUBLIC_DIA + ' — NETO</div><div class="adm-card-body" style="padding:0;">';
     stR.standings.forEach(function(s, i){
       html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
         '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
-        '<div style="flex:1;font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
-        '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diff) + '</div>' +
-        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-left:8px;">' + s.gross + '</div>' +
+        '<div style="flex:1;">' +
+          '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+          '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">Bruto ' + s.gross + ' · ' + finalPublicDiffTxt_(s.diff) + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diffNeto) + '</div>' +
+          '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.neto + '</div>' +
+        '</div>' +
       '</div>';
     });
     html += '</div></div>';
