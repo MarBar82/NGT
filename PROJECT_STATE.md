@@ -21343,3 +21343,328 @@ Reemplazalo por:
 
 4. Sí. En empate, `sort` es estable en motores modernos y los deja en el orden que ya tenían (por línea de salida). No hay lógica de desempate especial; no se muestra nada extra.
 
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 134 (Fecha Final — armado de líneas del Día 2)
+
+### Contexto (en criollo)
+
+Esta es la Tarea 8 de la Fecha Final. Con el Día 1 ya cerrado (resultado NETO calculado en la Tarea 133), esta Tarea agrega el paso que faltaba para poder arrancar el Día 2: armar sus líneas de salida.
+
+El criterio es el mismo que usamos para el Día 1 — grupos preferentemente de a 4, y el grupo con el peor resultado sale primero, los líderes salen últimos — pero con un cambio importante en el ORDEN: en el Día 1 no existía ningún resultado todavía, así que se ordenaba por la clasificación de la temporada, y los invitados (que no tienen puesto de temporada) iban directo al fondo. Ahora sí existe un resultado real y propio de la Final — el NETO del Día 1 — así que el Día 2 se ordena por ESE resultado, y los invitados entran a competir en igualdad de condiciones: si un invitado jugó bien el Día 1, puede terminar tranquilamente en el grupo de los líderes, mezclado con los clasificados. Te pregunté esto puntualmente antes de armarlo y me confirmaste que preferís este criterio (por NETO real, todos mezclados) — así que quedó así.
+
+No hace falta ningún cálculo nuevo de hándicap: el hándicap de juego del Día 2 ya está calculado y guardado en la tarjeta de cada jugador desde que se creó la Fecha Final (con la cancha y el color de tee del Día 2), así que esta Tarea solo lo lee — igual que ya hacía el armado del Día 1 con el hándicap del Día 1.
+
+Para no dejar que alguien arme el Día 2 antes de tiempo, la función nueva primero controla que el Día 1 esté realmente terminado (reutiliza `getFinalStandingsDia1_`, la misma que ya calcula el NETO y decide cuándo está todo completo — no se duplica ese cálculo en ningún lado) y devuelve un error claro si todavía falta algún hoyo.
+
+En el panel de Admin, dentro de la Fecha Final activa, agregué un bloque nuevo debajo de las líneas del Día 1: mientras el Día 1 está en curso pero no terminó, muestra un aviso de "esperando"; apenas termina, aparece el botón "⚡ Armar Líneas Día 2"; y una vez armadas, se ven las líneas igual que las del Día 1 (con el HCP del Día 2 de cada uno).
+
+Una aclaración sobre lo que ya tenías construido: la pantalla de carga de scores (Tarea 131) y la pantalla pública "Ver en Vivo" (Tarea 132) ya estaban armadas para funcionar con cualquier día, no solo el Día 1 — así que apenas armes las líneas del Día 2 con esta Tarea, esas dos pantallas van a empezar a funcionar solas para el Día 2, sin tocar nada más. Ojo con un detalle que quedó pendiente para la próxima Tarea: la tabla de resultados de la pantalla pública todavía va a seguir mostrando el resultado del Día 1 aunque estés viendo el Día 2 en vivo — eso lo resolvemos cuando armemos el resultado acumulado de las 36 hoyos.
+
+Probé todo a fondo: el backend con dos scripts (uno reutiliza el escenario grande de 9 jugadores de Tareas anteriores para no perder cobertura de regresión, y otro armado a propósito con 4 clasificados y 2 invitados con resultados de Día 1 que los mezclan) — confirmando que rechaza intentos antes de tiempo (con el Día 1 sin terminar, o con la Fecha Final recién creada), que arma bien los grupos y el orden (peor resultado sale primero), que los invitados quedan mezclados según su propio resultado (en el test armado a propósito, los 2 invitados terminan en el grupo de los líderes junto con un clasificado, mientras los 3 peores son todos clasificados), que el HCP que trae cada jugador es el del Día 2 y no el del Día 1, que el estado pasa a `dia2_en_curso` correctamente, y que no se puede volver a armar una vez armado. Y la pantalla del panel de Admin con un test automático en un navegador real: que no muestra nada mientras el Día 1 ni arrancó, que muestra el aviso de "esperando" mientras el Día 1 está incompleto, que aparece el botón apenas termina, que al tocarlo se arman y se muestran las líneas con el HCP e invitado correctos, y sin problemas de superposición en pantallas chicas.
+
+**Esta Tarea toca `13_FechaFinal.gs`, `10_Routing.gs` e `index.html` — hace falta el deploy de Apps Script (clasp push + deploy) Y el `git push` / redeploy de GitHub Pages, no alcanza con uno solo.**
+
+### Cambio 1 — `13_FechaFinal.gs`: función nueva `armarLineasFinalDia2_`
+
+Buscá:
+
+```
+  meta.lineasDia1 = lineas;
+  meta.estado = 'dia1_en_curso';
+  saveFinalMeta_(meta);
+
+  audit_('ARMAR_LINEAS_FINAL_DIA1', 'admin', { lineas: lineas.length, jugadores: n });
+
+  return { ok: true, lineas: lineas };
+}
+
+/**
+ * Guarda el score de un hoyo del Día 1 o Día 2 de la Final, durante la ronda.
+```
+
+Reemplazalo por:
+
+```
+  meta.lineasDia1 = lineas;
+  meta.estado = 'dia1_en_curso';
+  saveFinalMeta_(meta);
+
+  audit_('ARMAR_LINEAS_FINAL_DIA1', 'admin', { lineas: lineas.length, jugadores: n });
+
+  return { ok: true, lineas: lineas };
+}
+
+/**
+ * armarLineasFinalDia2_ — arma las líneas de salida del Día 2 de la Final.
+ * Orden: por el resultado NETO del Día 1 (getFinalStandingsDia1_, reutilizada
+ * tal cual -- no se duplica el cálculo de quién terminó y con qué neto),
+ * peor NETO primero. A diferencia del Día 1 -- donde los invitados no tenían
+ * ningún puesto de temporada y por eso iban directo al fondo -- acá todos,
+ * clasificados e invitados por igual, ya jugaron una ronda real: se ordenan
+ * solo por su NETO real, sin ningún trato especial para invitados. Mismo
+ * criterio de grupos y de salida que el Día 1: se arman preferentemente de a
+ * 4 (calcularTamanosGruposFinal_) y el grupo con el peor resultado sale
+ * primero (Línea 1), los líderes salen últimos.
+ */
+function armarLineasFinalDia2_(params) {
+  const { adminKey } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  if (meta.estado !== 'dia1_en_curso') {
+    return { ok: false, error: 'Las líneas del Día 2 no se pueden armar todavía (estado actual: ' + meta.estado + ')' };
+  }
+
+  const st = getFinalStandingsDia1_();
+  if (!st.ok) return { ok: false, error: st.error || 'No se pudo calcular el resultado del Día 1' };
+  if (!st.completo) return { ok: false, error: 'Todavía no se completaron los 18 hoyos del Día 1 de todos los jugadores' };
+
+  const ordered = st.standings; // ya viene ordenado mejor a peor NETO, con apodo/invitado incluidos
+  const n = ordered.length;
+  if (n < 2) return { ok: false, error: 'Se necesitan al menos 2 jugadores para armar líneas' };
+
+  // HCP del Día 2, ya calculado y guardado en TARJETAS FINAL al crear la fecha
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const hcpDia2 = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 3).getValues(); // DIA, MATRICULA, HCP
+      rows.forEach(function(r) {
+        if (String(r[0]) === '2') hcpDia2[String(r[1])] = r[2];
+      });
+    }
+  }
+
+  const sizes = calcularTamanosGruposFinal_(n); // mejor NETO → peor NETO
+  const blocks = [];
+  let idx = 0;
+  sizes.forEach(function(size) {
+    blocks.push(ordered.slice(idx, idx + size));
+    idx += size;
+  });
+  blocks.reverse(); // Línea 1 = peor NETO (sale primero) ... última línea = líderes
+
+  const lineas = blocks.map(function(grp, i) {
+    return {
+      lineNum: i + 1,
+      players: grp.map(function(row) {
+        return {
+          matricula: row.matricula,
+          apodo: row.apodo,
+          hcp: hcpDia2[row.matricula] !== undefined ? hcpDia2[row.matricula] : '',
+          invitado: row.invitado,
+        };
+      }),
+    };
+  });
+
+  meta.lineasDia2 = lineas;
+  meta.estado = 'dia2_en_curso';
+  saveFinalMeta_(meta);
+
+  audit_('ARMAR_LINEAS_FINAL_DIA2', 'admin', { lineas: lineas.length, jugadores: n });
+
+  return { ok: true, lineas: lineas };
+}
+
+/**
+ * Guarda el score de un hoyo del Día 1 o Día 2 de la Final, durante la ronda.
+```
+
+### Cambio 2 — `10_Routing.gs`: acción nueva `armarLineasFinalDia2`
+
+Buscá:
+
+```
+      case 'armarLineasFinalDia1':  result = armarLineasFinalDia1_(params); break;
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+```
+
+Reemplazalo por:
+
+```
+      case 'armarLineasFinalDia1':  result = armarLineasFinalDia1_(params); break;
+      case 'armarLineasFinalDia2':  result = armarLineasFinalDia2_(params); break;
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+```
+
+### Cambio 3 — `index.html`: bloque del Día 2 en el panel de Admin
+
+**3a.** Buscá:
+
+```
+        <div id="final-lineas-dia1-wrap"></div>
+        <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
+```
+
+Reemplazalo por:
+
+```
+        <div id="final-lineas-dia1-wrap"></div>
+        <div id="final-lineas-dia2-wrap"></div>
+        <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
+```
+
+**3b.** Buscá:
+
+```
+      renderFinalLineasDia1_(meta);
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+      const wrap = document.getElementById('final-lineas-dia1-wrap');
+      if(wrap) wrap.innerHTML = '';
+    }
+  }).catch(function(){});
+```
+
+Reemplazalo por:
+
+```
+      renderFinalLineasDia1_(meta);
+      renderFinalLineasDia2_(meta);
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+      const wrap = document.getElementById('final-lineas-dia1-wrap');
+      if(wrap) wrap.innerHTML = '';
+      const wrap2 = document.getElementById('final-lineas-dia2-wrap');
+      if(wrap2) wrap2.innerHTML = '';
+    }
+  }).catch(function(){});
+```
+
+**3c.** Buscá:
+
+```
+function finalArmarLineas(){
+  const msg = document.getElementById('final-lineas-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'armarLineasFinalDia1', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg) {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al armar las líneas';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+```
+
+Reemplazalo por:
+
+```
+function finalArmarLineas(){
+  const msg = document.getElementById('final-lineas-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'armarLineasFinalDia1', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg) {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al armar las líneas';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// Dibuja, dentro de la Fecha Final ya creada, el bloque del Día 2: nada
+// mientras el Día 1 no arrancó, un aviso de "esperando" mientras el Día 1
+// está en curso (consultando getFinalStandingsDia1_ para saber si ya se
+// puede armar -- se reutiliza tal cual, sin duplicar el cálculo de si ya
+// está completo), el botón para armar apenas el Día 1 termina, o las líneas
+// ya armadas una vez que existen.
+function renderFinalLineasDia2_(meta){
+  const wrap = document.getElementById('final-lineas-dia2-wrap');
+  if(!wrap) return;
+
+  if(meta.estado === 'armada'){
+    wrap.innerHTML = '';
+    return;
+  }
+
+  if(meta.estado === 'dia1_en_curso'){
+    wrap.innerHTML = '<div class="adm-msg" style="display:block;margin-top:18px;">Día 2: esperando a que termine el Día 1…</div>';
+    ngtApiGet('getFinalStandingsDia1').then(function(r){
+      if(r && r.ok && r.completo){
+        wrap.innerHTML =
+          '<button class="adm-btn-primary" onclick="finalArmarLineasDia2()" style="margin-top:18px;width:100%;">⚡ Armar Líneas Día 2</button>' +
+          '<div id="final-lineas-dia2-msg" class="adm-msg" style="display:none;"></div>';
+      }
+    }).catch(function(){});
+    return;
+  }
+
+  const lineas = meta.lineasDia2 || [];
+  if(!lineas.length){ wrap.innerHTML = ''; return; }
+  let html = '<div style="margin-top:18px;"><div class="adm-label" style="margin-bottom:8px;">Líneas de salida — Día 2</div>';
+  lineas.forEach(function(l){
+    html += '<div class="gf-lin-linea"><div class="gf-lin-hdr">Línea ' + l.lineNum + '</div><div class="gf-lin-players">';
+    (l.players || []).forEach(function(p){
+      html += '<div class="gf-lin-pill' + (p.invitado ? ' gf-lin-pill-inv' : '') + '">' +
+        '<span class="gf-lin-pname">' + p.apodo + (p.invitado ? ' (invitado)' : '') + '</span>' +
+        '<span style="font-size:12px;color:var(--g4);">HCP ' + (p.hcp !== '' && p.hcp !== null && p.hcp !== undefined ? p.hcp : '—') + '</span>' +
+        '</div>';
+    });
+    html += '</div></div>';
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function finalArmarLineasDia2(){
+  const msg = document.getElementById('final-lineas-dia2-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'armarLineasFinalDia2', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg) {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al armar las líneas';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+```
+
+### Qué NO cambia
+
+- No se toca `armarLineasFinalDia1_` ni el armado del Día 1 — sigue funcionando exactamente igual.
+- No se toca `getFinalStandingsDia1_` (Tarea 133) — `armarLineasFinalDia2_` la reutiliza tal cual, sin duplicar el cálculo de NETO ni el de cuándo está completo.
+- No se toca la pantalla de carga de scores (Tarea 131) ni la pantalla pública "Ver en Vivo" (Tarea 132) — ya estaban armadas para cualquier día, así que van a funcionar solas para el Día 2 apenas se arman sus líneas. La única salvedad (ya la charlamos) es que la tabla de resultados de "Ver en Vivo" todavía va a mostrar el resultado del Día 1 mientras jugás el Día 2 — eso se resuelve en la próxima Tarea, cuando armemos el resultado acumulado.
+- No se recalcula ningún hándicap — el del Día 2 ya estaba calculado y guardado desde que se creó la Fecha Final; esta Tarea solo lo lee de la tarjeta de cada jugador.
+- Los golpes a favor NO se vuelven a aplicar en el Día 2 — eso ya lo habíamos confirmado desde el principio: solo aplican al Día 1.
+- No hay ningún paso manual de "cerrar el Día 1" — el botón para armar el Día 2 aparece solo cuando `getFinalStandingsDia1_` confirma que ya está todo completo, sin ningún estado intermedio que alguien tenga que activar a mano.
+
+### ❓ Preguntas de verificación
+
+1. Con el Día 1 todavía en curso (falta que alguien complete sus 18 hoyos), entrá al panel de Admin de la Fecha Final — ¿ves un aviso de que hay que esperar a que termine el Día 1, sin ningún botón para armar el Día 2 todavía?
+
+2. Apenas se completan los 18 hoyos de todos en el Día 1, ¿aparece solo el botón "⚡ Armar Líneas Día 2" (sin que nadie tenga que "cerrar" nada a mano)?
+
+3. Al tocar el botón, ¿se arman las líneas y aparecen en pantalla con el mismo formato que las del Día 1 (línea, jugadores, HCP de cada uno)? ¿Ese HCP corresponde a la cancha del Día 2 (puede ser distinto al del Día 1)?
+
+4. Si algún invitado jugó bien el Día 1 (mejor NETO que varios clasificados), ¿puede terminar en un grupo de salida más tarde (de líderes) en vez de ir automáticamente al fondo como pasaba en el Día 1?
+
+5. ¿El jugador que salió peor en el NETO del Día 1 es el primero en salir en el Día 2 (Línea 1), y el que salió mejor sale último?
+
+6. Después de armar el Día 2, si volvés a entrar al panel de la Fecha Final, ¿las líneas del Día 2 se siguen viendo (ya no aparece el botón para volver a armarlas)?
+
+### ✅ Respuestas de verificación — Tarea 134
+
+1. Sí. `renderFinalLineasDia2_` detecta `meta.estado === 'dia1_en_curso'` y muestra `<div class="adm-msg">Día 2: esperando a que termine el Día 1…</div>`. Además consulta `getFinalStandingsDia1` asíncronamente: si `r.completo` es `false`, no muestra ningún botón, solo el aviso.
+
+2. Sí. La misma llamada asíncrona a `getFinalStandingsDia1` dentro de `renderFinalLineasDia2_` comprueba `r.ok && r.completo` — cuando se completan los 18 hoyos de todos, reemplaza el aviso por el botón "⚡ Armar Líneas Día 2", sin que nadie tenga que hacer nada extra.
+
+3. Sí. `armarLineasFinalDia2_` lee `hcpDia2` de TARJETAS FINAL (columna HCP, filas con DIA=2) — ese HCP fue calculado para la cancha del Día 2 al crear la Fecha Final, por lo que puede diferir del del Día 1. Las líneas se renderizan con el mismo HTML que las del Día 1 (usando la clase `.gf-lin-*`).
+
+4. Sí. `armarLineasFinalDia2_` usa directamente `st.standings` de `getFinalStandingsDia1_()`, que ya tiene a todos (clasificados e invitados) ordenados por NETO real. No hay ningún tratamiento especial por invitado — si un invitado tuvo buen NETO, queda en un grupo de líderes.
+
+5. Sí. `blocks.reverse()` invierte el orden: `ordered` viene de mejor a peor NETO (de `getFinalStandingsDia1_`); `blocks` se arma en ese mismo orden y luego se invierte, así el primer bloque (Línea 1) tiene a los de peor NETO y el último tiene a los líderes.
+
+6. Sí. Una vez `meta.estado === 'dia2_en_curso'`, `renderFinalLineasDia2_` lee `meta.lineasDia2` y renderiza directamente las líneas sin mostrar ningún botón ni aviso. El flujo `if(meta.estado === 'armada') return; if(meta.estado === 'dia1_en_curso') { ... return; }` ya pasó de largo, y llega directo a renderizar `lineas`.
