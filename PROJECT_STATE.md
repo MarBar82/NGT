@@ -19198,3 +19198,466 @@ Sí, lo revisé de 280px a 768px de ancho, incluso con nombres largos de cancha 
 4. **Sí.** `finalEliminar()` llama `confirm('⚠️ ¿Borrar la Fecha Final...')` antes de hacer nada. Si el usuario cancela, no pasa nada. Si confirma, manda `ngtApiPost({ action: 'eliminarFechaFinal', ... })` y al volver `ok: true` llama `finalLoad()` nuevamente, que detecta que ya no hay meta y vuelve a mostrar el formulario de creación.
 
 5. **Sí.** La pantalla usa `adm-card`, `adm-row`, `adm-field` y `adm-input` — los mismos estilos que ya usan "Crear Fecha" y "Gestionar Canchas/Jugadores", que ya fueron probados en móvil. Los combos usan `flex` con `adm-row` (que ya tiene `flex-wrap: wrap`) así que en pantallas angostas apilan verticalmente sin desborde.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 129 (Fecha Final — armar líneas del Día 1)
+
+### Contexto (en criollo)
+
+Esta es la Tarea 3 de la Fecha Final. Ya existe la pantalla para crearla y borrarla (Tarea 128); ahora agregamos el botón "Armar Líneas Día 1", que arma automáticamente los grupos de salida según la clasificación general de la temporada.
+
+Regla de armado (confirmada con Marcos):
+- Los jugadores se ordenan de mejor a peor puesto en la clasificación general. Los invitados van al final (no tienen puesto — salen primero).
+- Los grupos son preferentemente de 4 jugadores. Solo se arman grupos de 3 para absorber el resto, cuando la cantidad de jugadores no es múltiplo de 4 — y esos grupos de 3 quedan del lado de los peores puestos / invitados.
+- El orden de salida se invierte: el grupo de los peores puestos sale primero (Línea 1), y los líderes de la clasificación salen últimos.
+
+Ejemplo con 16 jugadores (el mismo que dio Marcos): Línea 1 = puestos 13 a 16, Línea 2 = puestos 9 a 12, Línea 3 = puestos 5 a 8, Línea 4 = puestos 1 a 4 (los líderes, salen últimos). Con la Fecha Final real actual (9 jugadores clasificados, sin invitados) da 3 líneas de 3.
+
+Una vez armadas las líneas, quedan guardadas — no se pueden volver a armar (el botón desaparece y se muestra el resultado). Si algo sale mal, ya existe el botón "Eliminar Fecha Final" (Tarea 128) para borrar todo y volver a crearla.
+
+De paso, esta Tarea reordena un poco el código interno de `13_FechaFinal.gs`: separa en una función aparte (`computeSeasonRanking_`) el cálculo del puesto de cada jugador en la clasificación general, que antes estaba mezclado adentro de la función de los golpes a favor. Ahora la usan las dos funciones (golpes a favor Y armado de líneas) sin duplicar código. **Verifiqué que el resultado de los golpes a favor da exactamente igual que antes** (mismo cálculo, solo more prolijo) — no cambia nada para lo que ya está funcionando.
+
+Probé el armado a fondo con un script aparte (no se puede correr Apps Script fuera de Google) simulando la Fecha Final real (9 jugadores) y varios casos con invitados y cantidades mixtas, y también la pantalla con una copia de prueba: aparece el botón, al tocarlo arma las líneas y las muestra, con hándicap y marcando quién es invitado — sin romper el diseño en ningún ancho de celular.
+
+### Cambio 1 — `13_FechaFinal.gs`: separar el cálculo del ranking en una función propia
+
+Buscá:
+
+```
+/**
+ * Calcula el ranking de la clasificación general de la temporada (mismo criterio
+ * que ya usa la hoja LEADERBOARD para ordenar) y devuelve, para los primeros 8
+ * puestos, los golpes a favor cargados a mano en LEADERBOARD!M2:M9 — un valor
+ * por puesto, ya en formato "listo para sumar" (negativo = descuento).
+ * No confía en el ORDEN que ya esté guardado en LEADERBOARD (lo recalcula desde
+ * los puntos reales), solo lee de ahí la columna M — así siempre queda
+ * sincronizado con los puntos actuales, incluso si LEADERBOARD no se refrescó
+ * después del último cambio de puntos.
+ */
+function getGolpesFavorMap_() {
+  const jugs = getJugadores_();
+  const playerMats = jugs.map(function(j) { return j.matricula; });
+  const numP = playerMats.length;
+  if (!numP) return {};
+
+  const ngtRows = getAllNGTScoreData_();
+  const ngtMap = {};
+  ngtRows.forEach(function(r) {
+    if (!ngtMap[r.mat]) ngtMap[r.mat] = {};
+    ngtMap[r.mat][r.fecha] = r;
+  });
+
+  const cVals = playerMats.map(function(mat) {
+    const playerFdMap = ngtMap[mat] || {};
+    let total = 0;
+    for (let n = 1; n <= 8; n++) {
+      const fd = playerFdMap[String(n)] || { st: 0, ma: 0, pb: 0, db: 0 };
+      total += (fd.st || 0) + (fd.ma || 0) + (fd.pb || 0) + (fd.db || 0);
+    }
+    return total;
+  });
+
+  const allRanks = cVals.map(function(ci, i) {
+    let rank = 1;
+    for (let j = 0; j < cVals.length; j++) { if (cVals[j] > ci) rank++; }
+    let cntBefore = 0;
+    for (let j = 0; j <= i; j++) { if (cVals[j] === ci) cntBefore++; }
+    return rank + cntBefore - 1;
+  });
+
+  const lbSh = getSheet_('LEADERBOARD');
+  const golpesMap = {};
+  if (lbSh) {
+    const golpesVals = lbSh.getRange(2, 13, 8, 1).getValues(); // M2:M9
+    for (let pos = 1; pos <= 8; pos++) {
+      const idx = allRanks.indexOf(pos);
+      if (idx < 0) continue;
+      const mat = playerMats[idx];
+      const raw = golpesVals[pos - 1][0];
+      const val = (raw === '' || raw === null || raw === undefined) ? 0 : (parseFloat(raw) || 0);
+      if (mat) golpesMap[mat] = val;
+    }
+  }
+  return golpesMap;
+}
+```
+
+Reemplazalo por:
+
+```
+/**
+ * Calcula el ranking de la clasificación general de la temporada: para cada
+ * jugador de JUGADORES, su puesto (1 = mejor) según la suma de puntos de las
+ * 8 fechas regulares (st+ma+pb+db), con el mismo criterio de desempate que ya
+ * usa la hoja LEADERBOARD. Se recalcula siempre desde los puntos reales (no
+ * lee el orden ya guardado en LEADERBOARD), así queda sincronizado incluso si
+ * LEADERBOARD no se refrescó después del último cambio de puntos.
+ * Devuelve { matricula: puesto }. Reutilizada por getGolpesFavorMap_ y por
+ * armarLineasFinalDia1_ (orden de salida del Día 1 de la Final).
+ */
+function computeSeasonRanking_() {
+  const jugs = getJugadores_();
+  const playerMats = jugs.map(function(j) { return j.matricula; });
+  const rankMap = {};
+  if (!playerMats.length) return rankMap;
+
+  const ngtRows = getAllNGTScoreData_();
+  const ngtMap = {};
+  ngtRows.forEach(function(r) {
+    if (!ngtMap[r.mat]) ngtMap[r.mat] = {};
+    ngtMap[r.mat][r.fecha] = r;
+  });
+
+  const cVals = playerMats.map(function(mat) {
+    const playerFdMap = ngtMap[mat] || {};
+    let total = 0;
+    for (let n = 1; n <= 8; n++) {
+      const fd = playerFdMap[String(n)] || { st: 0, ma: 0, pb: 0, db: 0 };
+      total += (fd.st || 0) + (fd.ma || 0) + (fd.pb || 0) + (fd.db || 0);
+    }
+    return total;
+  });
+
+  playerMats.forEach(function(mat, i) {
+    let rank = 1;
+    for (let j = 0; j < cVals.length; j++) { if (cVals[j] > cVals[i]) rank++; }
+    let cntBefore = 0;
+    for (let j = 0; j <= i; j++) { if (cVals[j] === cVals[i]) cntBefore++; }
+    rankMap[mat] = rank + cntBefore - 1;
+  });
+  return rankMap;
+}
+
+/**
+ * Devuelve, para los primeros 8 puestos de la clasificación general (según
+ * computeSeasonRanking_), los golpes a favor cargados a mano en
+ * LEADERBOARD!M2:M9 — un valor por puesto, ya en formato "listo para sumar"
+ * (negativo = descuento).
+ */
+function getGolpesFavorMap_() {
+  const rankMap = computeSeasonRanking_();
+  const matsByRank = {};
+  Object.keys(rankMap).forEach(function(mat) { matsByRank[rankMap[mat]] = mat; });
+
+  const lbSh = getSheet_('LEADERBOARD');
+  const golpesMap = {};
+  if (lbSh) {
+    const golpesVals = lbSh.getRange(2, 13, 8, 1).getValues(); // M2:M9
+    for (let pos = 1; pos <= 8; pos++) {
+      const mat = matsByRank[pos];
+      if (!mat) continue;
+      const raw = golpesVals[pos - 1][0];
+      const val = (raw === '' || raw === null || raw === undefined) ? 0 : (parseFloat(raw) || 0);
+      golpesMap[mat] = val;
+    }
+  }
+  return golpesMap;
+}
+```
+
+### Cambio 2 — `13_FechaFinal.gs`: agregar el armado de grupos + armado de líneas del Día 1
+
+Buscá (es el final del archivo):
+
+```
+  audit_('ELIMINAR_FECHA_FINAL', 'admin', { canchaId1: meta.canchaId1, canchaId2: meta.canchaId2 });
+
+  return { ok: true };
+}
+```
+
+Reemplazalo por:
+
+```
+  audit_('ELIMINAR_FECHA_FINAL', 'admin', { canchaId1: meta.canchaId1, canchaId2: meta.canchaId2 });
+
+  return { ok: true };
+}
+
+/**
+ * calcularTamanosGruposFinal_ — tamaños de los grupos de salida para la
+ * Final, PREFIRIENDO grupos de 4 (a diferencia de las fechas regulares
+ * "gestionadas", que prefieren 3). Solo usa grupos de 3 para absorber el
+ * resto cuando N no es múltiplo de 4. Devuelve un array ordenado de "mejor
+ * puesto" a "peor puesto" (ej. N=13 → [4,3,3,3]: el grupo de 4 se arma con
+ * los 4 mejores puestos, los 3 grupos de 3 con el resto).
+ */
+function calcularTamanosGruposFinal_(n) {
+  if (n <= 0) return [];
+  if (n <= 5) return [n]; // muy pocos jugadores: un solo grupo
+  const r = n % 4;
+  let numFour, numThree;
+  if (r === 0) { numFour = n / 4; numThree = 0; }
+  else if (r === 1) { numFour = (n - 9) / 4; numThree = 3; } // n>=9 siempre acá (n<=5 ya salió antes)
+  else if (r === 2) { numFour = (n - 6) / 4; numThree = 2; }
+  else { numFour = (n - 3) / 4; numThree = 1; }
+  const sizes = [];
+  for (let i = 0; i < numFour; i++) sizes.push(4);
+  for (let i = 0; i < numThree; i++) sizes.push(3);
+  return sizes;
+}
+
+/**
+ * armarLineasFinalDia1_ — arma las líneas de salida del Día 1 de la Final.
+ * Orden: por clasificación general de la temporada (computeSeasonRanking_),
+ * mejor puesto primero; los invitados van al final (no tienen puesto). Los
+ * grupos se arman preferentemente de 4 (calcularTamanosGruposFinal_); si hay
+ * que usar algún grupo de 3, queda del lado de los peores puestos/invitados.
+ * Para el orden de salida se INVIERTE el resultado: el grupo con los peores
+ * puestos sale primero (Línea 1) y los líderes salen últimos.
+ */
+function armarLineasFinalDia1_(params) {
+  const { adminKey } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  if (meta.estado !== 'armada') {
+    return { ok: false, error: 'Las líneas del Día 1 ya fueron armadas (estado actual: ' + meta.estado + ')' };
+  }
+
+  const rankMap = computeSeasonRanking_();
+  const clasificados = (meta.jugadores || []).slice();
+  clasificados.sort(function(a, b) {
+    const ra = rankMap[a] !== undefined ? rankMap[a] : 999999;
+    const rb = rankMap[b] !== undefined ? rankMap[b] : 999999;
+    return ra - rb;
+  });
+  const invitadosMats = Object.keys(meta.invitadosInfo || {});
+  const ordered = clasificados.concat(invitadosMats); // mejor puesto ... peor puesto / invitados
+
+  const n = ordered.length;
+  if (n < 2) return { ok: false, error: 'Se necesitan al menos 2 jugadores para armar líneas' };
+
+  // HCP del Día 1, ya calculado y guardado en TARJETAS FINAL al crear la fecha
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const hcpDia1 = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 3).getValues(); // DIA, MATRICULA, HCP
+      rows.forEach(function(r) {
+        if (String(r[0]) === '1') hcpDia1[String(r[1])] = r[2];
+      });
+    }
+  }
+
+  // Apodos/nombres para mostrar
+  const jugs = getJugadores_();
+  const matToApodo = {};
+  jugs.forEach(function(j) {
+    matToApodo[j.matricula] = (j.apodo || (j.nombre ? j.nombre.split(' ')[0] : j.matricula) || '').toUpperCase();
+  });
+
+  const sizes = calcularTamanosGruposFinal_(n); // mejor puesto → peor puesto
+  const blocks = [];
+  let idx = 0;
+  sizes.forEach(function(size) {
+    blocks.push(ordered.slice(idx, idx + size));
+    idx += size;
+  });
+  blocks.reverse(); // Línea 1 = peores puestos (sale primero) ... última línea = líderes
+
+  const lineas = blocks.map(function(grp, i) {
+    return {
+      lineNum: i + 1,
+      players: grp.map(function(mat) {
+        const esInvitado = mat.indexOf('INV') === 0;
+        return {
+          matricula: mat,
+          apodo: esInvitado ? (meta.invitadosInfo[mat] || mat) : (matToApodo[mat] || mat),
+          hcp: hcpDia1[mat] !== undefined ? hcpDia1[mat] : '',
+          invitado: esInvitado,
+        };
+      }),
+    };
+  });
+
+  meta.lineasDia1 = lineas;
+  meta.estado = 'dia1_en_curso';
+  saveFinalMeta_(meta);
+
+  audit_('ARMAR_LINEAS_FINAL_DIA1', 'admin', { lineas: lineas.length, jugadores: n });
+
+  return { ok: true, lineas: lineas };
+}
+```
+
+### Cambio 3 — `10_Routing.gs`: nueva acción en `doPost`
+
+Buscá:
+
+```
+      case 'crearFechaFinal':       result = crearFechaFinal_(params); break;
+      case 'eliminarFechaFinal':    result = eliminarFechaFinal_(params); break;
+      default:               result = { ok: false, error: 'Acción desconocida: ' + action };
+```
+
+Reemplazalo por:
+
+```
+      case 'crearFechaFinal':       result = crearFechaFinal_(params); break;
+      case 'eliminarFechaFinal':    result = eliminarFechaFinal_(params); break;
+      case 'armarLineasFinalDia1':  result = armarLineasFinalDia1_(params); break;
+      default:               result = { ok: false, error: 'Acción desconocida: ' + action };
+```
+
+**Esta Tarea toca archivos `.gs` — hace falta el deploy de Apps Script de siempre (clasp push + deploy), no alcanza con el `git push`.**
+
+### Cambio 4 — `index.html`: lugar para el botón / las líneas armadas
+
+Buscá:
+
+```
+        <div id="final-resumen" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--navy);line-height:1.9;"></div>
+        <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
+```
+
+Reemplazalo por:
+
+```
+        <div id="final-resumen" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--navy);line-height:1.9;"></div>
+        <div id="final-lineas-dia1-wrap"></div>
+        <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
+```
+
+### Cambio 5 — `index.html`: llamar al render de líneas al cargar la pantalla
+
+Buscá:
+
+```
+        resumen.innerHTML =
+          '<div><b>Día 1:</b> ' + (meta.canchaName1 || '') + ' (' + (meta.colorTee1 || '') + ', par ' + (meta.par1 || '—') + ')</div>' +
+          '<div><b>Día 2:</b> ' + (meta.canchaName2 || '') + ' (' + (meta.colorTee2 || '') + ', par ' + (meta.par2 || '—') + ')</div>' +
+          '<div><b>Jugadores:</b> ' + nJug + '</div>' +
+          '<div><b>Estado:</b> ' + meta.estado + '</div>';
+      }
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+    }
+  }).catch(function(){});
+```
+
+Reemplazalo por:
+
+```
+        resumen.innerHTML =
+          '<div><b>Día 1:</b> ' + (meta.canchaName1 || '') + ' (' + (meta.colorTee1 || '') + ', par ' + (meta.par1 || '—') + ')</div>' +
+          '<div><b>Día 2:</b> ' + (meta.canchaName2 || '') + ' (' + (meta.colorTee2 || '') + ', par ' + (meta.par2 || '—') + ')</div>' +
+          '<div><b>Jugadores:</b> ' + nJug + '</div>' +
+          '<div><b>Estado:</b> ' + meta.estado + '</div>';
+      }
+      renderFinalLineasDia1_(meta);
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+      const wrap = document.getElementById('final-lineas-dia1-wrap');
+      if(wrap) wrap.innerHTML = '';
+    }
+  }).catch(function(){});
+```
+
+### Cambio 6 — `index.html`: funciones nuevas (render de líneas + armar líneas)
+
+Buscá:
+
+```
+  }).catch(function(){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red';
+  });
+}
+
+// ══ CREAR FECHA WIZARD ══
+```
+
+Reemplazalo por:
+
+```
+  }).catch(function(){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red';
+  });
+}
+
+// Dibuja, dentro de la Fecha Final ya creada, el botón para armar las líneas
+// del Día 1 (mientras estado==='armada') o las líneas ya armadas (una vez
+// que se arman). Los nombres/hcp de cada jugador ya vienen resueltos desde
+// el backend (armarLineasFinalDia1_), no hace falta recalcularlos acá.
+function renderFinalLineasDia1_(meta){
+  const wrap = document.getElementById('final-lineas-dia1-wrap');
+  if(!wrap) return;
+  if(meta.estado === 'armada'){
+    wrap.innerHTML =
+      '<button class="adm-btn-primary" onclick="finalArmarLineas()" style="margin-top:18px;width:100%;">⚡ Armar Líneas Día 1</button>' +
+      '<div id="final-lineas-msg" class="adm-msg" style="display:none;"></div>';
+    return;
+  }
+  const lineas = meta.lineasDia1 || [];
+  if(!lineas.length){ wrap.innerHTML = ''; return; }
+  let html = '<div style="margin-top:18px;"><div class="adm-label" style="margin-bottom:8px;">Líneas de salida — Día 1</div>';
+  lineas.forEach(function(l){
+    html += '<div class="gf-lin-linea"><div class="gf-lin-hdr">Línea ' + l.lineNum + '</div><div class="gf-lin-players">';
+    (l.players || []).forEach(function(p){
+      html += '<div class="gf-lin-pill' + (p.invitado ? ' gf-lin-pill-inv' : '') + '">' +
+        '<span class="gf-lin-pname">' + p.apodo + (p.invitado ? ' (invitado)' : '') + '</span>' +
+        '<span style="font-size:12px;color:var(--g4);">HCP ' + (p.hcp !== '' && p.hcp !== null && p.hcp !== undefined ? p.hcp : '—') + '</span>' +
+        '</div>';
+    });
+    html += '</div></div>';
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function finalArmarLineas(){
+  const msg = document.getElementById('final-lineas-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'armarLineasFinalDia1', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg) {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al armar las líneas';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// ══ CREAR FECHA WIZARD ══
+```
+
+### Qué NO cambia
+
+- El armado de líneas de las fechas regulares (`armarLineas_`) no se toca para nada — sigue exactamente igual.
+- No hay forma de editar las líneas a mano todavía (mover un jugador de línea, etc.) — si algo queda mal armado, por ahora la única forma de corregirlo es "Eliminar Fecha Final" y volver a crearla. Lo dejamos así a propósito para no complicar esta Tarea; se puede agregar más adelante si hace falta.
+- Todavía no hay pantalla de carga de scores en vivo para el Día 1 — esa es la próxima Tarea.
+
+### ❓ Preguntas de verificación
+
+1. Entrá a "Fecha Final" (ya con la que tenés creada hoy, 9 jugadores). ¿Aparece el botón "⚡ Armar Líneas Día 1"?
+Sí, porque el estado es "armada".
+
+2. Tocá el botón. ¿Se arman 3 líneas de 3 jugadores cada una, y desaparece el botón (ya no se puede volver a armar)?
+Sí — con 9 jugadores clasificados y sin invitados, da 3 líneas de 3 exactas.
+
+3. ¿La Línea 1 tiene a los jugadores con peor puesto en la clasificación general, y la última línea a los líderes (los que salen últimos)?
+Sí, confirmá comparando con la tabla de clasificación general — el orden está invertido a propósito (peor puesto sale primero).
+
+4. Si hubiera invitados, ¿aparecen junto con los peores puestos en la Línea 1 (salen primero), tal cual como me confirmaste?
+Sí, los invitados no tienen puesto en la clasificación así que se agregan siempre al final de la lista ordenada, del lado de los peores puestos.
+
+5. ¿Se ve bien en el celular, con el HCP de cada jugador y marcando claramente quién es invitado?
+Sí, reutiliza el mismo estilo de tarjetas que ya usás para ver las líneas de las fechas regulares, revisado de 280px a 768px de ancho.
+
+### ✅ Respuestas de verificación — T129
+
+1. **Sí.** Una vez que se carga la pantalla "Fecha Final" con la meta existente (estado "armada"), `renderFinalLineasDia1_` detecta `meta.estado === 'armada'` y renderiza el botón "⚡ Armar Líneas Día 1" dentro de `#final-lineas-dia1-wrap`. El botón desaparece después de armar porque `finalLoad()` vuelve a llamar a `renderFinalLineasDia1_` con la meta actualizada (estado ya no es "armada").
+
+2. **Sí.** Con 9 jugadores y sin invitados: `calcularTamanosGruposFinal_(9)` → `r = 9 % 4 = 1` → entra en el caso `r===1` con `numFour = (9-9)/4 = 0`, `numThree = 3` → 3 grupos de 3. El resultado son exactamente 3 líneas de 3 jugadores.
+
+3. **Sí.** `computeSeasonRanking_` ordena los jugadores de mejor a peor puesto; luego `blocks.reverse()` invierte el orden de los bloques, así los de peor puesto quedan en el bloque 0 (Línea 1, sale primero) y los líderes en el último bloque (salen últimos).
+
+4. **Sí.** Los invitados se concatenan al final de `ordered` (después de `clasificados`), así que siempre quedan en los últimos bloques antes del reverse — es decir, en las primeras líneas de salida (junto con los peores puestos o en su propio bloque si hay suficientes).
+
+5. **Sí.** El render usa las mismas clases `gf-lin-linea`, `gf-lin-hdr`, `gf-lin-players`, `gf-lin-pill` que ya usa el armado de líneas de las fechas regulares (ya probadas en móvil). Los invitados quedan con clase extra `gf-lin-pill-inv`. El HCP viene resuelto desde el backend (ya calculado al crear la Fecha Final) — no hay llamada adicional al servidor.
