@@ -598,3 +598,32 @@ function getFinalStandingsDia1_() {
   filas.sort(function(a, b) { return a.gross - b.gross; });
   return { ok: true, completo: true, standings: filas };
 }
+
+/**
+ * Devuelve el snapshot de TODAS las líneas de un día en una sola llamada --
+ * para la pantalla pública "Ver en vivo" (Tarea 132), que muestra el progreso
+ * de todas las líneas a la vez en vez de una por una como getLineaLiveFinal_.
+ * Reusa buildLineaSnapshotFinal_ (misma función que ya usa la carga de scores
+ * y la vista individual de cada jugador) -- sin duplicar lógica de cálculo.
+ * No requiere sesión: es una vista de solo lectura, pensada para que
+ * cualquiera (participantes e invitados) pueda seguir el Día en vivo.
+ */
+function getAllLineasLiveFinal_(params) {
+  const dia = parseInt(params && params.dia);
+  if (dia !== 1 && dia !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+
+  const lineaKey = 'lineasDia' + dia;
+  const lineas = meta[lineaKey];
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día ' + dia };
+
+  const snaps = [];
+  for (let i = 0; i < lineas.length; i++) {
+    const snap = buildLineaSnapshotFinal_(dia, i, meta);
+    if (snap) snaps.push(snap);
+  }
+
+  return { ok: true, dia: dia, totalLineas: lineas.length, lineas: snaps };
+}
