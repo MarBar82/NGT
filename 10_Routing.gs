@@ -193,6 +193,7 @@ function doPost(e) {
       case 'agregarInvitadoSuelto':  result = agregarInvitadoSuelto_(params); break;
       case 'crearFechaFinal':       result = crearFechaFinal_(params); break;
       case 'eliminarFechaFinal':    result = eliminarFechaFinal_(params); break;
+      case 'armarLineasFinalDia1':  result = armarLineasFinalDia1_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }

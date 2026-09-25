@@ -2340,6 +2340,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       <div class="adm-card-hdr">🏆 Fecha Final activa</div>
       <div class="adm-card-body">
         <div id="final-resumen" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--navy);line-height:1.9;"></div>
+        <div id="final-lineas-dia1-wrap"></div>
         <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
         <div id="final-eliminar-msg" class="adm-msg" style="display:none;"></div>
       </div>
@@ -4109,9 +4110,12 @@ function finalLoad(){
           '<div><b>Jugadores:</b> ' + nJug + '</div>' +
           '<div><b>Estado:</b> ' + meta.estado + '</div>';
       }
+      renderFinalLineasDia1_(meta);
     } else {
       if(sinCrear) sinCrear.style.display = 'block';
       if(yaCreada) yaCreada.style.display = 'none';
+      const wrap = document.getElementById('final-lineas-dia1-wrap');
+      if(wrap) wrap.innerHTML = '';
     }
   }).catch(function(){});
 }
@@ -4172,6 +4176,50 @@ function finalEliminar(){
     }
   }).catch(function(){
     msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red';
+  });
+}
+
+// Dibuja, dentro de la Fecha Final ya creada, el botón para armar las líneas
+// del Día 1 (mientras estado==='armada') o las líneas ya armadas (una vez
+// que se arman). Los nombres/hcp de cada jugador ya vienen resueltos desde
+// el backend (armarLineasFinalDia1_), no hace falta recalcularlos acá.
+function renderFinalLineasDia1_(meta){
+  const wrap = document.getElementById('final-lineas-dia1-wrap');
+  if(!wrap) return;
+  if(meta.estado === 'armada'){
+    wrap.innerHTML =
+      '<button class="adm-btn-primary" onclick="finalArmarLineas()" style="margin-top:18px;width:100%;">⚡ Armar Líneas Día 1</button>' +
+      '<div id="final-lineas-msg" class="adm-msg" style="display:none;"></div>';
+    return;
+  }
+  const lineas = meta.lineasDia1 || [];
+  if(!lineas.length){ wrap.innerHTML = ''; return; }
+  let html = '<div style="margin-top:18px;"><div class="adm-label" style="margin-bottom:8px;">Líneas de salida — Día 1</div>';
+  lineas.forEach(function(l){
+    html += '<div class="gf-lin-linea"><div class="gf-lin-hdr">Línea ' + l.lineNum + '</div><div class="gf-lin-players">';
+    (l.players || []).forEach(function(p){
+      html += '<div class="gf-lin-pill' + (p.invitado ? ' gf-lin-pill-inv' : '') + '">' +
+        '<span class="gf-lin-pname">' + p.apodo + (p.invitado ? ' (invitado)' : '') + '</span>' +
+        '<span style="font-size:12px;color:var(--g4);">HCP ' + (p.hcp !== '' && p.hcp !== null && p.hcp !== undefined ? p.hcp : '—') + '</span>' +
+        '</div>';
+    });
+    html += '</div></div>';
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function finalArmarLineas(){
+  const msg = document.getElementById('final-lineas-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'armarLineasFinalDia1', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg) {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al armar las líneas';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
   });
 }
 
