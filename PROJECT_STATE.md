@@ -20060,3 +20060,619 @@ Sí, `completo` se recalcula desde cero en cada pedido — no queda memoria de q
 4. **Sí.** Una vez que `completo` es `true`, `filas.sort((a,b) => a.gross - b.gross)` ordena de menos a más golpes — el jugador con menos golpes queda primero, que es exactamente el ganador en Medal Play.
 
 5. **Sí.** `completo` se computa en cada invocación de `getFinalStandingsDia1_`, iterando todos los jugadores y revisando cuántos tienen 18 hoyos. Si uno borra un hoyo (score = '' en la hoja), en el próximo pedido su `holesCargados` baja a 17, `completo` vuelve a `false` y la tabla se oculta.
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 131 (Fecha Final — pantalla para que cada jugador cargue sus golpes, Día 1)
+
+### Contexto (en criollo)
+
+Esta es la Tarea 5 de la Fecha Final. Ya tenemos armadas las líneas del Día 1 (Tarea 129) y el motor de atrás para guardar scores hoyo por hoyo (Tarea 130). Esta Tarea agrega la pantalla real: la que ve cada jugador en su celular para ir cargando sus golpes durante la ronda.
+
+Es una pantalla nueva y separada de "Mi Tarjeta" de las fechas regulares — no comparte nada de código ni de estado con el Live Scoring que ya usás todos los domingos, así que no hay ningún riesgo de romper eso. La construí calcada en la experiencia que ya conocés (mismo estilo de tarjeta con círculo por jugador, mismo teclado numérico para tocar y cargar), pero simplificada porque la Final es Medal Play: no hay pestañas de Stableford / Match / Bonus (no existen en esta modalidad), y no hay que "firmar" la tarjeta al final — cada hoyo queda guardado en el momento en que lo tocás.
+
+Cómo se entra: en cuanto un jugador que participa de la Fecha Final en curso toca "Mi Tarjeta", la app lo lleva derecho a esta pantalla (sin pasar por la lista de fechas) — el mismo criterio que ya usamos hoy cuando hay una fecha regular en juego.
+
+Qué ve el jugador en cada hoyo: todos los jugadores de su línea, con su apodo, los golpes que lleva hasta ahora, la diferencia a par (por ejemplo "+2"), y cuántos hoyos ya cargó (por ejemplo "7/18"). Toca el círculo de cualquier jugador de su línea (incluido él mismo) para cargarle el score de ese hoyo — igual que hoy podés cargarle el score a tu pareja en una fecha regular. Apenas carga un jugador, la pantalla salta sola al siguiente jugador sin score en ese hoyo; cuando todos terminaron el hoyo, avanza sola al próximo hoyo pendiente. Cuando los 18 hoyos de su línea están completos, aparece un resumen de "tu grupo terminó" — pero aclarando que el resultado general de la Fecha Final se muestra recién cuando TODAS las líneas terminan (no solo la suya), tal cual me confirmaste.
+
+Probé todo a fondo con un test automático que simula la pantalla completa en un navegador real: que entra derecho a esta pantalla al tocar "Mi Tarjeta", que el hoyo 1 muestra a los 2 jugadores de la línea sin cargar, que tocar un jugador abre el teclado con su nombre y el par correcto, que cargar un score dispara el pedido correcto al servidor y salta automáticamente al siguiente jugador, que al completar el hoyo entre todos avanza solo al hoyo siguiente, que los datos de golpes/diferencia/hoyos-cargados se ven bien, que aparece la pantalla de "grupo completo" al cargar los 18 hoyos, que salir de la pantalla corta el sondeo automático al servidor, y que no hay problemas de superposición en pantallas chicas (probado de 280 a 768px de ancho).
+
+**Esta Tarea es solo `index.html` — no toca ningún archivo `.gs`. Alcanza con `git push` y el redeploy de GitHub Pages, no hace falta tocar Apps Script.**
+
+### Cambio 1 — `index.html`: pantalla nueva "Mi Tarjeta · Fecha Final" (HTML)
+
+Buscá (es el cierre de la pantalla `mit-live` de las fechas regulares):
+
+```
+    <!-- Offline / error notice -->
+    <div id="live-offline-msg" class="live-offline" style="display:none;"></div>
+
+  </div>
+
+</div>
+</div>
+```
+
+Reemplazalo por:
+
+```
+    <!-- Offline / error notice -->
+    <div id="live-offline-msg" class="live-offline" style="display:none;"></div>
+
+  </div>
+
+  <!-- ════ MI TARJETA — FECHA FINAL (Live, Medal Play) ════ -->
+  <div id="mit-live-final" style="display:none;">
+
+    <div style="display:flex;align-items:center;margin-bottom:10px;">
+      <span id="final-live-title" style="flex:1;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
+    </div>
+
+    <div id="final-live-loading" class="lb-status" style="display:block;"><div class="spinner"></div>Conectando...</div>
+
+    <div id="final-live-content" style="display:none;">
+      <div id="final-live-hoyo-view">
+        <div class="adm-card">
+          <div class="adm-card-hdr" id="final-live-hoyo-card-hdr">
+            <div class="live-hoyo-hdr">
+              <button class="live-nav-btn" onclick="finalLivePrevHoyo()">‹</button>
+              <div class="live-hoyo-title">
+                <span id="final-live-hoyo-label">Hoyo 1</span><span class="live-par-label" id="final-live-par-label"></span>
+                <span class="live-linea-chip" id="final-live-linea-chip"></span>
+              </div>
+              <button class="live-nav-btn" onclick="finalLiveNextHoyo()">›</button>
+            </div>
+          </div>
+          <div class="adm-card-body" style="padding:0;" id="final-live-players-body"></div>
+        </div>
+      </div>
+      <div id="final-live-complete-view" style="display:none;" class="live-complete-wrap"></div>
+    </div>
+
+    <div id="final-live-offline-msg" class="live-offline" style="display:none;"></div>
+
+  </div>
+
+</div>
+</div>
+```
+
+### Cambio 2 — `index.html`: modal de teclado numérico propio de la Final (HTML)
+
+Buscá:
+
+```
+  </div>
+</div>
+
+<!-- Admin tarjeta keypad modal -->
+```
+
+Reemplazalo por:
+
+```
+  </div>
+</div>
+
+<!-- Score picker modal — Fecha Final -->
+<div id="final-score-modal" class="sm-overlay" style="display:none;" onclick="finalSmClose(event)">
+  <div class="sm-box" onclick="event.stopPropagation()">
+    <div class="sm-hdr" id="final-sm-hdr">
+      <div class="sm-player-name" id="final-sm-player-name"></div>
+      <div class="sm-hoyo" id="final-sm-hoyo">Hoyo 1</div>
+      <div class="sm-par" id="final-sm-par">Par 4</div>
+    </div>
+    <div class="sm-big" id="final-sm-big">–</div>
+    <div class="sm-keypad" id="final-sm-keypad-low">
+      <button onclick="finalSmSetAndClose(1)">1</button>
+      <button onclick="finalSmSetAndClose(2)">2</button>
+      <button onclick="finalSmSetAndClose(3)">3</button>
+      <button onclick="finalSmSetAndClose(4)">4</button>
+      <button onclick="finalSmSetAndClose(5)">5</button>
+      <button onclick="finalSmSetAndClose(6)">6</button>
+      <button onclick="finalSmSetAndClose(7)">7</button>
+      <button onclick="finalSmSetAndClose(8)">8</button>
+      <button onclick="finalSmSetAndClose(9)">9</button>
+      <button class="sm-clear" onclick="finalSmSetAndClose(null)">✕</button>
+      <button onclick="finalSmSetAndClose(0)">0</button>
+      <button class="sm-more" onclick="finalSmShowHigh()">10+</button>
+    </div>
+    <div class="sm-keypad" id="final-sm-keypad-high" style="display:none;">
+      <button onclick="finalSmSetAndClose(10)">10</button>
+      <button onclick="finalSmSetAndClose(11)">11</button>
+      <button onclick="finalSmSetAndClose(12)">12</button>
+      <button onclick="finalSmSetAndClose(13)">13</button>
+      <button onclick="finalSmSetAndClose(14)">14</button>
+      <button onclick="finalSmSetAndClose(15)">15</button>
+      <button onclick="finalSmSetAndClose(16)">16</button>
+      <button onclick="finalSmSetAndClose(17)">17</button>
+      <button onclick="finalSmSetAndClose(18)">18</button>
+      <button onclick="finalSmSetAndClose(19)">19</button>
+      <button onclick="finalSmSetAndClose(20)">20</button>
+      <button class="sm-more" onclick="finalSmShowLow()">‹ 1-9</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin tarjeta keypad modal -->
+```
+
+### Cambio 3 — `index.html`: el router `pg()` tiene que saber apagar el sondeo de la Final al salir de "Mi Tarjeta"
+
+Buscá:
+
+```
+  if(id !== 'mit' && LIVE_MODE){ livePollStop(); LIVE_MODE=false; }
+  if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else if(NGT_SESSION){ MIT_PLAYER={matricula:NGT_SESSION.mat,nombre:NGT_SESSION.nombre||'',apodo:NGT_SESSION.apodo||''}; showMitFechas(); } else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; } }
+```
+
+Reemplazalo por:
+
+```
+  if(id !== 'mit' && LIVE_MODE){ livePollStop(); LIVE_MODE=false; }
+  if(id !== 'mit' && FINAL_LIVE_MODE){ finalLivePollStop(); FINAL_LIVE_MODE=false; }
+  if(id==='mit'){ if(LIVE_MODE){ livePollStop(); LIVE_MODE=false; } if(FINAL_LIVE_MODE){ finalLivePollStop(); FINAL_LIVE_MODE=false; } if(MIT_PLAYER) showMitFechas(); else if(NGT_SESSION){ MIT_PLAYER={matricula:NGT_SESSION.mat,nombre:NGT_SESSION.nombre||'',apodo:NGT_SESSION.apodo||''}; showMitFechas(); } else { document.getElementById('mit-login').style.display='block'; document.getElementById('mit-fechas').style.display='none'; document.getElementById('mit-score').style.display='none'; document.getElementById('mit-live').style.display='none'; document.getElementById('mit-live-final').style.display='none'; } }
+```
+
+### Cambio 4 — `index.html`: variables de estado nuevas para la pantalla de la Final
+
+Buscá:
+
+```
+let LIVE_REVIEW_MAT = null;  // set when editing from "Revisar Tarjetas" — triggers re-firma after save
+
+function mitLogin(){
+```
+
+Reemplazalo por:
+
+```
+let LIVE_REVIEW_MAT = null;  // set when editing from "Revisar Tarjetas" — triggers re-firma after save
+
+// ── Fecha Final — Live Scoring Día 1/2 (Medal Play) ──
+let FINAL_LIVE_MODE = false;
+let FINAL_LIVE_DIA = 1;
+let FINAL_LIVE_DATA = null;
+let FINAL_LIVE_HOYO = 1;
+let FINAL_LIVE_POLL_TIMER = null;
+let FINAL_LIVE_LOCAL_SEQ = 0;
+let FINAL_LIVE_POLL_SEQ = 0;
+let FINAL_LIVE_SAVING_MAT = null;
+let FINAL_LIVE_SAVING_HOYO = null;
+let FINAL_LIVE_TARGET_MAT = null;
+
+function mitLogin(){
+```
+
+### Cambio 5 — `index.html`: `showMitFechas()` — detectar si hay que ir directo a la Final (inicio de la función)
+
+Buscá:
+
+```
+  document.getElementById('mit-login').style.display = 'none';
+  document.getElementById('mit-score').style.display = 'none';
+  document.getElementById('mit-live').style.display = 'none';
+
+  // Si hay fecha activa, ir directo al live scoring sin mostrar la lista de fechas
+```
+
+Reemplazalo por:
+
+```
+  document.getElementById('mit-login').style.display = 'none';
+  document.getElementById('mit-score').style.display = 'none';
+  document.getElementById('mit-live').style.display = 'none';
+  var flEl0 = document.getElementById('mit-live-final');
+  if(flEl0) flEl0.style.display = 'none';
+
+  // Fecha Final en curso con este jugador adentro -> directo a esa pantalla,
+  // salteando la lista de fechas regulares (mismo criterio que HOME_FECHA_ACTIVA).
+  checkFinalLiveActiva_().then(function(fl){
+  if(fl){ openLiveViewFinal(fl.dia); return; }
+
+  // Si hay fecha activa, ir directo al live scoring sin mostrar la lista de fechas
+```
+
+### Cambio 6 — `index.html`: `showMitFechas()` — cierre del `.then(...)` agregado en el Cambio 5
+
+Buscá:
+
+```
+    // Un solo item pendiente — auto-jump directo al scorecard
+    openMitScore(f.fecha, f.cancha || '', f.colorTee || 'BLANCAS');
+  });
+}
+
+function openMitScore(fecha, cancha, colorTee){
+```
+
+Reemplazalo por:
+
+```
+    // Un solo item pendiente — auto-jump directo al scorecard
+    openMitScore(f.fecha, f.cancha || '', f.colorTee || 'BLANCAS');
+  });
+  }); // fin checkFinalLiveActiva_().then
+}
+
+function openMitScore(fecha, cancha, colorTee){
+```
+
+### Cambio 7 — `index.html`: todas las funciones nuevas de la pantalla (JS)
+
+Buscá:
+
+```
+// ── End Live Scoring ─────────────────────────────────────────
+
+function smShowHigh(){
+```
+
+Reemplazalo por:
+
+```
+// ── End Live Scoring ─────────────────────────────────────────
+
+// ── Fecha Final — Live Scoring Día 1/2 (Medal Play) ──────────────
+// Pantalla separada de mit-live (fechas regulares): sin pestañas de
+// Stableford/Match/Bonus (no existen en Medal Play), sin firma de tarjeta al
+// final (cada hoyo ya queda guardado en el momento en TARJETAS FINAL) y con
+// su propio modal de teclado (final-score-modal) para no compartir estado
+// con el Live Scoring de las fechas regulares.
+
+// Se llama desde showMitFechas(): si el jugador logueado participa del día
+// en curso de la Fecha Final, devuelve {dia}. Si no, null.
+function checkFinalLiveActiva_(){
+  return ngtApiGet('finalMeta').then(function(r){
+    var meta = r && r.data;
+    if(!meta || !MIT_PLAYER) return null;
+    var dia = null;
+    if(meta.estado === 'dia1_en_curso') dia = 1;
+    else if(meta.estado === 'dia2_en_curso') dia = 2;
+    if(!dia) return null;
+    var lineas = meta['lineasDia' + dia] || [];
+    var enLinea = lineas.some(function(l){
+      return (l.players || []).some(function(p){ return p.matricula === MIT_PLAYER.matricula; });
+    });
+    return enLinea ? { dia: dia } : null;
+  }).catch(function(){ return null; });
+}
+
+function openLiveViewFinal(dia){
+  FINAL_LIVE_DIA = dia;
+  FINAL_LIVE_MODE = true;
+  FINAL_LIVE_HOYO = 1;
+  FINAL_LIVE_DATA = null;
+  document.getElementById('mit-fechas').style.display = 'none';
+  document.getElementById('mit-score').style.display = 'none';
+  document.getElementById('mit-live').style.display = 'none';
+  document.getElementById('mit-live-final').style.display = 'block';
+  document.getElementById('final-live-loading').style.display = 'flex';
+  document.getElementById('final-live-content').style.display = 'none';
+  document.getElementById('final-live-offline-msg').style.display = 'none';
+  document.getElementById('final-live-title').textContent = '🏆 Fecha Final · Día ' + dia;
+  finalLivePoll();
+  finalLivePollStart();
+}
+
+function finalLivePollStart(){
+  finalLivePollStop();
+  FINAL_LIVE_POLL_TIMER = setInterval(finalLivePoll, 8000);
+}
+
+function finalLivePollStop(){
+  if(FINAL_LIVE_POLL_TIMER){ clearInterval(FINAL_LIVE_POLL_TIMER); FINAL_LIVE_POLL_TIMER = null; }
+}
+
+function finalLivePoll(){
+  if(!MIT_PLAYER || !FINAL_LIVE_MODE) return;
+  var seqAtPollTime = FINAL_LIVE_LOCAL_SEQ;
+  var myPollId = ++FINAL_LIVE_POLL_SEQ;
+  ngtApiGet('getLineaLiveFinal', { dia: FINAL_LIVE_DIA, matricula: MIT_PLAYER.matricula })
+    .then(function(r){
+      var offEl = document.getElementById('final-live-offline-msg');
+      if(r && r.ok){
+        var esRespuestaVigente = (FINAL_LIVE_LOCAL_SEQ === seqAtPollTime) && (myPollId === FINAL_LIVE_POLL_SEQ);
+        if(!FINAL_LIVE_DATA) finalLiveInitHoyo(r);
+        if(esRespuestaVigente) FINAL_LIVE_DATA = r;
+        document.getElementById('final-live-loading').style.display = 'none';
+        document.getElementById('final-live-content').style.display = 'block';
+        if(offEl) offEl.style.display = 'none';
+        finalLiveRender();
+        if(esRespuestaVigente){
+          var allComplete = r.jugadores.every(function(j){ return j.holesCargados === 18; });
+          if(allComplete) finalLivePollStop();
+        }
+      } else {
+        if(!FINAL_LIVE_DATA){
+          document.getElementById('final-live-loading').innerHTML =
+            '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
+            '<p style="color:var(--red);font-size:14px;">' + (r && r.error ? r.error : 'Error de conexión') + '</p>' +
+            '<button class="btn-back" onclick="pg(\'lb\',null)" style="margin-top:8px;">←</button></div>';
+        } else if(offEl){
+          offEl.textContent = r && r.error ? r.error : 'Error al actualizar';
+          offEl.style.display = 'block';
+        }
+      }
+    })
+    .catch(function(){
+      var offEl = document.getElementById('final-live-offline-msg');
+      if(!FINAL_LIVE_DATA){
+        document.getElementById('final-live-loading').innerHTML =
+          '<div style="padding:16px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;">' +
+          '<p style="color:var(--red);font-size:14px;">Sin conexión</p>' +
+          '<button class="btn-back" onclick="pg(\'lb\',null)" style="margin-top:8px;">←</button></div>';
+      } else if(offEl){
+        offEl.textContent = 'Sin conexión · reintentando...';
+        offEl.style.display = 'block';
+      }
+    });
+}
+
+function finalLiveInitHoyo(data){
+  for(var h = 0; h < 18; h++){
+    var anyMissing = data.jugadores.some(function(j){ return j.scores[h] === null; });
+    if(anyMissing){ FINAL_LIVE_HOYO = h + 1; return; }
+  }
+  FINAL_LIVE_HOYO = 18; // todos completos: queda en el último hoyo
+}
+
+function finalLiveRender(){
+  if(!FINAL_LIVE_DATA) return;
+  var d = FINAL_LIVE_DATA;
+  var chip = document.getElementById('final-live-linea-chip');
+  if(chip) chip.textContent = 'Línea ' + d.lineaNum + ' de ' + d.totalLineas;
+  finalLiveRenderHoyoActual();
+  var allComplete = d.jugadores.every(function(j){ return j.holesCargados === 18; });
+  document.getElementById('final-live-complete-view').style.display = allComplete ? 'block' : 'none';
+  if(allComplete) finalLiveRenderComplete();
+}
+
+function finalLiveDiffTxt_(diff){
+  if(diff === null || diff === undefined) return '–';
+  if(diff === 0) return 'PAR';
+  return diff > 0 ? ('+' + diff) : String(diff);
+}
+
+function finalLiveRenderHoyoActual(){
+  if(!FINAL_LIVE_DATA) return;
+  var d = FINAL_LIVE_DATA;
+  var pares = d.pares || [];
+  var h = FINAL_LIVE_HOYO - 1;
+  var par = pares[h] || null;
+  document.getElementById('final-live-hoyo-label').textContent = 'Hoyo ' + FINAL_LIVE_HOYO;
+  document.getElementById('final-live-par-label').textContent = par ? '· Par ' + par : '';
+
+  var html = '';
+  d.jugadores.forEach(function(jug){
+    var score = jug.scores[h];
+    var isSaving = FINAL_LIVE_SAVING_MAT === jug.matricula && FINAL_LIVE_SAVING_HOYO === FINAL_LIVE_HOYO;
+    var cls = 'hole-circle' + (score !== null ? ' filled' : '');
+    if(isSaving) cls += ' saving';
+    var savingLabel = isSaving ? '<div class="live-saving-label">Guardando...</div>' : '';
+
+    html += '<div class="live-player-row" onclick="finalLiveOpenScoreModal(' + FINAL_LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
+      '<div class="live-player-info">' +
+        '<div class="live-player-apodo">' + jug.apodo + (jug.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div class="live-player-hcp">' + jug.grossParcial + ' golpes · ' + finalLiveDiffTxt_(jug.diffParcial) + ' · ' + jug.holesCargados + '/18</div>' +
+      '</div>' +
+      '<div class="live-hole-wrap">' +
+        '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
+          (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
+          (score !== null ? '<span class="hole-score" style="font-size:22px;">' + score + '</span>' : '') +
+        '</div>' +
+        savingLabel +
+      '</div>' +
+    '</div>';
+  });
+  document.getElementById('final-live-players-body').innerHTML = html;
+}
+
+function finalLiveRenderComplete(){
+  if(!FINAL_LIVE_DATA) return;
+  var d = FINAL_LIVE_DATA;
+  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:3px solid var(--red);">Tu grupo completó el Día ' + FINAL_LIVE_DIA + '</div>' +
+    '<div class="adm-card-body">';
+  d.jugadores.forEach(function(jug){
+    html += '<div class="live-player-summary">' +
+      '<div><div class="live-sum-name">' + jug.apodo + '</div>' +
+      '<div class="live-sum-stat">' + jug.grossParcial + ' golpes · ' + finalLiveDiffTxt_(jug.diffParcial) + '</div></div>' +
+    '</div>';
+  });
+  html += '</div><div class="adm-card-body" style="border-top:1px solid var(--g1);text-align:center;">' +
+    '<p style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);margin:0;">El resultado general se muestra recién cuando todas las líneas terminan.</p>' +
+    '</div></div>';
+  document.getElementById('final-live-complete-view').innerHTML = html;
+}
+
+function finalLiveOpenScoreModal(hoyo, mat){
+  if(!FINAL_LIVE_DATA) return;
+  FINAL_LIVE_TARGET_MAT = mat;
+  var jug = FINAL_LIVE_DATA.jugadores.find(function(j){ return j.matricula === mat; });
+  var pares = FINAL_LIVE_DATA.pares || [];
+  var par = pares[hoyo - 1];
+  var currentScore = jug ? jug.scores[hoyo - 1] : null;
+  var apodo = jug ? jug.apodo : mat;
+
+  document.getElementById('final-sm-player-name').textContent = apodo;
+  document.getElementById('final-sm-hoyo').textContent = 'Hoyo ' + hoyo;
+  document.getElementById('final-sm-par').textContent = par ? 'Par ' + par : '';
+  document.getElementById('final-sm-big').textContent = currentScore !== null ? currentScore : '–';
+  document.getElementById('final-sm-keypad-low').style.display = 'grid';
+  document.getElementById('final-sm-keypad-high').style.display = 'none';
+  document.getElementById('final-score-modal').style.display = 'flex';
+}
+
+function finalSmShowHigh(){
+  document.getElementById('final-sm-keypad-low').style.display = 'none';
+  document.getElementById('final-sm-keypad-high').style.display = 'grid';
+}
+
+function finalSmShowLow(){
+  document.getElementById('final-sm-keypad-low').style.display = 'grid';
+  document.getElementById('final-sm-keypad-high').style.display = 'none';
+}
+
+function finalSmClose(e){
+  if(e && e.target && e.target.id !== 'final-score-modal') return;
+  document.getElementById('final-score-modal').style.display = 'none';
+}
+
+function finalSmSetAndClose(v){
+  document.getElementById('final-score-modal').style.display = 'none';
+  finalLiveSmConfirm(v);
+}
+
+function finalLiveSmConfirm(v){
+  if(!FINAL_LIVE_DATA || !FINAL_LIVE_TARGET_MAT) return;
+  var score = (v === null || v === '') ? null : parseInt(v, 10);
+  var hoyo = FINAL_LIVE_HOYO;
+  var mat = FINAL_LIVE_TARGET_MAT;
+
+  FINAL_LIVE_SAVING_MAT = mat;
+  FINAL_LIVE_SAVING_HOYO = hoyo;
+  FINAL_LIVE_LOCAL_SEQ++;
+
+  var jug = FINAL_LIVE_DATA.jugadores.find(function(j){ return j.matricula === mat; });
+  if(jug){ jug.scores[hoyo - 1] = score; }
+  finalLiveRender();
+
+  var optimisticAdvanced = false;
+  if(score !== null){
+    var allDoneHere = FINAL_LIVE_DATA.jugadores.every(function(j){ return j.scores[hoyo - 1] !== null; });
+    if(!allDoneHere){
+      finalLiveAutoAdvancePlayer(hoyo, mat);
+      optimisticAdvanced = true;
+    }
+  }
+
+  function doPost(){
+    return ngtApiPost({
+      action: 'cargarHoyoLiveFinal',
+      dia: FINAL_LIVE_DIA,
+      matriculaJugador: mat,
+      matriculaCargador: MIT_PLAYER.matricula,
+      token: NGT_SESSION && NGT_SESSION.token,
+      hoyo: hoyo,
+      score: score,
+    }).then(function(r){
+      if(!r || !r.ok) throw new Error((r && r.error) || 'Error del servidor');
+      return r;
+    });
+  }
+
+  function handleOk(r){
+    FINAL_LIVE_SAVING_MAT = null;
+    FINAL_LIVE_SAVING_HOYO = null;
+    FINAL_LIVE_LOCAL_SEQ++;
+    if(FINAL_LIVE_DATA && FINAL_LIVE_DATA.jugadores && r && r.jugadores){
+      var savedJug = r.jugadores.find(function(j){ return j.matricula === mat; });
+      if(savedJug){
+        var jugIdx = -1;
+        for(var _i = 0; _i < FINAL_LIVE_DATA.jugadores.length; _i++){
+          if(FINAL_LIVE_DATA.jugadores[_i].matricula === mat){ jugIdx = _i; break; }
+        }
+        if(jugIdx >= 0) FINAL_LIVE_DATA.jugadores[jugIdx] = savedJug;
+      }
+      if(r.updatedAt !== undefined) FINAL_LIVE_DATA.updatedAt = r.updatedAt;
+    } else {
+      FINAL_LIVE_DATA = r;
+    }
+    finalLiveRender();
+    var allComplete = FINAL_LIVE_DATA.jugadores && FINAL_LIVE_DATA.jugadores.every(function(j){ return j.holesCargados === 18; });
+    if(allComplete) finalLivePollStop();
+    if(score !== null && !optimisticAdvanced){
+      finalLiveAutoAdvancePlayer(hoyo, mat);
+    }
+  }
+
+  function onFinalFailure(){
+    FINAL_LIVE_SAVING_MAT = null;
+    FINAL_LIVE_SAVING_HOYO = null;
+    if(FINAL_LIVE_DATA){
+      var j2 = FINAL_LIVE_DATA.jugadores.find(function(j){ return j.matricula === mat; });
+      if(j2 && j2.scores[hoyo - 1] === score){ j2.scores[hoyo - 1] = null; }
+    }
+    finalLiveRender();
+    liveShowToast('Error al guardar — verificá tu conexión');
+  }
+
+  doPost().then(handleOk).catch(function(){
+    setTimeout(function(){
+      doPost().then(handleOk).catch(onFinalFailure);
+    }, 2000);
+  });
+}
+
+function finalLiveAutoAdvancePlayer(hoyo, justSavedMat){
+  if(!FINAL_LIVE_DATA) return;
+  var jugs = FINAL_LIVE_DATA.jugadores;
+  var allDoneHere = jugs.every(function(j){ return j.scores[hoyo - 1] !== null; });
+  if(allDoneHere){ finalLiveAutoAdvance(); return; }
+  var curIdx = -1;
+  for(var i = 0; i < jugs.length; i++){ if(jugs[i].matricula === justSavedMat){ curIdx = i; break; } }
+  if(curIdx < 0) return;
+  for(var k = 1; k <= jugs.length; k++){
+    var next = jugs[(curIdx + k) % jugs.length];
+    if(next.scores[hoyo - 1] === null){
+      setTimeout(function(){ finalLiveOpenScoreModal(hoyo, next.matricula); }, 150);
+      return;
+    }
+  }
+}
+
+function finalLiveAutoAdvance(){
+  if(!FINAL_LIVE_DATA) return;
+  var jugs = FINAL_LIVE_DATA.jugadores;
+  var allDoneHere = jugs.every(function(j){ return j.scores[FINAL_LIVE_HOYO - 1] !== null; });
+  if(!allDoneHere) return;
+  for(var k = 1; k < 18; k++){
+    var h = (FINAL_LIVE_HOYO - 1 + k) % 18;
+    var anyMissing = jugs.some(function(j){ return j.scores[h] === null; });
+    if(anyMissing){ FINAL_LIVE_HOYO = h + 1; finalLiveRenderHoyoActual(); return; }
+  }
+}
+
+function finalLivePrevHoyo(){ FINAL_LIVE_HOYO = FINAL_LIVE_HOYO === 1 ? 18 : FINAL_LIVE_HOYO - 1; finalLiveRenderHoyoActual(); }
+function finalLiveNextHoyo(){ FINAL_LIVE_HOYO = FINAL_LIVE_HOYO === 18 ? 1 : FINAL_LIVE_HOYO + 1; finalLiveRenderHoyoActual(); }
+
+document.addEventListener('visibilitychange', function(){
+  if(!FINAL_LIVE_MODE) return;
+  if(document.hidden){ finalLivePollStop(); }
+  else { finalLivePoll(); finalLivePollStart(); }
+});
+
+// ── End Fecha Final Live Scoring ──────────────────────────────
+
+function smShowHigh(){
+```
+
+### Qué NO cambia
+
+- No se toca nada del Live Scoring de las fechas regulares (`mit-live`, `LIVE_MODE`, `livePoll`, `score-modal`, etc.) — la Final tiene su propia pantalla (`mit-live-final`), su propio modal (`final-score-modal`) y sus propias variables (`FINAL_LIVE_*`), completamente separadas.
+- No hay pestañas de Stableford / Match / Bonus, ni "firmar tarjeta" al final — no corresponden a Medal Play. Cada hoyo queda guardado en el momento (usando `cargarHoyoLiveFinal` de la Tarea 130).
+- No se toca el ranking general del Día 1 (`getFinalStandingsDia1`, de la Tarea 130) — sigue oculto hasta que TODAS las líneas terminen. Esta Tarea solo agrega la pantalla de carga hoyo por hoyo; ver el resultado general en vivo (todas las líneas a la vez) es la próxima Tarea.
+- No toca ningún archivo `.gs` — es 100% frontend. Solo hace falta `git push` + el redeploy de GitHub Pages, no Apps Script.
+
+### ❓ Preguntas de verificación
+
+1. Entrá con la matrícula de un jugador que esté en la Fecha Final en curso y tocá "Mi Tarjeta" — ¿te lleva derecho a la pantalla de la Final (sin pasar por la lista de fechas)?
+Sí. `showMitFechas()` llama primero `checkFinalLiveActiva_()`, que hace GET `finalMeta` y chequea si el jugador logueado está en una línea del día en curso. Si sí, llama `openLiveViewFinal(dia)` directamente — nunca se muestra `#mit-fechas`.
+
+2. En el hoyo 1, ¿ves a todos los jugadores de tu línea con su apodo, golpes, diferencia a par y hoyos cargados (por ejemplo "0 golpes · – · 0/18")?
+Sí. `finalLiveRenderHoyoActual()` itera `FINAL_LIVE_DATA.jugadores` y renderiza: apodo, `grossParcial + ' golpes · ' + finalLiveDiffTxt_(diffParcial) + ' · ' + holesCargados + '/18'`. Con 0 hoyos cargados: "0 golpes · – · 0/18".
+
+3. Tocá tu propio círculo (o el de un compañero de tu línea) y cargá un score — ¿el teclado te muestra el nombre correcto, el hoyo correcto y el par correcto?
+Sí. `finalLiveOpenScoreModal(hoyo, mat)` lee el jugador de `FINAL_LIVE_DATA.jugadores`, el par de `FINAL_LIVE_DATA.pares[hoyo-1]`, y el score actual — los pone en `#final-sm-player-name`, `#final-sm-hoyo`, `#final-sm-par` y `#final-sm-big`.
+
+4. Después de cargar un score, ¿la pantalla salta sola al siguiente jugador sin cargar en ese hoyo? Y cuando todos los de la línea ya cargaron ese hoyo, ¿avanza sola al próximo hoyo?
+Sí. `finalLiveSmConfirm` llama `finalLiveAutoAdvancePlayer(hoyo, mat)`: si queda algún jugador sin cargar en ese hoyo, abre el modal del siguiente (setTimeout 150ms). Si todos terminaron el hoyo, llama `finalLiveAutoAdvance()` que busca el primer hoyo con algún score `null` y setea `FINAL_LIVE_HOYO`.
+
+5. Probá cargar los 18 hoyos de toda tu línea (podés usar scores cualquiera para probar) — ¿aparece el mensaje de "tu grupo completó el Día 1" aclarando que el resultado general se ve recién cuando terminan todas las líneas?
+Sí. `finalLiveRender()` chequea `d.jugadores.every(j => j.holesCargados === 18)` y si es `true` muestra `#final-live-complete-view` con `finalLiveRenderComplete()`, que incluye el texto "El resultado general se muestra recién cuando todas las líneas terminan."
+
+6. Si salís de "Mi Tarjeta" (por ejemplo tocando el menú de abajo) y volvés a entrar, ¿la pantalla sigue funcionando bien (sin quedar pegada ni duplicar el sondeo automático)?
+Sí. `pg()` detecta `id !== 'mit' && FINAL_LIVE_MODE` y llama `finalLivePollStop(); FINAL_LIVE_MODE=false`. Al volver a `mit`, `showMitFechas()` vuelve a llamar `checkFinalLiveActiva_()` y si corresponde entra a `openLiveViewFinal`, que llama `finalLivePollStop()` antes de `finalLivePollStart()` — nunca quedan 2 timers corriendo en paralelo.
+
+### ✅ Respuestas de verificación — T131 (todas respondidas arriba)
+
