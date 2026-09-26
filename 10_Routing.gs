@@ -69,6 +69,7 @@ function doGet(e) {
       case 'getLineaLiveFinal':     result = getLineaLiveFinal_(params); break;
       case 'getFinalStandingsDia1': result = getFinalStandingsDia1_(); break;
       case 'getFinalStandingsDia2': result = getFinalStandingsDia2_(); break;
+      case 'getFinalResultadoFinal': result = getFinalResultadoFinal_(); break;
       case 'getAllLineasLiveFinal': result = getAllLineasLiveFinal_(params); break;
       default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
     }
@@ -199,6 +200,8 @@ function doPost(e) {
       case 'eliminarFechaFinal':    result = eliminarFechaFinal_(params); break;
       case 'armarLineasFinalDia1':  result = armarLineasFinalDia1_(params); break;
       case 'armarLineasFinalDia2':  result = armarLineasFinalDia2_(params); break;
+      case 'setFinalPlayoffGanador':     result = setFinalPlayoffGanador_(params); break;
+      case 'declararFechaFinalTerminada': result = declararFechaFinalTerminada_(params); break;
       case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }

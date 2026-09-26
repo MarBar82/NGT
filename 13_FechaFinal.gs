@@ -777,6 +777,111 @@ function getFinalStandingsDia2_() {
 }
 
 /**
+ * Resultado final de la Fecha Final (36 hoyos, Día 1 + Día 2) -- a diferencia
+ * de getFinalStandingsDia2_ (que se muestra EN VIVO desde que arranca el
+ * Día 2), esta se muestra recién cuando TODOS los jugadores completaron los
+ * 18 hoyos del Día 2. Reutiliza getFinalStandingsDia2_ tal cual para el
+ * cálculo y el orden por netoTotal -- acá solo se agrega la detección de
+ * empate en el 1er puesto y, si ya se cargó un ganador del desempate a
+ * cancha (setFinalPlayoffGanador_), se lo usa para ubicarlo primero dentro
+ * del grupo empatado. El desempate a cancha SOLO aplica al 1er puesto -- un
+ * empate en 2do o 3er puesto no requiere ninguna resolución y queda tal cual
+ * (decisión de Marco: el playoff solo decide quién sale campeón).
+ */
+function getFinalResultadoFinal_() {
+  const st2 = getFinalStandingsDia2_();
+  if (!st2.ok) return { ok: false, error: st2.error };
+
+  const completo = st2.standings.length > 0 && st2.standings.every(function(s) { return s.holesCargados === 18; });
+  if (!completo) return { ok: true, completo: false };
+
+  const filas = st2.standings.slice();
+  const empatados1 = filas.filter(function(s) { return s.netoTotal === filas[0].netoTotal; });
+  const empate1 = empatados1.length > 1;
+
+  const meta = getFinalMeta_();
+  const playoffGanador = (meta && meta.playoffGanador) || null;
+  let resuelto1 = false;
+
+  if (empate1 && playoffGanador && empatados1.some(function(s) { return s.matricula === playoffGanador; })) {
+    const winnerIdx = filas.findIndex(function(s) { return s.matricula === playoffGanador; });
+    const winner = filas.splice(winnerIdx, 1)[0];
+    filas.unshift(winner);
+    resuelto1 = true;
+  }
+
+  return {
+    ok: true,
+    completo: true,
+    standings: filas,
+    empate1: empate1,
+    empatados1: empate1 ? empatados1.map(function(s) { return { matricula: s.matricula, apodo: s.apodo, invitado: s.invitado }; }) : [],
+    resuelto1: empate1 ? resuelto1 : true,
+    playoffGanador: playoffGanador,
+  };
+}
+
+/**
+ * Admin carga quién ganó el desempate a cancha cuando hay empate en el 1er
+ * puesto del resultado final (36 hoyos) -- ver getFinalResultadoFinal_. No
+ * reordena nada acá: solo guarda el matricula ganador en FINAL_META, y
+ * getFinalResultadoFinal_ lo usa para ubicarlo primero dentro del grupo
+ * empatado la próxima vez que se consulte.
+ */
+function setFinalPlayoffGanador_(params) {
+  const { adminKey, matricula } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const mat = String(matricula || '').trim();
+  if (!mat) return { ok: false, error: 'Falta el matricula del ganador' };
+
+  const res = getFinalResultadoFinal_();
+  if (!res.ok) return { ok: false, error: res.error };
+  if (!res.completo) return { ok: false, error: 'Todavía no se completó el Día 2' };
+  if (!res.empate1) return { ok: false, error: 'No hay empate en el 1er puesto, no hace falta cargar ningún desempate' };
+  if (!res.empatados1.some(function(p) { return p.matricula === mat; })) {
+    return { ok: false, error: 'Ese jugador no forma parte del empate en el 1er puesto' };
+  }
+
+  meta.playoffGanador = mat;
+  saveFinalMeta_(meta);
+  audit_('SET_FINAL_PLAYOFF_GANADOR', 'admin', { matricula: mat });
+  return { ok: true };
+}
+
+/**
+ * Admin declara terminada la Fecha Final: pasa a estado 'finalizada', que
+ * la pantalla pública muestra como el podio final en vez del acumulado en
+ * vivo. Requiere que el Día 2 esté completo y, si hay empate en el 1er
+ * puesto, que ya se haya cargado el ganador del desempate a cancha
+ * (setFinalPlayoffGanador_). No congela ni recalcula nada del resultado --
+ * getFinalResultadoFinal_ lo sigue calculando en vivo a partir de los datos
+ * reales, esto solo deja registrado que ya se cerró.
+ */
+function declararFechaFinalTerminada_(params) {
+  const { adminKey } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  if (meta.estado !== 'dia2_en_curso') {
+    return { ok: false, error: 'No se puede declarar terminada la Fecha Final en este estado (actual: ' + meta.estado + ')' };
+  }
+
+  const res = getFinalResultadoFinal_();
+  if (!res.ok) return { ok: false, error: res.error };
+  if (!res.completo) return { ok: false, error: 'Todavía no se completaron los 18 hoyos del Día 2 de todos los jugadores' };
+  if (res.empate1 && !res.resuelto1) {
+    return { ok: false, error: 'Hay empate en el 1er puesto -- cargá primero el resultado del desempate a cancha' };
+  }
+
+  meta.estado = 'finalizada';
+  saveFinalMeta_(meta);
+  audit_('DECLARAR_FECHA_FINAL_TERMINADA', 'admin', { ganador: res.standings[0].matricula });
+  return { ok: true };
+}
+
+/**
  * Devuelve el snapshot de TODAS las líneas de un día en una sola llamada --
  * para la pantalla pública "Ver en vivo" (Tarea 132), que muestra el progreso
  * de todas las líneas a la vez en vez de una por una como getLineaLiveFinal_.

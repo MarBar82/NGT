@@ -2449,6 +2449,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <div id="final-resumen" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--navy);line-height:1.9;"></div>
         <div id="final-lineas-dia1-wrap"></div>
         <div id="final-lineas-dia2-wrap"></div>
+        <div id="final-resultado-wrap"></div>
         <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
         <div id="final-eliminar-msg" class="adm-msg" style="display:none;"></div>
       </div>
@@ -4225,6 +4226,7 @@ function finalLoad(){
       }
       renderFinalLineasDia1_(meta);
       renderFinalLineasDia2_(meta);
+      renderFinalResultado_(meta);
     } else {
       if(sinCrear) sinCrear.style.display = 'block';
       if(yaCreada) yaCreada.style.display = 'none';
@@ -4232,6 +4234,8 @@ function finalLoad(){
       if(wrap) wrap.innerHTML = '';
       const wrap2 = document.getElementById('final-lineas-dia2-wrap');
       if(wrap2) wrap2.innerHTML = '';
+      const wrap3 = document.getElementById('final-resultado-wrap');
+      if(wrap3) wrap3.innerHTML = '';
     }
   }).catch(function(){});
 }
@@ -4391,6 +4395,101 @@ function finalArmarLineasDia2(){
       finalLoad();
     } else if(msg) {
       msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al armar las líneas';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// Dibuja, dentro de la Fecha Final ya creada, el bloque del resultado final:
+// nada mientras el Día 2 no está en curso o no se completó; si hay empate en
+// el 1er puesto sin resolver, pide cargar el ganador del desempate a cancha
+// (getFinalResultadoFinal_ ya trae quiénes están empatados); si no hay
+// empate (o ya se resolvió), muestra una vista previa del podio y el botón
+// para declarar terminada la Fecha Final; y una vez declarada, el podio
+// final fijo, sin ningún botón.
+function renderFinalResultado_(meta){
+  const wrap = document.getElementById('final-resultado-wrap');
+  if(!wrap) return;
+
+  if(meta.estado === 'finalizada'){
+    ngtApiGet('getFinalResultadoFinal').then(function(r){
+      if(r && r.ok && r.completo) wrap.innerHTML = finalPodioAdminHtml_(r.standings, '🏆 Fecha Final terminada');
+    }).catch(function(){});
+    return;
+  }
+
+  if(meta.estado !== 'dia2_en_curso'){ wrap.innerHTML = ''; return; }
+
+  ngtApiGet('getFinalResultadoFinal').then(function(r){
+    if(!r || !r.ok || !r.completo){ wrap.innerHTML = ''; return; }
+
+    if(r.empate1 && !r.resuelto1){
+      let opts = '';
+      r.empatados1.forEach(function(p){
+        opts += '<label style="display:block;margin-bottom:8px;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;color:var(--navy);"><input type="radio" name="final-playoff-radio" value="' + p.matricula + '" style="margin-right:8px;">' + p.apodo + (p.invitado ? ' (invitado)' : '') + '</label>';
+      });
+      wrap.innerHTML =
+        '<div class="adm-card" style="margin-top:18px;"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">⛳ Empate en el 1er puesto</div><div class="adm-card-body">' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;color:var(--g4);margin-bottom:10px;">Hay empate en el 1er puesto. Jugá el desempate a cancha y cargá acá quién ganó:</div>' +
+        opts +
+        '<button class="adm-btn-primary" onclick="finalGuardarPlayoff()" style="margin-top:10px;width:100%;">Guardar ganador del desempate</button>' +
+        '<div id="final-playoff-msg" class="adm-msg" style="display:none;"></div>' +
+        '</div></div>';
+      return;
+    }
+
+    wrap.innerHTML =
+      finalPodioAdminHtml_(r.standings, 'Vista previa del resultado final') +
+      '<button class="adm-btn-primary" onclick="finalDeclararTerminada()" style="margin-top:12px;width:100%;">🏆 Declarar Fecha Final Terminada</button>' +
+      '<div id="final-declarar-msg" class="adm-msg" style="display:none;"></div>';
+  }).catch(function(){ wrap.innerHTML = ''; });
+}
+
+// Tabla del podio (🥇🥈🥉 para los primeros 3, número para el resto) para el
+// panel admin -- reutilizada tanto para la vista previa antes de declarar
+// terminada como para el resultado ya fijo.
+function finalPodioAdminHtml_(standings, titulo){
+  const medals = ['🥇','🥈','🥉'];
+  let html = '<div class="adm-card" style="margin-top:18px;"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">' + titulo + '</div><div class="adm-card-body" style="padding:0;">';
+  standings.forEach(function(s, i){
+    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+      '<div style="font-size:18px;width:26px;">' + (medals[i] || (i + 1)) + '</div>' +
+      '<div style="flex:1;font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (invitado)' : '') + '</div>' +
+      '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.netoTotal + '</div>' +
+    '</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function finalGuardarPlayoff(){
+  const sel = document.querySelector('input[name="final-playoff-radio"]:checked');
+  const msg = document.getElementById('final-playoff-msg');
+  if(!sel){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Elegí quién ganó el desempate.'; }
+    return;
+  }
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'setFinalPlayoffGanador', adminKey: ADMIN_KEY_OK, matricula: sel.value }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg){
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al guardar el ganador del desempate';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+function finalDeclararTerminada(){
+  const msg = document.getElementById('final-declarar-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'declararFechaFinalTerminada', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg){
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al declarar terminada la Fecha Final';
     }
   }).catch(function(){
     if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
@@ -8722,11 +8821,17 @@ document.addEventListener('visibilitychange', function(){
 function checkFinalBanner_(){
   ngtApiGet('finalMeta').then(function(r){
     var meta = r && r.data;
+    var banner = document.getElementById('final-lb-banner');
+    if(!banner) return;
+    if(meta && meta.estado === 'finalizada'){
+      document.getElementById('final-lb-banner-title').textContent = 'Fecha Final — Resultado Final';
+      document.getElementById('final-lb-banner-sub').textContent = 'Tocá para ver el podio';
+      banner.style.display = 'block';
+      return;
+    }
     var dia = null;
     if(meta && meta.estado === 'dia1_en_curso') dia = 1;
     else if(meta && meta.estado === 'dia2_en_curso') dia = 2;
-    var banner = document.getElementById('final-lb-banner');
-    if(!banner) return;
     if(!dia){ banner.style.display = 'none'; return; }
     document.getElementById('final-lb-banner-title').textContent = 'Fecha Final en curso — Día ' + dia;
     document.getElementById('final-lb-banner-sub').textContent = 'Tocá para ver el progreso en vivo';
@@ -8742,6 +8847,11 @@ function startFinalPublicView(){
   document.getElementById('final-live-view-title').textContent = '🏆 Fecha Final — En Vivo';
   ngtApiGet('finalMeta').then(function(r){
     var meta = r && r.data;
+    if(meta && meta.estado === 'finalizada'){
+      document.getElementById('final-live-view-title').textContent = '🏆 Fecha Final — Resultado Final';
+      finalPublicShowPodio_();
+      return;
+    }
     var dia = null;
     if(meta && meta.estado === 'dia1_en_curso') dia = 1;
     else if(meta && meta.estado === 'dia2_en_curso') dia = 2;
@@ -8873,6 +8983,51 @@ function finalPublicStandingsDia2Html_(stR){
         '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diffTotal) + '</div>' +
         '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.netoTotal + '</div>' +
       '</div>' +
+    '</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+// Pantalla pública del resultado final (Tarea 136): a diferencia de las
+// otras vistas (Día 1 / Día 2), esta no sondea -- una vez que el admin
+// declaró terminada la Fecha Final el resultado ya no cambia, así que
+// alcanza con una sola consulta. Reutiliza getFinalResultadoFinal_, que ya
+// resuelve el orden (incluyendo el desempate a cancha del 1er puesto si
+// hubo empate).
+function finalPublicShowPodio_(){
+  ngtApiGet('getFinalResultadoFinal').then(function(r){
+    document.getElementById('final-live-view-loading').style.display = 'none';
+    if(!r || !r.ok || !r.completo){
+      document.getElementById('final-live-view-empty').style.display = 'block';
+      return;
+    }
+    document.getElementById('final-live-view-content').style.display = 'block';
+    document.getElementById('final-live-view-lineas').innerHTML = '';
+    document.getElementById('final-live-view-pending').style.display = 'none';
+    var standingsEl = document.getElementById('final-live-view-standings');
+    standingsEl.innerHTML = finalPublicPodioHtml_(r.standings);
+    standingsEl.style.display = 'block';
+  }).catch(function(){
+    document.getElementById('final-live-view-loading').style.display = 'none';
+    document.getElementById('final-live-view-empty').style.display = 'block';
+  });
+}
+
+// Tabla del podio final para la pantalla pública -- medallas para los
+// primeros 3, número para el resto. Mismo estilo visual que las demás
+// tablas de esta pantalla (finalPublicRender / finalPublicStandingsDia2Html_).
+function finalPublicPodioHtml_(standings){
+  var medals = ['🥇','🥈','🥉'];
+  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Resultado Final — 36 hoyos</div><div class="adm-card-body" style="padding:0;">';
+  standings.forEach(function(s, i){
+    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+      '<div style="font-size:20px;width:28px;">' + (medals[i] || (i + 1)) + '</div>' +
+      '<div style="flex:1;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">' + finalPublicDiffTxt_(s.diffTotal) + '</div>' +
+      '</div>' +
+      '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.netoTotal + '</div>' +
     '</div>';
   });
   html += '</div></div>';
