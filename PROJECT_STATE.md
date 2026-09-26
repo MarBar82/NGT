@@ -21951,3 +21951,566 @@ document.addEventListener('visibilitychange', function(){
 4. Sí. `filas.sort(function(a, b) { return a.netoTotal - b.netoTotal; })` ordena exclusivamente por `netoTotal` (Día 1 + Día 2 parcial). Un jugador que no arrancó el Día 2 compite igual que los demás — su `netoTotal` es su NETO del Día 1, que puede ser mejor o peor que el acumulado de otros que sí cargaron hoyos.
 
 5. Sí. Cuando `FINAL_PUBLIC_DIA === 1`, `finalPublicPoll` llama `getFinalStandingsDia1` (no `getFinalStandingsDia2`) y `finalPublicRender` nunca entra por la rama `if(FINAL_PUBLIC_DIA === 2)`. El comportamiento del Día 1 (oculto hasta completar, ordenado por NETO del día) es idéntico al de la Tarea 133.
+
+
+
+## 🎯 Tarea para Claude Code — Tarea 136 (Fecha Final — resultado final y podio, con desempate a cancha)
+
+### Contexto (en criollo)
+
+Esta es la Tarea 10 (y última grande) de la Fecha Final. Con el acumulado de las 36 hoyos ya visible en vivo durante el Día 2 (Tarea 135), esta Tarea cierra el círculo: agrega el **resultado final y el podio**, incluyendo cómo se registra el desempate a cancha (playoff) cuando hay empate en el 1er puesto.
+
+Charlamos dos cosas antes de armar esto, para no adivinar:
+
+1. **¿Para qué puestos se juega el desempate a cancha?** Me dijiste que **solo por el 1er puesto** — el playoff decide únicamente quién sale campeón. Si hay empate en 2do o 3er puesto, quedan empatados nomás, comparten el puesto, no se juega nada para desempatarlos.
+2. **¿Hace falta un cierre formal?** Me dijiste que **sí** — un botón de "Declarar Fecha Final Terminada" que vos como admin apretás una vez que está todo resuelto, y ahí la pantalla pública pasa a mostrar el podio de forma destacada (🥇🥈🥉), separado de la tabla en vivo normal.
+
+Con eso, así quedó armado:
+
+- Una función nueva en el backend (`getFinalResultadoFinal_`) que reutiliza tal cual `getFinalStandingsDia2_` (de la Tarea 135 — no se duplica ese cálculo) y agrega dos cosas: (a) recién se muestra cuando TODOS completaron los 18 hoyos del Día 2 (a diferencia de la tabla en vivo, que se ve desde que arranca el día), y (b) detecta si hay empate en el 1er puesto.
+- Si hay empate en el 1er puesto, el panel de administración te pide cargar quién ganó el desempate a cancha (elegís entre los empatados nomás, no puede ser cualquiera). Una vez cargado, ese jugador pasa a figurar primero.
+- Recién ahí aparece el botón para declarar terminada la Fecha Final — si hay empate sin resolver, el sistema no te deja declararla terminada todavía.
+- Una vez declarada terminada, la pantalla pública "Ver en Vivo" (la misma de siempre) pasa a mostrar el podio final con medallas en vez del acumulado en vivo del Día 2, y el banner del Leaderboard avisa "Fecha Final — Resultado Final" en vez de "en curso".
+- Nada de esto congela ni recalcula el resultado de nadie — si por algún motivo hiciera falta corregir una tarjeta después, el resultado se sigue calculando en vivo a partir de los datos reales. "Declarar terminada" es solo el cartel de que ya se cerró, no un freeze de los números.
+
+Probé todo a fondo: el backend con un script que arma un escenario con 6 jugadores y fuerza a propósito un empate en el 1er puesto entre dos de ellos (un invitado y un clasificado, para probar que el desempate no distingue eso), confirmando que el sistema detecta el empate, rechaza declarar terminada mientras no se resuelve, solo acepta como ganador del desempate a alguien que esté realmente empatado, reordena correctamente una vez cargado el ganador, y que un segundo escenario SIN empate deja declarar terminada directo sin pedir nada. Y la pantalla completa con un test automático en un navegador real: la tarjeta de empate con los jugadores correctos como opciones, el aviso si no elegís a nadie, la vista previa del podio con medallas tras resolver el empate, el botón de declarar terminada, y — ya declarada — el banner y la pantalla pública mostrando el podio con las medallas en el orden correcto, sin las líneas en vivo ni el mensaje de "pendiente". También repetí los tests de las Tareas 132 a 135 contra este mismo archivo para confirmar que nada de lo anterior se rompió.
+
+**Esta Tarea toca `13_FechaFinal.gs`, `10_Routing.gs` e `index.html` — hace falta el deploy de Apps Script (clasp push + deploy) Y el `git push` / redeploy de GitHub Pages, no alcanza con uno solo.**
+
+### Cambio 1 — `13_FechaFinal.gs`: 3 funciones nuevas (`getFinalResultadoFinal_`, `setFinalPlayoffGanador_`, `declararFechaFinalTerminada_`)
+
+Buscá:
+
+```
+  filas.sort(function(a, b) { return a.netoTotal - b.netoTotal; });
+  return { ok: true, standings: filas };
+}
+
+/**
+ * Devuelve el snapshot de TODAS las líneas de un día en una sola llamada --
+```
+
+Reemplazalo por:
+
+```
+  filas.sort(function(a, b) { return a.netoTotal - b.netoTotal; });
+  return { ok: true, standings: filas };
+}
+
+/**
+ * Resultado final de la Fecha Final (36 hoyos, Día 1 + Día 2) -- a diferencia
+ * de getFinalStandingsDia2_ (que se muestra EN VIVO desde que arranca el
+ * Día 2), esta se muestra recién cuando TODOS los jugadores completaron los
+ * 18 hoyos del Día 2. Reutiliza getFinalStandingsDia2_ tal cual para el
+ * cálculo y el orden por netoTotal -- acá solo se agrega la detección de
+ * empate en el 1er puesto y, si ya se cargó un ganador del desempate a
+ * cancha (setFinalPlayoffGanador_), se lo usa para ubicarlo primero dentro
+ * del grupo empatado. El desempate a cancha SOLO aplica al 1er puesto -- un
+ * empate en 2do o 3er puesto no requiere ninguna resolución y queda tal cual
+ * (decisión de Marco: el playoff solo decide quién sale campeón).
+ */
+function getFinalResultadoFinal_() {
+  const st2 = getFinalStandingsDia2_();
+  if (!st2.ok) return { ok: false, error: st2.error };
+
+  const completo = st2.standings.length > 0 && st2.standings.every(function(s) { return s.holesCargados === 18; });
+  if (!completo) return { ok: true, completo: false };
+
+  const filas = st2.standings.slice();
+  const empatados1 = filas.filter(function(s) { return s.netoTotal === filas[0].netoTotal; });
+  const empate1 = empatados1.length > 1;
+
+  const meta = getFinalMeta_();
+  const playoffGanador = (meta && meta.playoffGanador) || null;
+  let resuelto1 = false;
+
+  if (empate1 && playoffGanador && empatados1.some(function(s) { return s.matricula === playoffGanador; })) {
+    const winnerIdx = filas.findIndex(function(s) { return s.matricula === playoffGanador; });
+    const winner = filas.splice(winnerIdx, 1)[0];
+    filas.unshift(winner);
+    resuelto1 = true;
+  }
+
+  return {
+    ok: true,
+    completo: true,
+    standings: filas,
+    empate1: empate1,
+    empatados1: empate1 ? empatados1.map(function(s) { return { matricula: s.matricula, apodo: s.apodo, invitado: s.invitado }; }) : [],
+    resuelto1: empate1 ? resuelto1 : true,
+    playoffGanador: playoffGanador,
+  };
+}
+
+/**
+ * Admin carga quién ganó el desempate a cancha cuando hay empate en el 1er
+ * puesto del resultado final (36 hoyos) -- ver getFinalResultadoFinal_. No
+ * reordena nada acá: solo guarda el matricula ganador en FINAL_META, y
+ * getFinalResultadoFinal_ lo usa para ubicarlo primero dentro del grupo
+ * empatado la próxima vez que se consulte.
+ */
+function setFinalPlayoffGanador_(params) {
+  const { adminKey, matricula } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const mat = String(matricula || '').trim();
+  if (!mat) return { ok: false, error: 'Falta el matricula del ganador' };
+
+  const res = getFinalResultadoFinal_();
+  if (!res.ok) return { ok: false, error: res.error };
+  if (!res.completo) return { ok: false, error: 'Todavía no se completó el Día 2' };
+  if (!res.empate1) return { ok: false, error: 'No hay empate en el 1er puesto, no hace falta cargar ningún desempate' };
+  if (!res.empatados1.some(function(p) { return p.matricula === mat; })) {
+    return { ok: false, error: 'Ese jugador no forma parte del empate en el 1er puesto' };
+  }
+
+  meta.playoffGanador = mat;
+  saveFinalMeta_(meta);
+  audit_('SET_FINAL_PLAYOFF_GANADOR', 'admin', { matricula: mat });
+  return { ok: true };
+}
+
+/**
+ * Admin declara terminada la Fecha Final: pasa a estado 'finalizada', que
+ * la pantalla pública muestra como el podio final en vez del acumulado en
+ * vivo. Requiere que el Día 2 esté completo y, si hay empate en el 1er
+ * puesto, que ya se haya cargado el ganador del desempate a cancha
+ * (setFinalPlayoffGanador_). No congela ni recalcula nada del resultado --
+ * getFinalResultadoFinal_ lo sigue calculando en vivo a partir de los datos
+ * reales, esto solo deja registrado que ya se cerró.
+ */
+function declararFechaFinalTerminada_(params) {
+  const { adminKey } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  if (meta.estado !== 'dia2_en_curso') {
+    return { ok: false, error: 'No se puede declarar terminada la Fecha Final en este estado (actual: ' + meta.estado + ')' };
+  }
+
+  const res = getFinalResultadoFinal_();
+  if (!res.ok) return { ok: false, error: res.error };
+  if (!res.completo) return { ok: false, error: 'Todavía no se completaron los 18 hoyos del Día 2 de todos los jugadores' };
+  if (res.empate1 && !res.resuelto1) {
+    return { ok: false, error: 'Hay empate en el 1er puesto -- cargá primero el resultado del desempate a cancha' };
+  }
+
+  meta.estado = 'finalizada';
+  saveFinalMeta_(meta);
+  audit_('DECLARAR_FECHA_FINAL_TERMINADA', 'admin', { ganador: res.standings[0].matricula });
+  return { ok: true };
+}
+
+/**
+ * Devuelve el snapshot de TODAS las líneas de un día en una sola llamada --
+```
+
+### Cambio 2 — `10_Routing.gs`: acción nueva `getFinalResultadoFinal`
+
+Buscá:
+
+```
+      case 'getFinalStandingsDia2': result = getFinalStandingsDia2_(); break;
+      case 'getAllLineasLiveFinal': result = getAllLineasLiveFinal_(params); break;
+```
+
+Reemplazalo por:
+
+```
+      case 'getFinalStandingsDia2': result = getFinalStandingsDia2_(); break;
+      case 'getFinalResultadoFinal': result = getFinalResultadoFinal_(); break;
+      case 'getAllLineasLiveFinal': result = getAllLineasLiveFinal_(params); break;
+```
+
+### Cambio 3 — `10_Routing.gs`: acciones nuevas `setFinalPlayoffGanador` y `declararFechaFinalTerminada`
+
+Buscá:
+
+```
+      case 'armarLineasFinalDia2':  result = armarLineasFinalDia2_(params); break;
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+```
+
+Reemplazalo por:
+
+```
+      case 'armarLineasFinalDia2':  result = armarLineasFinalDia2_(params); break;
+      case 'setFinalPlayoffGanador':     result = setFinalPlayoffGanador_(params); break;
+      case 'declararFechaFinalTerminada': result = declararFechaFinalTerminada_(params); break;
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+```
+
+### Cambio 4 — `index.html`: div nuevo para el bloque de resultado final en el panel admin
+
+Buscá:
+
+```
+        <div id="final-lineas-dia1-wrap"></div>
+        <div id="final-lineas-dia2-wrap"></div>
+        <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
+```
+
+Reemplazalo por:
+
+```
+        <div id="final-lineas-dia1-wrap"></div>
+        <div id="final-lineas-dia2-wrap"></div>
+        <div id="final-resultado-wrap"></div>
+        <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
+```
+
+### Cambio 5 — `index.html`: `finalLoad()` llama al render nuevo
+
+Buscá:
+
+```
+      renderFinalLineasDia1_(meta);
+      renderFinalLineasDia2_(meta);
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+      const wrap = document.getElementById('final-lineas-dia1-wrap');
+      if(wrap) wrap.innerHTML = '';
+      const wrap2 = document.getElementById('final-lineas-dia2-wrap');
+      if(wrap2) wrap2.innerHTML = '';
+    }
+```
+
+Reemplazalo por:
+
+```
+      renderFinalLineasDia1_(meta);
+      renderFinalLineasDia2_(meta);
+      renderFinalResultado_(meta);
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+      const wrap = document.getElementById('final-lineas-dia1-wrap');
+      if(wrap) wrap.innerHTML = '';
+      const wrap2 = document.getElementById('final-lineas-dia2-wrap');
+      if(wrap2) wrap2.innerHTML = '';
+      const wrap3 = document.getElementById('final-resultado-wrap');
+      if(wrap3) wrap3.innerHTML = '';
+    }
+```
+
+### Cambio 6 — `index.html`: funciones nuevas del panel admin (`renderFinalResultado_`, `finalPodioAdminHtml_`, `finalGuardarPlayoff`, `finalDeclararTerminada`)
+
+Buscá:
+
+```
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// ══ CREAR FECHA WIZARD ══
+```
+
+Reemplazalo por:
+
+```
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// Dibuja, dentro de la Fecha Final ya creada, el bloque del resultado final:
+// nada mientras el Día 2 no está en curso o no se completó; si hay empate en
+// el 1er puesto sin resolver, pide cargar el ganador del desempate a cancha
+// (getFinalResultadoFinal_ ya trae quiénes están empatados); si no hay
+// empate (o ya se resolvió), muestra una vista previa del podio y el botón
+// para declarar terminada la Fecha Final; y una vez declarada, el podio
+// final fijo, sin ningún botón.
+function renderFinalResultado_(meta){
+  const wrap = document.getElementById('final-resultado-wrap');
+  if(!wrap) return;
+
+  if(meta.estado === 'finalizada'){
+    ngtApiGet('getFinalResultadoFinal').then(function(r){
+      if(r && r.ok && r.completo) wrap.innerHTML = finalPodioAdminHtml_(r.standings, '🏆 Fecha Final terminada');
+    }).catch(function(){});
+    return;
+  }
+
+  if(meta.estado !== 'dia2_en_curso'){ wrap.innerHTML = ''; return; }
+
+  ngtApiGet('getFinalResultadoFinal').then(function(r){
+    if(!r || !r.ok || !r.completo){ wrap.innerHTML = ''; return; }
+
+    if(r.empate1 && !r.resuelto1){
+      let opts = '';
+      r.empatados1.forEach(function(p){
+        opts += '<label style="display:block;margin-bottom:8px;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;color:var(--navy);"><input type="radio" name="final-playoff-radio" value="' + p.matricula + '" style="margin-right:8px;">' + p.apodo + (p.invitado ? ' (invitado)' : '') + '</label>';
+      });
+      wrap.innerHTML =
+        '<div class="adm-card" style="margin-top:18px;"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">⛳ Empate en el 1er puesto</div><div class="adm-card-body">' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;color:var(--g4);margin-bottom:10px;">Hay empate en el 1er puesto. Jugá el desempate a cancha y cargá acá quién ganó:</div>' +
+        opts +
+        '<button class="adm-btn-primary" onclick="finalGuardarPlayoff()" style="margin-top:10px;width:100%;">Guardar ganador del desempate</button>' +
+        '<div id="final-playoff-msg" class="adm-msg" style="display:none;"></div>' +
+        '</div></div>';
+      return;
+    }
+
+    wrap.innerHTML =
+      finalPodioAdminHtml_(r.standings, 'Vista previa del resultado final') +
+      '<button class="adm-btn-primary" onclick="finalDeclararTerminada()" style="margin-top:12px;width:100%;">🏆 Declarar Fecha Final Terminada</button>' +
+      '<div id="final-declarar-msg" class="adm-msg" style="display:none;"></div>';
+  }).catch(function(){ wrap.innerHTML = ''; });
+}
+
+// Tabla del podio (🥇🥈🥉 para los primeros 3, número para el resto) para el
+// panel admin -- reutilizada tanto para la vista previa antes de declarar
+// terminada como para el resultado ya fijo.
+function finalPodioAdminHtml_(standings, titulo){
+  const medals = ['🥇','🥈','🥉'];
+  let html = '<div class="adm-card" style="margin-top:18px;"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">' + titulo + '</div><div class="adm-card-body" style="padding:0;">';
+  standings.forEach(function(s, i){
+    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+      '<div style="font-size:18px;width:26px;">' + (medals[i] || (i + 1)) + '</div>' +
+      '<div style="flex:1;font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (invitado)' : '') + '</div>' +
+      '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.netoTotal + '</div>' +
+    '</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function finalGuardarPlayoff(){
+  const sel = document.querySelector('input[name="final-playoff-radio"]:checked');
+  const msg = document.getElementById('final-playoff-msg');
+  if(!sel){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Elegí quién ganó el desempate.'; }
+    return;
+  }
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'setFinalPlayoffGanador', adminKey: ADMIN_KEY_OK, matricula: sel.value }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg){
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al guardar el ganador del desempate';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+function finalDeclararTerminada(){
+  const msg = document.getElementById('final-declarar-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'declararFechaFinalTerminada', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg){
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al declarar terminada la Fecha Final';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// ══ CREAR FECHA WIZARD ══
+```
+
+### Cambio 7 — `index.html`: el banner del Leaderboard anuncia el resultado final
+
+Buscá:
+
+```
+function checkFinalBanner_(){
+  ngtApiGet('finalMeta').then(function(r){
+    var meta = r && r.data;
+    var dia = null;
+    if(meta && meta.estado === 'dia1_en_curso') dia = 1;
+    else if(meta && meta.estado === 'dia2_en_curso') dia = 2;
+    var banner = document.getElementById('final-lb-banner');
+    if(!banner) return;
+    if(!dia){ banner.style.display = 'none'; return; }
+    document.getElementById('final-lb-banner-title').textContent = 'Fecha Final en curso — Día ' + dia;
+    document.getElementById('final-lb-banner-sub').textContent = 'Tocá para ver el progreso en vivo';
+    banner.style.display = 'block';
+  }).catch(function(){});
+}
+```
+
+Reemplazalo por:
+
+```
+function checkFinalBanner_(){
+  ngtApiGet('finalMeta').then(function(r){
+    var meta = r && r.data;
+    var banner = document.getElementById('final-lb-banner');
+    if(!banner) return;
+    if(meta && meta.estado === 'finalizada'){
+      document.getElementById('final-lb-banner-title').textContent = 'Fecha Final — Resultado Final';
+      document.getElementById('final-lb-banner-sub').textContent = 'Tocá para ver el podio';
+      banner.style.display = 'block';
+      return;
+    }
+    var dia = null;
+    if(meta && meta.estado === 'dia1_en_curso') dia = 1;
+    else if(meta && meta.estado === 'dia2_en_curso') dia = 2;
+    if(!dia){ banner.style.display = 'none'; return; }
+    document.getElementById('final-lb-banner-title').textContent = 'Fecha Final en curso — Día ' + dia;
+    document.getElementById('final-lb-banner-sub').textContent = 'Tocá para ver el progreso en vivo';
+    banner.style.display = 'block';
+  }).catch(function(){});
+}
+```
+
+### Cambio 8 — `index.html`: la pantalla pública "Ver en Vivo" muestra el podio cuando la Fecha Final está finalizada
+
+Buscá:
+
+```
+  ngtApiGet('finalMeta').then(function(r){
+    var meta = r && r.data;
+    var dia = null;
+    if(meta && meta.estado === 'dia1_en_curso') dia = 1;
+    else if(meta && meta.estado === 'dia2_en_curso') dia = 2;
+    if(!dia){
+      document.getElementById('final-live-view-loading').style.display = 'none';
+      document.getElementById('final-live-view-empty').style.display = 'block';
+      return;
+    }
+    FINAL_PUBLIC_DIA = dia;
+    document.getElementById('final-live-view-title').textContent = '🏆 Fecha Final · Día ' + dia + ' — En Vivo';
+    finalPublicPoll();
+    finalPublicPollStart();
+  }).catch(function(){
+```
+
+Reemplazalo por:
+
+```
+  ngtApiGet('finalMeta').then(function(r){
+    var meta = r && r.data;
+    if(meta && meta.estado === 'finalizada'){
+      document.getElementById('final-live-view-title').textContent = '🏆 Fecha Final — Resultado Final';
+      finalPublicShowPodio_();
+      return;
+    }
+    var dia = null;
+    if(meta && meta.estado === 'dia1_en_curso') dia = 1;
+    else if(meta && meta.estado === 'dia2_en_curso') dia = 2;
+    if(!dia){
+      document.getElementById('final-live-view-loading').style.display = 'none';
+      document.getElementById('final-live-view-empty').style.display = 'block';
+      return;
+    }
+    FINAL_PUBLIC_DIA = dia;
+    document.getElementById('final-live-view-title').textContent = '🏆 Fecha Final · Día ' + dia + ' — En Vivo';
+    finalPublicPoll();
+    finalPublicPollStart();
+  }).catch(function(){
+```
+
+### Cambio 9 — `index.html`: funciones nuevas del podio público (`finalPublicShowPodio_`, `finalPublicPodioHtml_`)
+
+Buscá:
+
+```
+  html += '</div></div>';
+  return html;
+}
+
+document.addEventListener('visibilitychange', function(){
+  if(!FINAL_PUBLIC_MODE) return;
+  if(document.hidden){ finalPublicPollStop(); }
+  else { finalPublicPoll(); finalPublicPollStart(); }
+});
+```
+
+Reemplazalo por:
+
+```
+  html += '</div></div>';
+  return html;
+}
+
+// Pantalla pública del resultado final (Tarea 136): a diferencia de las
+// otras vistas (Día 1 / Día 2), esta no sondea -- una vez que el admin
+// declaró terminada la Fecha Final el resultado ya no cambia, así que
+// alcanza con una sola consulta. Reutiliza getFinalResultadoFinal_, que ya
+// resuelve el orden (incluyendo el desempate a cancha del 1er puesto si
+// hubo empate).
+function finalPublicShowPodio_(){
+  ngtApiGet('getFinalResultadoFinal').then(function(r){
+    document.getElementById('final-live-view-loading').style.display = 'none';
+    if(!r || !r.ok || !r.completo){
+      document.getElementById('final-live-view-empty').style.display = 'block';
+      return;
+    }
+    document.getElementById('final-live-view-content').style.display = 'block';
+    document.getElementById('final-live-view-lineas').innerHTML = '';
+    document.getElementById('final-live-view-pending').style.display = 'none';
+    var standingsEl = document.getElementById('final-live-view-standings');
+    standingsEl.innerHTML = finalPublicPodioHtml_(r.standings);
+    standingsEl.style.display = 'block';
+  }).catch(function(){
+    document.getElementById('final-live-view-loading').style.display = 'none';
+    document.getElementById('final-live-view-empty').style.display = 'block';
+  });
+}
+
+// Tabla del podio final para la pantalla pública -- medallas para los
+// primeros 3, número para el resto. Mismo estilo visual que las demás
+// tablas de esta pantalla (finalPublicRender / finalPublicStandingsDia2Html_).
+function finalPublicPodioHtml_(standings){
+  var medals = ['🥇','🥈','🥉'];
+  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Resultado Final — 36 hoyos</div><div class="adm-card-body" style="padding:0;">';
+  standings.forEach(function(s, i){
+    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+      '<div style="font-size:20px;width:28px;">' + (medals[i] || (i + 1)) + '</div>' +
+      '<div style="flex:1;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">' + finalPublicDiffTxt_(s.diffTotal) + '</div>' +
+      '</div>' +
+      '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.netoTotal + '</div>' +
+    '</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+document.addEventListener('visibilitychange', function(){
+  if(!FINAL_PUBLIC_MODE) return;
+  if(document.hidden){ finalPublicPollStop(); }
+  else { finalPublicPoll(); finalPublicPollStart(); }
+});
+```
+
+### Qué NO cambia
+
+- No se toca `getFinalStandingsDia2_` (Tarea 135) ni su comportamiento en la pantalla en vivo del Día 2 mientras la Fecha Final sigue en curso — `getFinalResultadoFinal_` lo reutiliza tal cual, sin modificarlo.
+- El desempate a cancha SOLO aplica al 1er puesto — un empate en 2do o 3er puesto no pide ni permite cargar nada, quedan empatados tal cual salió.
+- "Declarar Fecha Final Terminada" no congela ni recalcula ningún resultado — solo cambia `meta.estado` a `'finalizada'`. Si hiciera falta corregir una tarjeta después, `getFinalResultadoFinal_` lo sigue calculando en vivo con los datos reales.
+- No hay forma de declarar terminada la Fecha Final si todavía falta completar el Día 2, ni si hay un empate en el 1er puesto sin resolver — el backend lo rechaza en los dos casos.
+- Solo se puede cargar como ganador del desempate a alguien que esté realmente entre los empatados del 1er puesto — cualquier otro matricula se rechaza.
+- No se toca nada de las líneas en vivo (progreso hoyo a hoyo) ni de las pantallas del Día 1 — siguen funcionando exactamente igual que en las Tareas 132-135.
+
+### ❓ Preguntas de verificación
+
+1. Armá un escenario (o esperá a que pase en la Final real) donde el Día 2 se completa CON empate en el 1er puesto — ¿el panel de administración te pide cargar quién ganó el desempate a cancha, mostrando solo a los jugadores empatados como opciones?
+
+2. Si intentás declarar terminada la Fecha Final mientras ese empate sigue sin resolver, ¿el sistema te lo impide?
+
+3. Una vez que cargás el ganador del desempate, ¿aparece la vista previa del resultado con ese jugador primero (con 🥇), y recién ahí el botón para declarar terminada?
+
+4. Al declarar terminada la Fecha Final, ¿la pantalla pública "Ver en Vivo" pasa a mostrar el podio con las medallas (🥇🥈🥉) en el orden correcto, y el banner del Leaderboard avisa "Resultado Final" en vez de "en curso"?
+
+5. Si en cambio el Día 2 se completa SIN ningún empate en el 1er puesto, ¿podés declarar terminada la Fecha Final directamente, sin que te pida cargar ningún desempate?
+
+### ✅ Respuestas de verificación — Tarea 136
+
+1. Sí. `renderFinalResultado_` consulta `getFinalResultadoFinal` y si `r.empate1 && !r.resuelto1` renderiza el bloque de empate con un `<input type="radio">` por cada jugador de `r.empatados1` — solo los del empate, no todos los jugadores.
+
+2. Sí. `declararFechaFinalTerminada_` verifica `res.empate1 && !res.resuelto1` y devuelve `{ ok: false, error: 'Hay empate en el 1er puesto -- cargá primero el resultado del desempate a cancha' }`. El botón "Declarar Terminada" ni siquiera aparece en la UI mientras el empate no esté resuelto.
+
+3. Sí. `finalGuardarPlayoff` llama `setFinalPlayoffGanador` con el radio seleccionado; si ok, llama `finalLoad()` que re-ejecuta `renderFinalResultado_`. Ahora `r.resuelto1 === true`, así que muestra `finalPodioAdminHtml_` con el ganador del desempate primero (🥇) + el botón "Declarar Fecha Final Terminada".
+
+4. Sí. Al declarar terminada, `meta.estado = 'finalizada'`. `checkFinalBanner_` detecta ese estado y muestra "Fecha Final — Resultado Final · Tocá para ver el podio". `startFinalPublicView` detecta `estado === 'finalizada'` y llama `finalPublicShowPodio_`, que consulta `getFinalResultadoFinal` una sola vez y renderiza `finalPublicPodioHtml_` con 🥇🥈🥉.
+
+5. Sí. Sin empate, `r.empate1 === false` y `r.resuelto1 === true` (por `empate1 ? resuelto1 : true`). `renderFinalResultado_` muestra directamente el podio preview + el botón de declarar, sin bloque de playoff. `declararFechaFinalTerminada_` tampoco entra por la condición de empate sin resolver.
