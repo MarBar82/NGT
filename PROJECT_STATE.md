@@ -21668,3 +21668,286 @@ function finalArmarLineasDia2(){
 5. Sí. `blocks.reverse()` invierte el orden: `ordered` viene de mejor a peor NETO (de `getFinalStandingsDia1_`); `blocks` se arma en ese mismo orden y luego se invierte, así el primer bloque (Línea 1) tiene a los de peor NETO y el último tiene a los líderes.
 
 6. Sí. Una vez `meta.estado === 'dia2_en_curso'`, `renderFinalLineasDia2_` lee `meta.lineasDia2` y renderiza directamente las líneas sin mostrar ningún botón ni aviso. El flujo `if(meta.estado === 'armada') return; if(meta.estado === 'dia1_en_curso') { ... return; }` ya pasó de largo, y llega directo a renderizar `lineas`.
+
+
+---
+
+## 🎯 Tarea para Claude Code — Tarea 135 (Fecha Final — acumulado en vivo de las 36 hoyos, Día 2)
+
+### Contexto (en criollo)
+
+Esta es la Tarea 9 de la Fecha Final. Con el Día 2 ya armado (Tarea 134), esta Tarea completa la pantalla pública "Ver en Vivo" para cuando se está jugando el Día 2: en vez de seguir mostrando el resultado viejo del Día 1 (que es lo que pasaba hasta ahora, un gap que ya habíamos dejado anotado), ahora muestra el **acumulado real de las 36 hoyos** — y lo muestra EN VIVO desde que arranca el Día 2, sin esperar a que nadie termine (a diferencia del Día 1, que se mantiene oculto hasta que todos completan). Esto es lo que me confirmaste que querías desde el principio del proyecto.
+
+Para cada jugador, la tabla nueva muestra dos números: el NETO que lleva en el Día 2 hasta el momento (o "sin arrancar" si todavía no cargó ningún hoyo) y, como dato principal, el NETO TOTAL acumulado — su resultado ya cerrado del Día 1 más lo que lleva jugado del Día 2. Se ordena por ese acumulado, de mejor a peor. Un jugador que todavía no arrancó el Día 2 aparece con su total igual al del Día 1 (todavía no le sumó nada), y a medida que va cargando hoyos, su total se va actualizando solo.
+
+Armé una función nueva en el backend (`getFinalStandingsDia2_`) que reutiliza tal cual el resultado ya cerrado del Día 1 (`getFinalStandingsDia1_`, de la Tarea 133 — no se duplica ningún cálculo de NETO ahí) y le suma el NETO parcial del Día 2 que va calculando con los hoyos cargados hasta el momento. No aplica golpes a favor en el Día 2 (ya sabemos que esos solo van una vez, en el Día 1 — quedan adentro del NETO del Día 1 que ya trae cada jugador).
+
+En la pantalla, no toqué nada de cómo se ven las líneas en vivo (esa parte ya andaba bien desde la Tarea 132) — solo cambié la tabla de resultados de abajo: para el Día 1 sigue funcionando exactamente igual que siempre (oculta hasta completar, ordenada por NETO del día); para el Día 2 ahora consulta la función nueva y muestra el acumulado, siempre visible.
+
+Probé todo a fondo: el backend con un script que arma un Día 1 ya cerrado con NETOs conocidos, arma el Día 2, y carga hoyos de forma desigual (un jugador con la ronda completa, otro a mitad, otro recién arrancando, y varios que todavía no cargaron nada) — confirmando que cada acumulado da exactamente el número esperado, que los que no arrancaron el Día 2 muestran su total igual al del Día 1, y que el orden final mezcla correctamente a todos según su acumulado real (no por si arrancaron o no el Día 2). Y la pantalla completa con un test automático en un navegador real: que el acumulado aparece desde que se entra a la pantalla del Día 2 sin ningún mensaje de "espera", que cada fila muestra el dato correcto (con "sin arrancar" para los que no jugaron nada del Día 2 todavía), que el orden respeta lo que manda el backend, que las líneas en vivo se siguen viendo igual que siempre, que en el Día 2 nunca se llama a la función del Día 1 (y viceversa, verificado con los tests que ya existían de la Tarea 132/133 que siguen pasando igual), y sin problemas de superposición en pantallas chicas.
+
+**Esta Tarea toca `13_FechaFinal.gs`, `10_Routing.gs` e `index.html` — hace falta el deploy de Apps Script (clasp push + deploy) Y el `git push` / redeploy de GitHub Pages, no alcanza con uno solo.**
+
+### Cambio 1 — `13_FechaFinal.gs`: función nueva `getFinalStandingsDia2_`
+
+Buscá:
+
+```
+  if (!completo) return { ok: true, completo: false };
+
+  filas.sort(function(a, b) { return a.neto - b.neto; });
+  return { ok: true, completo: true, standings: filas };
+}
+
+/**
+ * Devuelve el snapshot de TODAS las líneas de un día en una sola llamada --
+```
+
+Reemplazalo por:
+
+```
+  if (!completo) return { ok: true, completo: false };
+
+  filas.sort(function(a, b) { return a.neto - b.neto; });
+  return { ok: true, completo: true, standings: filas };
+}
+
+/**
+ * Tabla del Día 2 de la Final -- a diferencia de getFinalStandingsDia1_ (que
+ * se mantiene OCULTA hasta completar los 18 hoyos), esta se muestra EN VIVO
+ * desde que arranca el Día 2: combina el NETO ya cerrado del Día 1
+ * (getFinalStandingsDia1_, reutilizada tal cual -- no se duplica ese
+ * cálculo) con el NETO parcial del Día 2 (a medida que se van cargando
+ * hoyos) para dar el acumulado de las 36 hoyos en cada consulta. Se ordena
+ * por ese acumulado. No aplica golpes a favor en el Día 2 -- esos solo se
+ * aplican una vez, en el Día 1 (ya están adentro del netoDia1 de cada uno).
+ * netoDia2 viene null mientras el jugador no cargó ningún hoyo todavía --
+ * en ese caso su acumulado es directamente su neto del Día 1, sin restar
+ * nada por un Día 2 que ni arrancó.
+ */
+function getFinalStandingsDia2_() {
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineas = meta.lineasDia2;
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día 2' };
+
+  const st1 = getFinalStandingsDia1_();
+  if (!st1.ok) return { ok: false, error: st1.error || 'No se pudo calcular el resultado del Día 1' };
+  if (!st1.completo) return { ok: false, error: 'Falta terminar el Día 1' };
+  const dia1ByMat = {};
+  st1.standings.forEach(function(s) { dia1ByMat[s.matricula] = s; });
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const scoresByMat = {};
+  const hcpByMat = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues();
+      rows.forEach(function(r) {
+        if (String(r[0]) !== '2') return;
+        const mat = String(r[1]).trim();
+        scoresByMat[mat] = r.slice(5, 23).map(function(v) {
+          return (v === '' || v === null || v === undefined) ? null : Number(v);
+        });
+        hcpByMat[mat] = (r[2] === '' || r[2] === null || r[2] === undefined) ? 0 : Number(r[2]);
+      });
+    }
+  }
+
+  const cd = meta.canchaId2
+    ? cachedRead_('cp2_' + meta.canchaId2, 600, function(){ return getCanchaPares_(meta.canchaId2); })
+    : null;
+  const cpPares = (cd && cd.pares) || [];
+
+  const allPlayers = [];
+  lineas.forEach(function(l) { (l.players || []).forEach(function(p) { allPlayers.push(p); }); });
+
+  const filas = allPlayers.map(function(p) {
+    const scores = scoresByMat[p.matricula] || new Array(18).fill(null);
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    const grossDia2 = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    let parJugado = 0;
+    scores.forEach(function(s, h) { if (s !== null) parJugado += (cpPares[h] || 0); });
+    const hcpJuego2 = hcpByMat[p.matricula] || 0;
+    const d1 = dia1ByMat[p.matricula] || { neto: 0, diffNeto: 0 };
+    const parTotal1 = d1.neto - d1.diffNeto;
+
+    const netoDia2 = holesCargados > 0 ? (grossDia2 - hcpJuego2) : null;
+    const netoTotal = d1.neto + (netoDia2 !== null ? netoDia2 : 0);
+    const diffTotal = netoTotal - parTotal1 - parJugado;
+
+    return {
+      matricula:     p.matricula,
+      apodo:         p.apodo,
+      invitado:      !!p.invitado,
+      holesCargados: holesCargados,
+      grossDia2:     grossDia2,
+      hcpJuego2:     hcpJuego2,
+      netoDia2:      netoDia2, // null hasta el primer hoyo cargado del Día 2
+      netoDia1:      d1.neto,
+      netoTotal:     netoTotal,
+      diffTotal:     diffTotal,
+    };
+  });
+
+  filas.sort(function(a, b) { return a.netoTotal - b.netoTotal; });
+  return { ok: true, standings: filas };
+}
+
+/**
+ * Devuelve el snapshot de TODAS las líneas de un día en una sola llamada --
+```
+
+### Cambio 2 — `10_Routing.gs`: acción nueva `getFinalStandingsDia2`
+
+Buscá:
+
+```
+      case 'getFinalStandingsDia1': result = getFinalStandingsDia1_(); break;
+      case 'getAllLineasLiveFinal': result = getAllLineasLiveFinal_(params); break;
+```
+
+Reemplazalo por:
+
+```
+      case 'getFinalStandingsDia1': result = getFinalStandingsDia1_(); break;
+      case 'getFinalStandingsDia2': result = getFinalStandingsDia2_(); break;
+      case 'getAllLineasLiveFinal': result = getAllLineasLiveFinal_(params); break;
+```
+
+### Cambio 3 — `index.html`: la pantalla "Ver en Vivo" usa el acumulado cuando es el Día 2
+
+**3a.** Buscá:
+
+```
+function finalPublicPoll(){
+  if(!FINAL_PUBLIC_MODE || !FINAL_PUBLIC_DIA) return;
+  Promise.all([
+    ngtApiGet('getAllLineasLiveFinal', { dia: FINAL_PUBLIC_DIA }),
+    ngtApiGet('getFinalStandingsDia1', {}),
+  ]).then(function(results){
+```
+
+Reemplazalo por:
+
+```
+function finalPublicPoll(){
+  if(!FINAL_PUBLIC_MODE || !FINAL_PUBLIC_DIA) return;
+  var standingsCall = FINAL_PUBLIC_DIA === 2 ? ngtApiGet('getFinalStandingsDia2', {}) : ngtApiGet('getFinalStandingsDia1', {});
+  Promise.all([
+    ngtApiGet('getAllLineasLiveFinal', { dia: FINAL_PUBLIC_DIA }),
+    standingsCall,
+  ]).then(function(results){
+```
+
+**3b.** Buscá:
+
+```
+  var standingsEl = document.getElementById('final-live-view-standings');
+  var pendingEl = document.getElementById('final-live-view-pending');
+  if(stR && stR.ok && stR.completo){
+```
+
+Reemplazalo por:
+
+```
+  var standingsEl = document.getElementById('final-live-view-standings');
+  var pendingEl = document.getElementById('final-live-view-pending');
+
+  if(FINAL_PUBLIC_DIA === 2){
+    // El acumulado de las 36 hoyos se muestra EN VIVO desde que arranca el
+    // Día 2 -- a diferencia del Día 1, acá no hay que esperar a que todos
+    // completen para ver algo.
+    pendingEl.style.display = 'none';
+    if(stR && stR.ok){
+      standingsEl.innerHTML = finalPublicStandingsDia2Html_(stR);
+      standingsEl.style.display = 'block';
+    } else {
+      standingsEl.style.display = 'none';
+      standingsEl.innerHTML = '';
+    }
+    return;
+  }
+
+  if(stR && stR.ok && stR.completo){
+```
+
+**3c.** Buscá:
+
+```
+    pendingEl.textContent = 'El resultado general se muestra cuando todas las líneas completen sus 18 hoyos.' + (faltan.length ? ' Falta: ' + faltan.join(', ') + '.' : '');
+    pendingEl.style.display = 'block';
+  }
+}
+
+document.addEventListener('visibilitychange', function(){
+```
+
+Reemplazalo por:
+
+```
+    pendingEl.textContent = 'El resultado general se muestra cuando todas las líneas completen sus 18 hoyos.' + (faltan.length ? ' Falta: ' + faltan.join(', ') + '.' : '');
+    pendingEl.style.display = 'block';
+  }
+}
+
+// Tabla del acumulado de las 36 hoyos (Día 1 + Día 2), en vivo desde que
+// arranca el Día 2 -- muestra el NETO del Día 2 (o "sin arrancar" si el
+// jugador todavía no cargó ningún hoyo) como dato secundario, y el NETO
+// TOTAL acumulado como número principal, igual que ya se hace con el NETO
+// del Día 1 en finalPublicRender.
+function finalPublicStandingsDia2Html_(stR){
+  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Acumulado 36 hoyos</div><div class="adm-card-body" style="padding:0;">';
+  stR.standings.forEach(function(s, i){
+    var dia2Txt = s.netoDia2 === null ? 'Día 2: sin arrancar' : ('Día 2: ' + s.netoDia2 + ' · ' + s.holesCargados + '/18');
+    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+      '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
+      '<div style="flex:1;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">' + dia2Txt + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diffTotal) + '</div>' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.netoTotal + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+document.addEventListener('visibilitychange', function(){
+```
+
+### Qué NO cambia
+
+- No se toca nada de cómo se ven las líneas en vivo (progreso hoyo a hoyo de cada jugador) — sigue funcionando exactamente igual que desde la Tarea 132, para los dos días.
+- No se toca `getFinalStandingsDia1_` (Tarea 133) ni su comportamiento en la pantalla cuando se está viendo el Día 1 — sigue oculto hasta que se completan los 18 hoyos de todos, y se sigue ordenando por el NETO del Día 1 solo.
+- No se aplican golpes a favor en el Día 2 — eso ya lo habíamos confirmado desde el principio: solo aplican una vez, en el Día 1 (y ya están adentro del NETO del Día 1 que se reutiliza).
+- No se recalcula ni se toca el NETO del Día 1 de nadie — `getFinalStandingsDia2_` lo lee tal cual viene de `getFinalStandingsDia1_`, sin modificarlo.
+- No hay ningún paso manual — el acumulado se recalcula solo en cada consulta, a medida que se van cargando hoyos del Día 2, igual que ya pasa con todo lo demás de la Fecha Final.
+
+### ❓ Preguntas de verificación
+
+1. Con el Día 2 recién arrancado (nadie cargó ningún hoyo todavía), entrá a "Ver en Vivo" — ¿aparece ya la tabla de acumulado (sin ningún mensaje de "esperá a que se complete"), con el total de cada uno igual a su resultado del Día 1?
+
+2. A medida que algún jugador va cargando hoyos del Día 2, ¿su fila se actualiza sola mostrando su NETO parcial del día y el total acumulado recalculado, sin que nadie tenga que hacer nada?
+
+3. ¿Los jugadores que todavía no cargaron ningún hoyo del Día 2 muestran claramente "sin arrancar" en vez de un número parcial que no tendría sentido?
+
+4. ¿El orden de la tabla corresponde al acumulado real (Día 1 + lo que va del Día 2), y no simplemente a quién arrancó primero o quién lleva más hoyos jugados?
+
+5. Si volvés a mirar la pantalla estando todavía en el Día 1 (por ejemplo si tuvieras que reabrir la Fecha Final para revisar algo), ¿se sigue comportando exactamente igual que antes — oculta hasta completar, ordenada por el NETO del Día 1 nomás, sin nada del acumulado?
+
+### ✅ Respuestas de verificación — Tarea 135
+
+1. Sí. `finalPublicRender` detecta `FINAL_PUBLIC_DIA === 2` y entra por la rama nueva: llama `finalPublicStandingsDia2Html_` inmediatamente sin verificar ningún flag `completo`. Para jugadores sin hoyos cargados, `netoDia2 === null` y `netoTotal = d1.neto`, así que la tabla aparece con el total del Día 1 desde el primer sondeo.
+
+2. Sí. El sondeo cada 8s llama `getFinalStandingsDia2_`, que recalcula `grossDia2 - hcpJuego2` con lo que hay en TARJETAS FINAL en ese momento. Cada respuesta actualiza `standingsEl.innerHTML` con los nuevos valores.
+
+3. Sí. `netoDia2 === null` (cuando `holesCargados === 0`) produce `dia2Txt = 'Día 2: sin arrancar'`. Para jugadores con hoyos cargados, muestra `'Día 2: X · N/18'`.
+
+4. Sí. `filas.sort(function(a, b) { return a.netoTotal - b.netoTotal; })` ordena exclusivamente por `netoTotal` (Día 1 + Día 2 parcial). Un jugador que no arrancó el Día 2 compite igual que los demás — su `netoTotal` es su NETO del Día 1, que puede ser mejor o peor que el acumulado de otros que sí cargaron hoyos.
+
+5. Sí. Cuando `FINAL_PUBLIC_DIA === 1`, `finalPublicPoll` llama `getFinalStandingsDia1` (no `getFinalStandingsDia2`) y `finalPublicRender` nunca entra por la rama `if(FINAL_PUBLIC_DIA === 2)`. El comportamiento del Día 1 (oculto hasta completar, ordenado por NETO del día) es idéntico al de la Tarea 133.
