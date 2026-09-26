@@ -8772,9 +8772,10 @@ function finalPublicPollStop(){
 
 function finalPublicPoll(){
   if(!FINAL_PUBLIC_MODE || !FINAL_PUBLIC_DIA) return;
+  var standingsCall = FINAL_PUBLIC_DIA === 2 ? ngtApiGet('getFinalStandingsDia2', {}) : ngtApiGet('getFinalStandingsDia1', {});
   Promise.all([
     ngtApiGet('getAllLineasLiveFinal', { dia: FINAL_PUBLIC_DIA }),
-    ngtApiGet('getFinalStandingsDia1', {}),
+    standingsCall,
   ]).then(function(results){
     var allR = results[0], stR = results[1];
     if(!allR || !allR.ok) return;
@@ -8808,6 +8809,22 @@ function finalPublicRender(allR, stR){
 
   var standingsEl = document.getElementById('final-live-view-standings');
   var pendingEl = document.getElementById('final-live-view-pending');
+
+  if(FINAL_PUBLIC_DIA === 2){
+    // El acumulado de las 36 hoyos se muestra EN VIVO desde que arranca el
+    // Día 2 -- a diferencia del Día 1, acá no hay que esperar a que todos
+    // completen para ver algo.
+    pendingEl.style.display = 'none';
+    if(stR && stR.ok){
+      standingsEl.innerHTML = finalPublicStandingsDia2Html_(stR);
+      standingsEl.style.display = 'block';
+    } else {
+      standingsEl.style.display = 'none';
+      standingsEl.innerHTML = '';
+    }
+    return;
+  }
+
   if(stR && stR.ok && stR.completo){
     var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Resultados Día ' + FINAL_PUBLIC_DIA + ' — NETO</div><div class="adm-card-body" style="padding:0;">';
     stR.standings.forEach(function(s, i){
@@ -8835,6 +8852,31 @@ function finalPublicRender(allR, stR){
     pendingEl.textContent = 'El resultado general se muestra cuando todas las líneas completen sus 18 hoyos.' + (faltan.length ? ' Falta: ' + faltan.join(', ') + '.' : '');
     pendingEl.style.display = 'block';
   }
+}
+
+// Tabla del acumulado de las 36 hoyos (Día 1 + Día 2), en vivo desde que
+// arranca el Día 2 -- muestra el NETO del Día 2 (o "sin arrancar" si el
+// jugador todavía no cargó ningún hoyo) como dato secundario, y el NETO
+// TOTAL acumulado como número principal, igual que ya se hace con el NETO
+// del Día 1 en finalPublicRender.
+function finalPublicStandingsDia2Html_(stR){
+  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Acumulado 36 hoyos</div><div class="adm-card-body" style="padding:0;">';
+  stR.standings.forEach(function(s, i){
+    var dia2Txt = s.netoDia2 === null ? 'Día 2: sin arrancar' : ('Día 2: ' + s.netoDia2 + ' · ' + s.holesCargados + '/18');
+    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+      '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
+      '<div style="flex:1;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">' + dia2Txt + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diffTotal) + '</div>' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.netoTotal + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div></div>';
+  return html;
 }
 
 document.addEventListener('visibilitychange', function(){

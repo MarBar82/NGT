@@ -694,6 +694,89 @@ function getFinalStandingsDia1_() {
 }
 
 /**
+ * Tabla del Día 2 de la Final -- a diferencia de getFinalStandingsDia1_ (que
+ * se mantiene OCULTA hasta completar los 18 hoyos), esta se muestra EN VIVO
+ * desde que arranca el Día 2: combina el NETO ya cerrado del Día 1
+ * (getFinalStandingsDia1_, reutilizada tal cual -- no se duplica ese
+ * cálculo) con el NETO parcial del Día 2 (a medida que se van cargando
+ * hoyos) para dar el acumulado de las 36 hoyos en cada consulta. Se ordena
+ * por ese acumulado. No aplica golpes a favor en el Día 2 -- esos solo se
+ * aplican una vez, en el Día 1 (ya están adentro del netoDia1 de cada uno).
+ * netoDia2 viene null mientras el jugador no cargó ningún hoyo todavía --
+ * en ese caso su acumulado es directamente su neto del Día 1, sin restar
+ * nada por un Día 2 que ni arrancó.
+ */
+function getFinalStandingsDia2_() {
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineas = meta.lineasDia2;
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día 2' };
+
+  const st1 = getFinalStandingsDia1_();
+  if (!st1.ok) return { ok: false, error: st1.error || 'No se pudo calcular el resultado del Día 1' };
+  if (!st1.completo) return { ok: false, error: 'Falta terminar el Día 1' };
+  const dia1ByMat = {};
+  st1.standings.forEach(function(s) { dia1ByMat[s.matricula] = s; });
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const scoresByMat = {};
+  const hcpByMat = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues();
+      rows.forEach(function(r) {
+        if (String(r[0]) !== '2') return;
+        const mat = String(r[1]).trim();
+        scoresByMat[mat] = r.slice(5, 23).map(function(v) {
+          return (v === '' || v === null || v === undefined) ? null : Number(v);
+        });
+        hcpByMat[mat] = (r[2] === '' || r[2] === null || r[2] === undefined) ? 0 : Number(r[2]);
+      });
+    }
+  }
+
+  const cd = meta.canchaId2
+    ? cachedRead_('cp2_' + meta.canchaId2, 600, function(){ return getCanchaPares_(meta.canchaId2); })
+    : null;
+  const cpPares = (cd && cd.pares) || [];
+
+  const allPlayers = [];
+  lineas.forEach(function(l) { (l.players || []).forEach(function(p) { allPlayers.push(p); }); });
+
+  const filas = allPlayers.map(function(p) {
+    const scores = scoresByMat[p.matricula] || new Array(18).fill(null);
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    const grossDia2 = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    let parJugado = 0;
+    scores.forEach(function(s, h) { if (s !== null) parJugado += (cpPares[h] || 0); });
+    const hcpJuego2 = hcpByMat[p.matricula] || 0;
+    const d1 = dia1ByMat[p.matricula] || { neto: 0, diffNeto: 0 };
+    const parTotal1 = d1.neto - d1.diffNeto;
+
+    const netoDia2 = holesCargados > 0 ? (grossDia2 - hcpJuego2) : null;
+    const netoTotal = d1.neto + (netoDia2 !== null ? netoDia2 : 0);
+    const diffTotal = netoTotal - parTotal1 - parJugado;
+
+    return {
+      matricula:     p.matricula,
+      apodo:         p.apodo,
+      invitado:      !!p.invitado,
+      holesCargados: holesCargados,
+      grossDia2:     grossDia2,
+      hcpJuego2:     hcpJuego2,
+      netoDia2:      netoDia2, // null hasta el primer hoyo cargado del Día 2
+      netoDia1:      d1.neto,
+      netoTotal:     netoTotal,
+      diffTotal:     diffTotal,
+    };
+  });
+
+  filas.sort(function(a, b) { return a.netoTotal - b.netoTotal; });
+  return { ok: true, standings: filas };
+}
+
+/**
  * Devuelve el snapshot de TODAS las líneas de un día en una sola llamada --
  * para la pantalla pública "Ver en vivo" (Tarea 132), que muestra el progreso
  * de todas las líneas a la vez en vez de una por una como getLineaLiveFinal_.

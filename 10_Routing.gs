@@ -68,6 +68,7 @@ function doGet(e) {
       case 'finalMeta':        result = { ok: true, data: getFinalMeta_() }; break;
       case 'getLineaLiveFinal':     result = getLineaLiveFinal_(params); break;
       case 'getFinalStandingsDia1': result = getFinalStandingsDia1_(); break;
+      case 'getFinalStandingsDia2': result = getFinalStandingsDia2_(); break;
       case 'getAllLineasLiveFinal': result = getAllLineasLiveFinal_(params); break;
       default:                 result = { ok: false, error: 'Acción desconocida: ' + action };
     }
