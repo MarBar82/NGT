@@ -205,6 +205,24 @@ function eliminarFechaFinal_(params) {
 
   audit_('ELIMINAR_FECHA_FINAL', 'admin', { canchaId1: meta.canchaId1, canchaId2: meta.canchaId2 });
 
+  // Limpiar también la "fila recordada" (tfRow_) y el "último que cargó"
+  // (lastCargFinal_) de cada jugador -- mismo criterio que eliminarFecha_
+  // para las fechas regulares (tRow_/lastCarg_): si no se borran, quedan
+  // apuntando a filas viejas (hasta 6hs) y al recrear la Fecha Final (con
+  // filas nuevas en otra posición), la app lee/escribe la fila equivocada.
+  try {
+    const cache_ = CacheService.getScriptCache();
+    const todosLosMats_ = (meta.jugadores || []).concat(Object.keys(meta.invitadosInfo || {}));
+    const keysABorrar_ = [];
+    [1, 2].forEach(function(dia) {
+      todosLosMats_.forEach(function(m) {
+        keysABorrar_.push('tfRow_' + dia + '_' + m);
+        keysABorrar_.push('lastCargFinal_' + dia + '_' + m);
+      });
+    });
+    if (keysABorrar_.length) cache_.removeAll(keysABorrar_);
+  } catch (e) {}
+
   return { ok: true };
 }
 
@@ -621,9 +639,12 @@ function getLineaLiveFinal_(params) {
  * Tabla general del Día 1 de la Final -- resultado NETO (golpes brutos menos
  * hándicap de juego menos golpes a favor, estos últimos ya congelados al
  * armar las líneas del Día 1). También devuelve golpes brutos y diferencia a
- * par bruta como datos secundarios. Se mantiene OCULTA (completo:false, sin
- * datos) hasta que las tarjetas de TODOS los jugadores del Día 1 tengan los
- * 18 hoyos cargados -- así nadie ve quién va ganando a mitad de ronda.
+ * par bruta como datos secundarios. Se muestra EN VIVO desde el primer hoyo
+ * cargado -- igual que getFinalStandingsDia2_ con netoDia2 -- y siempre
+ * incluye "standings" (parcial o completo); "completo" indica si TODAS las
+ * tarjetas del Día 1 ya tienen los 18 hoyos cargados, y lo siguen usando
+ * armarLineasFinalDia2_ y getFinalStandingsDia2_ como condición para avanzar
+ * al Día 2 (eso no cambia).
  * No aplica desempate especial ante empate en neto: esta tabla ordena la
  * salida del Día 2, no declara un "ganador" -- el desempate a cancha del
  * resultado general de la Final se resuelve aparte, sobre las 36 hoyos.
@@ -687,10 +708,8 @@ function getFinalStandingsDia1_() {
     };
   });
 
-  if (!completo) return { ok: true, completo: false };
-
   filas.sort(function(a, b) { return a.neto - b.neto; });
-  return { ok: true, completo: true, standings: filas };
+  return { ok: true, completo: completo, standings: filas };
 }
 
 /**

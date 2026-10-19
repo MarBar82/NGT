@@ -8592,11 +8592,7 @@ function finalLiveLoadDia1(){
       el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">' + ((r && r.error) || 'Sin datos del Día 1 todavía.') + '</div>';
       return;
     }
-    if(!r.completo){
-      el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">El resultado del Día 1 se muestra cuando todas las líneas completen sus 18 hoyos.</div>';
-      return;
-    }
-    el.innerHTML = finalStandingsNetoTableHtml_(r.standings, 'Resultados Día 1 — NETO');
+    el.innerHTML = finalStandingsNetoTableHtml_(r.standings, 'Resultados Día 1' + (r.completo ? ' — NETO' : ' — en vivo'));
   }).catch(function(){
     el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Error al cargar</div>';
   });
@@ -8765,7 +8761,7 @@ function finalLiveRenderHoyoActual(){
     html += '<div class="live-player-row" onclick="finalLiveOpenScoreModal(' + FINAL_LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
       '<div class="live-player-info">' +
         '<div class="live-player-apodo">' + jug.apodo + (jug.invitado ? ' (inv.)' : '') + '</div>' +
-        '<div class="live-player-hcp">' + jug.grossParcial + ' golpes · ' + finalLiveDiffTxt_(jug.diffParcial) + ' · ' + jug.holesCargados + '/18</div>' +
+        '<div class="live-player-hcp">' + finalLiveDiffTxt_(jug.diffParcial) + '</div>' +
       '</div>' +
       '<div class="live-hole-wrap">' +
         '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
@@ -9120,16 +9116,14 @@ function finalPublicRender(allR, stR){
     return;
   }
 
-  if(stR && stR.ok && stR.completo){
-    standingsEl.innerHTML = finalStandingsNetoTableHtml_(stR.standings, 'Resultados Día ' + FINAL_PUBLIC_DIA + ' — NETO');
+  if(stR && stR.ok){
+    standingsEl.innerHTML = finalStandingsNetoTableHtml_(stR.standings, 'Resultados Día ' + FINAL_PUBLIC_DIA + (stR.completo ? ' — NETO' : ' — en vivo'));
     standingsEl.style.display = 'block';
     pendingEl.style.display = 'none';
   } else {
     standingsEl.style.display = 'none';
     standingsEl.innerHTML = '';
-    var faltan = allR.lineas.filter(function(ln){ return !ln.jugadores.every(function(j){ return j.holesCargados === 18; }); })
-      .map(function(ln){ return 'Línea ' + ln.lineaNum; });
-    pendingEl.textContent = 'El resultado general se muestra cuando todas las líneas completen sus 18 hoyos.' + (faltan.length ? ' Falta: ' + faltan.join(', ') + '.' : '');
+    pendingEl.textContent = (stR && stR.error) || 'Sin datos todavía.';
     pendingEl.style.display = 'block';
   }
 }
