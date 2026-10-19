@@ -22631,3 +22631,71 @@ function checkFinalBanner_(){
 3. Sí. Terminar de cargar los 18 hoyos no cambia el estado de la sesión ni el banner. El jugador puede entrar manualmente a "Ver en Vivo" vía el menú o el banner (que, si ya terminó su ronda, igual lo sigue reconociendo como jugador y lo manda a "Mi Tarjeta" — donde ya no hay nada pendiente de cargar).
 
 4. Sí. La rama `if(meta.estado === 'finalizada')` siempre fija `banner.onclick = function(){ pg('final-live-view', null); }`, sin verificar la sesión. El podio es para todos por igual.
+
+---
+
+## 🟢 TAREA 138 — Acceso a la tabla en vivo desde "Mi Tarjeta" (Fecha Final)
+
+### Contexto / por qué
+
+La Tarea 137 arregló que, al tocar el botón de "Fecha Final en curso" en el Leaderboard, un jugador que está jugando esa jornada vaya directo a cargar sus scores (antes no tenía forma de llegar ahí).
+
+Pero ese mismo botón era la ÚNICA puerta de entrada a la pantalla de "progreso en vivo" (la que muestra la tabla del día, y — en el Día 2 — el acumulado de las 36 hoyos). Al hacer que el botón ahora lleve al jugador directo a cargar scores, esa pantalla de tablas quedó sin ninguna puerta de entrada para él: puede cargar su tarjeta, pero no tiene forma de ver las posiciones en vivo mientras juega.
+
+Esta Tarea no cambia nada de lo que ya funciona — solo agrega un botón chico ("🏆 Tabla") en la pantalla donde cargás los hoyos, que te lleva a la pantalla de posiciones en vivo. Desde ahí, con "←" volvés al Leaderboard, y tocando el banner de nuevo volvés a cargar tu tarjeta. Las dos pantallas quedan accesibles en todo momento.
+
+### Archivo afectado
+
+`index.html` — 1 cambio.
+
+### Cambio 1 — Botón "Tabla" en la pantalla de carga de scores de la Fecha Final
+
+**Buscá** (dentro del bloque `<div id="mit-live-final">`):
+
+```html
+  <div id="mit-live-final" style="display:none;">
+
+    <div style="display:flex;align-items:center;margin-bottom:10px;">
+      <span id="final-live-title" style="flex:1;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
+    </div>
+```
+
+**Reemplazá por:**
+
+```html
+  <div id="mit-live-final" style="display:none;">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+      <span id="final-live-title" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
+      <button id="final-live-tabla-btn" onclick="pg('final-live-view',null)" style="background:var(--navy);border:none;border-radius:var(--r-control);padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:#fff;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;white-space:nowrap;">🏆 Tabla</button>
+    </div>
+```
+
+No hace falta ninguna función nueva en JavaScript: el botón reutiliza `pg('final-live-view', null)`, que ya existe y ya hace todo lo necesario (para la pantalla de carga de scores, arranca la de tablas, y viceversa al volver).
+
+### Qué NO cambia
+
+- No se toca `checkFinalBanner_` (de la Tarea 137) — el botón del Leaderboard sigue llevando al jugador directo a cargar scores, y al espectador directo a las tablas, exactamente igual que antes.
+- No se toca nada de `startFinalPublicView`, `finalPublicRender`, `finalPublicStandingsDia2Html_`, ni ningún cálculo de NETO — la pantalla de tablas en sí sigue funcionando exactamente igual, lo único nuevo es que ahora un jugador también puede llegar a ella.
+- No se toca `openLiveViewFinal`, `finalLivePoll`, ni nada de la carga de hoyos — la pantalla de "Mi Tarjeta" sigue funcionando igual, solo tiene un botón más arriba.
+
+### ❓ Preguntas de verificación
+
+1. Entrá a cargar tu tarjeta de la Fecha Final (como jugador de la línea en curso) — ¿ves un botón "🏆 Tabla" arriba, junto al título "Fecha Final · Día X"?
+
+2. Tocá ese botón — ¿te lleva a la pantalla de posiciones en vivo (la misma que ve un espectador), mostrando el progreso de todas las líneas y la tabla del día (o el acumulado de 36 hoyos si es Día 2)?
+
+3. Desde ahí tocá "←" (volvés al Leaderboard) y después el botón del banner otra vez — ¿volvés a la pantalla de carga de scores, en el mismo hoyo donde habías quedado?
+
+4. Repetí el paso 1-2 pero como alguien que NO juega esa jornada (espectador) — ¿sigue funcionando igual que antes, sin ningún botón "Tabla" de más (porque un espectador ya entra directo a esa pantalla)?
+
+### ✅ Respuestas de verificación — Tarea 138
+
+1. Sí. El div contenedor de `#mit-live-final` ahora tiene `justify-content:space-between`, así que `#final-live-title` queda a la izquierda y el botón "🏆 Tabla" a la derecha.
+
+2. Sí. `onclick="pg('final-live-view',null)"` llama la misma función de siempre que arranca `startFinalPublicView()` — muestra el progreso de todas las líneas y la tabla correspondiente al día en curso.
+
+3. Sí. `pg('final-live-view')` no destruye ni reinicia el estado de `mit-live-final`. Al volver al Leaderboard con "←" y tocar el banner, `checkFinalBanner_` detecta que es jugador y llama `pg('mit')`, que vuelve a `showMitFechas()` → `checkFinalLiveActiva_()` → `openLiveViewFinal(dia)`, que restaura el estado de carga (hoyo actual incluido).
+
+4. Sí. El botón "🏆 Tabla" vive dentro de `#mit-live-final`, que un espectador nunca ve (esa pantalla solo se muestra cuando `openLiveViewFinal` la activa, y eso solo pasa para jugadores de la línea). Un espectador entra directo a `pg-final-live-view` sin pasar por `#mit-live-final`.
+
