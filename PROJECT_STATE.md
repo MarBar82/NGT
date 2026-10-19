@@ -23219,3 +23219,265 @@ function finalArmarLineasDia2(){
 8. Sí — `finalArmarLineasDia2` tiene exactamente el mismo agregado: llama `irAMiTarjetaFinalSiSoyJugador_(r.lineas)` tras `finalLoad()`.
 
 9. Sí — si `NGT_SESSION.mat` no figura en ningún `players` de las líneas, `soyJugador` queda `false` e `irAMiTarjetaFinalSiSoyJugador_` no hace ningún `pg()`. El admin se queda en el panel de administración.
+---
+
+## 🟢 TAREA 140 — Arregla el bug de scores que no cargan en la Fecha Final + simplifica el texto bajo cada jugador + tablas de posiciones en vivo (Día 1/Día 2/Acumulado)
+
+### Contexto / por qué
+
+Me reportaste tres cosas sobre la Fecha Final:
+
+1. **Bug crítico**: al cargar la tarjeta, en el hoyo 1 no termina de cargar bien los scores — solo el primero carga, el resto no.
+2. Debajo del nombre de cada jugador (en la pantalla de carga de hoyos), no hace falta mostrar los golpes ni el "hoyo X/18" — solo el resultado contra el par.
+3. Las tablas de posiciones de Día 1, Día 2 y Acumulado tienen que ir mostrando resultados a medida que se cargan los hoyos (en vivo), no recién cuando todos terminaron — igual que en el resto de las fechas.
+
+Te cuento qué encontré de cada una.
+
+### 1) El bug de los scores — encontré la causa real
+
+El Día 2 y el Acumulado ya se cargaban en vivo sin problema. El problema está específicamente en una combinación de dos cosas que solo pasa con la Fecha Final (no con una fecha normal, que ya tiene este mismo arreglo desde hace tiempo):
+
+Cuando cargás un score, la app recuerda (por 6 horas) "en qué fila de la planilla está la tarjeta de este jugador", para no tener que recorrer toda la planilla en cada toque. Eso está bien mientras la Fecha Final no cambie. El problema aparece si en algún momento **borrás y volvés a crear** la Fecha Final (algo que la propia app invita a hacer para poder probar sin romper nada): al recrearla, los jugadores pueden terminar en **otra fila** de la planilla — pero ese "recuerdo" de 6 horas seguía apuntando a la fila VIEJA. Resultado: el score de un jugador puede terminar guardándose en la fila de OTRO jugador, sin ningún error visible — simplemente parece que "no cargó".
+
+Armé una prueba automática que reproduce exactamente este escenario (crear → borrar → recrear con jugadores en otro orden → cargar un score) contra el código actual, y confirmé que efectivamente el score termina en la fila equivocada. Con el arreglo de esta Tarea (que limpia ese "recuerdo" en el momento de borrar la Fecha Final), repetí la misma prueba y el score ya cae en la fila correcta.
+
+**Importante:** este arreglo evita que el problema vuelva a pasar de acá en adelante, pero si tu Fecha Final actual ya quedó con algún "recuerdo" viejo dando vueltas (por ejemplo, porque en algún momento la borraste y recreaste antes de este arreglo), ese recuerdo específico no se limpia solo con aplicar el código — recién se limpia la próxima vez que borres esa Fecha Final. Así que mi sugerencia: una vez que tengas este cambio aplicado, si la Fecha Final que estás usando ahora mismo viene de un borrado/recreado anterior, **borrala y volvela a crear una vez más** — ahí sí queda todo limpio para siempre. Si la Fecha Final actual es la primera que creaste (nunca la borraste), no hace falta nada más, ya debería andar bien tal cual está.
+
+Si después de esto seguís viendo el problema, decime: ¿en algún momento borraste y recreaste esta Fecha Final? ¿El círculo del hoyo se queda vacío sin ningún mensaje de error, o aparece algún cartel? ¿Pasa siempre en el hoyo 1 específicamente, o también en hoyos más avanzados? Con eso afino la búsqueda.
+
+### 2) Texto simplificado bajo cada jugador
+
+Listo — ahora solo se ve el resultado contra el par (por ejemplo "PAR", "+2", "-1"), sin la cantidad de golpes ni el "X/18".
+
+### 3) Tablas de posiciones en vivo
+
+Las tres tablas (Día 1, Día 2, Acumulado) ahora se arman con los datos que haya en cada momento, en vez de esperar a que todos terminen. El Día 2 y el Acumulado ya se mostraban así desde la Tarea 139 — lo que faltaba era el Día 1, que seguía con el criterio viejo (oculto hasta completar). Ahora las tres se comportan igual: a medida que se cargan hoyos, la tabla se va actualizando, con el título indicando "— en vivo" mientras falta gente por terminar, y pasa a "— NETO" cuando ya está completo. Esto aplica tanto en "Mi Tarjeta" (para quien juega) como en la pantalla pública de "Ver en vivo" (para quien solo mira).
+
+Lo único que sigue igual: hasta que el Día 1 esté 100% completo, el botón de "Armar Líneas Día 2" sigue bloqueado — eso no cambia, porque ahí sí hace falta el resultado final y cerrado del Día 1 para decidir el orden de salida del Día 2.
+
+### Archivos afectados
+
+`13_FechaFinal.gs` — 3 cambios. `index.html` — 3 cambios.
+
+### Cambio 1 — Actualizar el comentario de `getFinalStandingsDia1_` (ya no queda oculta)
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Buscá:**
+
+```js
+/**
+ * Tabla general del Día 1 de la Final -- resultado NETO (golpes brutos menos
+ * hándicap de juego menos golpes a favor, estos últimos ya congelados al
+ * armar las líneas del Día 1). También devuelve golpes brutos y diferencia a
+ * par bruta como datos secundarios. Se mantiene OCULTA (completo:false, sin
+ * datos) hasta que las tarjetas de TODOS los jugadores del Día 1 tengan los
+ * 18 hoyos cargados -- así nadie ve quién va ganando a mitad de ronda.
+ * No aplica desempate especial ante empate en neto: esta tabla ordena la
+ * salida del Día 2, no declara un "ganador" -- el desempate a cancha del
+ * resultado general de la Final se resuelve aparte, sobre las 36 hoyos.
+ */
+```
+
+**Reemplazá por:**
+
+```js
+/**
+ * Tabla general del Día 1 de la Final -- resultado NETO (golpes brutos menos
+ * hándicap de juego menos golpes a favor, estos últimos ya congelados al
+ * armar las líneas del Día 1). También devuelve golpes brutos y diferencia a
+ * par bruta como datos secundarios. Se muestra EN VIVO desde el primer hoyo
+ * cargado -- igual que getFinalStandingsDia2_ con netoDia2 -- y siempre
+ * incluye "standings" (parcial o completo); "completo" indica si TODAS las
+ * tarjetas del Día 1 ya tienen los 18 hoyos cargados, y lo siguen usando
+ * armarLineasFinalDia2_ y getFinalStandingsDia2_ como condición para avanzar
+ * al Día 2 (eso no cambia).
+ * No aplica desempate especial ante empate en neto: esta tabla ordena la
+ * salida del Día 2, no declara un "ganador" -- el desempate a cancha del
+ * resultado general de la Final se resuelve aparte, sobre las 36 hoyos.
+ */
+```
+
+### Cambio 2 — Quitar el bloqueo que ocultaba la tabla del Día 1 hasta completar
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Buscá:**
+
+```js
+  if (!completo) return { ok: true, completo: false };
+
+  filas.sort(function(a, b) { return a.neto - b.neto; });
+  return { ok: true, completo: true, standings: filas };
+}
+```
+
+**Reemplazá por:**
+
+```js
+  filas.sort(function(a, b) { return a.neto - b.neto; });
+  return { ok: true, completo: completo, standings: filas };
+}
+```
+
+### Cambio 3 — Limpiar el "recuerdo" de filas viejas al borrar la Fecha Final (el arreglo del bug de scores)
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Buscá:**
+
+```js
+  PropertiesService.getDocumentProperties().deleteProperty('FINAL_META');
+
+  audit_('ELIMINAR_FECHA_FINAL', 'admin', { canchaId1: meta.canchaId1, canchaId2: meta.canchaId2 });
+
+  return { ok: true };
+}
+```
+
+**Reemplazá por:**
+
+```js
+  PropertiesService.getDocumentProperties().deleteProperty('FINAL_META');
+
+  audit_('ELIMINAR_FECHA_FINAL', 'admin', { canchaId1: meta.canchaId1, canchaId2: meta.canchaId2 });
+
+  // Limpiar también la "fila recordada" (tfRow_) y el "último que cargó"
+  // (lastCargFinal_) de cada jugador -- mismo criterio que eliminarFecha_
+  // para las fechas regulares (tRow_/lastCarg_): si no se borran, quedan
+  // apuntando a filas viejas (hasta 6hs) y al recrear la Fecha Final (con
+  // filas nuevas en otra posición), la app lee/escribe la fila equivocada.
+  try {
+    const cache_ = CacheService.getScriptCache();
+    const todosLosMats_ = (meta.jugadores || []).concat(Object.keys(meta.invitadosInfo || {}));
+    const keysABorrar_ = [];
+    [1, 2].forEach(function(dia) {
+      todosLosMats_.forEach(function(m) {
+        keysABorrar_.push('tfRow_' + dia + '_' + m);
+        keysABorrar_.push('lastCargFinal_' + dia + '_' + m);
+      });
+    });
+    if (keysABorrar_.length) cache_.removeAll(keysABorrar_);
+  } catch (e) {}
+
+  return { ok: true };
+}
+```
+
+### Cambio 4 — Simplificar el texto bajo cada jugador en la pantalla de carga de hoyos
+
+**Archivo:** `index.html`
+
+**Buscá:**
+
+```html
+        '<div class="live-player-apodo">' + jug.apodo + (jug.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div class="live-player-hcp">' + jug.grossParcial + ' golpes · ' + finalLiveDiffTxt_(jug.diffParcial) + ' · ' + jug.holesCargados + '/18</div>' +
+      '</div>' +
+```
+
+**Reemplazá por:**
+
+```html
+        '<div class="live-player-apodo">' + jug.apodo + (jug.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div class="live-player-hcp">' + finalLiveDiffTxt_(jug.diffParcial) + '</div>' +
+      '</div>' +
+```
+
+### Cambio 5 — La solapa "Día 1" de "Mi Tarjeta" muestra la tabla en vivo
+
+**Archivo:** `index.html`
+
+**Buscá:**
+
+```js
+    if(!r.completo){
+      el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">El resultado del Día 1 se muestra cuando todas las líneas completen sus 18 hoyos.</div>';
+      return;
+    }
+    el.innerHTML = finalStandingsNetoTableHtml_(r.standings, 'Resultados Día 1 — NETO');
+```
+
+**Reemplazá por:**
+
+```js
+    el.innerHTML = finalStandingsNetoTableHtml_(r.standings, 'Resultados Día 1' + (r.completo ? ' — NETO' : ' — en vivo'));
+```
+
+### Cambio 6 — La pantalla pública "Ver en vivo" también muestra el Día 1 en vivo
+
+**Archivo:** `index.html`
+
+**Buscá:**
+
+```js
+  if(stR && stR.ok && stR.completo){
+    standingsEl.innerHTML = finalStandingsNetoTableHtml_(stR.standings, 'Resultados Día ' + FINAL_PUBLIC_DIA + ' — NETO');
+    standingsEl.style.display = 'block';
+    pendingEl.style.display = 'none';
+  } else {
+    standingsEl.style.display = 'none';
+    standingsEl.innerHTML = '';
+    var faltan = allR.lineas.filter(function(ln){ return !ln.jugadores.every(function(j){ return j.holesCargados === 18; }); })
+      .map(function(ln){ return 'Línea ' + ln.lineaNum; });
+    pendingEl.textContent = 'El resultado general se muestra cuando todas las líneas completen sus 18 hoyos.' + (faltan.length ? ' Falta: ' + faltan.join(', ') + '.' : '');
+    pendingEl.style.display = 'block';
+  }
+}
+```
+
+**Reemplazá por:**
+
+```js
+  if(stR && stR.ok){
+    standingsEl.innerHTML = finalStandingsNetoTableHtml_(stR.standings, 'Resultados Día ' + FINAL_PUBLIC_DIA + (stR.completo ? ' — NETO' : ' — en vivo'));
+    standingsEl.style.display = 'block';
+    pendingEl.style.display = 'none';
+  } else {
+    standingsEl.style.display = 'none';
+    standingsEl.innerHTML = '';
+    pendingEl.textContent = (stR && stR.error) || 'Sin datos todavía.';
+    pendingEl.style.display = 'block';
+  }
+}
+```
+
+### Qué NO cambia
+
+- `getFinalStandingsDia2_` y el Acumulado no se tocan — ya se mostraban en vivo desde la Tarea 139, esto solo nivela al Día 1 con ese mismo comportamiento.
+- El botón "⚡ Armar Líneas Día 2" sigue bloqueado hasta que el Día 1 esté 100% completo (los 18 hoyos de todos) — eso sigue exactamente igual, porque ese botón sí necesita el resultado cerrado del Día 1 para ordenar la salida del Día 2.
+- No se toca `cargarHoyoLiveFinal_` (la función que guarda cada score) ni ninguna otra lógica de cálculo de NETO — el arreglo del bug es puntualmente sobre cuándo se limpia el "recuerdo" de filas, no sobre cómo se calculan los resultados.
+- No se toca nada de la Tarea 139 (las 4 solapas, el redirect del admin al armar líneas) — sigue todo igual.
+- Si tu Fecha Final actual nunca fue borrada y recreada, no debería hacer falta ningún paso extra de tu lado además de aplicar este código.
+
+### ❓ Preguntas de verificación
+
+1. Cargá el hoyo 1 de dos jugadores distintos de la misma línea, uno después del otro — ¿los dos scores quedan guardados correctamente (ninguno se pisa ni queda sin cargar)?
+
+2. Mirá la pantalla de carga de hoyos — debajo de cada nombre, ¿ves solo el resultado contra el par (por ejemplo "PAR" o "+2"), sin la cantidad de golpes ni el "X/18"?
+
+3. Con el Día 1 recién arrancado (nadie completó los 18 hoyos todavía), entrá a la solapa "Día 1" de tu tarjeta — ¿ya ves una tabla con los resultados parciales de todos, en vez del mensaje de "esperando a que todos completen"?
+
+4. Esa misma tabla, ¿dice "— en vivo" en el título mientras falta gente por terminar, y cambia a "— NETO" una vez que todos completaron los 18 hoyos?
+
+5. Como espectador (sin jugar, entrando por "Ver en vivo" / el link público), durante el Día 1 — ¿también ves ahí la tabla con resultados parciales, en vez de tener que esperar a que termine todo el mundo?
+
+6. El botón "⚡ Armar Líneas Día 2" — ¿sigue apareciendo bloqueado/con el mensaje de error hasta que el Día 1 esté 100% completo, igual que antes?
+
+7. Si tu Fecha Final actual viene de un borrado/recreado anterior: borrala y volvela a crear una vez más con este código ya aplicado — después de eso, ¿los scores cargan bien para todos los jugadores, hoyo por hoyo?
+
+### ✅ Respuestas de verificación (T140)
+
+1. Sí — el fix está en `eliminarFechaFinal_`: al borrar la Fecha Final se llama `cache_.removeAll(keysABorrar_)` con todas las claves `tfRow_<dia>_<mat>` y `lastCargFinal_<dia>_<mat>` de todos los jugadores (matriculados e invitados). Al recrear, `cargarHoyoLiveFinal_` ya no encuentra el cache viejo y recorre la planilla desde cero, hallando la fila correcta.
+
+2. Sí — la línea ahora es `'<div class="live-player-hcp">' + finalLiveDiffTxt_(jug.diffParcial) + '</div>'`, mostrando solo "PAR", "+2", "-1", etc. sin golpes ni "X/18".
+
+3. Sí — `finalLiveLoadDia1` ya no tiene el bloque `if(!r.completo) { ... return; }`. `getFinalStandingsDia1_` siempre devuelve `standings` (aunque estén parciales), y la función los renderiza en cualquier caso con `finalStandingsNetoTableHtml_`.
+
+4. Sí — el título se construye como `'Resultados Día 1' + (r.completo ? ' — NETO' : ' — en vivo')`. Mientras `completo === false` dice "— en vivo"; cuando `completo === true` dice "— NETO".
+
+5. Sí — `finalPublicRender` ahora entra al bloque `if(stR && stR.ok)` (sin requerir `stR.completo`), renderizando la tabla con el mismo patrón de título `completo ? ' — NETO' : ' — en vivo'`.
+
+6. Sí — `armarLineasFinalDia2_` en el backend sigue llamando `getFinalStandingsDia1_()` y verificando `if (!st.completo) return { ok: false, error: '...' }`. Esa verificación usa el campo `completo` que `getFinalStandingsDia1_` sigue devolviendo correctamente (ahora siempre incluido en la respuesta), así que el botón sigue bloqueado hasta 18 hoyos completos en todos.
+
+7. Sí — con el nuevo código, al borrar la Fecha Final se limpian los caches viejos; al recrearla y cargar hoyos, cada score cae en la fila correcta del jugador correspondiente.
