@@ -23481,3 +23481,445 @@ Lo único que sigue igual: hasta que el Día 1 esté 100% completo, el botón de
 6. Sí — `armarLineasFinalDia2_` en el backend sigue llamando `getFinalStandingsDia1_()` y verificando `if (!st.completo) return { ok: false, error: '...' }`. Esa verificación usa el campo `completo` que `getFinalStandingsDia1_` sigue devolviendo correctamente (ahora siempre incluido en la respuesta), así que el botón sigue bloqueado hasta 18 hoyos completos en todos.
 
 7. Sí — con el nuevo código, al borrar la Fecha Final se limpian los caches viejos; al recrearla y cargar hoyos, cada score cae en la fila correcta del jugador correspondiente.
+---
+
+## 🟢 TAREA 141 — Acumulado en vivo mientras no exista el Día 2 + resultado contra el par con hcp de juego aplicado hoyo por hoyo
+
+### Contexto / por qué
+
+Me reportaste cuatro cosas más sobre la Fecha Final:
+
+1. Seguís viendo el problema de scores que no cargan.
+2. La solapa "Día 1" da error al cargar, y "Acumulado" dice que todavía no se armaron las líneas del Día 2.
+3. Mientras no exista el Día 2, "Acumulado" tiene que mostrar lo mismo que el Día 1.
+4. El resultado contra el par (al lado de cada jugador) tiene que tener en cuenta el hcp de juego, hoyo por hoyo — y en el círculo del hoyo, en vez del par traslúcido, que aparezca la cantidad de golpes de ventaja que tenga el jugador en ese hoyo (ejemplo tuyo: hcp 10, hoyo de dificultad 7 → el círculo muestra "-1").
+
+Van los puntos 3 y 4 resueltos en esta Tarea. Sobre los puntos 1 y 2 necesito que me contestes algo puntual antes de seguir — te explico por qué más abajo.
+
+### 1 y 2) El problema de scores que persiste — necesito un dato tuyo antes de seguir
+
+Repasé de nuevo todo el código de guardado de scores de la Fecha Final (incluida la parte que toca el frontend cuando cargás varios jugadores seguidos) comparándolo línea por línea con el de una fecha normal, que sabemos que funciona bien hace tiempo — es exactamente el mismo mecanismo, sin diferencias. No encontré ningún bug nuevo ahí.
+
+Mi sospecha es la misma que te expliqué en la Tarea 140: el arreglo que hice ahí limpia el "recuerdo" de filas viejas recién **en el momento de borrar** la Fecha Final — no limpia nada retroactivamente. Si la Fecha Final que estás usando ahora mismo es la misma que ya tenías antes de que yo aplicara ese arreglo (es decir, no la borraste y volviste a crear después de que se desplegó la Tarea 140), el "recuerdo" viejo y corrupto sigue ahí intacto, y por eso ves exactamente el mismo problema que antes — nada cambió para esa Fecha Final en particular.
+
+**Antes de seguir investigando, necesito que me confirmes:** ¿borraste y volviste a crear la Fecha Final después de que se desplegó la Tarea 140? Si la respuesta es "no", te pido que hagas ese paso (borrar y crear de nuevo) y volvamos a probar — es muy probable que ahí se resuelva. Si la respuesta es "sí, ya la borré y recreé, y el problema sigue" — ahí sí hay algo más que no estoy viendo, y te voy a pedir dos o tres detalles más para encontrarlo (en qué hoyo pasa exactamente, si ves algún cartel de error en pantalla o el círculo simplemente se queda vacío, y si pasa con todos los jugadores de la línea o solo con algunos).
+
+Sobre el error puntual que viste en "Día 1" ("da error al cargar"): no encontré ninguna forma de que el código actual tire ese error con datos reales — el cartel "Error al cargar" aparece ante CUALQUIER falla de conexión o excepción del lado del servidor, así que podría estar relacionado con el mismo tema de arriba (o con el momento del deploy). Si después de rehacer el paso de borrar/crear lo seguís viendo, decime en qué momento exacto aparece y lo reviso puntualmente.
+
+### 3) "Acumulado" ya no depende de que exista el Día 2
+
+Encontré la causa: "Acumulado" y "Día 2" usan el mismo cálculo del backend, y ese cálculo frenaba con un error apenas no existían las líneas del Día 2 armadas (o si el Día 1 no estaba terminado). Saqué esa traba: ahora, mientras no exista el Día 2, el cálculo usa directamente las líneas del Día 1 como base — así "Acumulado" te muestra lo mismo que ya ves en la pestaña "Día 1" (en vivo si el Día 1 está en curso, cerrado si ya terminó), con el Día 2 marcado como "sin arrancar" para todos. En cuanto armes las líneas del Día 2, pasa a combinarlas de verdad, como ya venía funcionando.
+
+### 4) El resultado contra el par ahora tiene en cuenta el hcp de juego, hoyo por hoyo
+
+Antes, el número que veías al lado de cada jugador en la pantalla de carga era la diferencia BRUTA contra el par (sin descontar nada de hándicap). Ahora es la diferencia NETA: por cada hoyo que el jugador ya jugó, le resto además los golpes de ventaja que le corresponden en ESE hoyo según su hcp de juego y la dificultad del hoyo — exactamente el mismo criterio que usa el cálculo oficial de hándicap de la app (un hcp de 18 da un golpe en cada hoyo; un hcp de 15 da un golpe en los hoyos de dificultad 1 a 15 y ninguno en los de dificultad 16 a 18, etc.).
+
+En el círculo del hoyo, reemplacé el número de par (que se veía traslúcido de fondo) por la cantidad de golpes de ventaja que tiene ESE jugador en ESE hoyo, con el signo "-" adelante — tal cual tu ejemplo: hcp 10 en un hoyo de dificultad 7 → el círculo muestra "-1". Si el jugador no tiene golpe de ventaja en ese hoyo, el círculo queda sin ningún número de fondo (vacío hasta que cargues el score). De paso, agregué la dificultad del hoyo al encabezado ("Hoyo 7 · Par 4 · HCP 7"), para que se entienda de dónde sale el golpe — si preferís que esto último no aparezca, decime y lo saco.
+
+Una aclaración: esto es distinto de las tablas de posiciones (Día 1 / Día 2 / Acumulado), que YA venían descontando el hcp de juego completo contra el total — esas no cambian con esta Tarea. Lo que cambié acá es puntualmente el número que ves hoyo a hoyo mientras estás cargando, para que sea consistente con lo que vas a ver después en la tabla general.
+
+### Archivos afectados
+
+`13_FechaFinal.gs` — 3 cambios. `index.html` — 1 cambio.
+
+### Cambio 1 — Actualizar el comentario de `getFinalStandingsDia2_`
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Buscá:**
+
+```js
+/**
+ * Tabla del Día 2 de la Final -- a diferencia de getFinalStandingsDia1_ (que
+ * se mantiene OCULTA hasta completar los 18 hoyos), esta se muestra EN VIVO
+ * desde que arranca el Día 2: combina el NETO ya cerrado del Día 1
+ * (getFinalStandingsDia1_, reutilizada tal cual -- no se duplica ese
+ * cálculo) con el NETO parcial del Día 2 (a medida que se van cargando
+ * hoyos) para dar el acumulado de las 36 hoyos en cada consulta. Se ordena
+ * por ese acumulado. No aplica golpes a favor en el Día 2 -- esos solo se
+ * aplican una vez, en el Día 1 (ya están adentro del netoDia1 de cada uno).
+ * netoDia2 viene null mientras el jugador no cargó ningún hoyo todavía --
+ * en ese caso su acumulado es directamente su neto del Día 1, sin restar
+ * nada por un Día 2 que ni arrancó.
+ */
+```
+
+**Reemplazá por:**
+
+```js
+/**
+ * Tabla del Día 2 de la Final -- se muestra EN VIVO desde que arranca el
+ * Día 1 (incluso antes de armar las líneas del Día 2: ver más abajo):
+ * combina el NETO del Día 1 (getFinalStandingsDia1_, reutilizada tal cual --
+ * no se duplica ese cálculo, y ya viene en vivo/parcial si el Día 1 todavía
+ * no terminó) con el NETO parcial del Día 2 (a medida que se van cargando
+ * hoyos) para dar el acumulado de las 36 hoyos en cada consulta. Se ordena
+ * por ese acumulado. No aplica golpes a favor en el Día 2 -- esos solo se
+ * aplican una vez, en el Día 1 (ya están adentro del netoDia1 de cada uno).
+ * netoDia2 viene null mientras el jugador no cargó ningún hoyo todavía --
+ * en ese caso su acumulado es directamente su neto del Día 1, sin restar
+ * nada por un Día 2 que ni arrancó. Mientras no se armaron las líneas del
+ * Día 2, usa las líneas del Día 1 como base (ver más abajo) -- así la
+ * pestaña "Día 2"/"Acumulado" muestra lo mismo que la pestaña "Día 1" en
+ * vez de un error, hasta que el Día 2 arranque de verdad.
+ */
+```
+
+### Cambio 2 — `getFinalStandingsDia2_` usa las líneas del Día 1 cuando el Día 2 no está armado
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Buscá:**
+
+```js
+function getFinalStandingsDia2_() {
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineas = meta.lineasDia2;
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día 2' };
+
+  const st1 = getFinalStandingsDia1_();
+  if (!st1.ok) return { ok: false, error: st1.error || 'No se pudo calcular el resultado del Día 1' };
+  if (!st1.completo) return { ok: false, error: 'Falta terminar el Día 1' };
+  const dia1ByMat = {};
+  st1.standings.forEach(function(s) { dia1ByMat[s.matricula] = s; });
+```
+
+**Reemplazá por:**
+
+```js
+function getFinalStandingsDia2_() {
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+
+  const st1 = getFinalStandingsDia1_();
+  if (!st1.ok) return { ok: false, error: st1.error || 'No se pudo calcular el resultado del Día 1' };
+  const dia1ByMat = {};
+  st1.standings.forEach(function(s) { dia1ByMat[s.matricula] = s; });
+
+  // Mientras no se armaron las líneas del Día 2 (sin importar si el Día 1 ya
+  // está completo o no), el "Acumulado" -- y la pestaña "Día 2", que reutiliza
+  // este mismo cálculo -- se apoyan en las líneas del Día 1: así se ve lo
+  // mismo que ya muestra la pestaña Día 1 (en vivo o cerrado), sin duplicar
+  // ese cálculo acá. netoDia2 queda null para todos (nadie arrancó el Día 2
+  // todavía), así que el acumulado es directamente el neto del Día 1.
+  const lineas = (meta.lineasDia2 && meta.lineasDia2.length) ? meta.lineasDia2 : meta.lineasDia1;
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día 1' };
+```
+
+### Cambio 3 — `buildLineaSnapshotFinal_`: diferencia NETA (con hcp aplicado hoyo por hoyo) + golpes de ventaja por hoyo
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Buscá:**
+
+```js
+/**
+ * Snapshot en vivo de una línea del Día 1 o Día 2 de la Final: golpes
+ * cargados por hoyo + diferencia a par acumulada (solo sobre los hoyos ya
+ * jugados, no contra el par de los 18). Sin matches ni hoyos de bonus — no
+ * aplican en la Final.
+ */
+function buildLineaSnapshotFinal_(dia, lineaIdx, meta) {
+  const lineaKey = 'lineasDia' + dia;
+  const linea = (meta[lineaKey] || [])[lineaIdx];
+  if (!linea) return null;
+  const lineaPlayers = linea.players || [];
+  const lineaMats = lineaPlayers.map(function(p) { return p.matricula; });
+
+  const canchaId   = dia === 1 ? meta.canchaId1   : meta.canchaId2;
+  const canchaName = dia === 1 ? meta.canchaName1 : meta.canchaName2;
+  const colorTee   = dia === 1 ? meta.colorTee1   : meta.colorTee2;
+  const par        = dia === 1 ? meta.par1        : meta.par2;
+
+  const cd = canchaId
+    ? cachedRead_('cp2_' + canchaId, 600, function(){ return getCanchaPares_(canchaId); })
+    : null;
+  const cpPares = (cd && cd.pares) || [];
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const scoresByMat = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues(); // DIA..HOYO18
+      rows.forEach(function(r) {
+        if (String(r[0]) !== String(dia)) return;
+        const mat = String(r[1]).trim();
+        if (lineaMats.indexOf(mat) < 0) return;
+        scoresByMat[mat] = r.slice(5, 23).map(function(v) {
+          return (v === '' || v === null || v === undefined) ? null : Number(v);
+        });
+      });
+    }
+  }
+
+  const cache = CacheService.getScriptCache();
+  const jugadores = lineaPlayers.map(function(p) {
+    const scores = scoresByMat[p.matricula] || new Array(18).fill(null);
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    const grossParcial  = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    let parParcial = 0;
+    scores.forEach(function(s, h) { if (s !== null) parParcial += (cpPares[h] || 0); });
+    const diffParcial = holesCargados > 0 ? (grossParcial - parParcial) : null;
+    const firstNull = scores.indexOf(null);
+
+    let ultimoCargadoPor = null;
+    try {
+      const raw = cache.get('lastCargFinal_' + dia + '_' + p.matricula);
+      if (raw) ultimoCargadoPor = JSON.parse(raw);
+    } catch(e) {}
+
+    return {
+      matricula:        p.matricula,
+      apodo:             p.apodo,
+      hcp:               p.hcp,
+      invitado:          !!p.invitado,
+      scores:            scores,
+      holesCargados:     holesCargados,
+      grossParcial:      grossParcial,
+      diffParcial:       diffParcial, // null hasta el primer hoyo cargado
+      ultimoCargadoPor:  ultimoCargadoPor,
+      nextHoyo:          firstNull >= 0 ? firstNull + 1 : 19,
+    };
+  });
+
+  return {
+    dia:          dia,
+    lineaNum:     lineaIdx + 1,
+    totalLineas:  (meta[lineaKey] || []).length,
+    cancha:       { id: canchaId, nombre: canchaName, colorTee: colorTee || 'BLANCAS' },
+    par:          par,
+    pares:        cpPares,
+    updatedAt:    Date.now(),
+    jugadores:    jugadores,
+  };
+}
+```
+
+**Reemplazá por:**
+
+```js
+/**
+ * Snapshot en vivo de una línea del Día 1 o Día 2 de la Final: golpes
+ * cargados por hoyo + diferencia a par NETA acumulada (ya con los golpes de
+ * ventaja del hcp de juego de cada jugador aplicados hoyo por hoyo, según la
+ * dificultad de cada hoyo — misma fórmula que calcStrokesPerHole_ usa para
+ * el WHS, reutilizada tal cual) sobre los hoyos ya jugados, no contra el par
+ * de los 18. Sin matches ni hoyos de bonus — no aplican en la Final.
+ */
+function buildLineaSnapshotFinal_(dia, lineaIdx, meta) {
+  const lineaKey = 'lineasDia' + dia;
+  const linea = (meta[lineaKey] || [])[lineaIdx];
+  if (!linea) return null;
+  const lineaPlayers = linea.players || [];
+  const lineaMats = lineaPlayers.map(function(p) { return p.matricula; });
+
+  const canchaId   = dia === 1 ? meta.canchaId1   : meta.canchaId2;
+  const canchaName = dia === 1 ? meta.canchaName1 : meta.canchaName2;
+  const colorTee   = dia === 1 ? meta.colorTee1   : meta.colorTee2;
+  const par        = dia === 1 ? meta.par1        : meta.par2;
+
+  const cd = canchaId
+    ? cachedRead_('cp2_' + canchaId, 600, function(){ return getCanchaPares_(canchaId); })
+    : null;
+  const cpPares = (cd && cd.pares) || [];
+  const cpIndices = (cd && cd.indices) || [];
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const scoresByMat = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues(); // DIA..HOYO18
+      rows.forEach(function(r) {
+        if (String(r[0]) !== String(dia)) return;
+        const mat = String(r[1]).trim();
+        if (lineaMats.indexOf(mat) < 0) return;
+        scoresByMat[mat] = r.slice(5, 23).map(function(v) {
+          return (v === '' || v === null || v === undefined) ? null : Number(v);
+        });
+      });
+    }
+  }
+
+  const cache = CacheService.getScriptCache();
+  const jugadores = lineaPlayers.map(function(p) {
+    const scores = scoresByMat[p.matricula] || new Array(18).fill(null);
+    const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+    const grossParcial  = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
+    // Golpes de ventaja por hoyo según el hcp de juego de ESTE jugador y la
+    // dificultad de cada hoyo (índice 1 = más difícil) -- misma fórmula que
+    // ya usa el cálculo WHS (calcStrokesPerHole_, 05_HCP.gs): hcp 18 = 1
+    // golpe en cada hoyo; hcp 15 = 1 golpe en los hoyos de dificultad 1 a 15.
+    const strokesPerHole = calcStrokesPerHole_(p.hcp, cpIndices);
+    let diffParcial = null;
+    if (holesCargados > 0) {
+      let acc = 0;
+      scores.forEach(function(s, h) {
+        if (s !== null) acc += (s - (cpPares[h] || 0) - (strokesPerHole[h] || 0));
+      });
+      diffParcial = acc;
+    }
+    const firstNull = scores.indexOf(null);
+
+    let ultimoCargadoPor = null;
+    try {
+      const raw = cache.get('lastCargFinal_' + dia + '_' + p.matricula);
+      if (raw) ultimoCargadoPor = JSON.parse(raw);
+    } catch(e) {}
+
+    return {
+      matricula:        p.matricula,
+      apodo:             p.apodo,
+      hcp:               p.hcp,
+      invitado:          !!p.invitado,
+      scores:            scores,
+      holesCargados:     holesCargados,
+      grossParcial:      grossParcial,
+      diffParcial:       diffParcial, // NETO (con hcp de juego aplicado), null hasta el primer hoyo cargado
+      strokesPerHole:    strokesPerHole, // golpes de ventaja de este jugador en cada uno de los 18 hoyos
+      ultimoCargadoPor:  ultimoCargadoPor,
+      nextHoyo:          firstNull >= 0 ? firstNull + 1 : 19,
+    };
+  });
+
+  return {
+    dia:          dia,
+    lineaNum:     lineaIdx + 1,
+    totalLineas:  (meta[lineaKey] || []).length,
+    cancha:       { id: canchaId, nombre: canchaName, colorTee: colorTee || 'BLANCAS' },
+    par:          par,
+    pares:        cpPares,
+    indices:      cpIndices,
+    updatedAt:    Date.now(),
+    jugadores:    jugadores,
+  };
+}
+```
+
+### Cambio 4 — El círculo del hoyo muestra los golpes de ventaja (en vez del par) + la dificultad en el encabezado
+
+**Archivo:** `index.html`
+
+**Buscá:**
+
+```html
+function finalLiveRenderHoyoActual(){
+  if(!FINAL_LIVE_DATA) return;
+  var d = FINAL_LIVE_DATA;
+  var pares = d.pares || [];
+  var h = FINAL_LIVE_HOYO - 1;
+  var par = pares[h] || null;
+  document.getElementById('final-live-hoyo-label').textContent = 'Hoyo ' + FINAL_LIVE_HOYO;
+  document.getElementById('final-live-par-label').textContent = par ? '· Par ' + par : '';
+
+  var html = '';
+  d.jugadores.forEach(function(jug){
+    var score = jug.scores[h];
+    var isSaving = FINAL_LIVE_SAVING_MAT === jug.matricula && FINAL_LIVE_SAVING_HOYO === FINAL_LIVE_HOYO;
+    var cls = 'hole-circle' + (score !== null ? ' filled' : '');
+    if(isSaving) cls += ' saving';
+    var savingLabel = isSaving ? '<div class="live-saving-label">Guardando...</div>' : '';
+
+    html += '<div class="live-player-row" onclick="finalLiveOpenScoreModal(' + FINAL_LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
+      '<div class="live-player-info">' +
+        '<div class="live-player-apodo">' + jug.apodo + (jug.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div class="live-player-hcp">' + finalLiveDiffTxt_(jug.diffParcial) + '</div>' +
+      '</div>' +
+      '<div class="live-hole-wrap">' +
+        '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
+          (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
+          (score !== null ? '<span class="hole-score" style="font-size:22px;">' + score + '</span>' : '') +
+        '</div>' +
+        savingLabel +
+      '</div>' +
+    '</div>';
+  });
+  document.getElementById('final-live-players-body').innerHTML = html;
+}
+```
+
+**Reemplazá por:**
+
+```html
+function finalLiveRenderHoyoActual(){
+  if(!FINAL_LIVE_DATA) return;
+  var d = FINAL_LIVE_DATA;
+  var pares = d.pares || [];
+  var indices = d.indices || [];
+  var h = FINAL_LIVE_HOYO - 1;
+  var par = pares[h] || null;
+  var hoyoIdx = indices[h];
+  document.getElementById('final-live-hoyo-label').textContent = 'Hoyo ' + FINAL_LIVE_HOYO;
+  document.getElementById('final-live-par-label').textContent = (par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '');
+
+  var html = '';
+  d.jugadores.forEach(function(jug){
+    var score = jug.scores[h];
+    var isSaving = FINAL_LIVE_SAVING_MAT === jug.matricula && FINAL_LIVE_SAVING_HOYO === FINAL_LIVE_HOYO;
+    var cls = 'hole-circle' + (score !== null ? ' filled' : '');
+    if(isSaving) cls += ' saving';
+    var savingLabel = isSaving ? '<div class="live-saving-label">Guardando...</div>' : '';
+    // Golpes de ventaja de este jugador en este hoyo, según su hcp de juego
+    // (calcStrokesPerHole_ en el backend) -- se muestra en el círculo en vez
+    // del par traslúcido; si no recibe golpe en este hoyo, el círculo queda
+    // sin ningún número de fondo.
+    var strokesHere = (jug.strokesPerHole && jug.strokesPerHole[h]) || 0;
+
+    html += '<div class="live-player-row" onclick="finalLiveOpenScoreModal(' + FINAL_LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
+      '<div class="live-player-info">' +
+        '<div class="live-player-apodo">' + jug.apodo + (jug.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div class="live-player-hcp">' + finalLiveDiffTxt_(jug.diffParcial) + '</div>' +
+      '</div>' +
+      '<div class="live-hole-wrap">' +
+        '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
+          (strokesHere ? '<span class="hole-par-bg">-' + strokesHere + '</span>' : '') +
+          (score !== null ? '<span class="hole-score" style="font-size:22px;">' + score + '</span>' : '') +
+        '</div>' +
+        savingLabel +
+      '</div>' +
+    '</div>';
+  });
+  document.getElementById('final-live-players-body').innerHTML = html;
+}
+```
+
+### Qué NO cambia
+
+- Las tablas de posiciones (Día 1 / Día 2 / Acumulado) no tocan su cálculo de NETO — ya venían descontando el hcp de juego completo correctamente desde antes. Lo que cambió es puntualmente el número hoyo-a-hoyo de la pantalla de carga.
+- `cargarHoyoLiveFinal_` (guardado de cada score) no se toca en esta Tarea.
+- El botón "Armar Líneas Día 2" sigue con la misma condición de siempre (Día 1 completo) — no cambia.
+- La pestaña "Día 2" (no "Acumulado") también se beneficia del fallback del Cambio 2: si todavía no armaste esas líneas, en vez de un error vas a ver a todos con "sin arrancar" — mismo criterio, sin necesidad de otro cambio aparte.
+
+### ❓ Preguntas de verificación
+
+1. En la pantalla de carga de hoyos, el círculo de un jugador con hándicap que le da golpe en el hoyo actual — ¿muestra "-1" (o "-2" si corresponde) en vez del número de par?
+
+2. Un jugador SIN golpe de ventaja en el hoyo actual — ¿su círculo queda sin ningún número de fondo?
+
+3. El encabezado del hoyo — ¿ahora dice algo como "Hoyo 7 · Par 4 · HCP 7"?
+
+4. Debajo del nombre de cada jugador — ¿el número que aparece ahora tiene en cuenta el hándicap (no es simplemente golpes brutos menos par)?
+
+5. Con el Día 2 todavía sin armar, entrá a "Acumulado" — ¿ves los mismos jugadores y el mismo orden que en "Día 1", en vez de un mensaje de error?
+
+6. Una vez que armes las líneas del Día 2 y empieces a cargar — ¿"Acumulado" pasa a combinar los dos días normalmente, como antes?
+
+7. (Sobre el bug de scores): ¿borraste y recreaste la Fecha Final después de que se desplegó la Tarea 140? Contame el resultado para saber cómo seguir.
+
+### ✅ Respuestas de verificación (T141)
+
+1. Sí — `buildLineaSnapshotFinal_` ahora llama `calcStrokesPerHole_(p.hcp, cpIndices)` por cada jugador. El campo `strokesPerHole` llega al frontend junto con el snapshot. En `finalLiveRenderHoyoActual`, `strokesHere = jug.strokesPerHole[h]` y el círculo muestra `'-' + strokesHere` en lugar del par traslúcido.
+
+2. Sí — si `strokesPerHole[h] === 0` (el jugador no recibe golpe en ese hoyo), `strokesHere` es 0/falsy y no se renderiza el `<span class="hole-par-bg">`.
+
+3. Sí — `document.getElementById('final-live-par-label').textContent` ahora concatena `(par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '')`, donde `hoyoIdx = indices[h]` viene del campo `indices` que `buildLineaSnapshotFinal_` ahora incluye en el snapshot.
+
+4. Sí — `diffParcial` ahora acumula `s - (cpPares[h] || 0) - (strokesPerHole[h] || 0)` por hoyo jugado, en vez de solo `gross - parParcial`. Esto descuenta los golpes de ventaja del hcp de juego hoyo por hoyo.
+
+5. Sí — `getFinalStandingsDia2_` ya no tiene el `return { ok: false, error: 'Todavía no se armaron las líneas del Día 2' }`. En su lugar usa `const lineas = (meta.lineasDia2 && meta.lineasDia2.length) ? meta.lineasDia2 : meta.lineasDia1`. La solapa "Acumulado" llama a `getFinalStandingsDia2`, que a su vez llama a `getFinalStandingsDia1_` — así el Acumulado muestra lo mismo que el Día 1 mientras no exista el Día 2.
+
+6. Sí — en cuanto `meta.lineasDia2` tenga jugadores (al armar las líneas del Día 2), el fallback se descarta y `getFinalStandingsDia2_` usa las líneas reales del Día 2, combinando como antes `dia1ByMat` con los scores del Día 2 de cada jugador.
+
+7. Pendiente de confirmación del usuario (si borraste y recreaste después del deploy de T140).
