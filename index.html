@@ -8745,10 +8745,12 @@ function finalLiveRenderHoyoActual(){
   if(!FINAL_LIVE_DATA) return;
   var d = FINAL_LIVE_DATA;
   var pares = d.pares || [];
+  var indices = d.indices || [];
   var h = FINAL_LIVE_HOYO - 1;
   var par = pares[h] || null;
+  var hoyoIdx = indices[h];
   document.getElementById('final-live-hoyo-label').textContent = 'Hoyo ' + FINAL_LIVE_HOYO;
-  document.getElementById('final-live-par-label').textContent = par ? '· Par ' + par : '';
+  document.getElementById('final-live-par-label').textContent = (par ? '· Par ' + par : '') + (hoyoIdx ? ' · HCP ' + hoyoIdx : '');
 
   var html = '';
   d.jugadores.forEach(function(jug){
@@ -8757,6 +8759,11 @@ function finalLiveRenderHoyoActual(){
     var cls = 'hole-circle' + (score !== null ? ' filled' : '');
     if(isSaving) cls += ' saving';
     var savingLabel = isSaving ? '<div class="live-saving-label">Guardando...</div>' : '';
+    // Golpes de ventaja de este jugador en este hoyo, según su hcp de juego
+    // (calcStrokesPerHole_ en el backend) -- se muestra en el círculo en vez
+    // del par traslúcido; si no recibe golpe en este hoyo, el círculo queda
+    // sin ningún número de fondo.
+    var strokesHere = (jug.strokesPerHole && jug.strokesPerHole[h]) || 0;
 
     html += '<div class="live-player-row" onclick="finalLiveOpenScoreModal(' + FINAL_LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
       '<div class="live-player-info">' +
@@ -8765,7 +8772,7 @@ function finalLiveRenderHoyoActual(){
       '</div>' +
       '<div class="live-hole-wrap">' +
         '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
-          (par ? '<span class="hole-par-bg">' + par + '</span>' : '') +
+          (strokesHere ? '<span class="hole-par-bg">-' + strokesHere + '</span>' : '') +
           (score !== null ? '<span class="hole-score" style="font-size:22px;">' + score + '</span>' : '') +
         '</div>' +
         savingLabel +

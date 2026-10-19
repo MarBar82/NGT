@@ -521,9 +521,11 @@ function cargarHoyoLiveFinal_(params) {
 
 /**
  * Snapshot en vivo de una línea del Día 1 o Día 2 de la Final: golpes
- * cargados por hoyo + diferencia a par acumulada (solo sobre los hoyos ya
- * jugados, no contra el par de los 18). Sin matches ni hoyos de bonus — no
- * aplican en la Final.
+ * cargados por hoyo + diferencia a par NETA acumulada (ya con los golpes de
+ * ventaja del hcp de juego de cada jugador aplicados hoyo por hoyo, según la
+ * dificultad de cada hoyo — misma fórmula que calcStrokesPerHole_ usa para
+ * el WHS, reutilizada tal cual) sobre los hoyos ya jugados, no contra el par
+ * de los 18. Sin matches ni hoyos de bonus — no aplican en la Final.
  */
 function buildLineaSnapshotFinal_(dia, lineaIdx, meta) {
   const lineaKey = 'lineasDia' + dia;
@@ -541,6 +543,7 @@ function buildLineaSnapshotFinal_(dia, lineaIdx, meta) {
     ? cachedRead_('cp2_' + canchaId, 600, function(){ return getCanchaPares_(canchaId); })
     : null;
   const cpPares = (cd && cd.pares) || [];
+  const cpIndices = (cd && cd.indices) || [];
 
   const sh = getSheet_(FINAL_SHEET_NAME);
   const scoresByMat = {};
@@ -564,9 +567,19 @@ function buildLineaSnapshotFinal_(dia, lineaIdx, meta) {
     const scores = scoresByMat[p.matricula] || new Array(18).fill(null);
     const holesCargados = scores.filter(function(s){ return s !== null; }).length;
     const grossParcial  = scores.reduce(function(t, s){ return t + (s !== null ? s : 0); }, 0);
-    let parParcial = 0;
-    scores.forEach(function(s, h) { if (s !== null) parParcial += (cpPares[h] || 0); });
-    const diffParcial = holesCargados > 0 ? (grossParcial - parParcial) : null;
+    // Golpes de ventaja por hoyo según el hcp de juego de ESTE jugador y la
+    // dificultad de cada hoyo (índice 1 = más difícil) -- misma fórmula que
+    // ya usa el cálculo WHS (calcStrokesPerHole_, 05_HCP.gs): hcp 18 = 1
+    // golpe en cada hoyo; hcp 15 = 1 golpe en los hoyos de dificultad 1 a 15.
+    const strokesPerHole = calcStrokesPerHole_(p.hcp, cpIndices);
+    let diffParcial = null;
+    if (holesCargados > 0) {
+      let acc = 0;
+      scores.forEach(function(s, h) {
+        if (s !== null) acc += (s - (cpPares[h] || 0) - (strokesPerHole[h] || 0));
+      });
+      diffParcial = acc;
+    }
     const firstNull = scores.indexOf(null);
 
     let ultimoCargadoPor = null;
@@ -583,7 +596,8 @@ function buildLineaSnapshotFinal_(dia, lineaIdx, meta) {
       scores:            scores,
       holesCargados:     holesCargados,
       grossParcial:      grossParcial,
-      diffParcial:       diffParcial, // null hasta el primer hoyo cargado
+      diffParcial:       diffParcial, // NETO (con hcp de juego aplicado), null hasta el primer hoyo cargado
+      strokesPerHole:    strokesPerHole, // golpes de ventaja de este jugador en cada uno de los 18 hoyos
       ultimoCargadoPor:  ultimoCargadoPor,
       nextHoyo:          firstNull >= 0 ? firstNull + 1 : 19,
     };
@@ -596,6 +610,7 @@ function buildLineaSnapshotFinal_(dia, lineaIdx, meta) {
     cancha:       { id: canchaId, nombre: canchaName, colorTee: colorTee || 'BLANCAS' },
     par:          par,
     pares:        cpPares,
+    indices:      cpIndices,
     updatedAt:    Date.now(),
     jugadores:    jugadores,
   };
@@ -713,29 +728,38 @@ function getFinalStandingsDia1_() {
 }
 
 /**
- * Tabla del Día 2 de la Final -- a diferencia de getFinalStandingsDia1_ (que
- * se mantiene OCULTA hasta completar los 18 hoyos), esta se muestra EN VIVO
- * desde que arranca el Día 2: combina el NETO ya cerrado del Día 1
- * (getFinalStandingsDia1_, reutilizada tal cual -- no se duplica ese
- * cálculo) con el NETO parcial del Día 2 (a medida que se van cargando
+ * Tabla del Día 2 de la Final -- se muestra EN VIVO desde que arranca el
+ * Día 1 (incluso antes de armar las líneas del Día 2: ver más abajo):
+ * combina el NETO del Día 1 (getFinalStandingsDia1_, reutilizada tal cual --
+ * no se duplica ese cálculo, y ya viene en vivo/parcial si el Día 1 todavía
+ * no terminó) con el NETO parcial del Día 2 (a medida que se van cargando
  * hoyos) para dar el acumulado de las 36 hoyos en cada consulta. Se ordena
  * por ese acumulado. No aplica golpes a favor en el Día 2 -- esos solo se
  * aplican una vez, en el Día 1 (ya están adentro del netoDia1 de cada uno).
  * netoDia2 viene null mientras el jugador no cargó ningún hoyo todavía --
  * en ese caso su acumulado es directamente su neto del Día 1, sin restar
- * nada por un Día 2 que ni arrancó.
+ * nada por un Día 2 que ni arrancó. Mientras no se armaron las líneas del
+ * Día 2, usa las líneas del Día 1 como base (ver más abajo) -- así la
+ * pestaña "Día 2"/"Acumulado" muestra lo mismo que la pestaña "Día 1" en
+ * vez de un error, hasta que el Día 2 arranque de verdad.
  */
 function getFinalStandingsDia2_() {
   const meta = getFinalMeta_();
   if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
-  const lineas = meta.lineasDia2;
-  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día 2' };
 
   const st1 = getFinalStandingsDia1_();
   if (!st1.ok) return { ok: false, error: st1.error || 'No se pudo calcular el resultado del Día 1' };
-  if (!st1.completo) return { ok: false, error: 'Falta terminar el Día 1' };
   const dia1ByMat = {};
   st1.standings.forEach(function(s) { dia1ByMat[s.matricula] = s; });
+
+  // Mientras no se armaron las líneas del Día 2 (sin importar si el Día 1 ya
+  // está completo o no), el "Acumulado" -- y la pestaña "Día 2", que reutiliza
+  // este mismo cálculo -- se apoyan en las líneas del Día 1: así se ve lo
+  // mismo que ya muestra la pestaña Día 1 (en vivo o cerrado), sin duplicar
+  // ese cálculo acá. netoDia2 queda null para todos (nadie arrancó el Día 2
+  // todavía), así que el acumulado es directamente el neto del Día 1.
+  const lineas = (meta.lineasDia2 && meta.lineasDia2.length) ? meta.lineasDia2 : meta.lineasDia1;
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día 1' };
 
   const sh = getSheet_(FINAL_SHEET_NAME);
   const scoresByMat = {};
