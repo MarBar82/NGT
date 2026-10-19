@@ -2136,8 +2136,9 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
   <!-- ════ MI TARJETA — FECHA FINAL (Live, Medal Play) ════ -->
   <div id="mit-live-final" style="display:none;">
 
-    <div style="display:flex;align-items:center;margin-bottom:10px;">
-      <span id="final-live-title" style="flex:1;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+      <span id="final-live-title" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
+      <button id="final-live-tabla-btn" onclick="pg('final-live-view',null)" style="background:var(--navy);border:none;border-radius:var(--r-control);padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:#fff;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;white-space:nowrap;">🏆 Tabla</button>
     </div>
 
     <div id="final-live-loading" class="lb-status" style="display:block;"><div class="spinner"></div>Conectando...</div>
