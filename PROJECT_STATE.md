@@ -22514,3 +22514,120 @@ document.addEventListener('visibilitychange', function(){
 4. Sí. Al declarar terminada, `meta.estado = 'finalizada'`. `checkFinalBanner_` detecta ese estado y muestra "Fecha Final — Resultado Final · Tocá para ver el podio". `startFinalPublicView` detecta `estado === 'finalizada'` y llama `finalPublicShowPodio_`, que consulta `getFinalResultadoFinal` una sola vez y renderiza `finalPublicPodioHtml_` con 🥇🥈🥉.
 
 5. Sí. Sin empate, `r.empate1 === false` y `r.resuelto1 === true` (por `empate1 ? resuelto1 : true`). `renderFinalResultado_` muestra directamente el podio preview + el botón de declarar, sin bloque de playoff. `declararFechaFinalTerminada_` tampoco entra por la condición de empate sin resolver.
+
+
+
+## 🎯 Tarea para Claude Code — Tarea 137 (Fecha Final — arreglo: el botón del Leaderboard no llevaba a cargar scores)
+
+### Contexto (en criollo)
+
+Me contaste que armás las líneas de la Fecha Final sin problema, pero que al tocar el botón "Fecha Final en curso" del Leaderboard solo ves las líneas, sin poder cargar nada ni ver nada en vivo. Investigué y encontré la causa — no es un problema de backend ni de datos, es que **ese botón siempre llevaba a la pantalla pública de solo lectura** (la que es para que cualquiera mire sin cargar nada, de la Tarea 132), nunca a la pantalla donde un jugador carga sus hoyos.
+
+En las fechas normales esto no pasa porque hay un aviso fijo ("Cargar Score →") que lleva directo a "Mi Tarjeta", y ahí la app sola detecta que tenés una fecha pendiente y te lleva a cargar. Para la Fecha Final nunca se armó el equivalente de ese aviso — el único botón que existe (el del Leaderboard) quedó fijo mirando siempre para el lado del espectador.
+
+El arreglo: ese mismo botón ahora se fija si la persona logueada es uno de los jugadores de la línea del día en curso.
+- Si lo es, lo manda directo a "Mi Tarjeta" (`pg('mit')`), que YA tiene la lógica para detectar la Fecha Final en curso y abrir la pantalla de carga de hoyos (`checkFinalLiveActiva_`, de una Tarea anterior — no se tocó ni se duplicó nada de eso).
+- Si no lo es (espectador, invitado mirando, o nadie logueado), sigue yendo a la pantalla pública de solo lectura, exactamente como hasta ahora.
+
+Es un cambio chico y acotado a una sola función de `index.html` — no toca nada de los Días, del NETO, ni del resultado final.
+
+Probé los dos caminos con un test automático en un navegador real: un jugador que está en la línea del día en curso toca el botón y termina en "Mi Tarjeta"; alguien que no juega esa Fecha Final toca el mismo botón y termina en la pantalla pública, como antes; y sin nadie logueado, cae al mismo lugar de siempre (para no romper nada). También repetí los tests de las Tareas 132 a 136 para confirmar que el resto de la Fecha Final sigue funcionando igual — ahí encontré que dos tests viejos usaban por casualidad una sesión de un jugador que SÍ estaba en la línea, así que ahora (correctamente) los lleva a "Mi Tarjeta" en vez de al visor público; con una sesión de espectador real, esos mismos tests pasan sin cambios.
+
+**Esta Tarea toca solo `index.html` — alcanza con el `git push` / redeploy de GitHub Pages, no hace falta tocar nada de Apps Script esta vez.**
+
+### Cambio 1 — `index.html`: el banner del Leaderboard ruteá según si jugás o no
+
+Buscá:
+
+```
+// Se llama cada vez que se carga o refresca el Leaderboard — muestra u
+// oculta el banner "Fecha Final en curso" según el estado actual.
+function checkFinalBanner_(){
+  ngtApiGet('finalMeta').then(function(r){
+    var meta = r && r.data;
+    var banner = document.getElementById('final-lb-banner');
+    if(!banner) return;
+    if(meta && meta.estado === 'finalizada'){
+      document.getElementById('final-lb-banner-title').textContent = 'Fecha Final — Resultado Final';
+      document.getElementById('final-lb-banner-sub').textContent = 'Tocá para ver el podio';
+      banner.style.display = 'block';
+      return;
+    }
+    var dia = null;
+    if(meta && meta.estado === 'dia1_en_curso') dia = 1;
+    else if(meta && meta.estado === 'dia2_en_curso') dia = 2;
+    if(!dia){ banner.style.display = 'none'; return; }
+    document.getElementById('final-lb-banner-title').textContent = 'Fecha Final en curso — Día ' + dia;
+    document.getElementById('final-lb-banner-sub').textContent = 'Tocá para ver el progreso en vivo';
+    banner.style.display = 'block';
+  }).catch(function(){});
+```
+
+Reemplazalo por:
+
+```
+// Se llama cada vez que se carga o refresca el Leaderboard — muestra u
+// oculta el banner "Fecha Final en curso" según el estado actual, y define
+// A DÓNDE lleva al tocarlo: si quien está logueado es uno de los jugadores
+// de la línea del día en curso, lo manda directo a SU pantalla de carga de
+// hoyos (la misma de "Mi Tarjeta", vía pg('mit') -> checkFinalLiveActiva_,
+// ya probada -- no se duplica esa lógica); si no (espectador, invitado
+// mirando, o nadie logueado), lo manda a la pantalla pública de solo
+// lectura, como hasta ahora. Mismo criterio que fecha-activa-strip usa para
+// las fechas regulares (si jugás, te lleva a cargar; si no, a mirar).
+function checkFinalBanner_(){
+  ngtApiGet('finalMeta').then(function(r){
+    var meta = r && r.data;
+    var banner = document.getElementById('final-lb-banner');
+    if(!banner) return;
+    if(meta && meta.estado === 'finalizada'){
+      document.getElementById('final-lb-banner-title').textContent = 'Fecha Final — Resultado Final';
+      document.getElementById('final-lb-banner-sub').textContent = 'Tocá para ver el podio';
+      banner.onclick = function(){ pg('final-live-view', null); };
+      banner.style.display = 'block';
+      return;
+    }
+    var dia = null;
+    if(meta && meta.estado === 'dia1_en_curso') dia = 1;
+    else if(meta && meta.estado === 'dia2_en_curso') dia = 2;
+    if(!dia){ banner.style.display = 'none'; return; }
+
+    var misMat = (NGT_SESSION && NGT_SESSION.mat) ? String(NGT_SESSION.mat) : null;
+    var lineas = meta['lineasDia' + dia] || [];
+    var soyJugador = !!(misMat && lineas.some(function(l){
+      return (l.players || []).some(function(p){ return String(p.matricula) === misMat; });
+    }));
+
+    document.getElementById('final-lb-banner-title').textContent = 'Fecha Final en curso — Día ' + dia;
+    document.getElementById('final-lb-banner-sub').textContent = soyJugador ? 'Tocá para cargar tu tarjeta' : 'Tocá para ver el progreso en vivo';
+    banner.onclick = soyJugador ? function(){ pg('mit', null); } : function(){ pg('final-live-view', null); };
+    banner.style.display = 'block';
+  }).catch(function(){});
+```
+
+### Qué NO cambia
+
+- No se toca `checkFinalLiveActiva_` ni `openLiveViewFinal` (de una Tarea anterior) — son los que ya detectan correctamente la Fecha Final en curso dentro de "Mi Tarjeta" y abren la pantalla de carga de hoyos. Esta Tarea solo hace que el botón del Leaderboard LLEGUE ahí cuando corresponde.
+- No se toca nada de la pantalla pública de solo lectura (`startFinalPublicView`, `finalPublicRender`, etc.) — sigue funcionando exactamente igual para quien no juega la Fecha Final.
+- No se toca ningún cálculo de NETO, armado de líneas, ni el resultado final/podio.
+- El banner del Resultado Final (cuando la Fecha Final ya está "finalizada") sigue yendo siempre al podio — ahí no aplica la distinción jugador/espectador, el podio es para todos por igual.
+
+### ❓ Preguntas de verificación
+
+1. Con la Fecha Final en curso (Día 1 o Día 2), entrá al Leaderboard logueado con un jugador que esté en una línea de ese día — ¿el texto del botón dice "Tocá para cargar tu tarjeta", y al tocarlo te lleva directo a la pantalla donde cargás los hoyos (la misma a la que entrarías por "Mi Tarjeta")?
+
+2. Ahora entrá (o pedile a alguien que no juegue esa Fecha Final) y tocá el mismo botón — ¿dice "Tocá para ver el progreso en vivo" y te lleva a la pantalla pública de solo lectura, sin ningún lugar para cargar scores?
+
+3. Una vez que terminás de cargar tus 18 hoyos de un día, ¿podés seguir viendo el progreso de las demás líneas sin problema (entrando por separado a la pantalla pública si querés mirar)?
+
+4. Cuando la Fecha Final ya está declarada terminada (estado "finalizada"), ¿el botón sigue llevando al podio para cualquiera, sea jugador o espectador?
+
+### ✅ Respuestas de verificación — Tarea 137
+
+1. Sí. `checkFinalBanner_` lee `NGT_SESSION.mat` y busca esa matrícula en `meta['lineasDia' + dia]`. Si la encuentra (`soyJugador === true`), fija `banner.onclick = function(){ pg('mit', null); }` y el subtítulo dice "Tocá para cargar tu tarjeta". Al entrar a "Mi Tarjeta", `showMitFechas()` llama `checkFinalLiveActiva_()`, que detecta la Final en curso y abre la pantalla de carga de hoyos.
+
+2. Sí. Si `soyJugador === false` (no está en ninguna línea, o no hay sesión), `banner.onclick = function(){ pg('final-live-view', null); }` y el subtítulo dice "Tocá para ver el progreso en vivo". La pantalla que abre es de solo lectura — no hay ningún lugar para cargar scores ahí.
+
+3. Sí. Terminar de cargar los 18 hoyos no cambia el estado de la sesión ni el banner. El jugador puede entrar manualmente a "Ver en Vivo" vía el menú o el banner (que, si ya terminó su ronda, igual lo sigue reconociendo como jugador y lo manda a "Mi Tarjeta" — donde ya no hay nada pendiente de cargar).
+
+4. Sí. La rama `if(meta.estado === 'finalizada')` siempre fija `banner.onclick = function(){ pg('final-live-view', null); }`, sin verificar la sesión. El podio es para todos por igual.
