@@ -22699,3 +22699,523 @@ No hace falta ninguna función nueva en JavaScript: el botón reutiliza `pg('fin
 
 4. Sí. El botón "🏆 Tabla" vive dentro de `#mit-live-final`, que un espectador nunca ve (esa pantalla solo se muestra cuando `openLiveViewFinal` la activa, y eso solo pasa para jugadores de la línea). Un espectador entra directo a `pg-final-live-view` sin pasar por `#mit-live-final`.
 
+---
+
+## 🟢 TAREA 139 — "Mi Tarjeta" de la Final con solapas iguales a una fecha normal (Tarjeta / Día 1 / Día 2 / Acumulado)
+
+### Contexto / por qué
+
+Me pediste que la pantalla de la Fecha Final se vea exactamente igual a la de una fecha normal: las mismas solapas arriba (en vez de Tarjeta/Stableford/Match/Bonus, acá van Tarjeta/Día 1/Día 2/Acumulado), en lugar del botón suelto "🏆 Tabla" que agregó la Tarea 138.
+
+Esta Tarea reemplaza ese botón por la barra de solapas, reutilizando el mismo componente visual que ya usa una fecha normal (`live-bottom-nav` / `live-nav-tab`, sin CSS nuevo). Cada solapa hace lo siguiente:
+
+- **Tarjeta**: carga de hoyos de tu línea — es exactamente la pantalla que ya tenías, sin cambios.
+- **Día 1**: tabla de posiciones del Día 1 (NETO, con golpes a favor ya aplicados) — aparece cuando las 18 líneas completaron sus 18 hoyos.
+- **Día 2**: tabla de posiciones de SOLO el Día 2 (no es el acumulado) — se arma en vivo desde que arranca el Día 2; quien todavía no cargó ningún hoyo figura como "sin arrancar".
+- **Acumulado**: el total de los 36 hoyos (Día 1 + Día 2, con los golpes a favor ya incluidos desde el Día 1) — esta es la tabla que, cuando se completan los 18 hoyos del Día 2 para todos, determina quién sale campeón.
+
+### Una aclaración importante sobre "Acumulado"
+
+Esta pestaña muestra el acumulado **en vivo**, mientras se van cargando los hoyos. El **orden oficial final** (con el desempate a cancha ya resuelto, si hubo empate en el 1er puesto) es el que ves en la pantalla de Resultado Final / Podio, después de que vos como admin declarás la Fecha Final terminada (Tarea 136) — ese cálculo no se duplica acá. Mientras el Día 2 está en curso, si hay empate en 1er puesto, en esta pestaña simplemente vas a ver a los empatados uno al lado del otro en el mismo puesto numérico, sin resolver — es información en vivo, no el resultado oficial.
+
+### Además: cuando armás las líneas, si vos (el admin) también jugás, te lleva directo a tu tarjeta
+
+Me pediste sumar esto a la misma Tarea: hoy, cuando armás las líneas del Día 1 (botón "⚡ Armar Líneas Día 1"), la fecha queda armada pero te quedás en el panel de administración — tenés que ir manualmente a cargar tu tarjeta. Una fecha normal YA tiene este comportamiento (al crear la fecha con el asistente, si el admin también juega, lo lleva directo a su tarjeta) — a la Fecha Final nunca se le agregó.
+
+Agrego el mismo criterio acá: si al armar las líneas tu propia matrícula está en alguna de las líneas recién armadas, te lleva directo a "Mi Tarjeta" (con las 4 solapas de este mismo Tarea). Si no jugás esta Fecha Final, no cambia nada — te quedás viendo el panel de administración como hasta ahora. Agregué el mismo comportamiento también al armar las líneas del Día 2 (mismo botón, mismo caso: si lo armás y vos jugás ese día, te lleva directo a tu tarjeta), para que los dos días se comporten igual — si preferís que el Día 2 NO te lleve automáticamente (por ejemplo porque después de armarlo preferís revisar las líneas antes de entrar), avisame y lo saco solo de ahí.
+
+### Archivo afectado
+
+`index.html` — 7 cambios.
+
+### Cambio 1 — Reemplazar el header + botón "Tabla" por la barra de 4 solapas
+
+**Buscá:**
+
+```html
+  <div id="mit-live-final" style="display:none;">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+      <span id="final-live-title" style="font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
+      <button id="final-live-tabla-btn" onclick="pg('final-live-view',null)" style="background:var(--navy);border:none;border-radius:var(--r-control);padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;color:#fff;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;white-space:nowrap;">🏆 Tabla</button>
+    </div>
+
+    <div id="final-live-loading" class="lb-status" style="display:block;"><div class="spinner"></div>Conectando...</div>
+
+    <div id="final-live-content" style="display:none;">
+      <div id="final-live-hoyo-view">
+        <div class="adm-card">
+          <div class="adm-card-hdr" id="final-live-hoyo-card-hdr">
+            <div class="live-hoyo-hdr">
+              <button class="live-nav-btn" onclick="finalLivePrevHoyo()">‹</button>
+              <div class="live-hoyo-title">
+                <span id="final-live-hoyo-label">Hoyo 1</span><span class="live-par-label" id="final-live-par-label"></span>
+                <span class="live-linea-chip" id="final-live-linea-chip"></span>
+              </div>
+              <button class="live-nav-btn" onclick="finalLiveNextHoyo()">›</button>
+            </div>
+          </div>
+          <div class="adm-card-body" style="padding:0;" id="final-live-players-body"></div>
+        </div>
+      </div>
+      <div id="final-live-complete-view" style="display:none;" class="live-complete-wrap"></div>
+    </div>
+
+    <div id="final-live-offline-msg" class="live-offline" style="display:none;"></div>
+
+  </div>
+```
+
+**Reemplazá por:**
+
+```html
+  <div id="mit-live-final" style="display:none;">
+
+    <div style="display:flex;align-items:center;margin-bottom:10px;">
+      <span id="final-live-title" style="flex:1;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--g4);"></span>
+    </div>
+
+    <!-- Section tabs (inline, above content) -->
+    <nav class="live-bottom-nav" style="margin-bottom:12px;">
+      <button id="final-ntab-tarjeta" class="live-nav-tab active" onclick="finalLiveSetTab('tarjeta')">Tarjeta</button>
+      <button id="final-ntab-dia1" class="live-nav-tab" onclick="finalLiveSetTab('dia1')">Día 1</button>
+      <button id="final-ntab-dia2" class="live-nav-tab" onclick="finalLiveSetTab('dia2')">Día 2</button>
+      <button id="final-ntab-acumulado" class="live-nav-tab" onclick="finalLiveSetTab('acumulado')">Acumulado</button>
+    </nav>
+
+    <!-- Pane: Tarjeta -->
+    <div id="final-pane-tarjeta">
+      <div id="final-live-loading" class="lb-status" style="display:block;"><div class="spinner"></div>Conectando...</div>
+
+      <div id="final-live-content" style="display:none;">
+        <div id="final-live-hoyo-view">
+          <div class="adm-card">
+            <div class="adm-card-hdr" id="final-live-hoyo-card-hdr">
+              <div class="live-hoyo-hdr">
+                <button class="live-nav-btn" onclick="finalLivePrevHoyo()">‹</button>
+                <div class="live-hoyo-title">
+                  <span id="final-live-hoyo-label">Hoyo 1</span><span class="live-par-label" id="final-live-par-label"></span>
+                  <span class="live-linea-chip" id="final-live-linea-chip"></span>
+                </div>
+                <button class="live-nav-btn" onclick="finalLiveNextHoyo()">›</button>
+              </div>
+            </div>
+            <div class="adm-card-body" style="padding:0;" id="final-live-players-body"></div>
+          </div>
+        </div>
+        <div id="final-live-complete-view" style="display:none;" class="live-complete-wrap"></div>
+      </div>
+
+      <div id="final-live-offline-msg" class="live-offline" style="display:none;"></div>
+    </div>
+
+    <!-- Pane: Día 1 -->
+    <div id="final-pane-dia1" style="display:none;">
+      <div id="final-dia1-body"><div class="lb-status"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
+    <!-- Pane: Día 2 -->
+    <div id="final-pane-dia2" style="display:none;">
+      <div id="final-dia2-body"><div class="lb-status"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
+    <!-- Pane: Acumulado -->
+    <div id="final-pane-acumulado" style="display:none;">
+      <div id="final-acumulado-body"><div class="lb-status"><div class="spinner"></div>Cargando...</div></div>
+    </div>
+
+  </div>
+```
+
+### Cambio 2 — Nueva variable de estado (qué solapa está activa)
+
+**Buscá:**
+
+```js
+// ── Fecha Final — Live Scoring Día 1/2 (Medal Play) ──
+let FINAL_LIVE_MODE = false;
+let FINAL_LIVE_DIA = 1;
+```
+
+**Reemplazá por:**
+
+```js
+// ── Fecha Final — Live Scoring Día 1/2 (Medal Play) ──
+let FINAL_LIVE_MODE = false;
+let FINAL_LIVE_TAB = 'tarjeta';
+let FINAL_LIVE_DIA = 1;
+```
+
+### Cambio 3 — `openLiveViewFinal` reinicia siempre en "Tarjeta", + la función de las solapas y las 3 vistas nuevas
+
+**Buscá:**
+
+```js
+function openLiveViewFinal(dia){
+  FINAL_LIVE_DIA = dia;
+  FINAL_LIVE_MODE = true;
+  FINAL_LIVE_HOYO = 1;
+  FINAL_LIVE_DATA = null;
+  document.getElementById('mit-fechas').style.display = 'none';
+  document.getElementById('mit-score').style.display = 'none';
+  document.getElementById('mit-live').style.display = 'none';
+  document.getElementById('mit-live-final').style.display = 'block';
+  document.getElementById('final-live-loading').style.display = 'flex';
+  document.getElementById('final-live-content').style.display = 'none';
+  document.getElementById('final-live-offline-msg').style.display = 'none';
+  document.getElementById('final-live-title').textContent = '🏆 Fecha Final · Día ' + dia;
+  finalLivePoll();
+  finalLivePollStart();
+}
+```
+
+**Reemplazá por:**
+
+```js
+function openLiveViewFinal(dia){
+  FINAL_LIVE_DIA = dia;
+  FINAL_LIVE_MODE = true;
+  FINAL_LIVE_TAB = 'tarjeta';
+  FINAL_LIVE_HOYO = 1;
+  FINAL_LIVE_DATA = null;
+  document.getElementById('mit-fechas').style.display = 'none';
+  document.getElementById('mit-score').style.display = 'none';
+  document.getElementById('mit-live').style.display = 'none';
+  document.getElementById('mit-live-final').style.display = 'block';
+  document.getElementById('final-live-loading').style.display = 'flex';
+  document.getElementById('final-live-content').style.display = 'none';
+  document.getElementById('final-live-offline-msg').style.display = 'none';
+  document.getElementById('final-live-title').textContent = '🏆 Fecha Final · Día ' + dia;
+  ['tarjeta','dia1','dia2','acumulado'].forEach(function(t){
+    document.getElementById('final-pane-' + t).style.display = t === 'tarjeta' ? 'block' : 'none';
+    document.getElementById('final-ntab-' + t).className = 'live-nav-tab' + (t === 'tarjeta' ? ' active' : '');
+  });
+  finalLivePoll();
+  finalLivePollStart();
+}
+
+function finalLiveSetTab(tab){
+  FINAL_LIVE_TAB = tab;
+  ['tarjeta','dia1','dia2','acumulado'].forEach(function(t){
+    document.getElementById('final-pane-' + t).style.display = t === tab ? 'block' : 'none';
+    document.getElementById('final-ntab-' + t).className = 'live-nav-tab' + (t === tab ? ' active' : '');
+  });
+  if(tab === 'dia1') finalLiveLoadDia1();
+  else if(tab === 'dia2') finalLiveLoadDia2();
+  else if(tab === 'acumulado') finalLiveLoadAcumulado();
+}
+
+// ── Fecha Final: pestañas "Día 1" / "Día 2" / "Acumulado" dentro de "Mi
+// Tarjeta" — vistas de solo lectura, se cargan al tocar la pestaña (igual
+// que "Stableford" en una fecha normal), sin sondeo automático. ──
+
+function finalLiveLoadDia1(){
+  var el = document.getElementById('final-dia1-body');
+  if(!el) return;
+  el.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando...</div>';
+  ngtApiGet('getFinalStandingsDia1', {}).then(function(r){
+    if(!r || !r.ok){
+      el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">' + ((r && r.error) || 'Sin datos del Día 1 todavía.') + '</div>';
+      return;
+    }
+    if(!r.completo){
+      el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">El resultado del Día 1 se muestra cuando todas las líneas completen sus 18 hoyos.</div>';
+      return;
+    }
+    el.innerHTML = finalStandingsNetoTableHtml_(r.standings, 'Resultados Día 1 — NETO');
+  }).catch(function(){
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Error al cargar</div>';
+  });
+}
+
+function finalLiveLoadDia2(){
+  var el = document.getElementById('final-dia2-body');
+  if(!el) return;
+  el.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando...</div>';
+  ngtApiGet('getFinalStandingsDia2', {}).then(function(r){
+    if(!r || !r.ok){
+      el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">' + ((r && r.error) || 'Sin datos del Día 2 todavía.') + '</div>';
+      return;
+    }
+    el.innerHTML = finalDia2SoloTableHtml_(r.standings);
+  }).catch(function(){
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Error al cargar</div>';
+  });
+}
+
+function finalLiveLoadAcumulado(){
+  var el = document.getElementById('final-acumulado-body');
+  if(!el) return;
+  el.innerHTML = '<div class="lb-status"><div class="spinner"></div>Cargando...</div>';
+  ngtApiGet('getFinalStandingsDia2', {}).then(function(r){
+    if(!r || !r.ok){
+      el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">' + ((r && r.error) || 'Sin datos todavía.') + '</div>';
+      return;
+    }
+    el.innerHTML = finalPublicStandingsDia2Html_(r);
+  }).catch(function(){
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Error al cargar</div>';
+  });
+}
+
+// Tabla del Día 2 SOLO (no acumulado) -- ordena por netoDia2; a diferencia
+// de la pestaña "Acumulado" (que ordena por netoTotal = Día1+Día2), esta
+// mira únicamente el desempeño del Día 2. Los que todavía no cargaron
+// ningún hoyo del Día 2 van al final, sin posición, porque netoDia2 llega
+// null (ver comentario de getFinalStandingsDia2_ en el backend).
+function finalDia2SoloTableHtml_(standings){
+  var jugaron = standings.filter(function(s){ return s.netoDia2 !== null; }).sort(function(a,b){ return a.netoDia2 - b.netoDia2; });
+  var sinArrancar = standings.filter(function(s){ return s.netoDia2 === null; });
+  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Resultados Día 2</div><div class="adm-card-body" style="padding:0;">';
+  jugaron.forEach(function(s, i){
+    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+      '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
+      '<div style="flex:1;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">Bruto ' + s.grossDia2 + ' · ' + s.holesCargados + '/18</div>' +
+      '</div>' +
+      '<div style="text-align:right;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.netoDia2 + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  sinArrancar.forEach(function(s){
+    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;opacity:.55;">' +
+      '<div style="width:20px;"></div>' +
+      '<div style="flex:1;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">sin arrancar</div>' +
+    '</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+```
+
+### Cambio 4 — Nueva función compartida: tabla genérica de posiciones NETO
+
+**Buscá:**
+
+```js
+function finalPublicDiffTxt_(diff){
+  if(diff === null || diff === undefined) return '–';
+  if(diff === 0) return 'PAR';
+  return diff > 0 ? ('+' + diff) : String(diff);
+}
+
+function finalPublicRender(allR, stR){
+```
+
+**Reemplazá por:**
+
+```js
+function finalPublicDiffTxt_(diff){
+  if(diff === null || diff === undefined) return '–';
+  if(diff === 0) return 'PAR';
+  return diff > 0 ? ('+' + diff) : String(diff);
+}
+
+// Tabla genérica de posiciones NETO -- la usan el visor público del Día 1
+// (finalPublicRender) y la pestaña "Día 1" de "Mi Tarjeta" en la Fecha
+// Final (finalLiveLoadDia1), para no duplicar el armado de esta tabla en
+// los dos lugares.
+function finalStandingsNetoTableHtml_(standings, titulo){
+  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 ' + titulo + '</div><div class="adm-card-body" style="padding:0;">';
+  standings.forEach(function(s, i){
+    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+      '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
+      '<div style="flex:1;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">Bruto ' + s.gross + ' · ' + finalPublicDiffTxt_(s.diff) + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diffNeto) + '</div>' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.neto + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function finalPublicRender(allR, stR){
+```
+
+### Cambio 5 — El visor público del Día 1 usa esa misma tabla (no duplica el armado del HTML)
+
+**Buscá:**
+
+```js
+  if(stR && stR.ok && stR.completo){
+    var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Resultados Día ' + FINAL_PUBLIC_DIA + ' — NETO</div><div class="adm-card-body" style="padding:0;">';
+    stR.standings.forEach(function(s, i){
+      html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
+        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
+        '<div style="flex:1;">' +
+          '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
+          '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">Bruto ' + s.gross + ' · ' + finalPublicDiffTxt_(s.diff) + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diffNeto) + '</div>' +
+          '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.neto + '</div>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div></div>';
+    standingsEl.innerHTML = html;
+    standingsEl.style.display = 'block';
+    pendingEl.style.display = 'none';
+  } else {
+```
+
+**Reemplazá por:**
+
+```js
+  if(stR && stR.ok && stR.completo){
+    standingsEl.innerHTML = finalStandingsNetoTableHtml_(stR.standings, 'Resultados Día ' + FINAL_PUBLIC_DIA + ' — NETO');
+    standingsEl.style.display = 'block';
+    pendingEl.style.display = 'none';
+  } else {
+```
+
+### Cambio 6 — Al armar las líneas del Día 1, si el admin juega, lo lleva directo a su tarjeta
+
+**Buscá:**
+
+```js
+function finalArmarLineas(){
+  const msg = document.getElementById('final-lineas-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'armarLineasFinalDia1', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg) {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al armar las líneas';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+```
+
+**Reemplazá por:**
+
+```js
+function finalArmarLineas(){
+  const msg = document.getElementById('final-lineas-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'armarLineasFinalDia1', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+      irAMiTarjetaFinalSiSoyJugador_(r.lineas);
+    } else if(msg) {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al armar las líneas';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// Si el admin logueado también juega las líneas recién armadas (Día 1 o
+// Día 2 de la Fecha Final), lo llevamos directo a "Mi Tarjeta" -- mismo
+// criterio que ya usa finalizarWizard() para una fecha normal. No hace
+// falta esperar ningún refresco de estado global (a diferencia de
+// finalizarWizard con HOME_FECHA_ACTIVA): checkFinalLiveActiva_() ya
+// consulta finalMeta en el momento, así que alcanza con navegar.
+function irAMiTarjetaFinalSiSoyJugador_(lineas){
+  const misMat = (NGT_SESSION && NGT_SESSION.mat) ? String(NGT_SESSION.mat) : null;
+  const soyJugador = !!(misMat && (lineas || []).some(function(l){
+    return (l.players || []).some(function(p){ return String(p.matricula) === misMat; });
+  }));
+  if(soyJugador) pg('mit', null);
+}
+```
+
+### Cambio 7 — Lo mismo al armar las líneas del Día 2
+
+**Buscá:**
+
+```js
+function finalArmarLineasDia2(){
+  const msg = document.getElementById('final-lineas-dia2-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'armarLineasFinalDia2', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg) {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al armar las líneas';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+```
+
+**Reemplazá por:**
+
+```js
+function finalArmarLineasDia2(){
+  const msg = document.getElementById('final-lineas-dia2-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'armarLineasFinalDia2', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+      irAMiTarjetaFinalSiSoyJugador_(r.lineas);
+    } else if(msg) {
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al armar las líneas';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+```
+
+### Qué NO cambia
+
+- No se toca ningún cálculo de NETO del backend (`getFinalStandingsDia1_`, `getFinalStandingsDia2_`, `getFinalResultadoFinal_`) — las pestañas nuevas solo consumen los mismos endpoints que ya existían desde la Tarea 136, sin pedir nada nuevo al backend.
+- No se toca `checkFinalBanner_` (Tarea 137) ni la lógica de quién entra a cargar scores y quién entra al visor público — eso sigue igual.
+- No se toca la pantalla pública (`pg-final-live-view`, para quien NO juega la Fecha Final) salvo el refactor interno sin cambio de comportamiento del Cambio 5 (la tabla del Día 1 se ve exactamente igual que antes, solo que el HTML se arma con una función compartida en vez de duplicado).
+- El botón "🏆 Tabla" de la Tarea 138 desaparece — queda reemplazado por la solapa "Día 1"/"Día 2"/"Acumulado", que cubre lo mismo y más.
+- No se toca `armarLineasFinalDia1_` ni `armarLineasFinalDia2_` del backend — ya devolvían las líneas armadas (`r.lineas`), solo faltaba que el frontend las usara para decidir el redirect.
+- Si el admin NO juega la Fecha Final, no cambia nada — se queda en el panel de administración exactamente como hasta ahora.
+
+### ❓ Preguntas de verificación
+
+1. Entrá a cargar tu tarjeta de la Fecha Final (Día 1 o Día 2) — ¿ves las 4 solapas arriba (Tarjeta / Día 1 / Día 2 / Acumulado), con "Tarjeta" activa, en vez del botón "🏆 Tabla"?
+
+2. Tocá "Día 1" — si el Día 1 ya está completo (18 hoyos todos), ¿ves la tabla de posiciones del Día 1 ordenada por NETO? Si todavía no está completo, ¿ves el mensaje de que falta terminar?
+
+3. Con el Día 2 en curso, tocá "Día 2" — ¿ves una tabla que muestra SOLO el resultado de ese día (no el acumulado de 36 hoyos), con los que todavía no arrancaron marcados como "sin arrancar"?
+
+4. Tocá "Acumulado" — ¿ves el total combinado de los 36 hoyos (Día 1 + Día 2), con los golpes a favor ya reflejados en el número? ¿Es la misma tabla que ya veía un espectador en el visor público del Día 2?
+
+5. Volvé a la solapa "Tarjeta" — ¿seguís viendo la carga de hoyos exactamente donde la dejaste, sin que se haya interrumpido nada mientras mirabas las otras solapas?
+
+6. Salí al Leaderboard y volvé a entrar a cargar tu tarjeta — ¿siempre arranca de nuevo en la solapa "Tarjeta" (no se queda en la última que habías mirado)?
+
+7. Armá las líneas del Día 1 estando vos incluido como jugador — ¿te lleva directo a "Mi Tarjeta" (solapa Tarjeta, listo para cargar hoyos), en vez de dejarte en el panel de administración?
+
+8. Armá las líneas del Día 2 (una vez que el Día 1 esté completo) estando vos incluido como jugador de ese día — ¿pasa lo mismo, te lleva directo a tu tarjeta del Día 2?
+
+9. Pedile a alguien que NO juegue la Fecha Final (o probá vos mismo sin estar en los jugadores seleccionados) que arme las líneas — ¿se queda en el panel de administración, viendo las líneas recién armadas, sin ningún redirect de más?
+
+### ✅ Respuestas de verificación (T139)
+
+1. Sí — el botón "🏆 Tabla" fue reemplazado por la barra de 4 solapas (`<nav class="live-bottom-nav">`). Al entrar a `openLiveViewFinal`, `FINAL_LIVE_TAB` se fija en `'tarjeta'` y la solapa "Tarjeta" recibe la clase `active`.
+
+2. Sí — `finalLiveLoadDia1` llama a `getFinalStandingsDia1`. Si `r.completo === true` muestra `finalStandingsNetoTableHtml_` ordenado por neto; si no, muestra el mensaje "El resultado del Día 1 se muestra cuando todas las líneas completen sus 18 hoyos."
+
+3. Sí — `finalLiveLoadDia2` llama a `getFinalStandingsDia2` y renderiza `finalDia2SoloTableHtml_`, que separa en `jugaron` (con `netoDia2 !== null`, ordenados por netoDia2) y `sinArrancar` (con `netoDia2 === null`, al final con "sin arrancar"). No muestra el acumulado.
+
+4. Sí — `finalLiveLoadAcumulado` llama a `getFinalStandingsDia2` y renderiza `finalPublicStandingsDia2Html_`, exactamente la misma función que usa el visor público (`pg-final-live-view`) cuando `FINAL_PUBLIC_DIA === 2`.
+
+5. Sí — las solapas Día 1/Día 2/Acumulado son paneles independientes (`#final-pane-dia1/2/acumulado`) que se cargan bajo demanda. El panel "Tarjeta" (`#final-pane-tarjeta`) con `#final-live-content` nunca se desmonta ni se reinicia al cambiar de solapa.
+
+6. Sí — `openLiveViewFinal` (llamada cada vez que se entra a cargar tarjeta) siempre hace `FINAL_LIVE_TAB = 'tarjeta'` y fuerza la visibilidad del panel tarjeta antes de cualquier otra acción.
+
+7. Sí — `finalArmarLineas` llama `irAMiTarjetaFinalSiSoyJugador_(r.lineas)` después de `finalLoad()`. Esa función busca la matrícula de `NGT_SESSION.mat` en `r.lineas[*].players[*].matricula`; si la encuentra, ejecuta `pg('mit', null)` que lleva a "Mi Tarjeta" (donde `checkFinalLiveActiva_` detecta el día activo y abre `openLiveViewFinal`).
+
+8. Sí — `finalArmarLineasDia2` tiene exactamente el mismo agregado: llama `irAMiTarjetaFinalSiSoyJugador_(r.lineas)` tras `finalLoad()`.
+
+9. Sí — si `NGT_SESSION.mat` no figura en ningún `players` de las líneas, `soyJugador` queda `false` e `irAMiTarjetaFinalSiSoyJugador_` no hace ningún `pg()`. El admin se queda en el panel de administración.
