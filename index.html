@@ -8634,19 +8634,34 @@ function finalTarjetaBloqueDia_(nombreDia, scores, pares, indices, hcpJuego, gro
     '</div>';
 }
 
+// Estilo del óvalo grande del header de la tarjeta de la Final -- a
+// diferencia del de las fechas normales (siempre rojo, porque ahí muestra
+// puntos Stableford), acá el número es un resultado contra el par, así que
+// el óvalo toma el mismo color que el texto (negro en par, verde bajo par,
+// rojo sobre par) en vez de quedar siempre en rojo.
+function finalDiffBadgeStyle_(diff){
+  if(diff === null || diff === undefined) return '';
+  if(diff === 0) return 'color:var(--text);background:rgba(26,25,24,.08);';
+  return diff > 0
+    ? 'color:var(--red);background:rgba(200,16,46,.1);'
+    : 'color:var(--green);background:rgba(31,122,61,.1);';
+}
+
 function showFinalTarjetaModal(matricula, tramo){
   if(!FINAL_TARJETA_CACHE) return;
   var p = FINAL_TARJETA_CACHE.byMat[matricula];
   if(!p) return;
-  var bodyHtml, headerDiff, headerMeta;
+  var bodyHtml, headerDiff, headerMeta, headerBadgeStyle = '';
 
   if(tramo === 'dia1'){
     bodyHtml = finalTarjetaBloqueDia_('Día 1', p.scoresDia1, FINAL_TARJETA_CACHE.paresDia1, FINAL_TARJETA_CACHE.indicesDia1, p.hcpJuegoDia1, p.grossDia1, p.alParDia1, false);
     headerDiff = finalPublicDiffTxt_(p.alParDia1);
+    headerBadgeStyle = finalDiffBadgeStyle_(p.alParDia1);
     headerMeta = 'Día 1 · HCP ' + p.hcpJuegoDia1;
   } else if(tramo === 'dia2'){
     bodyHtml = finalTarjetaBloqueDia_('Día 2', p.scoresDia2, FINAL_TARJETA_CACHE.paresDia2, FINAL_TARJETA_CACHE.indicesDia2, p.hcpJuegoDia2, p.grossDia2, p.alParDia2, false);
     headerDiff = finalPublicDiffTxt_(p.alParDia2);
+    headerBadgeStyle = finalDiffBadgeStyle_(p.alParDia2);
     headerMeta = 'Día 2 · HCP ' + p.hcpJuegoDia2;
   } else {
     bodyHtml = finalTarjetaBloqueDia_('Día 1', p.scoresDia1, FINAL_TARJETA_CACHE.paresDia1, FINAL_TARJETA_CACHE.indicesDia1, p.hcpJuegoDia1, p.grossDia1, p.alParDia1, true) +
@@ -8666,7 +8681,7 @@ function showFinalTarjetaModal(matricula, tramo){
     '<div class="ronda-modal-box">' +
       '<button class="ronda-modal-close" onclick="closeRondaModal()">×</button>' +
       '<div class="ronda-modal-hdr">' +
-        '<div class="ronda-modal-diff">' + headerDiff + '</div>' +
+        '<div class="ronda-modal-diff" style="' + headerBadgeStyle + '">' + headerDiff + '</div>' +
         '<div class="ronda-modal-info">' +
           '<div class="ronda-modal-cancha">' + (p.apodo || '') + (p.invitado ? ' (inv.)' : '') + '</div>' +
           '<div class="ronda-modal-meta">' + headerMeta + '</div>' +
@@ -8848,8 +8863,10 @@ function finalLiveRender(){
 
 function finalLiveDiffTxt_(diff){
   if(diff === null || diff === undefined) return '–';
-  if(diff === 0) return 'PAR';
-  return diff > 0 ? ('+' + diff) : String(diff);
+  if(diff === 0) return '<span style="color:var(--text);">E</span>';
+  return diff > 0
+    ? '<span style="color:var(--red);">+' + diff + '</span>'
+    : '<span style="color:var(--green);">' + diff + '</span>';
 }
 
 function finalLiveRenderHoyoActual(){
@@ -9175,8 +9192,10 @@ function finalPublicPoll(){
 
 function finalPublicDiffTxt_(diff){
   if(diff === null || diff === undefined) return '–';
-  if(diff === 0) return 'PAR';
-  return diff > 0 ? ('+' + diff) : String(diff);
+  if(diff === 0) return '<span style="color:var(--text);">E</span>';
+  return diff > 0
+    ? '<span style="color:var(--red);">+' + diff + '</span>'
+    : '<span style="color:var(--green);">' + diff + '</span>';
 }
 
 // Tabla genérica de posiciones NETO -- la usan el visor público del Día 1
@@ -9289,7 +9308,14 @@ function finalPublicStandingsDia2Html_(stR){
       var alParDia1Val = (s.alParDia1 !== null && s.alParDia1 !== undefined) ? s.alParDia1 : null;
       var alParDia2Val = (s.alParDia2 !== null && s.alParDia2 !== undefined) ? s.alParDia2 : null;
       var alParTotal = (alParDia1Val === null && alParDia2Val === null) ? null : ((alParDia1Val || 0) + (alParDia2Val || 0));
-      var hoyoTxt = s.netoDia2 === null ? 'D2 sin arrancar' : ('D2 ' + s.holesCargados + '/18');
+      // Hoyo acumulado (1 a 36): no hace falta que el Día 2 haya arrancado --
+      // mientras el jugador sigue en el Día 1 se muestra su hoyo del Día 1
+      // tal cual (1-18); apenas pasa al Día 2 se le suman los 18 del Día 1
+      // (hoyo 10 del Día 2 => "28"); con los 36 hoyos jugados, "Completo".
+      var hoyoAcum = (s.nextHoyoDia1 < 19)
+        ? s.nextHoyoDia1
+        : (s.nextHoyoDia2 < 19 ? (18 + s.nextHoyoDia2) : null);
+      var hoyoTxt = hoyoAcum === null ? 'Completo' : String(hoyoAcum);
       var favorTxt = s.golpesFavor ? (s.golpesFavor > 0 ? '+' + s.golpesFavor : String(s.golpesFavor)) : '—';
       html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'ambos\')">' +
         '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +

@@ -820,7 +820,7 @@ function getFinalStandingsDia2_() {
     let parJugado = 0;
     scores.forEach(function(s, h) { if (s !== null) parJugado += (cpPares[h] || 0); });
     const hcpJuego2 = hcpByMat[p.matricula] || 0;
-    const d1 = dia1ByMat[p.matricula] || { neto: 0, diffNeto: 0, golpesFavor: 0, gross: 0, hcpJuego: 0, alPar: null, scores: new Array(18).fill(null), strokesPerHole: new Array(18).fill(0) };
+    const d1 = dia1ByMat[p.matricula] || { neto: 0, diffNeto: 0, golpesFavor: 0, gross: 0, hcpJuego: 0, alPar: null, scores: new Array(18).fill(null), strokesPerHole: new Array(18).fill(0), nextHoyo: 1 };
     const parTotal1 = d1.neto - d1.diffNeto;
 
     const netoDia2 = holesCargados > 0 ? (grossDia2 - hcpJuego2) : null;
@@ -851,6 +851,7 @@ function getFinalStandingsDia2_() {
       strokesPerHoleDia2: strokesPerHoleDia2,
       alParDia2:          calcDiffNetoParcial_(scores, cpPares, strokesPerHoleDia2),
       nextHoyoDia2:       firstNull >= 0 ? firstNull + 1 : 19,
+      nextHoyoDia1:       d1.nextHoyo || 1,
       grossDia1:          d1.gross || 0,
       hcpJuegoDia1:       d1.hcpJuego || 0,
       alParDia1:          (d1.alPar !== undefined ? d1.alPar : null),
