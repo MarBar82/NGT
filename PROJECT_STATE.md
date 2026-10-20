@@ -24793,3 +24793,276 @@ function finalPublicStandingsDia2Html_(stR){
 6. Sí — la columna TOTAL muestra `s.netoTotal`, que es exactamente el mismo número que `getFinalStandingsDia2_` usa para ordenar el array con `filas.sort(function(a, b){ return a.netoTotal - b.netoTotal; })`. No hay cálculo nuevo: se expone el número que ya determinaba el orden.
 
 7. Sí — cuando el Día 2 no está armado, `getFinalStandingsDia2_` devuelve datos de las líneas del Día 1 (fallback de la T141). La tabla Día 2 muestra a los jugadores "sin arrancar" (netoDia2 null) en la sección sin posición, y la tabla Acumulado los muestra con "D2 sin arrancar" en la columna Hoyo. Las columnas nuevas no rompen nada porque el fallback a null/0 está cubierto en todos los campos.
+
+## Tarea 143 — Color en el "Al par" de la Final (E / verde / rojo) + hoyo acumulado 1-36 en la pestaña Acumulado
+
+### Contexto
+
+Dos pedidos tuyos sobre las pantallas de resultados de la Final (Día 1, Día 2 y Acumulado, armadas en la Tarea 142):
+
+1. **Color del "Al par".** Hoy, cuando un jugador está exactamente en el par de cancha se muestra el texto "PAR". Lo cambiamos por una "E" en color negro. Además, el número ahora sale en **verde** cuando el jugador está bajo par (negativo) y en **rojo** cuando está sobre par (positivo). Esto se ve en las tablas de resultados, en la tarjeta de cada jugador, y en la pantalla de carga de hoyos en vivo.
+
+2. **Hoyo acumulado (1 a 36) en "Acumulado".** Hoy esa columna mostraba cosas como "D2 sin arrancar" o "D2 9/18", pensadas solo para el Día 2. La cambiamos para que muestre directamente en qué hoyo del torneo completo (1 a 36) va cada jugador, sin importar si el Día 2 arrancó o no:
+   - Si el jugador todavía está en el Día 1, en el hoyo 7 por ejemplo, la columna muestra **"7"**.
+   - Si ya terminó el Día 1 y está en el hoyo 10 del Día 2, la columna muestra **"28"** (18 del Día 1 + 10 del Día 2).
+   - Si ya jugó los 36 hoyos, muestra **"Completo"**.
+
+### Qué NO cambia
+
+- Ningún cálculo de puntaje, hándicap ni ranking. Esto es pura presentación: cómo se ve el número ("E"/color) y cómo se arma el texto de la columna "Hoyo" del Acumulado. El orden de las tablas y el valor de "TOTAL" siguen exactamente igual que en la Tarea 142.
+- La columna "Hoyo" de la pestaña **Día 2 sola** (no la de Acumulado) no se toca — ahí sigue mostrando "sin arrancar" / "X/18" para ESE día en particular, que es información distinta.
+- El óvalo grande del encabezado de la tarjeta del **Acumulado** (cuando tocás una fila de esa pestaña) sigue en rojo como siempre — ahí ese número es el TOTAL neto de los 36 hoyos, no un resultado contra el par, así que no le aplica el color nuevo. El color nuevo solo se usa en los óvalos de las tarjetas de Día 1 y Día 2 por separado, donde el número sí es un resultado contra el par.
+
+### Cambio 1
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** Para armar el hoyo acumulado necesitamos saber en qué hoyo del Día 1 va cada jugador incluso en la respuesta de la pestaña Acumulado (que hoy solo trae el hoyo del Día 2). Este cambio es la base: le agrega un valor por defecto a ese dato para los jugadores que todavía no cargaron ningún hoyo en absoluto.
+
+**Buscá:**
+
+```js
+    const d1 = dia1ByMat[p.matricula] || { neto: 0, diffNeto: 0, golpesFavor: 0, gross: 0, hcpJuego: 0, alPar: null, scores: new Array(18).fill(null), strokesPerHole: new Array(18).fill(0) };
+```
+
+**Reemplázá por:**
+
+```js
+    const d1 = dia1ByMat[p.matricula] || { neto: 0, diffNeto: 0, golpesFavor: 0, gross: 0, hcpJuego: 0, alPar: null, scores: new Array(18).fill(null), strokesPerHole: new Array(18).fill(0), nextHoyo: 1 };
+```
+
+### Cambio 2
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** Acá se agrega el dato nuevo en sí: `nextHoyoDia1`, el próximo hoyo sin cargar del Día 1 de cada jugador. Con esto, la pantalla ya tiene todo lo que necesita para calcular el hoyo acumulado sin pedir nada más al servidor.
+
+**Buscá:**
+
+```js
+      alParDia2:          calcDiffNetoParcial_(scores, cpPares, strokesPerHoleDia2),
+      nextHoyoDia2:       firstNull >= 0 ? firstNull + 1 : 19,
+      grossDia1:          d1.gross || 0,
+```
+
+**Reemplázá por:**
+
+```js
+      alParDia2:          calcDiffNetoParcial_(scores, cpPares, strokesPerHoleDia2),
+      nextHoyoDia2:       firstNull >= 0 ? firstNull + 1 : 19,
+      nextHoyoDia1:       d1.nextHoyo || 1,
+      grossDia1:          d1.gross || 0,
+```
+
+### Cambio 3
+
+**Archivo:** `index.html`
+
+**Por qué:** Agrega una nueva función chica (`finalDiffBadgeStyle_`) que decide el color del óvalo grande del encabezado de la tarjeta (negro si está en par, verde si está bajo par, rojo si está sobre par), y prepara una variable nueva (`headerBadgeStyle`) para guardar ese color.
+
+**Buscá:**
+
+```js
+function showFinalTarjetaModal(matricula, tramo){
+  if(!FINAL_TARJETA_CACHE) return;
+  var p = FINAL_TARJETA_CACHE.byMat[matricula];
+  if(!p) return;
+  var bodyHtml, headerDiff, headerMeta;
+```
+
+**Reemplázá por:**
+
+```js
+// Estilo del óvalo grande del header de la tarjeta de la Final -- a
+// diferencia del de las fechas normales (siempre rojo, porque ahí muestra
+// puntos Stableford), acá el número es un resultado contra el par, así que
+// el óvalo toma el mismo color que el texto (negro en par, verde bajo par,
+// rojo sobre par) en vez de quedar siempre en rojo.
+function finalDiffBadgeStyle_(diff){
+  if(diff === null || diff === undefined) return '';
+  if(diff === 0) return 'color:var(--text);background:rgba(26,25,24,.08);';
+  return diff > 0
+    ? 'color:var(--red);background:rgba(200,16,46,.1);'
+    : 'color:var(--green);background:rgba(31,122,61,.1);';
+}
+
+function showFinalTarjetaModal(matricula, tramo){
+  if(!FINAL_TARJETA_CACHE) return;
+  var p = FINAL_TARJETA_CACHE.byMat[matricula];
+  if(!p) return;
+  var bodyHtml, headerDiff, headerMeta, headerBadgeStyle = '';
+```
+
+### Cambio 4
+
+**Archivo:** `index.html`
+
+**Por qué:** Cuando se abre la tarjeta de SOLO el Día 1, usa el color nuevo según el "Al par" de ese día.
+
+**Buscá:**
+
+```js
+    headerDiff = finalPublicDiffTxt_(p.alParDia1);
+    headerMeta = 'Día 1 · HCP ' + p.hcpJuegoDia1;
+```
+
+**Reemplázá por:**
+
+```js
+    headerDiff = finalPublicDiffTxt_(p.alParDia1);
+    headerBadgeStyle = finalDiffBadgeStyle_(p.alParDia1);
+    headerMeta = 'Día 1 · HCP ' + p.hcpJuegoDia1;
+```
+
+### Cambio 5
+
+**Archivo:** `index.html`
+
+**Por qué:** Lo mismo que el Cambio 4, pero para cuando se abre la tarjeta de SOLO el Día 2.
+
+**Buscá:**
+
+```js
+    headerDiff = finalPublicDiffTxt_(p.alParDia2);
+    headerMeta = 'Día 2 · HCP ' + p.hcpJuegoDia2;
+```
+
+**Reemplázá por:**
+
+```js
+    headerDiff = finalPublicDiffTxt_(p.alParDia2);
+    headerBadgeStyle = finalDiffBadgeStyle_(p.alParDia2);
+    headerMeta = 'Día 2 · HCP ' + p.hcpJuegoDia2;
+```
+
+### Cambio 6
+
+**Archivo:** `index.html`
+
+**Por qué:** Aplica el color calculado (Cambios 3-5) al óvalo grande del encabezado de la tarjeta. Cuando se abre la tarjeta del Acumulado (las dos tarjetas juntas), este color queda vacío a propósito, así que el óvalo se ve igual que siempre (rojo) — tal como se explica en "Qué NO cambia".
+
+**Buscá:**
+
+```js
+        '<div class="ronda-modal-diff">' + headerDiff + '</div>' +
+```
+
+**Reemplázá por:**
+
+```js
+        '<div class="ronda-modal-diff" style="' + headerBadgeStyle + '">' + headerDiff + '</div>' +
+```
+
+### Cambio 7
+
+**Archivo:** `index.html`
+
+**Por qué:** Esta es una de las dos funciones que arman el texto del "Al par" que se ve en la pantalla de carga de hoyos en vivo. Reemplaza "PAR" por la "E" en negro, y le pone color verde/rojo al número.
+
+**Buscá:**
+
+```js
+function finalLiveDiffTxt_(diff){
+  if(diff === null || diff === undefined) return '–';
+  if(diff === 0) return 'PAR';
+  return diff > 0 ? ('+' + diff) : String(diff);
+}
+```
+
+**Reemplázá por:**
+
+```js
+function finalLiveDiffTxt_(diff){
+  if(diff === null || diff === undefined) return '–';
+  if(diff === 0) return '<span style="color:var(--text);">E</span>';
+  return diff > 0
+    ? '<span style="color:var(--red);">+' + diff + '</span>'
+    : '<span style="color:var(--green);">' + diff + '</span>';
+}
+```
+
+### Cambio 8
+
+**Archivo:** `index.html`
+
+**Por qué:** La misma función que el Cambio 7, pero la versión que usan las tablas de resultados (Día 1, Día 2, Acumulado) y las tarjetas.
+
+**Buscá:**
+
+```js
+function finalPublicDiffTxt_(diff){
+  if(diff === null || diff === undefined) return '–';
+  if(diff === 0) return 'PAR';
+  return diff > 0 ? ('+' + diff) : String(diff);
+}
+```
+
+**Reemplázá por:**
+
+```js
+function finalPublicDiffTxt_(diff){
+  if(diff === null || diff === undefined) return '–';
+  if(diff === 0) return '<span style="color:var(--text);">E</span>';
+  return diff > 0
+    ? '<span style="color:var(--red);">+' + diff + '</span>'
+    : '<span style="color:var(--green);">' + diff + '</span>';
+}
+```
+
+### Cambio 9
+
+**Archivo:** `index.html`
+
+**Por qué:** Este es el cambio del hoyo acumulado (1-36) de la pestaña Acumulado. Usa los datos nuevos del Cambio 2 (`nextHoyoDia1` y el ya existente `nextHoyoDia2`) para calcular en qué hoyo del torneo completo va cada jugador, sin depender de si el Día 2 arrancó.
+
+**Buscá:**
+
+```js
+      var hoyoTxt = s.netoDia2 === null ? 'D2 sin arrancar' : ('D2 ' + s.holesCargados + '/18');
+```
+
+**Reemplázá por:**
+
+```js
+      // Hoyo acumulado (1 a 36): no hace falta que el Día 2 haya arrancado --
+      // mientras el jugador sigue en el Día 1 se muestra su hoyo del Día 1
+      // tal cual (1-18); apenas pasa al Día 2 se le suman los 18 del Día 1
+      // (hoyo 10 del Día 2 => "28"); con los 36 hoyos jugados, "Completo".
+      var hoyoAcum = (s.nextHoyoDia1 < 19)
+        ? s.nextHoyoDia1
+        : (s.nextHoyoDia2 < 19 ? (18 + s.nextHoyoDia2) : null);
+      var hoyoTxt = hoyoAcum === null ? 'Completo' : String(hoyoAcum);
+```
+
+---
+
+### Cómo lo probé
+
+- Armé un escenario con 3 jugadores de prueba: uno con los 36 hoyos completos, uno a mitad del Día 1 (hoyo 7) y uno con el Día 1 completo y a mitad del Día 2 (hoyo 10) — exactamente tus dos ejemplos. La columna "Hoyo" del Acumulado mostró "7" y "28" tal cual los pediste, y "Completo" para el que ya terminó.
+- Probé los 3 colores (negro "E", verde, rojo) en las tablas de Día 1, Día 2 y Acumulado, en las tarjetas de cada jugador, y en la pantalla de carga de hoyos en vivo.
+- Confirmé que el óvalo del encabezado de la tarjeta del Acumulado (TOTAL) se sigue viendo rojo como siempre, sin el color nuevo.
+- Corrí de nuevo todas las pruebas de la Tarea 142 (tablas, redirecciones, tarjetas en vivo) para confirmar que nada se rompió.
+- Revisé que no aparezca ningún scroll horizontal ni se corte nada en pantallas chicas (280px a 768px de ancho), con capturas de pantalla.
+
+### Preguntas de verificación
+
+1. ¿La "E" negra, el verde y el rojo se ven como esperabas en las tablas de Día 1, Día 2 y Acumulado?
+2. ¿Esos mismos colores se ven bien también en la tarjeta de cada jugador (al tocar una fila) y en la pantalla de carga de hoyos en vivo?
+3. En la pestaña **Acumulado**, para un jugador que todavía está jugando el Día 1: ¿la columna "Hoyo" muestra el número de hoyo del Día 1 (por ejemplo "7"), sin decir nada de "sin arrancar"?
+4. Para un jugador que ya terminó el Día 1 y está jugando el Día 2: ¿la columna "Hoyo" suma los 18 del Día 1 (por ejemplo, hoyo 10 del Día 2 → "28")?
+5. Para un jugador que ya completó los 36 hoyos: ¿dice "Completo"?
+6. ¿El óvalo grande del encabezado de la tarjeta del Acumulado (el que muestra el TOTAL) se ve rojo como siempre, sin el color nuevo?
+
+### ✅ Respuestas de verificación (T143)
+
+1. Sí — `finalPublicDiffTxt_` ahora devuelve `<span style="color:var(--text);">E</span>` para diff=0, `<span style="color:var(--red);">+N</span>` para positivo, y `<span style="color:var(--green);">-N</span>` para negativo. Aplica en todas las tablas y tarjetas de la Final.
+
+2. Sí — `finalLiveDiffTxt_` (usada en la pantalla de carga en vivo) tiene exactamente la misma lógica. Las tarjetas usan `finalPublicDiffTxt_` en `finalTarjetaBloqueDia_` para el resumen "Al par".
+
+3. Sí — en la tabla Acumulado, `hoyoAcum = s.nextHoyoDia1` cuando `s.nextHoyoDia1 < 19`. Ese valor viene de `nextHoyoDia1: d1.nextHoyo || 1` en `getFinalStandingsDia2_`, que a su vez lo lee del campo `nextHoyo` que `getFinalStandingsDia1_` ya incluía en cada fila.
+
+4. Sí — cuando `s.nextHoyoDia1 >= 19` (Día 1 completo), `hoyoAcum = 18 + s.nextHoyoDia2`. Con `nextHoyoDia2 = 10`, el resultado es 28.
+
+5. Sí — cuando `nextHoyoDia1 >= 19` y `nextHoyoDia2 >= 19`, `hoyoAcum` queda `null` y `hoyoTxt = 'Completo'`.
+
+6. Sí — `headerBadgeStyle` solo se asigna en los bloques `tramo === 'dia1'` y `tramo === 'dia2'`. En el bloque `else` (Acumulado) la variable queda inicializada en `''`, así que el div `.ronda-modal-diff` no recibe ningún `style` extra y mantiene su aspecto por defecto (rojo, de la clase CSS).
