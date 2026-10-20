@@ -520,6 +520,25 @@ function cargarHoyoLiveFinal_(params) {
 }
 
 /**
+ * Diferencia NETA contra el par, prorateada solo sobre los hoyos ya jugados
+ * (no contra el par de los 18) -- con los golpes de ventaja del hcp de
+ * juego ya restados hoyo por hoyo (strokesPerHole, calcStrokesPerHole_).
+ * null mientras no se cargó ningún hoyo. Reutilizada por
+ * buildLineaSnapshotFinal_ (pantalla de carga en vivo) y por
+ * getFinalStandingsDia1_ / getFinalStandingsDia2_ (columna "Al par" de las
+ * tablas de resultados) para no duplicar este cálculo en cada lugar.
+ */
+function calcDiffNetoParcial_(scores, pares, strokesPerHole) {
+  const holesCargados = scores.filter(function(s){ return s !== null; }).length;
+  if (holesCargados === 0) return null;
+  let acc = 0;
+  scores.forEach(function(s, h) {
+    if (s !== null) acc += (s - (pares[h] || 0) - (strokesPerHole[h] || 0));
+  });
+  return acc;
+}
+
+/**
  * Snapshot en vivo de una línea del Día 1 o Día 2 de la Final: golpes
  * cargados por hoyo + diferencia a par NETA acumulada (ya con los golpes de
  * ventaja del hcp de juego de cada jugador aplicados hoyo por hoyo, según la
@@ -572,14 +591,7 @@ function buildLineaSnapshotFinal_(dia, lineaIdx, meta) {
     // ya usa el cálculo WHS (calcStrokesPerHole_, 05_HCP.gs): hcp 18 = 1
     // golpe en cada hoyo; hcp 15 = 1 golpe en los hoyos de dificultad 1 a 15.
     const strokesPerHole = calcStrokesPerHole_(p.hcp, cpIndices);
-    let diffParcial = null;
-    if (holesCargados > 0) {
-      let acc = 0;
-      scores.forEach(function(s, h) {
-        if (s !== null) acc += (s - (cpPares[h] || 0) - (strokesPerHole[h] || 0));
-      });
-      diffParcial = acc;
-    }
+    const diffParcial = calcDiffNetoParcial_(scores, cpPares, strokesPerHole);
     const firstNull = scores.indexOf(null);
 
     let ultimoCargadoPor = null;
@@ -692,6 +704,7 @@ function getFinalStandingsDia1_() {
     ? cachedRead_('cp2_' + meta.canchaId1, 600, function(){ return getCanchaPares_(meta.canchaId1); })
     : null;
   const cpPares = (cd && cd.pares) || [];
+  const cpIndices = (cd && cd.indices) || [];
   const parTotal = cpPares.reduce(function(t, pr){ return t + (pr || 0); }, 0);
 
   const golpesFavor = meta.golpesFavor || {};
@@ -710,21 +723,33 @@ function getFinalStandingsDia1_() {
     // ver comentario de getGolpesFavorMap_ -- por eso se SUMA, no se resta.
     const favor = golpesFavor[p.matricula] || 0;
     const neto = gross - hcpJuego + favor;
+    // Golpes de ventaja hoyo por hoyo + "Al par" prorateado solo sobre los
+    // hoyos ya jugados (calcDiffNetoParcial_, reutilizada de la pantalla de
+    // carga en vivo) -- para la columna "Al par" de la tabla de resultados.
+    // Distinto de diffNeto (arriba), que usa el par completo de 18 hoyos y
+    // está pensado para cuando el Día 1 ya terminó / para ordenar.
+    const strokesPerHole = calcStrokesPerHole_(hcpJuego, cpIndices);
+    const firstNull = scores.indexOf(null);
     return {
-      matricula:   p.matricula,
-      apodo:       p.apodo,
-      invitado:    !!p.invitado,
-      gross:       gross,
-      diff:        gross - parTotal,
-      hcpJuego:    hcpJuego,
-      golpesFavor: favor,
-      neto:        neto,
-      diffNeto:    neto - parTotal,
+      matricula:      p.matricula,
+      apodo:          p.apodo,
+      invitado:       !!p.invitado,
+      gross:          gross,
+      diff:           gross - parTotal,
+      hcpJuego:       hcpJuego,
+      golpesFavor:    favor,
+      neto:           neto,
+      diffNeto:       neto - parTotal,
+      scores:         scores,
+      strokesPerHole: strokesPerHole,
+      alPar:          calcDiffNetoParcial_(scores, cpPares, strokesPerHole),
+      holesCargados:  holesCargados,
+      nextHoyo:       firstNull >= 0 ? firstNull + 1 : 19,
     };
   });
 
   filas.sort(function(a, b) { return a.neto - b.neto; });
-  return { ok: true, completo: completo, standings: filas };
+  return { ok: true, completo: completo, standings: filas, pares: cpPares, indices: cpIndices };
 }
 
 /**
@@ -783,6 +808,7 @@ function getFinalStandingsDia2_() {
     ? cachedRead_('cp2_' + meta.canchaId2, 600, function(){ return getCanchaPares_(meta.canchaId2); })
     : null;
   const cpPares = (cd && cd.pares) || [];
+  const cpIndices = (cd && cd.indices) || [];
 
   const allPlayers = [];
   lineas.forEach(function(l) { (l.players || []).forEach(function(p) { allPlayers.push(p); }); });
@@ -794,29 +820,47 @@ function getFinalStandingsDia2_() {
     let parJugado = 0;
     scores.forEach(function(s, h) { if (s !== null) parJugado += (cpPares[h] || 0); });
     const hcpJuego2 = hcpByMat[p.matricula] || 0;
-    const d1 = dia1ByMat[p.matricula] || { neto: 0, diffNeto: 0 };
+    const d1 = dia1ByMat[p.matricula] || { neto: 0, diffNeto: 0, golpesFavor: 0, gross: 0, hcpJuego: 0, alPar: null, scores: new Array(18).fill(null), strokesPerHole: new Array(18).fill(0) };
     const parTotal1 = d1.neto - d1.diffNeto;
 
     const netoDia2 = holesCargados > 0 ? (grossDia2 - hcpJuego2) : null;
     const netoTotal = d1.neto + (netoDia2 !== null ? netoDia2 : 0);
     const diffTotal = netoTotal - parTotal1 - parJugado;
+    // Golpes de ventaja hoyo por hoyo del Día 2 + "Al par" prorateado, misma
+    // lógica que el Día 1 (calcDiffNetoParcial_) -- para la columna "Al par"
+    // de la tabla del Día 2 y la tarjeta del Acumulado. De paso se pasan
+    // también los datos del Día 1 de este jugador (ya calculados en
+    // getFinalStandingsDia1_, sin duplicar) para poder armar su tarjeta
+    // completa de los 36 hoyos desde esta misma respuesta.
+    const strokesPerHoleDia2 = calcStrokesPerHole_(hcpJuego2, cpIndices);
+    const firstNull = scores.indexOf(null);
 
     return {
-      matricula:     p.matricula,
-      apodo:         p.apodo,
-      invitado:      !!p.invitado,
-      holesCargados: holesCargados,
-      grossDia2:     grossDia2,
-      hcpJuego2:     hcpJuego2,
-      netoDia2:      netoDia2, // null hasta el primer hoyo cargado del Día 2
-      netoDia1:      d1.neto,
-      netoTotal:     netoTotal,
-      diffTotal:     diffTotal,
+      matricula:          p.matricula,
+      apodo:              p.apodo,
+      invitado:           !!p.invitado,
+      holesCargados:      holesCargados,
+      grossDia2:          grossDia2,
+      hcpJuego2:          hcpJuego2,
+      netoDia2:           netoDia2, // null hasta el primer hoyo cargado del Día 2
+      netoDia1:           d1.neto,
+      netoTotal:          netoTotal,
+      diffTotal:          diffTotal,
+      golpesFavor:        d1.golpesFavor || 0,
+      scoresDia2:         scores,
+      strokesPerHoleDia2: strokesPerHoleDia2,
+      alParDia2:          calcDiffNetoParcial_(scores, cpPares, strokesPerHoleDia2),
+      nextHoyoDia2:       firstNull >= 0 ? firstNull + 1 : 19,
+      grossDia1:          d1.gross || 0,
+      hcpJuegoDia1:       d1.hcpJuego || 0,
+      alParDia1:          (d1.alPar !== undefined ? d1.alPar : null),
+      scoresDia1:         d1.scores || new Array(18).fill(null),
+      strokesPerHoleDia1: d1.strokesPerHole || new Array(18).fill(0),
     };
   });
 
   filas.sort(function(a, b) { return a.netoTotal - b.netoTotal; });
-  return { ok: true, standings: filas };
+  return { ok: true, standings: filas, paresDia1: (st1.pares || []), indicesDia1: (st1.indices || []), paresDia2: cpPares, indicesDia2: cpIndices };
 }
 
 /**

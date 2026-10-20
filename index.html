@@ -8583,6 +8583,101 @@ function finalLiveSetTab(tab){
 // Tarjeta" — vistas de solo lectura, se cargan al tocar la pestaña (igual
 // que "Stableford" en una fecha normal), sin sondeo automático. ──
 
+// Caché de datos de tarjeta de la Final (Día 1 / Día 2, todos los
+// jugadores) -- mismo rol que FECHA_STB_CACHE para las fechas normales:
+// se llena cada vez que se cargan las pestañas Día 1 / Día 2 / Acumulado,
+// y showFinalTarjetaModal la usa para abrir la tarjeta de 18 o 36 hoyos de
+// cualquier jugador sin otra consulta al servidor.
+var FINAL_TARJETA_CACHE = null;
+
+function finalTarjetaCacheMergeDia1_(r){
+  if(!FINAL_TARJETA_CACHE) FINAL_TARJETA_CACHE = { byMat: {} };
+  FINAL_TARJETA_CACHE.paresDia1 = r.pares || [];
+  FINAL_TARJETA_CACHE.indicesDia1 = r.indices || [];
+  (r.standings || []).forEach(function(s){
+    var p = FINAL_TARJETA_CACHE.byMat[s.matricula] || {};
+    p.matricula = s.matricula; p.apodo = s.apodo; p.invitado = s.invitado;
+    p.hcpJuegoDia1 = s.hcpJuego; p.grossDia1 = s.gross; p.alParDia1 = s.alPar; p.scoresDia1 = s.scores;
+    FINAL_TARJETA_CACHE.byMat[s.matricula] = p;
+  });
+}
+
+function finalTarjetaCacheMergeDia2_(r){
+  if(!FINAL_TARJETA_CACHE) FINAL_TARJETA_CACHE = { byMat: {} };
+  if(r.paresDia1) FINAL_TARJETA_CACHE.paresDia1 = r.paresDia1;
+  if(r.indicesDia1) FINAL_TARJETA_CACHE.indicesDia1 = r.indicesDia1;
+  FINAL_TARJETA_CACHE.paresDia2 = r.paresDia2 || [];
+  FINAL_TARJETA_CACHE.indicesDia2 = r.indicesDia2 || [];
+  (r.standings || []).forEach(function(s){
+    var p = FINAL_TARJETA_CACHE.byMat[s.matricula] || {};
+    p.matricula = s.matricula; p.apodo = s.apodo; p.invitado = s.invitado;
+    p.hcpJuegoDia1 = s.hcpJuegoDia1; p.grossDia1 = s.grossDia1; p.alParDia1 = s.alParDia1; p.scoresDia1 = s.scoresDia1;
+    p.hcpJuegoDia2 = s.hcpJuego2; p.grossDia2 = s.grossDia2; p.alParDia2 = s.alParDia2; p.scoresDia2 = s.scoresDia2;
+    p.golpesFavor = s.golpesFavor; p.netoTotal = s.netoTotal;
+    FINAL_TARJETA_CACHE.byMat[s.matricula] = p;
+  });
+}
+
+// Abre la tarjeta de lectura de un jugador de la Final -- mismo patrón que
+// showFechaTarjetaModal (fechas normales), reutilizando renderTarjeta18Hoyos
+// y el modal #ronda-modal. tramo: 'dia1' (solo Día 1), 'dia2' (solo Día 2)
+// o 'ambos' (Acumulado -- muestra las dos tarjetas + el resumen de golpes a
+// favor / TOTAL de los 36 hoyos).
+function finalTarjetaBloqueDia_(nombreDia, scores, pares, indices, hcpJuego, gross, alPar, mostrarLabel){
+  var tarjeta = renderTarjeta18Hoyos(scores || [], pares || [], 'Score', indices || [], [], true, null);
+  var label = mostrarLabel ? ('<div style="font-family:\'Oswald\',sans-serif;font-size:13px;font-weight:700;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">' + nombreDia + ' · HCP ' + hcpJuego + '</div>') : '';
+  return label +
+    '<div class="ronda-modal-card">' + tarjeta + '</div>' +
+    '<div class="perf-ecl-resumen">' +
+      '<div class="perf-ecl-resumen-item"><span class="rlbl">Bruto</span><span class="perf-ecl-par">' + gross + '</span></div>' +
+      '<div class="perf-ecl-resumen-item"><span class="rlbl">Al par</span><span class="perf-ecl-par">' + finalPublicDiffTxt_(alPar) + '</span></div>' +
+    '</div>';
+}
+
+function showFinalTarjetaModal(matricula, tramo){
+  if(!FINAL_TARJETA_CACHE) return;
+  var p = FINAL_TARJETA_CACHE.byMat[matricula];
+  if(!p) return;
+  var bodyHtml, headerDiff, headerMeta;
+
+  if(tramo === 'dia1'){
+    bodyHtml = finalTarjetaBloqueDia_('Día 1', p.scoresDia1, FINAL_TARJETA_CACHE.paresDia1, FINAL_TARJETA_CACHE.indicesDia1, p.hcpJuegoDia1, p.grossDia1, p.alParDia1, false);
+    headerDiff = finalPublicDiffTxt_(p.alParDia1);
+    headerMeta = 'Día 1 · HCP ' + p.hcpJuegoDia1;
+  } else if(tramo === 'dia2'){
+    bodyHtml = finalTarjetaBloqueDia_('Día 2', p.scoresDia2, FINAL_TARJETA_CACHE.paresDia2, FINAL_TARJETA_CACHE.indicesDia2, p.hcpJuegoDia2, p.grossDia2, p.alParDia2, false);
+    headerDiff = finalPublicDiffTxt_(p.alParDia2);
+    headerMeta = 'Día 2 · HCP ' + p.hcpJuegoDia2;
+  } else {
+    bodyHtml = finalTarjetaBloqueDia_('Día 1', p.scoresDia1, FINAL_TARJETA_CACHE.paresDia1, FINAL_TARJETA_CACHE.indicesDia1, p.hcpJuegoDia1, p.grossDia1, p.alParDia1, true) +
+      finalTarjetaBloqueDia_('Día 2', p.scoresDia2, FINAL_TARJETA_CACHE.paresDia2, FINAL_TARJETA_CACHE.indicesDia2, p.hcpJuegoDia2, p.grossDia2, p.alParDia2, true) +
+      '<div class="perf-ecl-resumen">' +
+        '<div class="perf-ecl-resumen-item"><span class="rlbl">Golpes a favor</span><span class="perf-ecl-par">' + (p.golpesFavor ? (p.golpesFavor > 0 ? '+' + p.golpesFavor : p.golpesFavor) : '—') + '</span></div>' +
+        '<div class="perf-ecl-resumen-item"><span class="rlbl">TOTAL</span><span class="perf-ecl-par">' + p.netoTotal + '</span></div>' +
+      '</div>';
+    headerDiff = p.netoTotal;
+    headerMeta = 'Acumulado 36 hoyos';
+  }
+
+  var modal = document.getElementById('ronda-modal') || document.createElement('div');
+  modal.id = 'ronda-modal';
+  modal.className = 'ronda-modal';
+  modal.innerHTML = '<div class="ronda-modal-bg" onclick="closeRondaModal()"></div>' +
+    '<div class="ronda-modal-box">' +
+      '<button class="ronda-modal-close" onclick="closeRondaModal()">×</button>' +
+      '<div class="ronda-modal-hdr">' +
+        '<div class="ronda-modal-diff">' + headerDiff + '</div>' +
+        '<div class="ronda-modal-info">' +
+          '<div class="ronda-modal-cancha">' + (p.apodo || '') + (p.invitado ? ' (inv.)' : '') + '</div>' +
+          '<div class="ronda-modal-meta">' + headerMeta + '</div>' +
+        '</div>' +
+      '</div>' +
+      bodyHtml +
+    '</div>';
+  if(!modal.parentNode) document.body.appendChild(modal);
+  setTimeout(function(){ modal.classList.add('open'); }, 10);
+}
+
 function finalLiveLoadDia1(){
   var el = document.getElementById('final-dia1-body');
   if(!el) return;
@@ -8592,6 +8687,7 @@ function finalLiveLoadDia1(){
       el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">' + ((r && r.error) || 'Sin datos del Día 1 todavía.') + '</div>';
       return;
     }
+    finalTarjetaCacheMergeDia1_(r);
     el.innerHTML = finalStandingsNetoTableHtml_(r.standings, 'Resultados Día 1' + (r.completo ? ' — NETO' : ' — en vivo'));
   }).catch(function(){
     el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Error al cargar</div>';
@@ -8607,6 +8703,7 @@ function finalLiveLoadDia2(){
       el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">' + ((r && r.error) || 'Sin datos del Día 2 todavía.') + '</div>';
       return;
     }
+    finalTarjetaCacheMergeDia2_(r);
     el.innerHTML = finalDia2SoloTableHtml_(r.standings);
   }).catch(function(){
     el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Error al cargar</div>';
@@ -8622,6 +8719,7 @@ function finalLiveLoadAcumulado(){
       el.innerHTML = '<div style="padding:20px;text-align:center;font-family:\'Barlow Condensed\',sans-serif;color:var(--g4);">' + ((r && r.error) || 'Sin datos todavía.') + '</div>';
       return;
     }
+    finalTarjetaCacheMergeDia2_(r);
     el.innerHTML = finalPublicStandingsDia2Html_(r);
   }).catch(function(){
     el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-family:\'Barlow Condensed\',sans-serif;">Error al cargar</div>';
@@ -8636,29 +8734,42 @@ function finalLiveLoadAcumulado(){
 function finalDia2SoloTableHtml_(standings){
   var jugaron = standings.filter(function(s){ return s.netoDia2 !== null; }).sort(function(a,b){ return a.netoDia2 - b.netoDia2; });
   var sinArrancar = standings.filter(function(s){ return s.netoDia2 === null; });
-  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Resultados Día 2</div><div class="adm-card-body" style="padding:0;">';
-  jugaron.forEach(function(s, i){
-    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
-      '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
-      '<div style="flex:1;">' +
-        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
-        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">Bruto ' + s.grossDia2 + ' · ' + s.holesCargados + '/18</div>' +
-      '</div>' +
-      '<div style="text-align:right;">' +
-        '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.netoDia2 + '</div>' +
-      '</div>' +
-    '</div>';
-  });
-  sinArrancar.forEach(function(s){
-    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;opacity:.55;">' +
-      '<div style="width:20px;"></div>' +
-      '<div style="flex:1;">' +
-        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
-      '</div>' +
-      '<div style="text-align:right;font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">sin arrancar</div>' +
-    '</div>';
-  });
-  html += '</div></div>';
+  var html = '<div class="card" style="margin-bottom:14px;">' +
+    '<div class="card-hdr"><div class="card-hdr-title">Resultados Día 2</div></div>' +
+    '<div class="stb-scroll"><table class="stb">' +
+      '<thead><tr>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hoyo</th>' +
+      '</tr></thead><tbody>';
+  if(!jugaron.length && !sinArrancar.length){
+    html += '<tr><td colspan="5" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+  } else {
+    jugaron.forEach(function(s, i){
+      var pos = i + 1;
+      var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
+      var hoyoTxt = s.holesCargados === 18 ? 'Completo' : (s.holesCargados + '/18');
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia2\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div><div class="s dim" style="font-size:11px;">HCP ' + s.hcpJuego2 + '</div></td>' +
+        '<td class="c"><span class="s">' + s.grossDia2 + '</span></td>' +
+        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(s.alParDia2) + '</span></td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
+      '</tr>';
+    });
+    sinArrancar.forEach(function(s){
+      html += '<tr class="fecha-row-click" style="cursor:pointer;opacity:.55;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia2\')">' +
+        '<td class="c" style="padding:6px 4px;"></td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div><div class="s dim" style="font-size:11px;">HCP ' + s.hcpJuego2 + '</div></td>' +
+        '<td class="c"><span class="s dim">–</span></td>' +
+        '<td class="c"><span class="s dim">–</span></td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">sin arrancar</span></td>' +
+      '</tr>';
+    });
+  }
+  html += '</tbody></table></div></div>';
   return html;
 }
 
@@ -9073,21 +9184,33 @@ function finalPublicDiffTxt_(diff){
 // Final (finalLiveLoadDia1), para no duplicar el armado de esta tabla en
 // los dos lugares.
 function finalStandingsNetoTableHtml_(standings, titulo){
-  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 ' + titulo + '</div><div class="adm-card-body" style="padding:0;">';
-  standings.forEach(function(s, i){
-    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
-      '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
-      '<div style="flex:1;">' +
-        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
-        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">Bruto ' + s.gross + ' · ' + finalPublicDiffTxt_(s.diff) + '</div>' +
-      '</div>' +
-      '<div style="text-align:right;">' +
-        '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diffNeto) + '</div>' +
-        '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.neto + '</div>' +
-      '</div>' +
-    '</div>';
-  });
-  html += '</div></div>';
+  var html = '<div class="card" style="margin-bottom:14px;">' +
+    '<div class="card-hdr"><div class="card-hdr-title">' + titulo + '</div></div>' +
+    '<div class="stb-scroll"><table class="stb">' +
+      '<thead><tr>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hoyo</th>' +
+      '</tr></thead><tbody>';
+  if(!standings.length){
+    html += '<tr><td colspan="5" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+  } else {
+    standings.forEach(function(s, i){
+      var pos = i + 1;
+      var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
+      var hoyoTxt = s.holesCargados === 18 ? 'Completo' : (s.holesCargados + '/18');
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia1\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div><div class="s dim" style="font-size:11px;">HCP ' + s.hcpJuego + '</div></td>' +
+        '<td class="c"><span class="s">' + s.gross + '</span></td>' +
+        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(s.alPar) + '</span></td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
+      '</tr>';
+    });
+  }
+  html += '</tbody></table></div></div>';
   return html;
 }
 
@@ -9114,6 +9237,7 @@ function finalPublicRender(allR, stR){
     // completen para ver algo.
     pendingEl.style.display = 'none';
     if(stR && stR.ok){
+      finalTarjetaCacheMergeDia2_(stR);
       standingsEl.innerHTML = finalPublicStandingsDia2Html_(stR);
       standingsEl.style.display = 'block';
     } else {
@@ -9124,6 +9248,7 @@ function finalPublicRender(allR, stR){
   }
 
   if(stR && stR.ok){
+    finalTarjetaCacheMergeDia1_(stR);
     standingsEl.innerHTML = finalStandingsNetoTableHtml_(stR.standings, 'Resultados Día ' + FINAL_PUBLIC_DIA + (stR.completo ? ' — NETO' : ' — en vivo'));
     standingsEl.style.display = 'block';
     pendingEl.style.display = 'none';
@@ -9141,22 +9266,43 @@ function finalPublicRender(allR, stR){
 // TOTAL acumulado como número principal, igual que ya se hace con el NETO
 // del Día 1 en finalPublicRender.
 function finalPublicStandingsDia2Html_(stR){
-  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:4px solid var(--gold);">🏆 Acumulado 36 hoyos</div><div class="adm-card-body" style="padding:0;">';
-  stR.standings.forEach(function(s, i){
-    var dia2Txt = s.netoDia2 === null ? 'Día 2: sin arrancar' : ('Día 2: ' + s.netoDia2 + ' · ' + s.holesCargados + '/18');
-    html += '<div style="display:flex;align-items:center;padding:9px 15px;border-bottom:1px solid var(--g1);gap:10px;">' +
-      '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--g4);width:20px;">' + (i + 1) + '</div>' +
-      '<div style="flex:1;">' +
-        '<div style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div>' +
-        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);">' + dia2Txt + '</div>' +
-      '</div>' +
-      '<div style="text-align:right;">' +
-        '<div style="font-family:\'Oswald\',sans-serif;font-size:13px;color:var(--g4);">' + finalPublicDiffTxt_(s.diffTotal) + '</div>' +
-        '<div style="font-family:\'Oswald\',sans-serif;font-size:16px;font-weight:800;color:var(--text);">' + s.netoTotal + '</div>' +
-      '</div>' +
-    '</div>';
-  });
-  html += '</div></div>';
+  var standings = stR.standings;
+  var html = '<div class="card" style="margin-bottom:14px;">' +
+    '<div class="card-hdr"><div class="card-hdr-title">Acumulado 36 hoyos</div></div>' +
+    '<div class="stb-scroll"><table class="stb">' +
+      '<thead><tr>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hoyo</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Golpes a favor de la clasificación de temporada (posiciones 1-8)">Favor</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;background:var(--navy);color:#fff;border-radius:0;" title="Neto total de los 36 hoyos, con los golpes a favor ya aplicados">Total</th>' +
+      '</tr></thead><tbody>';
+  if(!standings.length){
+    html += '<tr><td colspan="7" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+  } else {
+    standings.forEach(function(s, i){
+      var pos = i + 1;
+      var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
+      var grossTotal = (s.grossDia1 || 0) + s.grossDia2;
+      var alParDia1Val = (s.alParDia1 !== null && s.alParDia1 !== undefined) ? s.alParDia1 : null;
+      var alParDia2Val = (s.alParDia2 !== null && s.alParDia2 !== undefined) ? s.alParDia2 : null;
+      var alParTotal = (alParDia1Val === null && alParDia2Val === null) ? null : ((alParDia1Val || 0) + (alParDia2Val || 0));
+      var hoyoTxt = s.netoDia2 === null ? 'D2 sin arrancar' : ('D2 ' + s.holesCargados + '/18');
+      var favorTxt = s.golpesFavor ? (s.golpesFavor > 0 ? '+' + s.golpesFavor : String(s.golpesFavor)) : '—';
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'ambos\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div><div class="s dim" style="font-size:11px;">HCP ' + s.hcpJuego2 + '</div></td>' +
+        '<td class="c"><span class="s">' + grossTotal + '</span></td>' +
+        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(alParTotal) + '</span></td>' +
+        '<td class="c"><span class="s dim" style="font-size:11px;">' + hoyoTxt + '</span></td>' +
+        '<td class="c"><span class="s">' + favorTxt + '</span></td>' +
+        '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + s.netoTotal + '</span></td>' +
+      '</tr>';
+    });
+  }
+  html += '</tbody></table></div></div>';
   return html;
 }
 
