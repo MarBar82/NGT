@@ -25695,3 +25695,150 @@ function liveOpenScoreModal(hoyo, mat){
 5. Sí — una vez que `firmados[mat]` existe para TODOS los jugadores no-INV de la fecha, `conFirma.length === jugadoresFecha.length` es `true` → `completada = true` → `getFechaActiva_` no devuelve esa fecha → la app muestra "No tenés tarjetas pendientes".
 
 6. Sí — `cargarHoyoLive_` solo bloquea cuando `!isAdmin`. El Admin puede siempre, independientemente del valor de `firmados`.
+
+---
+## Tarea 146 — Una fecha vieja no puede quedar "EN JUEGO" para siempre si ya todos jugaron los 18 hoyos (arregla que reapareciera la Fecha 8)
+
+### Contexto
+
+Apenas se aplicó la Tarea 145 pasó esto: la Fecha 8 volvió a aparecer como "para cargar scores" para cualquiera que entrara a "Mi Tarjeta", a pesar de que todas las líneas ya hace tiempo que terminaron de jugarla.
+
+La causa es pura cuestión de fechas: el dato `firmados` (quién apretó "Finalizar Ronda") es nuevo, lo empezamos a guardar recién con la Tarea 145. Para la Fecha 8 — jugada antes de que ese dato existiera — nadie tiene `firmados` registrado, aunque en los hechos ya jugaron y terminaron hace rato. Como `getFechaActiva_` (la función que decide "qué fecha está en juego ahora") pasó a mirar sólo `firmados`, una fecha vieja sin ese dato le parece "recién arrancando" — y la vuelve a mostrar como pendiente para todo el mundo. Es un hueco en los datos históricos, no un error en la lógica nueva en sí.
+
+El riesgo que marcaste es real y es el importante: si alguien entra ahora a la Fecha 8 (que la app te ofrece como "la fecha en juego") y toca un hoyo para cambiar un score, ese cambio SÍ se guarda — porque el freno que agrega la Tarea 145 (`cargarHoyoLive_` no deja tocar hoyos si ya firmaste) depende de `firmados`, que en la Fecha 8 está vacío para todos. Entonces hoy, técnicamente, se podría pisar un resultado ya publicado.
+
+**La solución**: le agrego a `getFechaActiva_` una regla de respaldo, además de `firmados` (que sigue siendo la señal principal y no se toca). Si TODOS los jugadores de una fecha ya tienen sus 18 hoyos cargados en la planilla — no importa si alguno nunca apretó el botón — la fecha se da por terminada igual. Y de paso, para que quede resuelto para siempre (no sólo esa vez), guardo el `firmados` que faltaba para esos jugadores. Así:
+
+- La Fecha 8 se cierra sola la próxima vez que cualquiera abra la app (no hace falta que yo corra nada a mano ni que vos hagas un paso extra).
+- Una vez cerrada, el freno de `cargarHoyoLive_` (de la Tarea 145) también la protege, porque ahora sí tiene el `firmados` que le faltaba.
+- Una fecha genuinamente en curso (alguien todavía no cargó los 18 hoyos) sigue funcionando exactamente igual que con la Tarea 145 — esta regla de respaldo sólo entra en juego cuando literalmente TODOS ya terminaron de jugar.
+
+### Qué NO cambia
+
+- La regla principal de la Tarea 145 sigue intacta: mientras falte aunque sea un jugador con un hoyo pendiente, la fecha sigue EN JUEGO y cualquiera puede seguir entrando a cargar o revisar su tarjeta.
+- No hace falta correr ningún script ni tocar la planilla a mano — se arregla sola la próxima vez que `getFechaActiva_` se ejecute (que pasa constantemente, cada vez que alguien abre la app).
+- No cambia nada de los cálculos de Stableford, Match, posiciones ni puntos — sigue siendo pura señal de "¿está esta fecha todavía en juego o no?".
+
+### Cambio 1
+
+**Archivo:** `03_Reads.gs`
+
+**Por qué:** Es el único lugar que hay que tocar. `getFechaActiva_` ya tenía la regla de "todos firmaron"; le agrego la regla de respaldo ("todos tienen los 18 hoyos") que se activa sólo cuando la primera no alcanza, y que de paso guarda el `firmados` que faltaba para que quede resuelto para siempre.
+
+**Buscá:**
+
+```js
+    const shT = getSheet_(SHEETS.TARJETAS);
+    var completada = false;
+    if (shT) {
+      try {
+        const ne = findNextEmptyRow_(shT, 1);
+        if (ne > 2) {
+          const rows = shT.getRange(2, 1, ne - 2, 7).getValues();
+          const jugadoresFecha = rows.filter(function(r) {
+            const f   = String(r[0] || '').trim();
+            const mat = String(r[1] || '').trim();
+            return f === String(fNum) && mat && mat.indexOf('INV') !== 0;
+          });
+          if (jugadoresFecha.length > 0) {
+            const firmados = m.firmados || {};
+            const conFirma = jugadoresFecha.filter(function(r) {
+              const mat = String(r[1] || '').trim();
+              return !!firmados[mat];
+            });
+            completada = conFirma.length === jugadoresFecha.length;
+          } else {
+            // Sin jugadores no-INV encontrados para esta fecha → la tratamos como completada
+            // para no mostrar el botón innecesariamente (edge case: líneas solo con INV).
+            completada = true;
+          }
+        }
+      } catch(e) {}
+    }
+```
+
+**Reemplázá por:**
+
+```js
+    const shT = getSheet_(SHEETS.TARJETAS);
+    var completada = false;
+    if (shT) {
+      try {
+        const ne = findNextEmptyRow_(shT, 1);
+        if (ne > 2) {
+          // A..V (22 cols): fecha, mat, hcp, canchaId, H1..H18 — los 18 hoyos
+          // hacen falta para el respaldo de más abajo.
+          const rows = shT.getRange(2, 1, ne - 2, 22).getValues();
+          const jugadoresFecha = rows.filter(function(r) {
+            const f   = String(r[0] || '').trim();
+            const mat = String(r[1] || '').trim();
+            return f === String(fNum) && mat && mat.indexOf('INV') !== 0;
+          });
+          if (jugadoresFecha.length > 0) {
+            const firmados = m.firmados || {};
+            const conFirma = jugadoresFecha.filter(function(r) {
+              const mat = String(r[1] || '').trim();
+              return !!firmados[mat];
+            });
+            completada = conFirma.length === jugadoresFecha.length;
+
+            // Respaldo: fechas de antes de que existiera "firmados" (o algún
+            // jugador que nunca apretó Finalizar) no pueden quedar EN JUEGO
+            // para siempre. Si TODOS los jugadores de la fecha ya tienen sus
+            // 18 hoyos cargados, la damos por terminada y lo dejamos guardado
+            // en FECHA_META — así cargarHoyoLive_ también la ve cerrada de ahí
+            // en adelante, sin tener que volver a escanear la planilla.
+            if (!completada) {
+              const todosJugaron18 = jugadoresFecha.every(function(r) {
+                for (var h = 4; h <= 21; h++) {
+                  if (r[h] === '' || r[h] === null || r[h] === undefined) return false;
+                }
+                return true;
+              });
+              if (todosJugaron18) {
+                try {
+                  const propsBk = PropertiesService.getDocumentProperties();
+                  const metaBk  = JSON.parse(propsBk.getProperty('FECHA_META') || '{}');
+                  const fBkStr  = String(fNum);
+                  if (!metaBk[fBkStr]) metaBk[fBkStr] = {};
+                  if (!metaBk[fBkStr].firmados) metaBk[fBkStr].firmados = {};
+                  jugadoresFecha.forEach(function(r) {
+                    metaBk[fBkStr].firmados[String(r[1]).trim()] = true;
+                  });
+                  propsBk.setProperty('FECHA_META', JSON.stringify(metaBk));
+                } catch (eBk) { /* No bloquea: igual la tratamos como completada abajo */ }
+                completada = true;
+              }
+            }
+          } else {
+            // Sin jugadores no-INV encontrados para esta fecha → la tratamos como completada
+            // para no mostrar el botón innecesariamente (edge case: líneas solo con INV).
+            completada = true;
+          }
+        }
+      } catch(e) {}
+    }
+```
+
+### Cómo lo probé
+
+- Armé 6 escenarios con un script de Node que corre esta misma función (extraída del código real) contra datos simulados:
+  1. **La Fecha 8 real**: dos líneas, los 4 jugadores con los 18 hoyos cargados, nadie firmado. Confirmé que la fecha deja de aparecer como activa, y que `firmados` quedó guardado como `true` para los 4.
+  2. **Una fecha realmente en curso**: una línea completa, otra con sólo 10 de 18 hoyos cargados. Confirmé que la fecha sigue apareciendo como activa (nada cambia) y que no se tocó `firmados` de nadie.
+  3. **El camino normal** (el de la Tarea 145): todos firmaron de verdad apretando "Finalizar Ronda". Confirmé que sigue cerrando como corresponde, sin pasar por el respaldo nuevo.
+  4. **Caso mixto**: un jugador firmó, el otro no pero ya tiene los 18 hoyos. Confirmé que la fecha cierra igual (por el respaldo) y que el backfill completa sólo el que faltaba, sin tocar el que ya estaba firmado.
+  5. **Un solo hoyo pendiente en una línea**: un jugador completo, su compañero con 17 de 18 hoyos. Confirmé que la fecha sigue EN JUEGO — el respaldo no se activa si falta aunque sea un solo hoyo de un solo jugador.
+  6. **Fecha vieja + fecha nueva en curso a la vez**: la Fecha 8 (vieja, todos con 18 hoyos, sin firmar) y una Fecha 9 (nueva, recién arrancando). Confirmé que la que se devuelve como activa es la 9 (la real), y que la 8 todavía no se backfillea en esa misma llamada — no hace falta, porque de todas formas a nadie se lo rutea para allá; se termina de limpiar sola en una llamada posterior, cuando la 9 también se cierre.
+- Las 11 verificaciones (entre las 6 pruebas) salieron bien.
+
+### Preguntas de verificación
+
+1. ¿Al entrar ahora a "Mi Tarjeta", ya no te aparece la Fecha 8 para cargar scores (te dice "No tenés tarjetas pendientes" si no tenés nada más abierto)?
+2. ¿Si tocás un hoyo ya cargado de la Fecha 8 (por ejemplo desde un link viejo o una pestaña que quedó abierta), ya no te deja cambiarlo?
+3. Si en algún momento arrancamos una fecha nueva y alguna línea todavía no terminó sus 18 hoyos, ¿la app sigue mostrándola como "en juego" con normalidad (sin cerrarse antes de tiempo)?
+
+### Respuestas de verificación
+
+1. Sí — `getFechaActiva_` detecta que todos los jugadores de la Fecha 8 tienen los 18 hoyos cargados, activa el respaldo, guarda `firmados` en FECHA_META y la marca como completada. La próxima vez que cualquiera entre, ya no la ve.
+2. Sí — una vez que el respaldo corre (primer `getFechaActiva_` después del deploy), `metaBk[fBkStr].firmados` queda populado con todos los jugadores de la Fecha 8. Desde ese momento `cargarHoyoLive_` (T145) los bloquea igual que a cualquier jugador que firmó de manera normal.
+3. Sí — el respaldo tiene la condición `jugadoresFecha.every(...)` que exige que los 18 hoyos (columnas 4 a 21 de TARJETAS, índices base-0) estén todos no-vacíos para cada jugador. Si uno solo tiene un hoyo pendiente, `every` devuelve `false` y la fecha sigue EN JUEGO sin tocar nada.
