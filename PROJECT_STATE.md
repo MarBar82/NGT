@@ -25326,3 +25326,372 @@ function calcularResultadoMatch_(netA, netB, hoyoSalida) {
 4. Sí — `cargarTarjeta_` (`04_Writes.gs`) lee `getFechaMeta_(fStr).hoyoSalida` justo antes del bloque de cancha, y lo pasa a `calcularResultadoMatch_`. Para fechas que arrancan por el hoyo 1 (el caso habitual), `hoyoSalidaCT` queda en 1 y `holeOrder` es 0-17 en orden, idéntico al comportamiento anterior.
 
 5. Sí — los circulitos empatados ahora usan `bg = '#fff'; border = '#6b7280'; txtColor = '#374151'` (fondo blanco, borde gris, número oscuro) tanto en `buildMatchCard` como en `liveRenderMatchBody`. El signo `=` ya no se usa.
+
+---
+## Tarea 145 — Una fecha queda "en juego" para un jugador hasta que aprieta "Finalizar Ronda" (no antes) + puede seguir viendo los resultados en vivo de los demás después de firmar
+
+### Contexto
+
+Este es el arreglo de fondo de lo que pasó con la Línea 1 en la Fecha 8. Hoy, la app decide si "hay una fecha en curso" mirando si todos los jugadores ya cargaron el Hoyo 1 — eso pasa muy temprano en la ronda (apenas arrancan todas las líneas), no cuando terminan. El resultado es que un jugador que cierra y vuelve a abrir la app a mitad de una ronda (no solo al final) puede encontrarse con que la app ya no le ofrece entrar a cargar hoyos ni finalizar, aunque todavía no haya apretado "Finalizar Ronda".
+
+Esta Tarea cambia la señal: una fecha queda "en juego" para un jugador hasta que **aprieta el botón "Finalizar Ronda"** — ni antes (aunque haya cargado los 18 hoyos, todavía puede entrar a revisar su tarjeta) ni por ningún otro motivo. Recién ahí la fecha se cierra para ese jugador.
+
+Además, agrega el pedido de ver cómo siguen los demás: un jugador que ya finalizó su ronda (y la fecha sigue en juego para otras líneas) ya no puede cargar ni corregir sus propios hoyos, pero puede seguir viendo cómo vienen las líneas que todavía están jugando, usando el mismo selector de líneas ("L1 L2 L3...") que ya existe en la pestaña "Match" de la pantalla en vivo.
+
+**Sobre la Fecha Final:** la revisé para aplicar los mismos dos cambios, pero tiene una estructura distinta: no existe un botón "Finalizar Ronda" por jugador — los días de la Final se abren y cierran a mano por el administrador (no automáticamente por hoyo 1 cargado, así que no tiene el bug que tenía la fecha normal), y ya existen las pestañas "Día 1 / Día 2 / Acumulado" de solo lectura dentro de "Mi Tarjeta", que cualquier jugador puede ver en cualquier momento mientras el día sigue en curso, terminó su ronda o no. Es decir: el problema de la Línea 1 no existe en la Final, y el "ver cómo vienen los demás" ya está — no encontré nada para corregir ahí. Si de todas formas querés que la Final tenga un botón explícito de "Finalizar Ronda" por jugador (hoy no lo tiene, los hoyos se van guardando y ya), decime y lo armamos como una Tarea aparte, porque sería una función nueva, no una corrección.
+
+### Qué NO cambia
+
+- Nada de los cálculos de Stableford, Match, posiciones ni puntos dobles. Esta Tarea es pura "señal de acceso": cuándo una fecha se considera en juego o terminada para cada jugador, y cuándo puede seguir cargando scores.
+- El administrador puede seguir editando/corrigiendo la tarjeta de cualquier jugador desde el panel de Admin, firmada o no — el bloqueo de "ya no podés cargar hoyos" solo aplica al jugador mismo, no al Admin.
+- La pestaña "Match" (ver cómo vienen otras líneas) no se toca — ya tenía todo lo necesario, el problema era que antes nunca se llegaba a usarla porque la app te sacaba antes.
+
+### Cambio 1
+
+**Archivo:** `03_Reads.gs`
+
+**Por qué:** Este es el corazón del arreglo. `getFechaActiva_` decide si una fecha sigue "en juego" o ya está "completada". Hoy lo decide mirando si todos cargaron el Hoyo 1 (pasa casi al arrancar la ronda). Lo cambio para que mire si todos los jugadores ya **firmaron** (apretaron "Finalizar Ronda") — ese dato nuevo (`firmados`) lo guarda el Cambio 3.
+
+**Buscá:**
+
+```js
+    // Una fecha está "completada" cuando TODOS los jugadores cargaron sus scores.
+    // Col H (Hoyo 1) es el indicador — si tiene valor, el jugador cargó tarjeta.
+    // El HCP (col E) NO sirve porque se auto-rellena al crear la fecha.
+    const shT = getSheet_(SHEETS.TARJETAS);
+    var completada = false;
+    if (shT) {
+      try {
+        const ne = findNextEmptyRow_(shT, 1);
+        if (ne > 2) {
+          // A(0)=fecha, B(1)=mat, C(2)=hcp, D(3)=canchaId, E(4)=Hoyo1 — verified against
+          // cargarHoyoLive_ (getRange(rowIdx,4+hoyoNum) → hoyo1=col5=E) and
+          // cargarTarjeta_ (writes from col C: C=hcp,D=canchaId,E=H1).
+          const rows = shT.getRange(2, 1, ne - 2, 7).getValues();
+          const jugadoresFecha = rows.filter(function(r) {
+            const f   = String(r[0] || '').trim();
+            const mat = String(r[1] || '').trim();
+            return f === String(fNum) && mat && mat.indexOf('INV') !== 0;
+          });
+          if (jugadoresFecha.length > 0) {
+            const conScores = jugadoresFecha.filter(function(r) {
+              const hoyo1 = r[4]; // col E — only has a value when the player's scorecard was saved
+              return hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined && hoyo1 !== false;
+            });
+            completada = conScores.length === jugadoresFecha.length;
+          } else {
+            // Sin jugadores no-INV encontrados para esta fecha → la tratamos como completada
+            // para no mostrar el botón innecesariamente (edge case: líneas solo con INV).
+            completada = true;
+          }
+        }
+      } catch(e) {}
+```
+
+**Reemplázá por:**
+
+```js
+    // Una fecha está "completada" cuando TODOS los jugadores que la juegan ya
+    // apretaron "Finalizar Ronda" — queda registrado en m.firmados (lo escribe
+    // cargarTarjeta_). Haber cargado los 18 hoyos no alcanza: recién al firmar
+    // se calculan STB/SCORE/MATCH, así que hasta ese momento la fecha sigue
+    // EN JUEGO para ese jugador (puede seguir entrando a revisar su tarjeta).
+    const shT = getSheet_(SHEETS.TARJETAS);
+    var completada = false;
+    if (shT) {
+      try {
+        const ne = findNextEmptyRow_(shT, 1);
+        if (ne > 2) {
+          const rows = shT.getRange(2, 1, ne - 2, 7).getValues();
+          const jugadoresFecha = rows.filter(function(r) {
+            const f   = String(r[0] || '').trim();
+            const mat = String(r[1] || '').trim();
+            return f === String(fNum) && mat && mat.indexOf('INV') !== 0;
+          });
+          if (jugadoresFecha.length > 0) {
+            const firmados = m.firmados || {};
+            const conFirma = jugadoresFecha.filter(function(r) {
+              const mat = String(r[1] || '').trim();
+              return !!firmados[mat];
+            });
+            completada = conFirma.length === jugadoresFecha.length;
+          } else {
+            // Sin jugadores no-INV encontrados para esta fecha → la tratamos como completada
+            // para no mostrar el botón innecesariamente (edge case: líneas solo con INV).
+            completada = true;
+          }
+        }
+      } catch(e) {}
+```
+
+### Cambio 2
+
+**Archivo:** `03_Reads.gs`
+
+**Por qué:** `getMisFechas_` es lo que usa "Mi Tarjeta" para saber, por jugador, si tiene algo pendiente. Le agrego el campo `firmada` (si este jugador ya finalizó esa fecha), que es lo que el Cambio 6 va a usar para decidir si mostrar "no tenés tarjetas pendientes".
+
+**Buscá:**
+
+```js
+  const data = sh.getRange(2, 1, nextEmpty - 2, 25).getValues();
+  const out = [];
+  const canchasNeeded = {}; // canchaId → true
+  data.forEach(function(row, i) {
+    const f = String(row[0] || '').trim();
+    const m = String(row[1] || '').trim();
+    if (m !== String(matricula) || !f) return;
+    const canchaId   = String(row[3] || '').trim(); // D = ID
+    const canchaName = lookupCanchaName_(canchaId) || canchaId;
+    const ct         = String(row[24] || '').trim().toUpperCase();
+    const hoyo1      = row[4]; // col E
+    out.push({
+      fecha:     f,
+      hcp:       row[2] || '',
+      hasScores: hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined,
+      cancha:    canchaName,
+      canchaId:  canchaId,
+      colorTee:  ct || 'BLANCAS',
+      rowIndex:  i + 2,
+    });
+    if (canchaId) canchasNeeded[canchaId] = true;
+  });
+```
+
+**Reemplázá por:**
+
+```js
+  const data = sh.getRange(2, 1, nextEmpty - 2, 25).getValues();
+  const out = [];
+  const canchasNeeded = {}; // canchaId → true
+  // FECHA_META trae m.firmados — necesario para saber si ESTE jugador ya
+  // apretó "Finalizar Ronda" en cada fecha (ver getFechaActiva_).
+  const metaMisFechas = JSON.parse(PropertiesService.getDocumentProperties().getProperty('FECHA_META') || '{}');
+  data.forEach(function(row, i) {
+    const f = String(row[0] || '').trim();
+    const m = String(row[1] || '').trim();
+    if (m !== String(matricula) || !f) return;
+    const canchaId   = String(row[3] || '').trim(); // D = ID
+    const canchaName = lookupCanchaName_(canchaId) || canchaId;
+    const ct         = String(row[24] || '').trim().toUpperCase();
+    const hoyo1      = row[4]; // col E
+    const metaF      = metaMisFechas[f] || {};
+    out.push({
+      fecha:     f,
+      hcp:       row[2] || '',
+      hasScores: hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined,
+      firmada:   !!(metaF.firmados && metaF.firmados[m]),
+      cancha:    canchaName,
+      canchaId:  canchaId,
+      colorTee:  ct || 'BLANCAS',
+      rowIndex:  i + 2,
+    });
+    if (canchaId) canchasNeeded[canchaId] = true;
+  });
+```
+
+### Cambio 3
+
+**Archivo:** `04_Writes.gs`
+
+**Por qué:** Acá se escribe el dato nuevo (`firmados`) que usan los Cambios 1 y 2 — justo al final de `cargarTarjeta_` ("Finalizar Ronda"), una vez que todo lo demás ya se guardó bien.
+
+**Buscá:**
+
+```js
+  audit_('CARGAR_TARJETA', isAdmin ? 'admin' : matricula, { fecha, matricula, hcp, scores, ld, ba, usarDoble, dobleMsg });
+  try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
+  return { ok: true, dobleMsg: dobleMsg };
+}
+```
+
+**Reemplázá por:**
+
+```js
+  // Marcar al jugador como "firmado" para esta fecha — es la señal que usan
+  // getFechaActiva_ (fecha EN JUEGO vs. completada) y getMisFechas_ (acceso al
+  // live scoring). Haber cargado los 18 hoyos no alcanza: recién acá, al
+  // terminar "Finalizar Ronda", la fecha queda cerrada para este jugador.
+  try {
+    const propsFm = PropertiesService.getDocumentProperties();
+    const metaFm  = JSON.parse(propsFm.getProperty('FECHA_META') || '{}');
+    if (!metaFm[fStr]) metaFm[fStr] = {};
+    if (!metaFm[fStr].firmados) metaFm[fStr].firmados = {};
+    metaFm[fStr].firmados[mStr] = true;
+    propsFm.setProperty('FECHA_META', JSON.stringify(metaFm));
+  } catch (eFm) { /* No bloquea el guardado de la tarjeta */ }
+
+  audit_('CARGAR_TARJETA', isAdmin ? 'admin' : matricula, { fecha, matricula, hcp, scores, ld, ba, usarDoble, dobleMsg });
+  try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
+  return { ok: true, dobleMsg: dobleMsg };
+}
+```
+
+### Cambio 4
+
+**Archivo:** `07_LiveScoring.gs`
+
+**Por qué:** `getLineaLive_` es lo que alimenta la pantalla de "Mi Tarjeta" en vivo. Cuando un jugador consulta SU PROPIA línea (sin pedir explícitamente otra), hoy siempre le da permiso de edición. Lo cambio para que, si ya firmó, se la mande en modo solo lectura — así puede seguir viéndola pero no tocarla.
+
+**Buscá:**
+
+```js
+  const snap = buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap);
+  return Object.assign({ ok: true, soloLectura: false }, snap || {});
+}
+```
+
+**Reemplázá por:**
+
+```js
+  const snap = buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap);
+  const yaFirmo = !!(meta.firmados && meta.firmados[matStr]);
+  return Object.assign({ ok: true, soloLectura: yaFirmo }, snap || {});
+}
+```
+
+### Cambio 5
+
+**Archivo:** `07_LiveScoring.gs`
+
+**Por qué:** Esta es la protección real (del lado del servidor, no solo de pantalla): `cargarHoyoLive_` es la función que guarda un hoyo durante la carga en vivo. Si el jugador ya firmó, no tiene que poder cambiar ni cargar ningún hoyo más — ni por error, ni volviendo a abrir una pantalla vieja. El Admin sigue pudiendo corregir sin este freno.
+
+**Buscá:**
+
+```js
+  if (lineaIdx < 0) return { ok: false, error: 'No autorizado para cargar en esta línea' };
+
+  // score: null/'' borra; entero 1-15 guarda
+```
+
+**Reemplázá por:**
+
+```js
+  if (lineaIdx < 0) return { ok: false, error: 'No autorizado para cargar en esta línea' };
+
+  // Si el jugador ya firmó su tarjeta (apretó "Finalizar Ronda"), su ronda ya
+  // quedó cerrada — no se puede seguir cargando ni corrigiendo hoyos, aunque
+  // la fecha siga en juego para el resto de las líneas.
+  if (meta.firmados && meta.firmados[jugStr] && !isAdmin) {
+    return { ok: false, error: 'Esta tarjeta ya fue finalizada — no se puede modificar' };
+  }
+
+  // score: null/'' borra; entero 1-15 guarda
+```
+
+### Cambio 6
+
+**Archivo:** `index.html`
+
+**Por qué:** Este es el callejón sin salida que vivió la Línea 1: cuando no hay ninguna fecha "en juego" para mostrar directo, la app te manda a esta lista, y antes miraba `hasScores` (cargó el hoyo 1) para decidir si mostrarte "no tenés tarjetas pendientes". Ahora mira `firmada` — el dato nuevo del Cambio 2.
+
+**Buscá:**
+
+```js
+    const f = fechas[0];
+    if(!f || f.hasScores){
+```
+
+**Reemplázá por:**
+
+```js
+    const f = fechas[0];
+    if(!f || f.firmada){
+```
+
+### Cambio 7
+
+**Archivo:** `index.html`
+
+**Por qué:** Este es el que abre el "número para tocar y cargar un score" al tocar un hoyo. Si el jugador ya firmó (su línea le llega en modo solo lectura, por el Cambio 4), no tiene que poder abrir este cuadro — ni para él mismo ni, de paso, para cualquier otra línea que esté mirando de solo lectura.
+
+**Buscá:**
+
+```js
+function liveOpenScoreModal(hoyo, mat){
+  if(!LIVE_LINEA_DATA) return;
+  LIVE_HOYO = hoyo;
+```
+
+**Reemplázá por:**
+
+```js
+function liveOpenScoreModal(hoyo, mat){
+  if(!LIVE_LINEA_DATA) return;
+  if(LIVE_LINEA_DATA.soloLectura) return; // ya firmaste — tu tarjeta quedó cerrada
+  LIVE_HOYO = hoyo;
+```
+
+### Cambio 8
+
+**Archivo:** `index.html`
+
+**Por qué:** Es la pantalla "Ronda completa" que aparece cuando ya están los 18 hoyos cargados. Hoy siempre muestra "Finalizar Ronda" y "Revisar Tarjetas". Si el jugador ya firmó, en cambio, le muestro un aviso de que ya terminó y puede ir a ver cómo vienen los demás en la pestaña Match.
+
+**Buscá:**
+
+```js
+  html += '</div>' +
+    '<div id="live-complete-actions" class="adm-card-body" style="border-top:1px solid var(--g1);display:flex;gap:8px;padding-top:12px;">' +
+    '<button class="adm-btn-primary" onclick="liveFinalizar()" style="flex:1;font-size:14px;padding:10px;">🏁 Finalizar Ronda</button>' +
+    '<button class="adm-btn" onclick="liveRevisarTarjetas()" style="flex:1;font-size:14px;padding:10px;">📋 Revisar Tarjetas</button>' +
+    '</div></div>';
+  document.getElementById('live-complete-view').innerHTML = html;
+}
+```
+
+**Reemplázá por:**
+
+```js
+  html += '</div>';
+  if(d.soloLectura){
+    html +=
+      '<div id="live-complete-actions" class="adm-card-body" style="border-top:1px solid var(--g1);padding-top:12px;text-align:center;">' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;color:var(--g4);line-height:1.5;">✅ Ya finalizaste tu ronda — tu tarjeta quedó cerrada.<br>Podés seguir viendo cómo van los demás en la pestaña "Match".</div>' +
+      '</div></div>';
+  } else {
+    html +=
+      '<div id="live-complete-actions" class="adm-card-body" style="border-top:1px solid var(--g1);display:flex;gap:8px;padding-top:12px;">' +
+      '<button class="adm-btn-primary" onclick="liveFinalizar()" style="flex:1;font-size:14px;padding:10px;">🏁 Finalizar Ronda</button>' +
+      '<button class="adm-btn" onclick="liveRevisarTarjetas()" style="flex:1;font-size:14px;padding:10px;">📋 Revisar Tarjetas</button>' +
+      '</div></div>';
+  }
+  document.getElementById('live-complete-view').innerHTML = html;
+}
+```
+
+---
+
+### Cómo lo probé
+
+- Armé un escenario con una fecha de prueba (2 líneas): la Línea 1 con los 18 hoyos cargados y ya firmada, la Línea 2 con los 18 hoyos cargados pero SIN firmar todavía — exactamente la situación de la Fecha 8.
+- Con un script de Node que corre estas mismas funciones reales (extraídas del código) contra ese escenario:
+  - Confirmé que `getFechaActiva_` sigue devolviendo la fecha como "en juego" mientras la Línea 2 no firme — y que deja de estarlo recién cuando también firma.
+  - Confirmé que, con nadie firmado todavía (el caso de siempre, recién arrancando la ronda), la fecha también sigue "en juego" — ya no se cierra sola apenas cargan el hoyo 1, que era el bug.
+  - Confirmé que `getMisFechas_` devuelve `firmada:true` para los jugadores de la Línea 1 y `firmada:false` para los de la Línea 2, sin romper el dato viejo (`hasScores`).
+  - Confirmé que `getLineaLive_` le da modo solo lectura a un jugador de la Línea 1 mirando SU PROPIA línea (ya firmó), pero modo edición normal a un jugador de la Línea 2 (todavía no firmó) — y que mirar otra línea explícitamente siempre es de solo lectura, como ya era antes.
+  - Confirmé que `cargarHoyoLive_` rechaza con un error claro si un jugador de la Línea 1 intenta cargar o corregir un hoyo, y que a un jugador de la Línea 2 no lo frena ese mismo chequeo.
+  - Confirmé que el bloque que guarda `firmados` en la fecha no pisa otros datos que ya estuvieran guardados ahí (como el ajuste manual de hándicap).
+- Para la parte visual, probé las dos funciones de pantalla directamente con datos de prueba: con la línea en modo solo lectura, tocar un hoyo ya no abre el cuadro para cargar un score, y la pantalla de "Ronda completa" muestra el aviso de "ya finalizaste" en lugar de los botones "Finalizar Ronda" / "Revisar Tarjetas". Con la línea en modo normal, todo sigue funcionando exactamente como antes.
+
+### Preguntas de verificación
+
+1. Si entrás a "Mi Tarjeta" a mitad de una ronda (ya cargaste varios hoyos, pero no finalizaste) y salís y volvés a entrar, ¿seguís llegando directo a la pantalla de carga de hoyos, sin que te diga "no tenés tarjetas pendientes"?
+2. Una vez que completás los 18 hoyos pero TODAVÍA no apretaste "Finalizar Ronda", ¿podés seguir entrando a revisar tu tarjeta sin problema?
+3. Después de apretar "Finalizar Ronda", si volvés a entrar a "Mi Tarjeta" y todavía hay otras líneas jugando, ¿te muestra el aviso de "Ya finalizaste tu ronda" en lugar del botón de Finalizar, y podés igual tocar la pestaña "Match" y elegir otra línea (L1, L2, etc.) para ver cómo vienen?
+4. Después de firmar, si tocás uno de tus propios hoyos ya cargados, ¿ya no te deja abrir el cuadro para cambiar el score?
+5. Una vez que TODAS las líneas de la fecha firmaron, ¿"Mi Tarjeta" te muestra "No tenés tarjetas pendientes" como corresponde (la fecha ya terminó de verdad)?
+6. Como Admin, ¿seguís pudiendo entrar a corregir la tarjeta de un jugador aunque ya haya firmado (desde Editar Fecha / Editar Jugador)?
+
+### ✅ Respuestas de verificación (T145)
+
+1. Sí — `getMisFechas_` ahora incluye `firmada: !!(metaF.firmados && metaF.firmados[m])`. En el frontend, `if(!f || f.firmada)` es la nueva condición para mostrar "No tenés tarjetas pendientes". Si el jugador no firmó (aunque ya cargó el hoyo 1), `firmada` es `false` y sigue llegando a la pantalla de carga.
+
+2. Sí — la condición de "en juego" (`getFechaActiva_`) ahora mira `m.firmados` y no el hoyo 1. Mientras el jugador no aprete "Finalizar Ronda", `firmados[mat]` no existe, así que la fecha sigue activa para él — puede entrar y revisar cualquier hoyo.
+
+3. Sí — `getLineaLive_` devuelve `soloLectura: yaFirmo` donde `yaFirmo = !!(meta.firmados && meta.firmados[matStr])`. Con `soloLectura:true`, `liveOpenScoreModal` retorna sin abrir el modal (Cambio 7), y `liveRenderComplete` muestra el aviso de "Ya finalizaste tu ronda" con la sugerencia de ir a la pestaña "Match" (Cambio 8).
+
+4. Sí — `liveOpenScoreModal` tiene `if(LIVE_LINEA_DATA.soloLectura) return;` como primera guardia. El toque en cualquier hoyo no hace nada si la tarjeta ya está firmada.
+
+5. Sí — una vez que `firmados[mat]` existe para TODOS los jugadores no-INV de la fecha, `conFirma.length === jugadoresFecha.length` es `true` → `completada = true` → `getFechaActiva_` no devuelve esa fecha → la app muestra "No tenés tarjetas pendientes".
+
+6. Sí — `cargarHoyoLive_` solo bloquea cuando `!isAdmin`. El Admin puede siempre, independientemente del valor de `firmados`.
