@@ -976,7 +976,9 @@ function getFechaActiva_() {
       try {
         const ne = findNextEmptyRow_(shT, 1);
         if (ne > 2) {
-          const rows = shT.getRange(2, 1, ne - 2, 7).getValues();
+          // A..V (22 cols): fecha, mat, hcp, canchaId, H1..H18 — los 18 hoyos
+          // hacen falta para el respaldo de más abajo.
+          const rows = shT.getRange(2, 1, ne - 2, 22).getValues();
           const jugadoresFecha = rows.filter(function(r) {
             const f   = String(r[0] || '').trim();
             const mat = String(r[1] || '').trim();
@@ -989,6 +991,35 @@ function getFechaActiva_() {
               return !!firmados[mat];
             });
             completada = conFirma.length === jugadoresFecha.length;
+
+            // Respaldo: fechas de antes de que existiera "firmados" (o algún
+            // jugador que nunca apretó Finalizar) no pueden quedar EN JUEGO
+            // para siempre. Si TODOS los jugadores de la fecha ya tienen sus
+            // 18 hoyos cargados, la damos por terminada y lo dejamos guardado
+            // en FECHA_META — así cargarHoyoLive_ también la ve cerrada de ahí
+            // en adelante, sin tener que volver a escanear la planilla.
+            if (!completada) {
+              const todosJugaron18 = jugadoresFecha.every(function(r) {
+                for (var h = 4; h <= 21; h++) {
+                  if (r[h] === '' || r[h] === null || r[h] === undefined) return false;
+                }
+                return true;
+              });
+              if (todosJugaron18) {
+                try {
+                  const propsBk = PropertiesService.getDocumentProperties();
+                  const metaBk  = JSON.parse(propsBk.getProperty('FECHA_META') || '{}');
+                  const fBkStr  = String(fNum);
+                  if (!metaBk[fBkStr]) metaBk[fBkStr] = {};
+                  if (!metaBk[fBkStr].firmados) metaBk[fBkStr].firmados = {};
+                  jugadoresFecha.forEach(function(r) {
+                    metaBk[fBkStr].firmados[String(r[1]).trim()] = true;
+                  });
+                  propsBk.setProperty('FECHA_META', JSON.stringify(metaBk));
+                } catch (eBk) { /* No bloquea: igual la tratamos como completada abajo */ }
+                completada = true;
+              }
+            }
           } else {
             // Sin jugadores no-INV encontrados para esta fecha → la tratamos como completada
             // para no mostrar el botón innecesariamente (edge case: líneas solo con INV).
