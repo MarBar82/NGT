@@ -262,6 +262,13 @@ function cargarHoyoLive_(params) {
   }
   if (lineaIdx < 0) return { ok: false, error: 'No autorizado para cargar en esta línea' };
 
+  // Si el jugador ya firmó su tarjeta (apretó "Finalizar Ronda"), su ronda ya
+  // quedó cerrada — no se puede seguir cargando ni corrigiendo hoyos, aunque
+  // la fecha siga en juego para el resto de las líneas.
+  if (meta.firmados && meta.firmados[jugStr] && !isAdmin) {
+    return { ok: false, error: 'Esta tarjeta ya fue finalizada — no se puede modificar' };
+  }
+
   // score: null/'' borra; entero 1-15 guarda
   let scoreVal;
   if (score === null || score === '' || score === undefined) {
@@ -394,7 +401,8 @@ function getLineaLive_(fecha, matricula, lineaNum) {
   if (lineaIdx < 0) return { ok: false, error: 'No pertenecés a ninguna línea de esta fecha' };
 
   const snap = buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap);
-  return Object.assign({ ok: true, soloLectura: false }, snap || {});
+  const yaFirmo = !!(meta.firmados && meta.firmados[matStr]);
+  return Object.assign({ ok: true, soloLectura: yaFirmo }, snap || {});
 }
 
 function getBonusEstado_(params) {

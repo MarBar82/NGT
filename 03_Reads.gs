@@ -482,6 +482,9 @@ function getMisFechas_(matricula) {
   const data = sh.getRange(2, 1, nextEmpty - 2, 25).getValues();
   const out = [];
   const canchasNeeded = {}; // canchaId → true
+  // FECHA_META trae m.firmados — necesario para saber si ESTE jugador ya
+  // apretó "Finalizar Ronda" en cada fecha (ver getFechaActiva_).
+  const metaMisFechas = JSON.parse(PropertiesService.getDocumentProperties().getProperty('FECHA_META') || '{}');
   data.forEach(function(row, i) {
     const f = String(row[0] || '').trim();
     const m = String(row[1] || '').trim();
@@ -490,10 +493,12 @@ function getMisFechas_(matricula) {
     const canchaName = lookupCanchaName_(canchaId) || canchaId;
     const ct         = String(row[24] || '').trim().toUpperCase();
     const hoyo1      = row[4]; // col E
+    const metaF      = metaMisFechas[f] || {};
     out.push({
       fecha:     f,
       hcp:       row[2] || '',
       hasScores: hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined,
+      firmada:   !!(metaF.firmados && metaF.firmados[m]),
       cancha:    canchaName,
       canchaId:  canchaId,
       colorTee:  ct || 'BLANCAS',
@@ -960,18 +965,17 @@ function getFechaActiva_() {
     const fNum = fechasConLineas[i];
     const m    = meta[String(fNum)];
 
-    // Una fecha está "completada" cuando TODOS los jugadores cargaron sus scores.
-    // Col H (Hoyo 1) es el indicador — si tiene valor, el jugador cargó tarjeta.
-    // El HCP (col E) NO sirve porque se auto-rellena al crear la fecha.
+    // Una fecha está "completada" cuando TODOS los jugadores que la juegan ya
+    // apretaron "Finalizar Ronda" — queda registrado en m.firmados (lo escribe
+    // cargarTarjeta_). Haber cargado los 18 hoyos no alcanza: recién al firmar
+    // se calculan STB/SCORE/MATCH, así que hasta ese momento la fecha sigue
+    // EN JUEGO para ese jugador (puede seguir entrando a revisar su tarjeta).
     const shT = getSheet_(SHEETS.TARJETAS);
     var completada = false;
     if (shT) {
       try {
         const ne = findNextEmptyRow_(shT, 1);
         if (ne > 2) {
-          // A(0)=fecha, B(1)=mat, C(2)=hcp, D(3)=canchaId, E(4)=Hoyo1 — verified against
-          // cargarHoyoLive_ (getRange(rowIdx,4+hoyoNum) → hoyo1=col5=E) and
-          // cargarTarjeta_ (writes from col C: C=hcp,D=canchaId,E=H1).
           const rows = shT.getRange(2, 1, ne - 2, 7).getValues();
           const jugadoresFecha = rows.filter(function(r) {
             const f   = String(r[0] || '').trim();
@@ -979,11 +983,12 @@ function getFechaActiva_() {
             return f === String(fNum) && mat && mat.indexOf('INV') !== 0;
           });
           if (jugadoresFecha.length > 0) {
-            const conScores = jugadoresFecha.filter(function(r) {
-              const hoyo1 = r[4]; // col E — only has a value when the player's scorecard was saved
-              return hoyo1 !== '' && hoyo1 !== null && hoyo1 !== undefined && hoyo1 !== false;
+            const firmados = m.firmados || {};
+            const conFirma = jugadoresFecha.filter(function(r) {
+              const mat = String(r[1] || '').trim();
+              return !!firmados[mat];
             });
-            completada = conScores.length === jugadoresFecha.length;
+            completada = conFirma.length === jugadoresFecha.length;
           } else {
             // Sin jugadores no-INV encontrados para esta fecha → la tratamos como completada
             // para no mostrar el botón innecesariamente (edge case: líneas solo con INV).

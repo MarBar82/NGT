@@ -7324,7 +7324,7 @@ function showMitFechas(preloadedPromise){
     // Solo mostrar la fecha más reciente (fechas viene ordenado desc). Las anteriores
     // ya están cerradas y no hay nada que el jugador deba hacer con ellas.
     const f = fechas[0];
-    if(!f || f.hasScores){
+    if(!f || f.firmada){
       list.innerHTML = '<div class="s dim" style="text-align:center;padding:32px 24px;font-family:\'Barlow Condensed\',sans-serif;font-size:16px;">No tenés tarjetas pendientes</div>';
       return;
     }
@@ -8146,11 +8146,19 @@ function liveRenderComplete(){
       '<div class="live-sum-stat">Gross ' + (jug.grossParcial || 0) + ' · STB ' + (jug.stbTotal !== null ? jug.stbTotal : '–') + '</div></div>' +
     '</div>';
   });
-  html += '</div>' +
-    '<div id="live-complete-actions" class="adm-card-body" style="border-top:1px solid var(--g1);display:flex;gap:8px;padding-top:12px;">' +
-    '<button class="adm-btn-primary" onclick="liveFinalizar()" style="flex:1;font-size:14px;padding:10px;">🏁 Finalizar Ronda</button>' +
-    '<button class="adm-btn" onclick="liveRevisarTarjetas()" style="flex:1;font-size:14px;padding:10px;">📋 Revisar Tarjetas</button>' +
-    '</div></div>';
+  html += '</div>';
+  if(d.soloLectura){
+    html +=
+      '<div id="live-complete-actions" class="adm-card-body" style="border-top:1px solid var(--g1);padding-top:12px;text-align:center;">' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;color:var(--g4);line-height:1.5;">✅ Ya finalizaste tu ronda — tu tarjeta quedó cerrada.<br>Podés seguir viendo cómo van los demás en la pestaña "Match".</div>' +
+      '</div></div>';
+  } else {
+    html +=
+      '<div id="live-complete-actions" class="adm-card-body" style="border-top:1px solid var(--g1);display:flex;gap:8px;padding-top:12px;">' +
+      '<button class="adm-btn-primary" onclick="liveFinalizar()" style="flex:1;font-size:14px;padding:10px;">🏁 Finalizar Ronda</button>' +
+      '<button class="adm-btn" onclick="liveRevisarTarjetas()" style="flex:1;font-size:14px;padding:10px;">📋 Revisar Tarjetas</button>' +
+      '</div></div>';
+  }
   document.getElementById('live-complete-view').innerHTML = html;
 }
 
@@ -8272,6 +8280,7 @@ function renderTarjeta18HoyosEditable(jug, pares, indices){
 
 function liveOpenScoreModal(hoyo, mat){
   if(!LIVE_LINEA_DATA) return;
+  if(LIVE_LINEA_DATA.soloLectura) return; // ya firmaste — tu tarjeta quedó cerrada
   LIVE_HOYO = hoyo;
   LIVE_TARGET_MAT = mat;
   MIT_CUR_HOLE = hoyo - 1;

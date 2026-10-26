@@ -703,6 +703,19 @@ function cargarTarjeta_(params) {
     } catch (eHm) { /* No bloquea el guardado de la tarjeta */ }
   }
 
+  // Marcar al jugador como "firmado" para esta fecha — es la señal que usan
+  // getFechaActiva_ (fecha EN JUEGO vs. completada) y getMisFechas_ (acceso al
+  // live scoring). Haber cargado los 18 hoyos no alcanza: recién acá, al
+  // terminar "Finalizar Ronda", la fecha queda cerrada para este jugador.
+  try {
+    const propsFm = PropertiesService.getDocumentProperties();
+    const metaFm  = JSON.parse(propsFm.getProperty('FECHA_META') || '{}');
+    if (!metaFm[fStr]) metaFm[fStr] = {};
+    if (!metaFm[fStr].firmados) metaFm[fStr].firmados = {};
+    metaFm[fStr].firmados[mStr] = true;
+    propsFm.setProperty('FECHA_META', JSON.stringify(metaFm));
+  } catch (eFm) { /* No bloquea el guardado de la tarjeta */ }
+
   audit_('CARGAR_TARJETA', isAdmin ? 'admin' : matricula, { fecha, matricula, hcp, scores, ld, ba, usarDoble, dobleMsg });
   try { CacheService.getScriptCache().remove('fechaRes_' + String(fecha)); } catch(e) {}
   return { ok: true, dobleMsg: dobleMsg };
