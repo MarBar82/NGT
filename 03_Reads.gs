@@ -411,8 +411,8 @@ function getMatchesFullForFecha_(fecha) {
 
     const hcpA   = parseFloat(tarjA[2]);
     const hcpB   = parseFloat(tarjB[2]);
-    const hcp85A = isNaN(hcpA) ? 0 : hcpA;
-    const hcp85B = isNaN(hcpB) ? 0 : hcpB;
+    const hcp85A = isNaN(hcpA) ? 0 : Math.round(hcpA * 0.85);
+    const hcp85B = isNaN(hcpB) ? 0 : Math.round(hcpB * 0.85);
     const ayA = Math.max(0, hcp85A - hcp85B);
     const ayB = Math.max(0, hcp85B - hcp85A);
     const bcA = Math.max(0, ayA - 18);
@@ -436,8 +436,8 @@ function getMatchesFullForFecha_(fecha) {
     matches.push({
       j1Name:   jug1.nombre || p.matA,
       j2Name:   jug2.nombre || p.matB,
-      j1Hcp:    hcp85A,
-      j2Hcp:    hcp85B,
+      j1Hcp:    isNaN(hcpA) ? null : hcpA,
+      j2Hcp:    isNaN(hcpB) ? null : hcpB,
       j1Scores: netA,
       j2Scores: netB,
       j1Result: p.resA,

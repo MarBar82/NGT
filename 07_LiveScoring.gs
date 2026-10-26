@@ -185,7 +185,7 @@ function buildLineaSnapshot_(fStr, lineaIdx, meta, jugMap) {
         net2arr[h] = g2 + adj2;
       }
     }
-    const mr = calcularResultadoMatch_(net1arr, net2arr);
+    const mr = calcularResultadoMatch_(net1arr, net2arr, meta.hoyoSalida);
     const diff      = mr.diff;
     const remaining = mr.remaining;
     const abs       = Math.abs(diff);
@@ -540,10 +540,21 @@ function setBonusHoyo_(params) {
  *   resA/resB: "2&1", "3 UP", "AS", or "" (loser)
  *   mPtsA/mPtsB: 0=lost, 3=halved, 6=won
  */
-function calcularResultadoMatch_(netA, netB) {
+function calcularResultadoMatch_(netA, netB, hoyoSalida) {
+  // Recorre los hoyos en el orden real en que se jugaron (respeta el hoyo de
+  // salida de la fecha), igual que recalcularMatchesFecha_ — así el cierre del
+  // match ("3&2", "2 UP", etc.) es el mismo sin importar qué pantalla lo calcule.
+  var holeOrder = [];
+  if (hoyoSalida === 10) {
+    for (var ho = 9; ho < 18; ho++) holeOrder.push(ho);
+    for (var ho = 0; ho < 9;  ho++) holeOrder.push(ho);
+  } else {
+    for (var ho = 0; ho < 18; ho++) holeOrder.push(ho);
+  }
   var ptsA = 0, ptsB = 0, played = 0;
   var detail = new Array(18).fill(null);
-  for (var h = 0; h < 18; h++) {
+  for (var pos = 0; pos < 18; pos++) {
+    var h = holeOrder[pos];
     var a = netA[h], b = netB[h];
     if (a === null || a === '' || a === undefined || b === null || b === '' || b === undefined) continue;
     var na = Number(a), nb = Number(b);

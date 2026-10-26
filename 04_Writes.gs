@@ -431,6 +431,11 @@ function cargarTarjeta_(params) {
   const fStr = String(fecha);
   const mStr = String(matricula);
 
+  // hoyoSalida de la fecha — para que el cierre del match ("3&2", "2 UP", etc.)
+  // respete el orden real en que se jugaron los hoyos, igual que recalcularMatchesFecha_.
+  const metaCT = getFechaMeta_(fStr);
+  const hoyoSalidaCT = (metaCT && metaCT.hoyoSalida) ? parseInt(metaCT.hoyoSalida) : 1;
+
   // Cancha data (cached — fast after first fetch)
   const canchaId   = existingRow[3];
   const cd         = canchaId
@@ -518,7 +523,7 @@ function cargarTarjeta_(params) {
           oppNet[h] = (oppG !== null && !isNaN(oppG)) ? oppG + adjOpp : '';
         }
 
-        const matchCalc = calcularResultadoMatch_(myNet, oppNet);
+        const matchCalc = calcularResultadoMatch_(myNet, oppNet, hoyoSalidaCT);
         const myX  = matchCalc.resA;
         const oppX = matchCalc.resB;
         const myY  = matchCalc.mPtsA;
