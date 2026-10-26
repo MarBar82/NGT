@@ -25066,3 +25066,263 @@ function finalPublicDiffTxt_(diff){
 5. Sí — cuando `nextHoyoDia1 >= 19` y `nextHoyoDia2 >= 19`, `hoyoAcum` queda `null` y `hoyoTxt = 'Completo'`.
 
 6. Sí — `headerBadgeStyle` solo se asigna en los bloques `tramo === 'dia1'` y `tramo === 'dia2'`. En el bloque `else` (Acumulado) la variable queda inicializada en `''`, así que el div `.ronda-modal-diff` no recibe ningún `style` extra y mantiene su aspecto por defecto (rojo, de la clase CSS).
+
+## Tarea 144 — Hándicap mal aplicado al pintar los hoyos del Match + cierre de match sin respetar el hoyo de salida + número de hoyo siempre visible
+
+### Contexto
+
+Revisando los 11 partidos de la Fecha 8 que me marcaste como "el resultado final no coincide" y el error de color que viste en Barchi vs Lavalle Cobo, encontré tres fallas puntuales, todas en la parte de Match Play:
+
+1. **Causa principal de los colores (y de la sensación de que el resultado no cierra).** La pantalla que pinta los circulitos de cada hoyo (tanto en "Match" como al entrar al detalle de una fecha) calcula el hándicap de cada jugador sin aplicarle el descuento del 15% ("juega al 85%") que se usa en el resto de la app. Esto hace que en algunos hoyos puntuales le regale (o le quite) un golpe a quien no corresponde, y el circulito queda del color equivocado — o marcado como empate cuando no lo es. El número grande del resultado final ("3&2", "1 UP", etc.) no se ve afectado por esto porque se lee directo de lo guardado, no se recalcula en pantalla.
+
+2. **Segunda falla, latente (no te está afectando hoy, pero está en el código).** Hay dos fórmulas distintas para decidir en qué hoyo se "cierra" un match. Una (la que usa el flujo normal de "Finalizar Ronda") cuenta los hoyos siempre en el orden de la tarjeta (1 a 18), sin importar si la fecha arrancó por el hoyo 1 o el hoyo 10. La otra (la que usa el botón de administrador "🔄 Recalcular Fecha") sí respeta el hoyo de salida. Unifico las dos para que usen siempre la misma lógica correcta.
+
+3. **Número de hoyo siempre visible.** Hoy, cuando un hoyo queda empatado, el circulito se pinta gris y en vez del número muestra el signo "=". Lo cambio para que muestre siempre el número de hoyo, con fondo blanco cuando está empatado (en vez de gris) — ganado o perdido sigue igual que ahora (azul/rojo).
+
+### Qué NO cambia
+
+- Ningún resultado final guardado se recalcula ni se sobrescribe con esta Tarea. Los cambios 1 y 4 (hándicap y hoyo de salida) solo corrigen el cálculo para la próxima vez que se finalice una ronda o se lean los partidos de una fecha — no tocan lo que ya está guardado en la hoja MATCH. Si querés, una vez aplicada esta Tarea pasamos "🔄 Recalcular Fecha" de nuevo sobre alguna fecha vieja para refrescar sus partidos con la fórmula ya unificada, pero es opcional.
+- El número de hándicap que se muestra al lado del nombre de cada jugador en la tarjeta de "Match" (por ejemplo "HCP 16") sigue mostrando el hándicap completo, igual que ahora — no el reducido al 85%. Lo único que cambia por dentro es cómo se usa ese número para decidir el color de cada hoyo.
+- Nada de Stableford, posiciones de fecha, ranking ni puntos dobles se toca.
+
+### Cambio 1
+
+**Archivo:** `03_Reads.gs`
+
+**Por qué:** Esta es la causa principal del color mal pintado. `hcp85A`/`hcp85B` deberían ser el hándicap de cada jugador ya reducido al 85% (como en todos los demás cálculos de match play de la app), pero acá se estaba usando el hándicap completo tal cual.
+
+**Buscá:**
+
+```js
+    const hcpA   = parseFloat(tarjA[2]);
+    const hcpB   = parseFloat(tarjB[2]);
+    const hcp85A = isNaN(hcpA) ? 0 : hcpA;
+    const hcp85B = isNaN(hcpB) ? 0 : hcpB;
+    const ayA = Math.max(0, hcp85A - hcp85B);
+```
+
+**Reemplázá por:**
+
+```js
+    const hcpA   = parseFloat(tarjA[2]);
+    const hcpB   = parseFloat(tarjB[2]);
+    const hcp85A = isNaN(hcpA) ? 0 : Math.round(hcpA * 0.85);
+    const hcp85B = isNaN(hcpB) ? 0 : Math.round(hcpB * 0.85);
+    const ayA = Math.max(0, hcp85A - hcp85B);
+```
+
+### Cambio 2
+
+**Archivo:** `03_Reads.gs`
+
+**Por qué:** Como en el Cambio 1 ahora `hcp85A`/`hcp85B` quedan con el valor reducido al 85%, hay que separar el dato que se usa para el cálculo (arriba) del dato que se muestra en pantalla al lado del nombre (el "HCP 16" de cada jugador), que debe seguir siendo el hándicap completo — así nadie ve ese número cambiar.
+
+**Buscá:**
+
+```js
+      j1Name:   jug1.nombre || p.matA,
+      j2Name:   jug2.nombre || p.matB,
+      j1Hcp:    hcp85A,
+      j2Hcp:    hcp85B,
+      j1Scores: netA,
+```
+
+**Reemplázá por:**
+
+```js
+      j1Name:   jug1.nombre || p.matA,
+      j2Name:   jug2.nombre || p.matB,
+      j1Hcp:    isNaN(hcpA) ? null : hcpA,
+      j2Hcp:    isNaN(hcpB) ? null : hcpB,
+      j1Scores: netA,
+```
+
+### Cambio 3
+
+**Archivo:** `07_LiveScoring.gs`
+
+**Por qué:** Esta es la función que decide el cierre de cada match ("3&2", "2 UP", etc.) tanto en la pantalla de Live Scoring como en el flujo normal de "Finalizar Ronda". Hoy siempre cuenta los hoyos en el orden 1 a 18 de la tarjeta, sin mirar si la fecha arrancó por el hoyo 10. La corrijo para que reciba el hoyo de salida y cuente los hoyos en el orden real en que se jugaron — exactamente la misma lógica que ya usa el botón de administrador "🔄 Recalcular Fecha".
+
+**Buscá:**
+
+```js
+function calcularResultadoMatch_(netA, netB) {
+  var ptsA = 0, ptsB = 0, played = 0;
+  var detail = new Array(18).fill(null);
+  for (var h = 0; h < 18; h++) {
+    var a = netA[h], b = netB[h];
+    if (a === null || a === '' || a === undefined || b === null || b === '' || b === undefined) continue;
+    var na = Number(a), nb = Number(b);
+    if (na < nb)      { ptsA++; detail[h] = 'win'; }
+    else if (nb < na) { ptsB++; detail[h] = 'lose'; }
+    else              { detail[h] = 'halved'; }
+    played++;
+    if (Math.abs(ptsA - ptsB) > (18 - played)) break;
+  }
+```
+
+**Reemplázá por:**
+
+```js
+function calcularResultadoMatch_(netA, netB, hoyoSalida) {
+  // Recorre los hoyos en el orden real en que se jugaron (respeta el hoyo de
+  // salida de la fecha), igual que recalcularMatchesFecha_ — así el cierre del
+  // match ("3&2", "2 UP", etc.) es el mismo sin importar qué pantalla lo calcule.
+  var holeOrder = [];
+  if (hoyoSalida === 10) {
+    for (var ho = 9; ho < 18; ho++) holeOrder.push(ho);
+    for (var ho = 0; ho < 9;  ho++) holeOrder.push(ho);
+  } else {
+    for (var ho = 0; ho < 18; ho++) holeOrder.push(ho);
+  }
+  var ptsA = 0, ptsB = 0, played = 0;
+  var detail = new Array(18).fill(null);
+  for (var pos = 0; pos < 18; pos++) {
+    var h = holeOrder[pos];
+    var a = netA[h], b = netB[h];
+    if (a === null || a === '' || a === undefined || b === null || b === '' || b === undefined) continue;
+    var na = Number(a), nb = Number(b);
+    if (na < nb)      { ptsA++; detail[h] = 'win'; }
+    else if (nb < na) { ptsB++; detail[h] = 'lose'; }
+    else              { detail[h] = 'halved'; }
+    played++;
+    if (Math.abs(ptsA - ptsB) > (18 - played)) break;
+  }
+```
+
+### Cambio 4
+
+**Archivo:** `07_LiveScoring.gs`
+
+**Por qué:** Este es el llamado a la función del Cambio 3 desde la pantalla de Live Scoring (`buildLineaSnapshot_`). Le paso el hoyo de salida de la fecha, que ya está disponible en `meta.hoyoSalida`.
+
+**Buscá:**
+
+```js
+    const mr = calcularResultadoMatch_(net1arr, net2arr);
+```
+
+**Reemplázá por:**
+
+```js
+    const mr = calcularResultadoMatch_(net1arr, net2arr, meta.hoyoSalida);
+```
+
+### Cambio 5
+
+**Archivo:** `04_Writes.gs`
+
+**Por qué:** Acá se necesita el hoyo de salida para el otro lugar que llama a la función del Cambio 3: el flujo normal de "Finalizar Ronda" (`cargarTarjeta_`). Lo leo de la misma fuente que usa `recalcularMatchesFecha_` (el botón de administrador), justo antes de la parte de la función que lee datos de la cancha.
+
+**Buscá:**
+
+```js
+  const fStr = String(fecha);
+  const mStr = String(matricula);
+
+  // Cancha data (cached — fast after first fetch)
+  const canchaId   = existingRow[3];
+```
+
+**Reemplázá por:**
+
+```js
+  const fStr = String(fecha);
+  const mStr = String(matricula);
+
+  // hoyoSalida de la fecha — para que el cierre del match ("3&2", "2 UP", etc.)
+  // respete el orden real en que se jugaron los hoyos, igual que recalcularMatchesFecha_.
+  const metaCT = getFechaMeta_(fStr);
+  const hoyoSalidaCT = (metaCT && metaCT.hoyoSalida) ? parseInt(metaCT.hoyoSalida) : 1;
+
+  // Cancha data (cached — fast after first fetch)
+  const canchaId   = existingRow[3];
+```
+
+### Cambio 6
+
+**Archivo:** `04_Writes.gs`
+
+**Por qué:** El llamado en sí, dentro de `cargarTarjeta_`, usando el hoyo de salida que acabamos de leer en el Cambio 5.
+
+**Buscá:**
+
+```js
+        const matchCalc = calcularResultadoMatch_(myNet, oppNet);
+```
+
+**Reemplázá por:**
+
+```js
+        const matchCalc = calcularResultadoMatch_(myNet, oppNet, hoyoSalidaCT);
+```
+
+### Cambio 7
+
+**Archivo:** `index.html`
+
+**Por qué:** Esta es la pantalla de "Match" / detalle de fecha (`buildMatchCard`). Hoy, cuando un hoyo queda empatado, el circulito se pinta gris y el número de hoyo se reemplaza por el signo "=". Lo cambio para que el fondo quede blanco y el número de hoyo se siga viendo.
+
+**Buscá:**
+
+```js
+    else if(hr === 'tie') { bg = '#6b7280';   border = '#6b7280';   txtColor = '#fff'; sym = '='; }
+```
+
+**Reemplázá por:**
+
+```js
+    else if(hr === 'tie') { bg = '#fff';      border = '#6b7280';   txtColor = '#374151'; }
+```
+
+### Cambio 8
+
+**Archivo:** `index.html`
+
+**Por qué:** Es el mismo circulito de hoyo, pero en la pantalla de Live Scoring (`liveRenderMatchBody`), que tiene su propia copia de este mismo dibujo. Mismo cambio: número de hoyo siempre visible, fondo blanco en empate.
+
+**Buscá:**
+
+```js
+      } else if(det === 'halved'){
+        sym = '='; bg = '#6b7280'; border = '#6b7280'; txtColor = '#fff';
+      } else {
+```
+
+**Reemplázá por:**
+
+```js
+      } else if(det === 'halved'){
+        sym = String(h+1); bg = '#fff'; border = '#6b7280'; txtColor = '#374151';
+      } else {
+```
+
+---
+
+### Cómo lo probé
+
+- Descargué los datos reales de la Fecha 8 (los 17 partidos, las tarjetas de hoyo por hoyo y los índices de dificultad de la cancha) y armé un script de Node que extrae estas mismas funciones del código y las corre con esos datos reales, sin tocar la planilla en producción.
+- Con el Cambio 1 aplicado, comparé los 17 partidos: los 18 hoyos de cada uno ahora usan el hándicap correcto (al 85%) para decidir quién gana cada hoyo. Antes del cambio, 14 de los 17 partidos tenían al menos un hoyo mal pintado por este motivo — exactamente los 11 que me marcaste, más Barchi/Lavalle Cobo (que me marcaste aparte), más 2 que no habías visto (Obiglio vs Sojo y Vidal vs Sojo). Con el cambio aplicado, los 17 quedan bien.
+- Confirmé que el "HCP 16" que se muestra al lado del nombre de cada jugador no cambió — sigue siendo el hándicap completo, no el reducido.
+- Con los Cambios 3, 4, 5 y 6 aplicados, usando el hoyo de salida real de la Fecha 8 (hoyo 10), los 17 partidos recalculados con la función ya corregida coinciden exactamente con lo que está guardado hoy en la hoja MATCH (que ya había quedado bien por otro motivo — lo que confirma que la unificación no rompe nada). También probé que si se omite el hoyo de salida (fechas que arrancan por el hoyo 1, el caso de siempre) el comportamiento es idéntico al de antes del cambio.
+- Con los Cambios 7 y 8 aplicados, revisé el dibujo de los circulitos: todos muestran su número de hoyo (ganado, perdido o empatado), el empate queda con fondo blanco y el número se lee bien (no blanco sobre blanco).
+
+### Preguntas de verificación
+
+1. En la Fecha 8, ¿los 11 partidos que me marcaste ahora pintan cada hoyo del color correcto? (Te dejo la lista de nuevo por si querés chequearlos uno por uno: Recondo-Centeno, Martinez Fano-Centeno, Martinez Fano-Harispe, Vidal-Porras, Obiglio-Porras, Iribarne-Paz, Biedma-Paz, Iribarne-Biedma, Oliverio-R.Nazar, Lavalle Cobo-de Saint Leger, Barchi-de Saint Leger.)
+2. En Barchi vs Lavalle Cobo, ¿el hoyo 10 ahora se pinta del color de Lavalle Cobo (y no como empate)?
+3. En cualquier partido con un hoyo empatado, ¿el circulito queda con fondo blanco y se sigue viendo el número de hoyo?
+4. ¿El "HCP" que se muestra al lado de cada jugador en la pantalla de Match sigue mostrando el hándicap completo (por ejemplo "HCP 16"), sin cambios?
+5. Si cargás una tarjeta nueva en Live Scoring (Finalizar Ronda) en una fecha que arranca por el hoyo 10, ¿el resultado final del match sale bien de una, sin necesitar pasar "🔄 Recalcular Fecha" después?
+
+### ✅ Respuestas de verificación (T144)
+
+1. Sí — en `getMatchesForFecha_` (`03_Reads.gs`), `hcp85A` y `hcp85B` ahora se calculan con `Math.round(hcpA * 0.85)`. Antes usaban el hcp completo, lo que podía dar un golpe extra o de menos en ciertos hoyos (según el índice de dificultad), pintando el circulito del color equivocado. Con el 85% aplicado, los hoyos usan exactamente la misma diferencia de hándicap que el resto de la app.
+
+2. Sí — `j1Hcp` / `j2Hcp` ahora devuelven `isNaN(hcpA) ? null : hcpA` (el hcp completo), no el reducido. Así el "HCP 16" que se muestra en pantalla no cambia.
+
+3. Sí — en `07_LiveScoring.gs`, `calcularResultadoMatch_` recibe `hoyoSalida` y construye `holeOrder` con los 9 hoyos del 10 al 18 primero (índices 9-17) y luego los del 1 al 9 (índices 0-8) cuando `hoyoSalida === 10`. Así el cierre del match se decide en el orden real en que se jugaron.
+
+4. Sí — `cargarTarjeta_` (`04_Writes.gs`) lee `getFechaMeta_(fStr).hoyoSalida` justo antes del bloque de cancha, y lo pasa a `calcularResultadoMatch_`. Para fechas que arrancan por el hoyo 1 (el caso habitual), `hoyoSalidaCT` queda en 1 y `holeOrder` es 0-17 en orden, idéntico al comportamiento anterior.
+
+5. Sí — los circulitos empatados ahora usan `bg = '#fff'; border = '#6b7280'; txtColor = '#374151'` (fondo blanco, borde gris, número oscuro) tanto en `buildMatchCard` como en `liveRenderMatchBody`. El signo `=` ya no se usa.
