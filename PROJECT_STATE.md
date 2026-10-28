@@ -26617,3 +26617,283 @@ function finalPublicStandingsDia2Html_(stR){
 2. Sí — `finalDia2SoloTableHtml_` tiene las mismas 7 columnas. Un jugador que todavía no arrancó el Día 2 muestra `s.hcpJuego2` en la columna Hcp y "–" en Gross/Neto; su fila tiene `opacity:.55` y el texto "sin arrancar" en la columna Hoyo (Cambio 1).
 3. Sí — `finalPublicStandingsDia2Html_` tiene 11 columnas: pos, Jugador, Gross/Hcp/Neto Día 1, Gross/Hcp/Neto Día 2, D1-D2, Favor, Total. `netoDia1Puro = s.grossDia1 - s.hcpJuegoDia1` (sin golpes a favor); `sumaNetos = netoDia1Puro + s.netoDia2`; `netoTotal` (TOTAL) es el mismo número que antes. Si el jugador todavía no arrancó el Día 2, Gross y Neto del Día 2 se muestran en "–" con clase `dim`; el Hcp del Día 2 sí se muestra (Cambio 4).
 4. Sí — en `finalLiveFinalizar`, después del `Promise.all` exitoso, se agregó `if(FINAL_LIVE_DIA === 2) finalLiveSetTab('acumulado')`. Al terminar el Día 1 no se llama (la condición no se cumple) y seguís viendo el mensaje de tarjeta cerrada (Cambio 2).
+
+## Tarea 149 — Color y diseño en las tablas de resultados de la Fecha Final (Día 1, Día 2, Acumulado)
+
+### Contexto
+
+Después de la Tarea 148 (que rediseñó las columnas de estas 3 tablas), Marco pidió:
+
+1. Ponerle color a los datos — hoy todo se ve en negro/gris plano.
+2. Regla de color para "Neto": en par o bajo par = **verde**, sobre par = **rojo**. Misma regla para "Al par".
+3. El Hcp en otro color, que no sea negro.
+4. En la tabla Acumulado, agregar una columna "Al par" (el total, sumando los 2 días) justo después de "D1-D2".
+5. Una línea separadora fina entre el bloque del Día 1 y el del Día 2, y entre el bloque del Día 2 y "D1-D2" (con un poco más de espacio ahí), para distinguir mejor los 2 días del total.
+6. Las 3 tablas con los mismos colores y reglas de diseño.
+
+**No hace falta tocar nada del backend (los archivos `.gs`)** — toda la información que faltaba (el "Al par" del Día 1, del Día 2 y el total acumulado) ya la calcula el backend desde la Tarea 148; solo faltaba mostrarla con color en la pantalla. Este Tarea es 100% de `index.html`.
+
+### Qué NO cambia
+
+- Ningún archivo `.gs` del backend.
+- La cantidad de columnas de las tablas Día 1 y Día 2 (siguen con 7).
+- Los valores que se muestran (Gross, Hcp, Neto, D1-D2, Favor, Total) — solo cambia el color y, en el Acumulado, se agrega una columna nueva.
+- El criterio de color que usan OTRAS pantallas de la app con `finalPublicDiffTxt_` (el resumen en vivo de las líneas, el "Al par" en el resumen del día en la tarjeta, el podio final) — esa función sigue intacta, se usa una función nueva (`finalTablaAlParTxt_`) solo para estas 3 tablas, con su propio criterio de color.
+
+### Criterio de color (igual en las 3 tablas)
+
+- **Neto** (de cada día) y **Al par**: si el jugador está en par o por debajo del par, el número se ve en **verde**. Si está por encima del par, en **rojo**. Un empate exacto con el par ("E" o el Neto exacto) cuenta como verde.
+- **Hcp**: siempre en gris (no negro), para que no compita visualmente con el Neto.
+- **Gross** y **Hoyo**: sin cambios de color.
+
+### Cambio 1 — Tabla Día 2: color en Hcp, Neto y Al par
+
+**Archivo:** `index.html`
+
+**Buscá:**
+```js
+        '<td class="c"><span class="s">' + s.grossDia2 + '</span></td>' +
+        '<td class="c"><span class="s">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c"><span class="s">' + s.netoDia2 + '</span></td>' +
+        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(s.alParDia2) + '</span></td>' +
+```
+
+**Reemplázá por:**
+```js
+        '<td class="c"><span class="s">' + s.grossDia2 + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(s.alParDia2) + ';">' + s.netoDia2 + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(s.alParDia2) + '</td>' +
+```
+
+### Cambio 2 — Nuevas funciones de color (las usan las 3 tablas)
+
+**Archivo:** `index.html`
+
+**Buscá:**
+```js
+function finalPublicDiffTxt_(diff){
+  if(diff === null || diff === undefined) return '–';
+  if(diff === 0) return '<span style="color:var(--text);">E</span>';
+  return diff > 0
+    ? '<span style="color:var(--red);">+' + diff + '</span>'
+    : '<span style="color:var(--green);">' + diff + '</span>';
+}
+
+// Tabla genérica de posiciones NETO -- la usan el visor público del Día 1
+```
+
+**Reemplázá por:**
+```js
+function finalPublicDiffTxt_(diff){
+  if(diff === null || diff === undefined) return '–';
+  if(diff === 0) return '<span style="color:var(--text);">E</span>';
+  return diff > 0
+    ? '<span style="color:var(--red);">+' + diff + '</span>'
+    : '<span style="color:var(--green);">' + diff + '</span>';
+}
+
+// Color para la columna "Neto" y "Al par" de las 3 tablas de resultados de
+// la Fecha Final (Día 1, Día 2, Acumulado): en par o bajo par = verde,
+// sobre par = rojo. `diff` es la diferencia respecto al par -- si es null
+// (todavía no se jugó ningún hoyo) no se aplica color (queda el default).
+function finalTablaDiffColor_(diff){
+  if(diff === null || diff === undefined) return '';
+  return diff > 0 ? 'var(--red)' : 'var(--green)';
+}
+
+// Texto "Al par" (+2 / E / -3) de las 3 tablas de resultados de la Final --
+// a propósito NO es finalPublicDiffTxt_ (esa la usan otras pantallas, como
+// el resumen en vivo, con un criterio de color distinto: ahí un empate con
+// el par queda neutro). Acá el criterio es el mismo que el de la columna
+// "Neto" de estas 3 tablas (finalTablaDiffColor_) -- un empate con el par
+// cuenta como verde, para que nunca se vea un Neto en verde al lado de un
+// "E" en otro color en la misma fila.
+function finalTablaAlParTxt_(diff){
+  if(diff === null || diff === undefined) return '<span class="s dim">–</span>';
+  var txt = diff === 0 ? 'E' : (diff > 0 ? '+' + diff : String(diff));
+  return '<span class="s big" style="color:' + finalTablaDiffColor_(diff) + ';">' + txt + '</span>';
+}
+
+// Tabla genérica de posiciones NETO -- la usan el visor público del Día 1
+```
+
+### Cambio 3 — Tabla Día 1: color en Hcp, Neto y Al par
+
+**Archivo:** `index.html`
+
+**Buscá:**
+```js
+        '<td class="c"><span class="s">' + s.gross + '</span></td>' +
+        '<td class="c"><span class="s">' + s.hcpJuego + '</span></td>' +
+        '<td class="c"><span class="s">' + (s.gross - s.hcpJuego) + '</span></td>' +
+        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(s.alPar) + '</span></td>' +
+```
+
+**Reemplázá por:**
+```js
+        '<td class="c"><span class="s">' + s.gross + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(s.alPar) + ';">' + (s.gross - s.hcpJuego) + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(s.alPar) + '</td>' +
+```
+
+### Cambio 4 — Tabla Acumulado: comentario actualizado (documentación)
+
+**Archivo:** `index.html`
+
+**Buscá:**
+```js
+// Tabla del acumulado de las 36 hoyos (Día 1 + Día 2) -- un bloque de 3
+// columnas (Gross/Hcp/Neto) por cada día, más D1-D2 (suma de los 2 netos,
+// sin golpes a favor), Favor y el TOTAL final (D1-D2 + Favor). El "Neto" de
+// cada día es siempre gross - hcp de ese día, SIN golpes a favor (esos solo
+// se suman una vez, en el TOTAL) -- por eso es distinto del `neto` que ya
+// trae getFinalStandingsDia1_ (ese sí incluye golpesFavor, porque se usa
+// para ordenar/armar las líneas del Día 2). Se muestra EN VIVO desde que
+// arranca el Día 2 -- mientras el jugador no cargó ningún hoyo todavía
+// (netoDia2 === null), el bloque del Día 2 se ve en gris con un "–".
+function finalPublicStandingsDia2Html_(stR){
+```
+
+**Reemplázá por:**
+```js
+// Tabla del acumulado de las 36 hoyos (Día 1 + Día 2) -- un bloque de 3
+// columnas (Gross/Hcp/Neto) por cada día, más D1-D2 (suma de los 2 netos,
+// sin golpes a favor), el Al par total (diffTotal, ya calculado en
+// getFinalStandingsDia2_), Favor y el TOTAL final (D1-D2 + Favor). El
+// "Neto" de cada día es siempre gross - hcp de ese día, SIN golpes a favor
+// (esos solo se suman una vez, en el TOTAL) -- por eso es distinto del
+// `neto` que ya trae getFinalStandingsDia1_ (ese sí incluye golpesFavor,
+// porque se usa para ordenar/armar las líneas del Día 2). Se muestra EN
+// VIVO desde que arranca el Día 2 -- mientras el jugador no cargó ningún
+// hoyo todavía (netoDia2 === null), el bloque del Día 2 se ve en gris con
+// un "–". Lleva una línea separadora fina (border-left) antes del bloque
+// del Día 2 y antes de D1-D2, para distinguir visualmente los 2 días del
+// total -- mismo criterio de color (finalTablaDiffColor_/finalTablaAlParTxt_)
+// que las tablas de Día 1 y Día 2 (finalStandingsNetoTableHtml_ /
+// finalDia2SoloTableHtml_): en par o bajo par = verde, sobre par = rojo, y
+// el Hcp siempre en gris (var(--g4)), nunca negro.
+function finalPublicStandingsDia2Html_(stR){
+```
+
+### Cambio 5 — Tabla Acumulado: encabezados (separadores + columna "Al par" nueva)
+
+**Archivo:** `index.html`
+
+**Buscá:**
+```js
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">D1-D2</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Golpes a favor de la clasificación de temporada (posiciones 1-8)">Favor</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;background:var(--navy);color:#fff;border-radius:0;" title="Neto total de los 36 hoyos, con los golpes a favor ya aplicados">Total</th>' +
+      '</tr></thead><tbody>';
+  if(!standings.length){
+    html += '<tr><td colspan="11" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+```
+
+**Reemplázá por:**
+```js
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;border-left:1px solid var(--g2);padding-left:16px;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;border-left:1px solid var(--g2);padding-left:16px;">D1-D2</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Golpes a favor de la clasificación de temporada (posiciones 1-8)">Favor</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;background:var(--navy);color:#fff;border-radius:0;" title="Neto total de los 36 hoyos, con los golpes a favor ya aplicados">Total</th>' +
+      '</tr></thead><tbody>';
+  if(!standings.length){
+    html += '<tr><td colspan="12" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+```
+
+### Cambio 6 — Tabla Acumulado: filas (colores + separadores + columna "Al par" nueva)
+
+**Archivo:** `index.html`
+
+**Buscá:**
+```js
+      var netoDia1Puro = s.grossDia1 - s.hcpJuegoDia1;
+      var arrancoDia2 = s.netoDia2 !== null;
+      var sumaNetos = netoDia1Puro + (arrancoDia2 ? s.netoDia2 : 0);
+      var favorTxt = s.golpesFavor ? (s.golpesFavor > 0 ? '+' + s.golpesFavor : String(s.golpesFavor)) : '—';
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'ambos\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s">' + s.grossDia1 + '</span></td>' +
+        '<td class="c"><span class="s">' + s.hcpJuegoDia1 + '</span></td>' +
+        '<td class="c"><span class="s">' + netoDia1Puro + '</span></td>' +
+        '<td class="c"><span class="s' + (arrancoDia2 ? '' : ' dim') + '">' + (arrancoDia2 ? s.grossDia2 : '–') + '</span></td>' +
+        '<td class="c"><span class="s">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c"><span class="s' + (arrancoDia2 ? '' : ' dim') + '">' + (arrancoDia2 ? s.netoDia2 : '–') + '</span></td>' +
+        '<td class="c"><span class="s">' + sumaNetos + '</span></td>' +
+        '<td class="c"><span class="s">' + favorTxt + '</span></td>' +
+        '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + s.netoTotal + '</span></td>' +
+      '</tr>';
+```
+
+**Reemplázá por:**
+```js
+      var netoDia1Puro = s.grossDia1 - s.hcpJuegoDia1;
+      var arrancoDia2 = s.netoDia2 !== null;
+      var sumaNetos = netoDia1Puro + (arrancoDia2 ? s.netoDia2 : 0);
+      var favorTxt = s.golpesFavor ? (s.golpesFavor > 0 ? '+' + s.golpesFavor : String(s.golpesFavor)) : '—';
+      // diffD1/diffD2 en 0 si todavía no hay ningún hoyo jugado ese día (en
+      // vez de null) para que el "Neto" de ese bloque y el "D1-D2" nunca
+      // queden sin color -- mismo criterio que ya usa el ordenamiento más
+      // arriba (getFinalStandingsDia2_: "(a.alParDia1 === null ? 0 : ...)").
+      var diffD1 = (s.alParDia1 === null ? 0 : s.alParDia1);
+      var diffD2 = (s.alParDia2 === null ? 0 : s.alParDia2);
+      var diffSuma = diffD1 + (arrancoDia2 ? diffD2 : 0);
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'ambos\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s">' + s.grossDia1 + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuegoDia1 + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(diffD1) + ';">' + netoDia1Puro + '</span></td>' +
+        '<td class="c" style="border-left:1px solid var(--g2);padding-left:16px;"><span class="s' + (arrancoDia2 ? '' : ' dim') + '">' + (arrancoDia2 ? s.grossDia2 : '–') + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c"><span class="s' + (arrancoDia2 ? '' : ' dim') + '"' + (arrancoDia2 ? ' style="color:' + finalTablaDiffColor_(diffD2) + ';"' : '') + '>' + (arrancoDia2 ? s.netoDia2 : '–') + '</span></td>' +
+        '<td class="c" style="border-left:1px solid var(--g2);padding-left:16px;"><span class="s" style="color:' + finalTablaDiffColor_(diffSuma) + ';">' + sumaNetos + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(s.diffTotal) + '</td>' +
+        '<td class="c"><span class="s">' + favorTxt + '</span></td>' +
+        '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + s.netoTotal + '</span></td>' +
+      '</tr>';
+```
+
+### Cómo lo probé
+
+Armé una copia de prueba del repo y extraje con un script las funciones reales involucradas (`finalPublicDiffTxt_`, `finalTablaDiffColor_`, `finalTablaAlParTxt_`, `finalStandingsNetoTableHtml_`, `finalDia2SoloTableHtml_`, `finalPublicStandingsDia2Html_`) para correrlas con datos de jugadores de prueba (uno sobre el par, uno bajo el par, uno justo en el par, y uno que todavía no arrancó el Día 2) y revisar el HTML que generan: 44 chequeos automáticos, todos en verde. Entre otras cosas confirmé que:
+
+- Un jugador justo en el par se muestra en **verde** (no gris ni rojo) tanto en "Neto" como en "Al par".
+- Un jugador sobre el par se muestra en **rojo**, uno bajo el par en **verde**, en las 3 tablas.
+- El Hcp siempre sale en gris, nunca en negro, en las 3 tablas.
+- El separador fino aparece antes del bloque del Día 2 y antes de "D1-D2" en los encabezados y en cada fila de la tabla Acumulado.
+- La tabla Acumulado ahora tiene 12 columnas (antes 11) y el "sin datos" usa `colspan="12"`.
+- Un jugador que no arrancó el Día 2 sigue mostrando su Gross/Neto del Día 2 en gris con "–" (sin romperse), pero su Hcp del Día 2 y su "D1-D2"/"Al par" (que en ese caso es directamente el del Día 1) sí se muestran con color.
+- Las tablas Día 1 y Día 2 (con una sola columna de Hcp/Neto/Al par cada una) siguen con 7 columnas, sin cambios estructurales.
+
+Antes y después de escribir este documento, además, verifiqué que cada bloque "Buscá" aparece exactamente una vez en el código real (recién clonado de GitHub, commit `fcb9752`), y simulé la aplicación completa de los 6 cambios sobre ese código real: el resultado es **idéntico, byte por byte**, al archivo que efectivamente probé.
+
+### Preguntas de verificación
+
+1. ¿Los números "Neto" y "Al par" se ven en verde cuando el jugador está en par o mejor, y en rojo cuando está sobre el par, en las 3 tablas (Día 1, Día 2 y Acumulado)?
+2. ¿El Hcp se ve en un gris claro, ya no en negro, en las 3 tablas?
+3. ¿En la tabla Acumulado aparece la columna nueva "Al par" (el total de los 2 días) justo después de "D1-D2" y antes de "Favor"?
+4. ¿Se nota la línea separadora fina entre el bloque del Día 1 y el del Día 2, y entre el Día 2 y "D1-D2", en la tabla Acumulado?
+5. ¿Sigue funcionando todo lo demás de la Fecha Final sin cambios (armado de líneas, carga en vivo, Finalizar Ronda, etc.)?
+
+### Respuestas de verificación
+
+1. Sí — las nuevas funciones `finalTablaDiffColor_` (devuelve `var(--green)` si `diff <= 0`, `var(--red)` si `diff > 0`) y `finalTablaAlParTxt_` (idem, texto "E"/"+N"/"-N") se usan en el Neto y Al par de las 3 tablas. Un jugador en par exacto (`diff === 0`) queda en verde, no en gris neutro (Cambios 1, 3, 6).
+2. Sí — las 3 tablas ahora pasan `style="color:var(--g4);"` a la celda del Hcp (Cambios 1, 3, 6).
+3. Sí — Cambio 5 agrega `<th>Al par</th>` después de "D1-D2"; Cambio 6 agrega `finalTablaAlParTxt_(s.diffTotal)` en la celda correspondiente. El colspan del "sin datos" pasó de 11 a 12.
+4. Sí — Cambios 5 y 6 agregan `border-left:1px solid var(--g2);padding-left:16px;` tanto en los encabezados como en cada celda de las columnas "Gross" del Día 2 y "D1-D2".
+5. Sí — solo se tocó `index.html`, solo las funciones que arman el HTML de las 3 tablas de resultados. Todo el código de carga en vivo, Finalizar Ronda y armado de líneas está en otras funciones que no se modificaron.
