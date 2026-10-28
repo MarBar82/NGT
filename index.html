@@ -8775,12 +8775,18 @@ function finalTarjetaCacheMergeDia2_(r){
 function finalTarjetaBloqueDia_(nombreDia, scores, pares, indices, hcpJuego, gross, alPar, mostrarLabel){
   var tarjeta = renderTarjeta18Hoyos(scores || [], pares || [], 'Score', indices || [], [], true, null);
   var label = mostrarLabel ? ('<div style="font-family:\'Oswald\',sans-serif;font-size:13px;font-weight:700;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">' + nombreDia + ' · HCP ' + hcpJuego + '</div>') : '';
-  return label +
+  var grossTxt = (gross !== null && gross !== undefined) ? gross : '–';
+  var hcpTxt = (hcpJuego !== null && hcpJuego !== undefined) ? hcpJuego : '–';
+  var netoTxt = (gross !== null && gross !== undefined && hcpJuego !== null && hcpJuego !== undefined) ? (gross - hcpJuego) : '–';
+  var bloque = label +
     '<div class="ronda-modal-card">' + tarjeta + '</div>' +
     '<div class="perf-ecl-resumen">' +
-      '<div class="perf-ecl-resumen-item"><span class="rlbl">Bruto</span><span class="perf-ecl-par">' + gross + '</span></div>' +
+      '<div class="perf-ecl-resumen-item"><span class="rlbl">Gross</span><span class="perf-ecl-par">' + grossTxt + '</span></div>' +
+      '<div class="perf-ecl-resumen-item"><span class="rlbl">Hcp</span><span class="perf-ecl-par">' + hcpTxt + '</span></div>' +
+      '<div class="perf-ecl-resumen-item"><span class="rlbl">Neto</span><span class="perf-ecl-par">' + netoTxt + '</span></div>' +
       '<div class="perf-ecl-resumen-item"><span class="rlbl">Al par</span><span class="perf-ecl-par">' + finalPublicDiffTxt_(alPar) + '</span></div>' +
     '</div>';
+  return mostrarLabel ? ('<div style="margin-bottom:18px;">' + bloque + '</div>') : bloque;
 }
 
 // Estilo del óvalo grande del header de la tarjeta de la Final -- a
