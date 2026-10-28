@@ -25842,3 +25842,436 @@ El riesgo que marcaste es real y es el importante: si alguien entra ahora a la F
 1. Sí — `getFechaActiva_` detecta que todos los jugadores de la Fecha 8 tienen los 18 hoyos cargados, activa el respaldo, guarda `firmados` en FECHA_META y la marca como completada. La próxima vez que cualquiera entre, ya no la ve.
 2. Sí — una vez que el respaldo corre (primer `getFechaActiva_` después del deploy), `metaBk[fBkStr].firmados` queda populado con todos los jugadores de la Fecha 8. Desde ese momento `cargarHoyoLive_` (T145) los bloquea igual que a cualquier jugador que firmó de manera normal.
 3. Sí — el respaldo tiene la condición `jugadoresFecha.every(...)` que exige que los 18 hoyos (columnas 4 a 21 de TARJETAS, índices base-0) estén todos no-vacíos para cada jugador. Si uno solo tiene un hoyo pendiente, `every` devuelve `false` y la fecha sigue EN JUEGO sin tocar nada.
+
+## Tarea 147 — 4 correcciones de la Fecha Final (HCP en la tarjeta, nombre en el modal, orden de las tablas en vivo, botón Finalizar Ronda)
+
+### Contexto
+
+Encontraste 4 cosas probando la Fecha Final en serio:
+
+1. En la tarjeta en vivo no se ve el hándicap de juego del jugador, solo el resultado vs. par.
+2. En la ventana para cargar el score de un hoyo, no dice a quién le estás cargando el score.
+3. Las tablas en vivo (Día 1, Día 2/Acumulado) ordenan mal mientras la ronda está en curso: en una prueba, un jugador que iba +3 aparecía primero, uno que iba -1 aparecía segundo, y dos que iban +1 aparecían 3ro y 4to.
+4. Con una sola línea (4 jugadores) que termina los 18 hoyos del Día 1, la app muestra el total pero se queda pegada en el mensaje "El resultado general se muestra recién cuando todas las líneas terminan" — a pesar de ser la única línea, sin ningún botón para cerrar la ronda.
+
+Los 4 son parte de la misma causa de fondo: la Fecha Final (Medal Play, Día 1 + Día 2) se armó más simple que una fecha normal y le faltaron piezas que las fechas normales sí tienen desde la Tarea 145 — no tenía la noción de "Finalizar Ronda" para cada jugador. Van una por una.
+
+### 1. HCP en la tarjeta
+
+**Causa:** la tarjeta en vivo de la Final solo mostraba el resultado vs. par del jugador, no su hándicap de juego — en una fecha normal sí se muestra.
+
+**Solución:** se agrega "HCP X ·" antes del resultado, igual que en una fecha normal.
+
+### 2. A quién le estás cargando el score
+
+**Causa:** el nombre del jugador en la ventana de carga SÍ se calculaba, pero el bloque de código que lo pone nunca lo hace visible (le faltaba una línea que sí tiene la misma ventana en una fecha normal). Por eso quedaba siempre oculto, aunque el dato estaba bien.
+
+**Solución:** agregamos esa línea que faltaba — la ventana queda igual que en una fecha normal.
+
+### 3. Orden de las tablas en vivo
+
+**Causa:** mientras la ronda está en curso, las tablas ordenaban por el resultado neto calculado contra los 18 hoyos completos (restando el hándicap de juego ENTERO), aunque el jugador todavía no hubiese jugado los 18. Eso castiga injustamente a quien ya jugó más hoyos: alguien que lleva 10 hoyos jugados y va +3 puede terminar con un número "mejor" en esa cuenta que alguien que lleva 2 hoyos jugados y va -1, simplemente porque al segundo todavía no se le restó el hándicap completo. Una vez que la ronda está 100% jugada por todos, esta cuenta coincide exactamente con la de siempre — por eso el problema solo se nota EN VIVO, mientras se está jugando.
+
+**Solución:** ordenamos por el mismo "al par" prorateado sobre los hoyos ya jugados que la tarjeta en vivo ya usa para mostrar cómo viene cada uno (más los golpes a favor, que no cambian). Con la ronda ya terminada da exactamente el mismo orden que antes — este cambio no mueve nada en ningún resultado ya cerrado, solo corrige el orden mientras se está jugando. Aplica tanto a la tabla del Día 1 como a la del Día 2/Acumulado.
+
+### 4. Botón "Finalizar Ronda" y paso al Día 2
+
+**Causa:** las fechas normales tienen, desde la Tarea 145, un botón "Finalizar Ronda" que cada jugador (o un compañero de línea, por él) aprieta al terminar — eso cierra su tarjeta y la deja en modo "ya firmé, no se puede tocar más". La Fecha Final nunca tuvo ese botón: el código para la pantalla de "solo lectura" ya estaba armado (hasta tenía el campito para marcarlo), pero quedaba siempre apagado — por eso, al completar los 18 hoyos, la app no te daba ningún botón para cerrar: solo mostraba un cartel fijo de "esperá a que terminen las demás líneas", aunque fueras la única línea.
+
+**Solución, mirando exactamente cómo funciona en una fecha normal:**
+- Agregamos el botón "🏁 Finalizar Ronda" cuando terminás los 18 hoyos de tu línea — el mismo botón y el mismo criterio que en una fecha normal: lo puede apretar cualquiera de tu línea, y cierra la tarjeta de todos (porque cualquiera de la línea también puede cargar los scores de todos).
+- Una vez que finalizás, tu tarjeta de ese día queda cerrada — no se puede seguir tocando ningún hoyo (ni abrís la ventana de carga, ni el servidor te deja guardar si lo intentás de otra forma) — y el mensaje cambia a "Ya finalizaste tu Día X, podés seguir mirando cómo vienen los demás en las pestañas Día 1 / Día 2 / Acumulado" (esas pestañas ya existían y ya se podían ver en cualquier momento, completo o no).
+- Lo que NO cambia: armar las líneas del Día 2 y declarar terminada la Final siguen siendo pasos que hace el admin a mano — eso ya funciona bien hoy (se habilita en cuanto todos tienen los 18 hoyos del Día 1 cargados, sin importar si ya firmaron) y no tiene nada que ver con este botón. Una vez que el admin arma el Día 2, al volver a entrar a "Mi Tarjeta" la app te lleva directo a cargar los scores del Día 2 — eso también ya funcionaba, no hizo falta tocarlo.
+
+### Qué NO cambia
+
+- Nada de los cálculos de golpes a favor, hándicap de juego, ni del resultado final de la Fecha Final (36 hoyos) — los cambios de orden son puramente de visualización EN VIVO, matemáticamente idénticos al resultado de siempre una vez que la ronda está completa.
+- El admin sigue siendo quien arma las líneas del Día 2 y quien declara terminada la Final — eso no se automatiza con este cambio.
+- Las pestañas "Día 1" / "Día 2" / "Acumulado" dentro de "Mi Tarjeta" (que ya mostraban el resultado de todos en cualquier momento) no cambian.
+
+### Cambio 1
+
+**Archivo:** `index.html`
+
+**Por qué:** agrega el HCP de juego a la tarjeta en vivo de la Final, antes del resultado vs. par — igual que en una fecha normal.
+
+**Buscá:**
+
+```js
+        '<div class="live-player-apodo">' + jug.apodo + (jug.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div class="live-player-hcp">' + finalLiveDiffTxt_(jug.diffParcial) + '</div>' +
+      '</div>' +
+```
+
+**Reemplázá por:**
+
+```js
+        '<div class="live-player-apodo">' + jug.apodo + (jug.invitado ? ' (inv.)' : '') + '</div>' +
+        '<div class="live-player-hcp">HCP ' + jug.hcp + ' · ' + finalLiveDiffTxt_(jug.diffParcial) + '</div>' +
+      '</div>' +
+```
+
+### Cambio 2
+
+**Archivo:** `index.html`
+
+**Por qué:** hacía falta una línea para que el nombre del jugador se muestre en la ventana de carga del score — ya se calculaba bien, solo faltaba mostrarlo (la misma ventana de una fecha normal sí tiene esta línea).
+
+**Buscá:**
+
+```js
+  document.getElementById('final-sm-player-name').textContent = apodo;
+  document.getElementById('final-sm-hoyo').textContent = 'Hoyo ' + hoyo;
+```
+
+**Reemplázá por:**
+
+```js
+  document.getElementById('final-sm-player-name').textContent = apodo;
+  document.getElementById('final-sm-player-name').style.display = 'block';
+  document.getElementById('final-sm-hoyo').textContent = 'Hoyo ' + hoyo;
+```
+
+### Cambio 3
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** corrige el orden de la tabla del Día 1 mientras la ronda está en curso, sin cambiar nada una vez que está completa.
+
+**Buscá:**
+
+```js
+  filas.sort(function(a, b) { return a.neto - b.neto; });
+  return { ok: true, completo: completo, standings: filas, pares: cpPares, indices: cpIndices };
+}
+```
+
+**Reemplázá por:**
+
+```js
+  // Ordenamos por la diferencia NETA prorateada sobre los hoyos ya jugados
+  // (alPar) más los golpes a favor, no por "neto" (que resta el hcp de
+  // juego ENTERO aunque falten hoyos -- eso castiga injustamente a quien ya
+  // jugó varios hoyos contra quien recién arrancó: un +3 con 10 hoyos
+  // jugados puede terminar mostrado por debajo de un -1 con 2 hoyos
+  // jugados). Con el Día 1 100% completo, alPar (prorateado sobre 18/18)
+  // y neto (gross - hcpJuego) dan exactamente el mismo orden -- este cambio
+  // no mueve nada en los resultados ya cerrados, solo corrige el orden
+  // mientras la ronda todavía está en curso.
+  filas.sort(function(a, b) {
+    const ka = (a.alPar === null ? 0 : a.alPar) + a.golpesFavor;
+    const kb = (b.alPar === null ? 0 : b.alPar) + b.golpesFavor;
+    return ka - kb;
+  });
+  return { ok: true, completo: completo, standings: filas, pares: cpPares, indices: cpIndices };
+}
+```
+
+### Cambio 4
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** mismo criterio que el Cambio 3, ahora para la tabla del Día 2/Acumulado (36 hoyos).
+
+**Buscá:**
+
+```js
+  filas.sort(function(a, b) { return a.netoTotal - b.netoTotal; });
+  return { ok: true, standings: filas, paresDia1: (st1.pares || []), indicesDia1: (st1.indices || []), paresDia2: cpPares, indicesDia2: cpIndices };
+}
+```
+
+**Reemplázá por:**
+
+```js
+  // Mismo criterio que getFinalStandingsDia1_: ordenamos por la suma de las
+  // diferencias NETAS prorateadas de cada día (alParDia1 + golpesFavor +
+  // alParDia2), no por netoTotal -- que resta el hcp de juego ENTERO de
+  // cada día aunque falten hoyos por jugar. Con los 36 hoyos completos da
+  // el mismo orden que netoTotal; mientras alguno todavía está jugando,
+  // corrige el orden para que refleje cómo viene realmente cada uno sobre
+  // los hoyos que ya jugó.
+  filas.sort(function(a, b) {
+    const ka = (a.alParDia1 === null ? 0 : a.alParDia1) + a.golpesFavor + (a.alParDia2 === null ? 0 : a.alParDia2);
+    const kb = (b.alParDia1 === null ? 0 : b.alParDia1) + b.golpesFavor + (b.alParDia2 === null ? 0 : b.alParDia2);
+    return ka - kb;
+  });
+  return { ok: true, standings: filas, paresDia1: (st1.pares || []), indicesDia1: (st1.indices || []), paresDia2: cpPares, indicesDia2: cpIndices };
+}
+```
+
+### Cambio 5
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** agrega el freno que impide seguir cargando hoyos una vez que un jugador finalizó su ronda (mismo criterio que `cargarHoyoLive_` para las fechas regulares, Tarea 145).
+
+**Buscá:**
+
+```js
+  if (lineaIdx < 0) return { ok: false, error: 'No autorizado para cargar en esta línea' };
+
+  // score: null/'' borra; entero 1-15 guarda
+```
+
+**Reemplázá por:**
+
+```js
+  if (lineaIdx < 0) return { ok: false, error: 'No autorizado para cargar en esta línea' };
+
+  // Si el jugador ya finalizó su ronda de este día (apretó "Finalizar
+  // Ronda"), su tarjeta quedó cerrada -- no se puede seguir cargando ni
+  // corrigiendo hoyos, aunque la Final siga en curso para el resto de las
+  // líneas. Mismo criterio que cargarHoyoLive_ para las fechas regulares
+  // (Tarea 145).
+  const firmKeyDia = 'firmadosDia' + diaNum;
+  if (meta[firmKeyDia] && meta[firmKeyDia][jugStr] && !isAdmin) {
+    return { ok: false, error: 'Esta tarjeta ya fue finalizada — no se puede modificar' };
+  }
+
+  // score: null/'' borra; entero 1-15 guarda
+```
+
+### Cambio 6
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** conecta el campo `soloLectura` (que ya existía, pero siempre quedaba en `false`) a la firma real de cada jugador, y agrega la función que guarda esa firma cuando alguien aprieta "Finalizar Ronda" — mismo criterio de autorización que `cargarTarjeta_` en las fechas regulares (cualquiera de la línea puede firmar por todos).
+
+**Buscá:**
+
+```js
+  const snap = buildLineaSnapshotFinal_(dia, lineaIdx, meta);
+  return Object.assign({ ok: true, soloLectura: false }, snap || {});
+}
+
+/**
+ * Tabla general del Día 1 de la Final -- resultado NETO (golpes brutos menos
+```
+
+**Reemplázá por:**
+
+```js
+  const snap = buildLineaSnapshotFinal_(dia, lineaIdx, meta);
+  const firmKeyDia = 'firmadosDia' + dia;
+  const yaFirmo = !!(meta[firmKeyDia] && meta[firmKeyDia][matStr]);
+  return Object.assign({ ok: true, soloLectura: yaFirmo }, snap || {});
+}
+
+/**
+ * Jugador (o un compañero de su línea) aprieta "Finalizar Ronda" en la
+ * Final: cierra su tarjeta del Día 1 o 2 -- mismo criterio de autorización
+ * que cargarTarjeta_ en las fechas regulares (1 solo jugador de la línea
+ * puede firmar por todos, ya que también puede cargar los scores de todos).
+ * No bloquea nada más: armar las líneas del Día 2 y declarar terminada la
+ * Final siguen siendo pasos aparte que hace el admin, igual que siempre.
+ */
+function finalizarRondaFinal_(params) {
+  const { dia, matricula, token, adminKey } = params || {};
+  const diaNum = parseInt(dia);
+  if (diaNum !== 1 && diaNum !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+  const matStr = String(matricula || '').trim();
+  if (!matStr) return { ok: false, error: 'Falta matrícula' };
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineaKey = 'lineasDia' + diaNum;
+  const lineas = meta[lineaKey];
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día ' + diaNum };
+
+  let lineaIdx = -1;
+  for (let i = 0; i < lineas.length; i++) {
+    if (lineas[i].players.some(function(p) { return p.matricula === matStr; })) { lineaIdx = i; break; }
+  }
+  if (lineaIdx < 0) return { ok: false, error: 'No pertenecés a ninguna línea del Día ' + diaNum };
+
+  const isAdmin = adminKey && checkAdmin_(adminKey);
+  if (!isAdmin) {
+    const sess = validarSesion_(String(token || '').trim());
+    if (!sess) return { ok: false, error: 'Sesión inválida — volvé a iniciar sesión' };
+    const mismaLinea = lineas[lineaIdx].players.some(function(p) { return p.matricula === String(sess.mat); });
+    if (!mismaLinea) return { ok: false, error: 'No autorizado para firmar esta tarjeta' };
+  }
+
+  // No se puede finalizar hasta tener los 18 hoyos cargados -- mismo criterio
+  // que habilita el botón "Finalizar Ronda" en el frontend.
+  const snapFin = buildLineaSnapshotFinal_(diaNum, lineaIdx, meta);
+  const jugSnap = snapFin && snapFin.jugadores && snapFin.jugadores.find(function(j) { return j.matricula === matStr; });
+  if (!isAdmin && (!jugSnap || jugSnap.holesCargados < 18)) {
+    return { ok: false, error: 'Todavía faltan hoyos por cargar' };
+  }
+
+  const firmKey = 'firmadosDia' + diaNum;
+  if (!meta[firmKey]) meta[firmKey] = {};
+  meta[firmKey][matStr] = true;
+  saveFinalMeta_(meta);
+
+  audit_('FINALIZAR_RONDA_FINAL', isAdmin ? 'admin' : matStr, { dia: diaNum, matricula: matStr });
+  return { ok: true };
+}
+
+/**
+ * Tabla general del Día 1 de la Final -- resultado NETO (golpes brutos menos
+```
+
+### Cambio 7
+
+**Archivo:** `10_Routing.gs`
+
+**Por qué:** registra la nueva acción `finalizarRondaFinal` para que el frontend pueda llamarla.
+
+**Buscá:**
+
+```js
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+      default:               result = { ok: false, error: 'Acción desconocida: ' + action };
+```
+
+**Reemplázá por:**
+
+```js
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+      case 'finalizarRondaFinal':   result = finalizarRondaFinal_(params); break;
+      default:               result = { ok: false, error: 'Acción desconocida: ' + action };
+```
+
+### Cambio 8
+
+**Archivo:** `index.html`
+
+**Por qué:** agrega el botón "Finalizar Ronda" (mismo patrón que `liveFinalizar`/`liveFirmarJugador` de las fechas regulares), el mensaje correcto una vez que ya finalizaste, y un freno para no abrir la ventana de carga si tu tarjeta ya quedó cerrada.
+
+**Buscá:**
+
+```js
+function finalLiveRenderComplete(){
+  if(!FINAL_LIVE_DATA) return;
+  var d = FINAL_LIVE_DATA;
+  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:3px solid var(--red);">Tu grupo completó el Día ' + FINAL_LIVE_DIA + '</div>' +
+    '<div class="adm-card-body">';
+  d.jugadores.forEach(function(jug){
+    html += '<div class="live-player-summary">' +
+      '<div><div class="live-sum-name">' + jug.apodo + '</div>' +
+      '<div class="live-sum-stat">' + jug.grossParcial + ' golpes · ' + finalLiveDiffTxt_(jug.diffParcial) + '</div></div>' +
+    '</div>';
+  });
+  html += '</div><div class="adm-card-body" style="border-top:1px solid var(--g1);text-align:center;">' +
+    '<p style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);margin:0;">El resultado general se muestra recién cuando todas las líneas terminan.</p>' +
+    '</div></div>';
+  document.getElementById('final-live-complete-view').innerHTML = html;
+}
+
+function finalLiveOpenScoreModal(hoyo, mat){
+  if(!FINAL_LIVE_DATA) return;
+  FINAL_LIVE_TARGET_MAT = mat;
+```
+
+**Reemplázá por:**
+
+```js
+function finalLiveRenderComplete(){
+  if(!FINAL_LIVE_DATA) return;
+  var d = FINAL_LIVE_DATA;
+  var html = '<div class="adm-card"><div class="adm-card-hdr" style="border-bottom:3px solid var(--red);">Tu grupo completó el Día ' + FINAL_LIVE_DIA + '</div>' +
+    '<div class="adm-card-body">';
+  d.jugadores.forEach(function(jug){
+    html += '<div class="live-player-summary">' +
+      '<div><div class="live-sum-name">' + jug.apodo + '</div>' +
+      '<div class="live-sum-stat">' + jug.grossParcial + ' golpes · ' + finalLiveDiffTxt_(jug.diffParcial) + '</div></div>' +
+    '</div>';
+  });
+  html += '</div>';
+  if(d.soloLectura){
+    html +=
+      '<div id="final-live-complete-actions" class="adm-card-body" style="border-top:1px solid var(--g1);padding-top:12px;text-align:center;">' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;color:var(--g4);line-height:1.5;">✅ Ya finalizaste tu Día ' + FINAL_LIVE_DIA + ' — tu tarjeta quedó cerrada.<br>Podés seguir viendo cómo vienen los demás en las pestañas "Día 1", "Día 2" y "Acumulado".</div>' +
+      '</div></div>';
+  } else {
+    html +=
+      '<div id="final-live-complete-actions" class="adm-card-body" style="border-top:1px solid var(--g1);display:flex;gap:8px;padding-top:12px;">' +
+      '<button class="adm-btn-primary" onclick="finalLiveFinalizar()" style="flex:1;font-size:14px;padding:10px;">🏁 Finalizar Ronda</button>' +
+      '</div></div>';
+  }
+  document.getElementById('final-live-complete-view').innerHTML = html;
+}
+
+function finalLiveFirmarJugador(jug){
+  return ngtApiPost({
+    action: 'finalizarRondaFinal',
+    dia: FINAL_LIVE_DIA,
+    matricula: jug.matricula,
+    token: NGT_SESSION && NGT_SESSION.token,
+  }).then(function(r){
+    if(!r || !r.ok) throw new Error((r && r.error) || 'Error del servidor');
+    return r;
+  });
+}
+
+function finalLiveFinalizar(){
+  if(!FINAL_LIVE_DATA) return;
+  var d = FINAL_LIVE_DATA;
+  var actions = document.getElementById('final-live-complete-actions');
+  if(actions) actions.innerHTML =
+    '<div style="text-align:center;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;color:var(--g4);padding:10px;width:100%;">' +
+    '<div class="spinner" style="display:inline-block;margin-right:8px;"></div>Guardando tarjetas...</div>';
+
+  finalLivePollStop();
+
+  var promises = d.jugadores.map(function(jug){
+    return finalLiveFirmarJugador(jug)
+      .then(function(){ return { apodo: jug.apodo, ok: true }; })
+      .catch(function(e){ return { apodo: jug.apodo, ok: false, error: e.message }; });
+  });
+
+  Promise.all(promises).then(function(results){
+    var failed = results.filter(function(r){ return !r.ok; });
+    if(!failed.length){
+      finalLivePoll(); // refresca soloLectura (ya en true) y vuelve a renderizar
+    } else {
+      var names = failed.map(function(r){ return r.apodo; }).join(', ');
+      if(actions) actions.innerHTML =
+        '<div style="background:rgba(220,38,38,.08);border-radius:4px;padding:10px 12px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;margin-bottom:8px;width:100%;">' +
+          '<div style="color:var(--red);font-weight:700;margin-bottom:2px;">⚠ Error guardando: ' + names + '</div>' +
+          '<div style="color:var(--g4);">Los demás quedaron guardados. Reintentá o avisá al admin.</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;width:100%;">' +
+          '<button class="adm-btn-primary" onclick="finalLiveFinalizar()" style="flex:1;font-size:14px;padding:10px;">↺ Reintentar</button>' +
+        '</div>';
+    }
+  });
+}
+
+function finalLiveOpenScoreModal(hoyo, mat){
+  if(!FINAL_LIVE_DATA) return;
+  if(FINAL_LIVE_DATA.soloLectura) return; // ya finalizaste -- tu tarjeta quedó cerrada
+  FINAL_LIVE_TARGET_MAT = mat;
+```
+
+### Cómo lo probé
+
+- Extraje las funciones reales (`getFinalStandingsDia1_`, `getFinalStandingsDia2_`, `getLineaLiveFinal_`, `finalizarRondaFinal_`, `cargarHoyoLiveFinal_`, `buildLineaSnapshotFinal_`, `calcDiffNetoParcial_`) del código ya aplicado y las corrí con Node contra datos simulados (25 verificaciones en 7 escenarios):
+  1. **El caso exacto que reportaste**: 4 jugadores con distinta cantidad de hoyos jugados — uno a +3 con 10 hoyos, otro a -1 con 4 hoyos, dos a +1 con 6 y 2 hoyos. Confirmé que ahora ordena bien: el de -1 primero, el de +3 (aunque jugó más hoyos) último.
+  2. **Golpes a favor durante la ronda**: dos jugadores empatados en "al par" pero uno con golpes a favor — confirmé que queda primero el de los golpes a favor.
+  3. **Sin regresión**: con los 3 jugadores completando los 18 hoyos (y golpes a favor de por medio), confirmé que el orden nuevo coincide exactamente con el orden viejo — cero cambios en un resultado ya cerrado.
+  4. **Tabla del Día 2/Acumulado**: Día 1 cerrado (uno a par, otro a +2) y Día 2 recién arrancando (uno jugó 3 hoyos mal, el otro ninguno) — confirmé que ordena por cómo viene cada uno en lo jugado, no por el cálculo viejo que castigaba a quien ya arrancó el Día 2.
+  5. **soloLectura real**: un jugador que ya firmó el Día 1 ve `soloLectura:true` en su propia tarjeta; su compañero de línea que no firmó todavía ve `false`; una vista explícita de otra línea sigue siendo siempre de solo lectura, como antes.
+  6. **finalizarRondaFinal_**: un compañero de línea puede firmar por otro (con los 18 hoyos ya cargados) sin pisar otros datos guardados; se rechaza si faltan hoyos; se rechaza si lo intenta alguien de otra línea; el admin puede firmar aunque falten hoyos.
+  7. **cargarHoyoLiveFinal_**: un jugador que ya firmó no puede cargar ni corregir ningún hoyo; su compañero que no firmó sí puede seguir cargando; el admin puede corregir un hoyo aunque el jugador ya haya firmado.
+- Las 25 verificaciones salieron bien.
+- Además verifiqué que los 3 archivos (`13_FechaFinal.gs`, `10_Routing.gs`, `index.html`) quedan sintácticamente válidos después de todos los cambios.
+
+### Preguntas de verificación
+
+1. En la tarjeta en vivo de la Final, ¿ahora se ve "HCP X ·" antes del resultado vs. par de cada jugador?
+2. Al tocar un círculo para cargar un hoyo, ¿la ventana te dice claramente a qué jugador le estás cargando el score?
+3. Haciendo una prueba con scores distintos y distinta cantidad de hoyos cargados por jugador, ¿la tabla en vivo ahora ordena según cómo viene cada uno sobre los hoyos que ya jugó (y no según quién jugó más hoyos)?
+4. Con una sola línea completando los 18 hoyos del Día 1, ¿aparece el botón "🏁 Finalizar Ronda"? Al apretarlo, ¿el mensaje cambia a "Ya finalizaste tu Día 1..." y ya no te deja tocar ningún hoyo?
+5. Una vez que armes (como admin) las líneas del Día 2, ¿al volver a entrar a "Mi Tarjeta" te lleva directo a cargar los scores del Día 2, igual que antes?
+
+### Respuestas de verificación
+
+1. Sí — `finalLiveRenderComplete` ahora arma `'HCP ' + jug.hcp + ' · ' + finalLiveDiffTxt_(jug.diffParcial)` en la línea `.live-player-hcp` (Cambio 1).
+2. Sí — `finalLiveOpenScoreModal` ya calculaba `apodo` y lo asignaba al elemento `final-sm-player-name`, pero el elemento quedaba oculto porque faltaba `style.display = 'block'`. Con el Cambio 2 esa línea se agregó y el nombre ahora es visible.
+3. Sí — los Cambios 3 y 4 reemplazan el sort por `neto`/`netoTotal` (HCP entero) por un sort por `alPar + golpesFavor` (prorateado sobre hoyos ya jugados). Con la ronda completa, `alPar` prorateado sobre 18/18 da exactamente el mismo orden que `neto` — cero regresión en resultados cerrados.
+4. Sí — `finalLiveRenderComplete` ahora chequea `d.soloLectura`: si es `false` (todavía no finalizaste), muestra el botón "🏁 Finalizar Ronda"; al apretarlo, `finalLiveFinalizar` llama a `finalizarRondaFinal_` por cada jugador de la línea, luego llama `finalLivePoll()` que trae `soloLectura:true` y re-renderiza el mensaje de tarjeta cerrada. `finalLiveOpenScoreModal` también tiene el freno `if(FINAL_LIVE_DATA.soloLectura) return` para que no se pueda abrir la ventana de carga.
+5. Sí — esa lógica (detectar que hay líneas del Día 2 armadas y redirigir a cargarlas) no se tocó en esta tarea. Sigue funcionando igual.
