@@ -26275,3 +26275,345 @@ function finalLiveOpenScoreModal(hoyo, mat){
 3. Sí — los Cambios 3 y 4 reemplazan el sort por `neto`/`netoTotal` (HCP entero) por un sort por `alPar + golpesFavor` (prorateado sobre hoyos ya jugados). Con la ronda completa, `alPar` prorateado sobre 18/18 da exactamente el mismo orden que `neto` — cero regresión en resultados cerrados.
 4. Sí — `finalLiveRenderComplete` ahora chequea `d.soloLectura`: si es `false` (todavía no finalizaste), muestra el botón "🏁 Finalizar Ronda"; al apretarlo, `finalLiveFinalizar` llama a `finalizarRondaFinal_` por cada jugador de la línea, luego llama `finalLivePoll()` que trae `soloLectura:true` y re-renderiza el mensaje de tarjeta cerrada. `finalLiveOpenScoreModal` también tiene el freno `if(FINAL_LIVE_DATA.soloLectura) return` para que no se pueda abrir la ventana de carga.
 5. Sí — esa lógica (detectar que hay líneas del Día 2 armadas y redirigir a cargarlas) no se tocó en esta tarea. Sigue funcionando igual.
+
+## Tarea 148 — Rediseño de las tablas de la Fecha Final (Día 1, Día 2 y Acumulado)
+
+### Contexto
+
+Pediste cambiar qué columnas muestran las 3 tablas de resultados de la Fecha Final:
+
+- **Día 1** y **Día 2**: agregar las columnas "Hcp" y "Neto" (hoy solo mostraban Gross, Al par y Hoyo — el HCP aparecía como un subtítulo chiquito debajo del nombre, no como columna propia).
+- **Acumulado**: la cambiás por completo — en vez de un solo bloque de "Gross/Al par/Hoyo" combinado entre los dos días, ahora muestra, lado a lado, el desglose completo: Gross/Hcp/Neto del Día 1, Gross/Hcp/Neto del Día 2, la suma de esos 2 netos (D1-D2), los golpes a favor (Favor) y el resultado final (TOTAL).
+
+Además, pediste que al finalizar la ronda del Día 2 (apretando "Finalizar Ronda"), te lleve directo a la pestaña "Acumulado" — hoy te dejaba en la pestaña "Tarjeta" con el mensaje de "ya finalizaste".
+
+Para que las cuentas cierren bien en el Acumulado, el "Neto" de cada día es el cálculo clásico (golpes brutos menos hándicap de juego de ese día), SIN los golpes a favor — los golpes a favor se aplican una sola vez, al final, en la columna "Favor", y el "TOTAL" es la suma de todo (D1-D2 + Favor). Es la misma cuenta que ya se usaba por detrás para el resultado final — no cambia ningún número, solo cómo se reparte en columnas.
+
+### Qué NO cambia
+
+- Ningún cálculo de fondo: el hándicap de juego, los golpes a favor y el resultado final (TOTAL) siguen siendo exactamente los mismos números que ya se usan hoy para decidir el campeón.
+- El orden de las tablas (ya corregido en la Tarea 147) no se toca.
+- Las pestañas "Día 1" / "Día 2" / "Acumulado" siguen funcionando igual (se cargan al tocarlas, sin sondeo automático) — solo cambian las columnas que muestran.
+- Al finalizar la ronda del Día 1 seguís viendo el mensaje de "ya finalizaste" en la pestaña "Tarjeta", con las otras 3 pestañas disponibles para mirar cuando quieras — eso no cambia.
+
+### Cambio 1
+
+**Archivo:** `index.html`
+
+**Por qué:** agrega las columnas "Hcp" y "Neto" a la tabla del Día 2 (`finalDia2SoloTableHtml_`), y quita el subtítulo "HCP X" bajo el nombre (ahora sobra, porque el HCP ya tiene su propia columna). "Neto" es golpes brutos del día menos el HCP de juego del día (sin golpes a favor — esos no aplican en el Día 2). Para el jugador que todavía no arrancó el Día 2, el HCP sí se muestra (ya se conoce de antemano) pero Gross y Neto quedan en "–", igual que antes.
+
+**Buscá:**
+
+```js
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hoyo</th>' +
+      '</tr></thead><tbody>';
+  if(!jugaron.length && !sinArrancar.length){
+    html += '<tr><td colspan="5" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+  } else {
+    jugaron.forEach(function(s, i){
+      var pos = i + 1;
+      var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
+      var hoyoTxt = s.holesCargados === 18 ? 'Completo' : (s.holesCargados + '/18');
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia2\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div><div class="s dim" style="font-size:11px;">HCP ' + s.hcpJuego2 + '</div></td>' +
+        '<td class="c"><span class="s">' + s.grossDia2 + '</span></td>' +
+        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(s.alParDia2) + '</span></td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
+      '</tr>';
+    });
+    sinArrancar.forEach(function(s){
+      html += '<tr class="fecha-row-click" style="cursor:pointer;opacity:.55;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia2\')">' +
+        '<td class="c" style="padding:6px 4px;"></td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div><div class="s dim" style="font-size:11px;">HCP ' + s.hcpJuego2 + '</div></td>' +
+        '<td class="c"><span class="s dim">–</span></td>' +
+        '<td class="c"><span class="s dim">–</span></td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">sin arrancar</span></td>' +
+      '</tr>';
+    });
+  }
+```
+
+**Reemplázá por:**
+
+```js
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hoyo</th>' +
+      '</tr></thead><tbody>';
+  if(!jugaron.length && !sinArrancar.length){
+    html += '<tr><td colspan="7" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+  } else {
+    jugaron.forEach(function(s, i){
+      var pos = i + 1;
+      var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
+      var hoyoTxt = s.holesCargados === 18 ? 'Completo' : (s.holesCargados + '/18');
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia2\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s">' + s.grossDia2 + '</span></td>' +
+        '<td class="c"><span class="s">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c"><span class="s">' + s.netoDia2 + '</span></td>' +
+        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(s.alParDia2) + '</span></td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
+      '</tr>';
+    });
+    sinArrancar.forEach(function(s){
+      html += '<tr class="fecha-row-click" style="cursor:pointer;opacity:.55;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia2\')">' +
+        '<td class="c" style="padding:6px 4px;"></td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s dim">–</span></td>' +
+        '<td class="c"><span class="s dim">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c"><span class="s dim">–</span></td>' +
+        '<td class="c"><span class="s dim">–</span></td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">sin arrancar</span></td>' +
+      '</tr>';
+    });
+  }
+```
+
+### Cambio 2
+
+**Archivo:** `index.html`
+
+**Por qué:** al terminar la ronda del Día 2, te lleva directo a la pestaña "Acumulado" (en el Día 1 seguís viendo el mensaje de "ya finalizaste" como antes, sin cambios ahí).
+
+**Buscá:**
+
+```js
+    var failed = results.filter(function(r){ return !r.ok; });
+    if(!failed.length){
+      finalLivePoll(); // refresca soloLectura (ya en true) y vuelve a renderizar
+    } else {
+```
+
+**Reemplázá por:**
+
+```js
+    var failed = results.filter(function(r){ return !r.ok; });
+    if(!failed.length){
+      finalLivePoll(); // refresca soloLectura (ya en true) y vuelve a renderizar
+      // Al terminar el Día 2, directo a la tabla Acumulado -- en el Día 1
+      // seguís viendo tu tarjeta cerrada, con las pestañas Día 1/Día 2/
+      // Acumulado disponibles para mirar cuando quieras (sin cambio ahí).
+      if(FINAL_LIVE_DIA === 2) finalLiveSetTab('acumulado');
+    } else {
+```
+
+### Cambio 3
+
+**Archivo:** `index.html`
+
+**Por qué:** mismo cambio que el Cambio 1, ahora para la tabla del Día 1 (`finalStandingsNetoTableHtml_`): agrega las columnas "Hcp" y "Neto", y quita el subtítulo "HCP X" bajo el nombre.
+
+**Buscá:**
+
+```js
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hoyo</th>' +
+      '</tr></thead><tbody>';
+  if(!standings.length){
+    html += '<tr><td colspan="5" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+  } else {
+    standings.forEach(function(s, i){
+      var pos = i + 1;
+      var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
+      var hoyoTxt = s.holesCargados === 18 ? 'Completo' : (s.holesCargados + '/18');
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia1\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div><div class="s dim" style="font-size:11px;">HCP ' + s.hcpJuego + '</div></td>' +
+        '<td class="c"><span class="s">' + s.gross + '</span></td>' +
+        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(s.alPar) + '</span></td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
+      '</tr>';
+    });
+  }
+```
+
+**Reemplázá por:**
+
+```js
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hoyo</th>' +
+      '</tr></thead><tbody>';
+  if(!standings.length){
+    html += '<tr><td colspan="7" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+  } else {
+    standings.forEach(function(s, i){
+      var pos = i + 1;
+      var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
+      var hoyoTxt = s.holesCargados === 18 ? 'Completo' : (s.holesCargados + '/18');
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia1\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s">' + s.gross + '</span></td>' +
+        '<td class="c"><span class="s">' + s.hcpJuego + '</span></td>' +
+        '<td class="c"><span class="s">' + (s.gross - s.hcpJuego) + '</span></td>' +
+        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(s.alPar) + '</span></td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
+      '</tr>';
+    });
+  }
+```
+
+### Cambio 4
+
+**Archivo:** `index.html`
+
+**Por qué:** rediseña por completo la tabla "Acumulado" (`finalPublicStandingsDia2Html_`): en vez del bloque combinado de "Gross/Al par/Hoyo" entre los dos días, muestra Gross/Hcp/Neto del Día 1, Gross/Hcp/Neto del Día 2, la suma de esos 2 netos (D1-D2), los golpes a favor (Favor) y el resultado final (TOTAL) — sin tocar ningún cálculo de fondo: el TOTAL sigue siendo exactamente el mismo número (`s.netoTotal`) que ya se usaba.
+
+**Buscá:**
+
+```js
+// Tabla del acumulado de las 36 hoyos (Día 1 + Día 2), en vivo desde que
+// arranca el Día 2 -- muestra el NETO del Día 2 (o "sin arrancar" si el
+// jugador todavía no cargó ningún hoyo) como dato secundario, y el NETO
+// TOTAL acumulado como número principal, igual que ya se hace con el NETO
+// del Día 1 en finalPublicRender.
+function finalPublicStandingsDia2Html_(stR){
+  var standings = stR.standings;
+  var html = '<div class="card" style="margin-bottom:14px;">' +
+    '<div class="card-hdr"><div class="card-hdr-title">Acumulado 36 hoyos</div></div>' +
+    '<div class="stb-scroll"><table class="stb">' +
+      '<thead><tr>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hoyo</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Golpes a favor de la clasificación de temporada (posiciones 1-8)">Favor</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;background:var(--navy);color:#fff;border-radius:0;" title="Neto total de los 36 hoyos, con los golpes a favor ya aplicados">Total</th>' +
+      '</tr></thead><tbody>';
+  if(!standings.length){
+    html += '<tr><td colspan="7" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+  } else {
+    standings.forEach(function(s, i){
+      var pos = i + 1;
+      var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
+      var grossTotal = (s.grossDia1 || 0) + s.grossDia2;
+      var alParDia1Val = (s.alParDia1 !== null && s.alParDia1 !== undefined) ? s.alParDia1 : null;
+      var alParDia2Val = (s.alParDia2 !== null && s.alParDia2 !== undefined) ? s.alParDia2 : null;
+      var alParTotal = (alParDia1Val === null && alParDia2Val === null) ? null : ((alParDia1Val || 0) + (alParDia2Val || 0));
+      // Hoyo acumulado (1 a 36): no hace falta que el Día 2 haya arrancado --
+      // mientras el jugador sigue en el Día 1 se muestra su hoyo del Día 1
+      // tal cual (1-18); apenas pasa al Día 2 se le suman los 18 del Día 1
+      // (hoyo 10 del Día 2 => "28"); con los 36 hoyos jugados, "Completo".
+      var hoyoAcum = (s.nextHoyoDia1 < 19)
+        ? s.nextHoyoDia1
+        : (s.nextHoyoDia2 < 19 ? (18 + s.nextHoyoDia2) : null);
+      var hoyoTxt = hoyoAcum === null ? 'Completo' : String(hoyoAcum);
+      var favorTxt = s.golpesFavor ? (s.golpesFavor > 0 ? '+' + s.golpesFavor : String(s.golpesFavor)) : '—';
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'ambos\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div><div class="s dim" style="font-size:11px;">HCP ' + s.hcpJuego2 + '</div></td>' +
+        '<td class="c"><span class="s">' + grossTotal + '</span></td>' +
+        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(alParTotal) + '</span></td>' +
+        '<td class="c"><span class="s dim" style="font-size:11px;">' + hoyoTxt + '</span></td>' +
+        '<td class="c"><span class="s">' + favorTxt + '</span></td>' +
+        '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + s.netoTotal + '</span></td>' +
+      '</tr>';
+    });
+  }
+  html += '</tbody></table></div></div>';
+  return html;
+}
+```
+
+**Reemplázá por:**
+
+```js
+// Tabla del acumulado de las 36 hoyos (Día 1 + Día 2) -- un bloque de 3
+// columnas (Gross/Hcp/Neto) por cada día, más D1-D2 (suma de los 2 netos,
+// sin golpes a favor), Favor y el TOTAL final (D1-D2 + Favor). El "Neto" de
+// cada día es siempre gross - hcp de ese día, SIN golpes a favor (esos solo
+// se suman una vez, en el TOTAL) -- por eso es distinto del `neto` que ya
+// trae getFinalStandingsDia1_ (ese sí incluye golpesFavor, porque se usa
+// para ordenar/armar las líneas del Día 2). Se muestra EN VIVO desde que
+// arranca el Día 2 -- mientras el jugador no cargó ningún hoyo todavía
+// (netoDia2 === null), el bloque del Día 2 se ve en gris con un "–".
+function finalPublicStandingsDia2Html_(stR){
+  var standings = stR.standings;
+  var html = '<div class="card" style="margin-bottom:14px;">' +
+    '<div class="card-hdr"><div class="card-hdr-title">Acumulado 36 hoyos</div></div>' +
+    '<div class="stb-scroll"><table class="stb">' +
+      '<thead><tr>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">D1-D2</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Golpes a favor de la clasificación de temporada (posiciones 1-8)">Favor</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;background:var(--navy);color:#fff;border-radius:0;" title="Neto total de los 36 hoyos, con los golpes a favor ya aplicados">Total</th>' +
+      '</tr></thead><tbody>';
+  if(!standings.length){
+    html += '<tr><td colspan="11" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+  } else {
+    standings.forEach(function(s, i){
+      var pos = i + 1;
+      var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
+      var netoDia1Puro = s.grossDia1 - s.hcpJuegoDia1;
+      var arrancoDia2 = s.netoDia2 !== null;
+      var sumaNetos = netoDia1Puro + (arrancoDia2 ? s.netoDia2 : 0);
+      var favorTxt = s.golpesFavor ? (s.golpesFavor > 0 ? '+' + s.golpesFavor : String(s.golpesFavor)) : '—';
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'ambos\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s">' + s.grossDia1 + '</span></td>' +
+        '<td class="c"><span class="s">' + s.hcpJuegoDia1 + '</span></td>' +
+        '<td class="c"><span class="s">' + netoDia1Puro + '</span></td>' +
+        '<td class="c"><span class="s' + (arrancoDia2 ? '' : ' dim') + '">' + (arrancoDia2 ? s.grossDia2 : '–') + '</span></td>' +
+        '<td class="c"><span class="s">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c"><span class="s' + (arrancoDia2 ? '' : ' dim') + '">' + (arrancoDia2 ? s.netoDia2 : '–') + '</span></td>' +
+        '<td class="c"><span class="s">' + sumaNetos + '</span></td>' +
+        '<td class="c"><span class="s">' + favorTxt + '</span></td>' +
+        '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + s.netoTotal + '</span></td>' +
+      '</tr>';
+    });
+  }
+  html += '</tbody></table></div></div>';
+  return html;
+}
+```
+
+### Cómo lo probé
+
+- Extraje las 3 funciones reales que arman estas tablas (`finalStandingsNetoTableHtml_`, `finalDia2SoloTableHtml_`, `finalPublicStandingsDia2Html_`) del código ya aplicado y las corrí con Node contra datos simulados (36 verificaciones):
+  1. **Tabla Día 1**: con un jugador a gross 85/hcp 12 confirmé que la columna "Neto" muestra 73 (85-12), que la tabla tiene las 7 columnas pedidas, que cada fila tiene 7 celdas, que el "sin datos" usa colspan 7, y que ya no aparece el subtítulo "HCP" bajo el nombre.
+  2. **Tabla Día 2**: mismo chequeo para "Neto" (grossDia2-hcpJuego2), y además confirmé que un jugador que todavía no arrancó el Día 2 sigue mostrando su HCP (ya se conoce de antemano) pero con Gross y Neto en "–" y la leyenda "sin arrancar".
+  3. **Tabla Acumulado**: con un jugador con Día 1 y Día 2 completos (gross1 85/hcp1 12 → neto1 73; gross2 80/hcp2 10 → neto2 70; golpesFavor -2) confirmé que aparecen las 11 columnas pedidas (sin "Al par" ni "Hoyo"), que D1-D2 = 73+70 = 143, que Favor = -2 y que TOTAL = 141 (el mismo `netoTotal` de siempre). Con un segundo jugador que todavía no arrancó el Día 2, confirmé que su HCP del Día 2 sí se muestra pero Gross/Neto del Día 2 quedan en "–", que D1-D2 toma solo su neto del Día 1 (sin sumar nada del Día 2 que no jugó) y que el TOTAL sigue siendo el que ya calculaba el sistema.
+- Las 36 verificaciones salieron bien.
+- Verifiqué además que `index.html` queda sintácticamente válido después de los 4 cambios.
+
+### Preguntas de verificación
+
+1. En la pestaña "Día 1", ¿ahora se ven las columnas Gross, Hcp, Neto, Al par y Hoyo (en ese orden)?
+2. En la pestaña "Día 2", ¿se ven esas mismas 5 columnas, y un jugador que todavía no arrancó el Día 2 muestra su HCP igual (con Gross/Neto en "–")?
+3. En la pestaña "Acumulado", ¿se ven las 11 columnas pedidas (Gross/Hcp/Neto del Día 1, Gross/Hcp/Neto del Día 2, D1-D2, Favor, TOTAL), sin "Al par" ni "Hoyo"?
+4. Al finalizar la ronda del Día 2, ¿te lleva directo a la pestaña "Acumulado"?
+
+### Respuestas de verificación
+
+1. Sí — `finalStandingsNetoTableHtml_` ahora tiene 7 columnas: pos, Jugador, Gross, Hcp, Neto (= `s.gross - s.hcpJuego`), Al par, Hoyo. El subtítulo "HCP X" bajo el nombre fue eliminado (Cambio 3).
+2. Sí — `finalDia2SoloTableHtml_` tiene las mismas 7 columnas. Un jugador que todavía no arrancó el Día 2 muestra `s.hcpJuego2` en la columna Hcp y "–" en Gross/Neto; su fila tiene `opacity:.55` y el texto "sin arrancar" en la columna Hoyo (Cambio 1).
+3. Sí — `finalPublicStandingsDia2Html_` tiene 11 columnas: pos, Jugador, Gross/Hcp/Neto Día 1, Gross/Hcp/Neto Día 2, D1-D2, Favor, Total. `netoDia1Puro = s.grossDia1 - s.hcpJuegoDia1` (sin golpes a favor); `sumaNetos = netoDia1Puro + s.netoDia2`; `netoTotal` (TOTAL) es el mismo número que antes. Si el jugador todavía no arrancó el Día 2, Gross y Neto del Día 2 se muestran en "–" con clase `dim`; el Hcp del Día 2 sí se muestra (Cambio 4).
+4. Sí — en `finalLiveFinalizar`, después del `Promise.all` exitoso, se agregó `if(FINAL_LIVE_DIA === 2) finalLiveSetTab('acumulado')`. Al terminar el Día 1 no se llama (la condición no se cumple) y seguís viendo el mensaje de tarjeta cerrada (Cambio 2).
