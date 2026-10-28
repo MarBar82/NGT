@@ -26897,3 +26897,209 @@ Antes y después de escribir este documento, además, verifiqué que cada bloque
 3. Sí — Cambio 5 agrega `<th>Al par</th>` después de "D1-D2"; Cambio 6 agrega `finalTablaAlParTxt_(s.diffTotal)` en la celda correspondiente. El colspan del "sin datos" pasó de 11 a 12.
 4. Sí — Cambios 5 y 6 agregan `border-left:1px solid var(--g2);padding-left:16px;` tanto en los encabezados como en cada celda de las columnas "Gross" del Día 2 y "D1-D2".
 5. Sí — solo se tocó `index.html`, solo las funciones que arman el HTML de las 3 tablas de resultados. Todo el código de carga en vivo, Finalizar Ronda y armado de líneas está en otras funciones que no se modificaron.
+
+## Tarea 150 — Acumulado más angosto (sin Gross ni Al par) + Total más destacado
+
+### Contexto
+
+Después de la Tarea 149 (que le agregó color a las 3 tablas de resultados de la Final), Marco probó la tabla **Acumulado** en el celular y no entraba en la pantalla — tenía demasiadas columnas (12). Pidió:
+
+1. Sacar las columnas "Gross" (de los 2 días).
+2. Sacar la columna "Al par" (el total, agregada en la Tarea 149).
+3. Que los números de la columna "Total" se vean mejor.
+
+Con esto la tabla Acumulado pasa de 12 a 9 columnas: Jugador, Hcp día 1, Neto día 1, Hcp día 2, Neto día 2, D1-D2, Favor y Total.
+
+**No hace falta tocar el backend.** El Gross de cada día sigue haciendo falta ADENTRO del cálculo (para sacar el Neto = Gross - Hcp), solo que ya no se muestra como columna propia — es un cambio 100% de `index.html`, nada más que la función que arma esta tabla (`finalPublicStandingsDia2Html_`).
+
+### Qué NO cambia
+
+- Ningún archivo `.gs` del backend.
+- Las tablas Día 1 y Día 2 (`finalStandingsNetoTableHtml_`, `finalDia2SoloTableHtml_`) — siguen igual, con sus 7 columnas (incluyendo Gross), tal como quedaron en la Tarea 149. Esta Tarea solo toca el Acumulado.
+- El criterio de color (verde/rojo en Neto y D1-D2, Hcp siempre en gris) — sigue exactamente igual, solo se reordenan/quitan columnas.
+- Los números que se usan para decidir el campeón (TOTAL = `netoTotal`) — no cambia ningún cálculo, solo cómo se ve.
+
+### Mejora visual del Total
+
+Antes, la columna "Total" tenía un fondo apenas tintado de navy (`rgba(0,35,75,.04)`, casi imperceptible) con el número en navy y 14px. Ahora la celda entera tiene el fondo navy sólido (igual que el encabezado "Total", que ya era navy con letras blancas) y el número en blanco, más grande (16px) y bien negrita — así se destaca de un vistazo como el resultado final de la fila, en vez de perderse entre las demás columnas.
+
+### Cambio 1 — Acumulado: sacar Gross y Al par, Total más destacado
+
+**Archivo:** `index.html`
+
+**Por qué:** quita las 2 columnas "Gross" (una por día) y la columna "Al par" (que había agregado la Tarea 149) de la tabla Acumulado, para que entre en pantalla de celular. El Gross sigue usándose adentro de la cuenta (`netoDia1Puro = s.grossDia1 - s.hcpJuegoDia1`, etc.), solo que ya no tiene su propia columna. La columna "Total" ahora tiene fondo navy sólido y el número en blanco, más grande.
+
+**Buscá:**
+```js
+// Tabla del acumulado de las 36 hoyos (Día 1 + Día 2) -- un bloque de 3
+// columnas (Gross/Hcp/Neto) por cada día, más D1-D2 (suma de los 2 netos,
+// sin golpes a favor), el Al par total (diffTotal, ya calculado en
+// getFinalStandingsDia2_), Favor y el TOTAL final (D1-D2 + Favor). El
+// "Neto" de cada día es siempre gross - hcp de ese día, SIN golpes a favor
+// (esos solo se suman una vez, en el TOTAL) -- por eso es distinto del
+// `neto` que ya trae getFinalStandingsDia1_ (ese sí incluye golpesFavor,
+// porque se usa para ordenar/armar las líneas del Día 2). Se muestra EN
+// VIVO desde que arranca el Día 2 -- mientras el jugador no cargó ningún
+// hoyo todavía (netoDia2 === null), el bloque del Día 2 se ve en gris con
+// un "–". Lleva una línea separadora fina (border-left) antes del bloque
+// del Día 2 y antes de D1-D2, para distinguir visualmente los 2 días del
+// total -- mismo criterio de color (finalTablaDiffColor_/finalTablaAlParTxt_)
+// que las tablas de Día 1 y Día 2 (finalStandingsNetoTableHtml_ /
+// finalDia2SoloTableHtml_): en par o bajo par = verde, sobre par = rojo, y
+// el Hcp siempre en gris (var(--g4)), nunca negro.
+function finalPublicStandingsDia2Html_(stR){
+  var standings = stR.standings;
+  var html = '<div class="card" style="margin-bottom:14px;">' +
+    '<div class="card-hdr"><div class="card-hdr-title">Acumulado 36 hoyos</div></div>' +
+    '<div class="stb-scroll"><table class="stb">' +
+      '<thead><tr>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;border-left:1px solid var(--g2);padding-left:16px;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;border-left:1px solid var(--g2);padding-left:16px;">D1-D2</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Golpes a favor de la clasificación de temporada (posiciones 1-8)">Favor</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;background:var(--navy);color:#fff;border-radius:0;" title="Neto total de los 36 hoyos, con los golpes a favor ya aplicados">Total</th>' +
+      '</tr></thead><tbody>';
+  if(!standings.length){
+    html += '<tr><td colspan="12" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+  } else {
+    standings.forEach(function(s, i){
+      var pos = i + 1;
+      var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
+      var netoDia1Puro = s.grossDia1 - s.hcpJuegoDia1;
+      var arrancoDia2 = s.netoDia2 !== null;
+      var sumaNetos = netoDia1Puro + (arrancoDia2 ? s.netoDia2 : 0);
+      var favorTxt = s.golpesFavor ? (s.golpesFavor > 0 ? '+' + s.golpesFavor : String(s.golpesFavor)) : '—';
+      // diffD1/diffD2 en 0 si todavía no hay ningún hoyo jugado ese día (en
+      // vez de null) para que el "Neto" de ese bloque y el "D1-D2" nunca
+      // queden sin color -- mismo criterio que ya usa el ordenamiento más
+      // arriba (getFinalStandingsDia2_: "(a.alParDia1 === null ? 0 : ...)").
+      var diffD1 = (s.alParDia1 === null ? 0 : s.alParDia1);
+      var diffD2 = (s.alParDia2 === null ? 0 : s.alParDia2);
+      var diffSuma = diffD1 + (arrancoDia2 ? diffD2 : 0);
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'ambos\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s">' + s.grossDia1 + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuegoDia1 + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(diffD1) + ';">' + netoDia1Puro + '</span></td>' +
+        '<td class="c" style="border-left:1px solid var(--g2);padding-left:16px;"><span class="s' + (arrancoDia2 ? '' : ' dim') + '">' + (arrancoDia2 ? s.grossDia2 : '–') + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c"><span class="s' + (arrancoDia2 ? '' : ' dim') + '"' + (arrancoDia2 ? ' style="color:' + finalTablaDiffColor_(diffD2) + ';"' : '') + '>' + (arrancoDia2 ? s.netoDia2 : '–') + '</span></td>' +
+        '<td class="c" style="border-left:1px solid var(--g2);padding-left:16px;"><span class="s" style="color:' + finalTablaDiffColor_(diffSuma) + ';">' + sumaNetos + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(s.diffTotal) + '</td>' +
+        '<td class="c"><span class="s">' + favorTxt + '</span></td>' +
+        '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + s.netoTotal + '</span></td>' +
+      '</tr>';
+    });
+  }
+  html += '</tbody></table></div></div>';
+  return html;
+}
+```
+
+**Reemplázá por:**
+```js
+// Tabla del acumulado de las 36 hoyos (Día 1 + Día 2) -- un bloque de 2
+// columnas (Hcp/Neto) por cada día, más D1-D2 (suma de los 2 netos, sin
+// golpes a favor), Favor y el TOTAL final (D1-D2 + Favor). Sin las
+// columnas "Gross" ni "Al par" (Tarea 150: no entraba en pantalla de
+// celular) -- el Gross de cada día sigue haciendo falta para calcular el
+// Neto (netoDia1Puro/sumaNetos), solo que ya no se muestra como columna
+// propia. El "Neto" de cada día es siempre gross - hcp de ese día, SIN
+// golpes a favor (esos solo se suman una vez, en el TOTAL) -- por eso es
+// distinto del `neto` que ya trae getFinalStandingsDia1_ (ese sí incluye
+// golpesFavor, porque se usa para ordenar/armar las líneas del Día 2). Se
+// muestra EN VIVO desde que arranca el Día 2 -- mientras el jugador no
+// cargó ningún hoyo todavía (netoDia2 === null), su Neto del Día 2 se ve
+// en gris con un "–". Lleva una línea separadora fina (border-left) antes
+// del bloque del Día 2 y antes de D1-D2, para distinguir visualmente los 2
+// días del total -- mismo criterio de color (finalTablaDiffColor_) que las
+// tablas de Día 1 y Día 2 (finalStandingsNetoTableHtml_ /
+// finalDia2SoloTableHtml_): en par o bajo par = verde, sobre par = rojo, y
+// el Hcp siempre en gris (var(--g4)), nunca negro. El TOTAL va en una
+// celda con fondo navy sólido y el número grande en blanco, para que se
+// destaque como el resultado final de la fila.
+function finalPublicStandingsDia2Html_(stR){
+  var standings = stR.standings;
+  var html = '<div class="card" style="margin-bottom:14px;">' +
+    '<div class="card-hdr"><div class="card-hdr-title">Acumulado 36 hoyos</div></div>' +
+    '<div class="stb-scroll"><table class="stb">' +
+      '<thead><tr>' +
+        '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
+        '<th>Jugador</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;border-left:1px solid var(--g2);padding-left:16px;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;border-left:1px solid var(--g2);padding-left:16px;">D1-D2</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;" title="Golpes a favor de la clasificación de temporada (posiciones 1-8)">Favor</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;background:var(--navy);color:#fff;border-radius:0;" title="Neto total de los 36 hoyos, con los golpes a favor ya aplicados">Total</th>' +
+      '</tr></thead><tbody>';
+  if(!standings.length){
+    html += '<tr><td colspan="9" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+  } else {
+    standings.forEach(function(s, i){
+      var pos = i + 1;
+      var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
+      var netoDia1Puro = s.grossDia1 - s.hcpJuegoDia1;
+      var arrancoDia2 = s.netoDia2 !== null;
+      var sumaNetos = netoDia1Puro + (arrancoDia2 ? s.netoDia2 : 0);
+      var favorTxt = s.golpesFavor ? (s.golpesFavor > 0 ? '+' + s.golpesFavor : String(s.golpesFavor)) : '—';
+      // diffD1/diffD2 en 0 si todavía no hay ningún hoyo jugado ese día (en
+      // vez de null) para que el "Neto" de ese bloque y el "D1-D2" nunca
+      // queden sin color -- mismo criterio que ya usa el ordenamiento más
+      // arriba (getFinalStandingsDia2_: "(a.alParDia1 === null ? 0 : ...)").
+      var diffD1 = (s.alParDia1 === null ? 0 : s.alParDia1);
+      var diffD2 = (s.alParDia2 === null ? 0 : s.alParDia2);
+      var diffSuma = diffD1 + (arrancoDia2 ? diffD2 : 0);
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'ambos\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuegoDia1 + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(diffD1) + ';">' + netoDia1Puro + '</span></td>' +
+        '<td class="c" style="border-left:1px solid var(--g2);padding-left:16px;"><span class="s" style="color:var(--g4);">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c"><span class="s' + (arrancoDia2 ? '' : ' dim') + '"' + (arrancoDia2 ? ' style="color:' + finalTablaDiffColor_(diffD2) + ';"' : '') + '>' + (arrancoDia2 ? s.netoDia2 : '–') + '</span></td>' +
+        '<td class="c" style="border-left:1px solid var(--g2);padding-left:16px;"><span class="s" style="color:' + finalTablaDiffColor_(diffSuma) + ';">' + sumaNetos + '</span></td>' +
+        '<td class="c"><span class="s">' + favorTxt + '</span></td>' +
+        '<td class="c" style="background:var(--navy);border-radius:0;"><span class="s" style="font-size:16px;font-weight:900;color:#fff;">' + s.netoTotal + '</span></td>' +
+      '</tr>';
+    });
+  }
+  html += '</tbody></table></div></div>';
+  return html;
+}
+```
+
+### Cómo lo probé
+
+Extraje la función real (`finalPublicStandingsDia2Html_`, junto con `finalTablaDiffColor_` y `finalTablaAlParTxt_` que siguen usando las otras 2 tablas) y la corrí con Node contra 2 jugadores de prueba (uno con los 2 días completos, otro que todavía no arrancó el Día 2): 21 chequeos automáticos, todos en verde. Confirmé entre otras cosas que:
+
+- El encabezado ya no tiene "Gross" ni "Al par", y pasó de 12 a 9 columnas.
+- Cada fila tiene 9 celdas (antes 12), y el "sin datos" usa `colspan="9"`.
+- Los valores de Gross ya no aparecen como celdas propias (siguen usándose internamente para calcular el Neto, pero no se muestran).
+- El Hcp sigue en gris, el Neto y el D1-D2 siguen coloreados en verde/rojo según corresponda, igual que antes.
+- La columna "Total" ahora tiene la celda con fondo navy sólido y el número en blanco a 16px (antes era un tinte casi invisible con el número en navy a 14px).
+- La línea separadora fina se mantiene, ahora antes del Hcp del Día 2 (antes estaba antes del Gross del Día 2) y antes de "D1-D2", sin cambios en ese criterio.
+
+Antes y después de escribir este documento verifiqué que el bloque "Buscá" aparece exactamente una vez en el código real (recién clonado de GitHub, commit `7cb0d4b`, que ya tiene aplicada la Tarea 149), y que aplicar el cambio sobre ese código real da como resultado un archivo **idéntico, byte por byte**, al que efectivamente probé.
+
+### Preguntas de verificación
+
+1. ¿La tabla Acumulado ya no muestra las columnas "Gross" ni "Al par"?
+2. ¿Ahora entra bien en la pantalla del celular sin tener que hacer scroll horizontal (o haciendo mucho menos)?
+3. ¿El número de la columna "Total" se ve mucho más destacado (fondo navy sólido, número blanco y grande)?
+4. ¿Las tablas Día 1 y Día 2 siguen exactamente igual que antes (con sus columnas de Gross incluidas)?
+
+### Respuestas de verificación
+
+1. Sí — el encabezado del Acumulado pasó de 12 columnas a 9: pos, Jugador, Hcp, Neto (Día 1), Hcp, Neto (Día 2), D1-D2, Favor, Total. El Gross de cada día sigue usándose internamente (`netoDia1Puro = s.grossDia1 - s.hcpJuegoDia1`) pero no aparece como celda propia.
+2. Sí — al pasar de 12 a 9 columnas, la tabla ocupa significativamente menos ancho. El separador entre el bloque del Día 2 y D1-D2 se mantuvo (ahora antes del Hcp del Día 2 en vez de antes del Gross del Día 2).
+3. Sí — la celda del Total cambió de `background:rgba(0,35,75,.04)` (casi invisible) con texto navy a 14px, a `background:var(--navy)` sólido con `color:#fff;font-size:16px;font-weight:900`.
+4. Sí — `finalStandingsNetoTableHtml_` y `finalDia2SoloTableHtml_` no se tocaron en esta tarea; siguen con sus 7 columnas incluyendo Gross.
