@@ -27749,3 +27749,100 @@ Antes y después de escribir este documento verifiqué que cada uno de los 9 blo
 4. **Sí.** `openAdmTarModal` sigue igual que antes, más el reset `ADM_TAR_FINAL_DIA = null` al inicio. Como `ADM_TAR_FINAL_DIA` queda en `null`, `admTarModalHtml_` genera `tituloSufijo = ''` y SÍ incluye el bloque LD/BA. `admTarModalGuardar_` detecta `ADM_TAR_FINAL_DIA` como falsy, salta la rama Final y ejecuta el `ngtApiPost({ action: 'cargarTarjeta', ... ld, ba })` exactamente igual que antes.
 
 5. **Commit:** `d4a572a` — "T151: admin puede corregir tarjetas ya guardadas de la Fecha Final"
+
+## Tarea 152 — Tarjeta de un jugador en la Final: "Bruto" → "Gross", suma Hcp y Neto, y espacio entre Día 1 y Día 2
+
+### Contexto
+
+Pediste: *"Vamos a trabajar las tarjetas de los jugadores tanto para la tabla de dias como el acumulado. Cambiar el bruto por Gross. Sumar el hcp y el neto. Igual que como esta la tarjeta de una fecha normal. y dejar un pequeño espacio entre una tarjeta y la otra, estan muy pegadas."*
+
+Cuando tocás el nombre de un jugador en cualquiera de las 3 tablas de resultados de la Final (Día 1, Día 2 o Acumulado), se abre una tarjeta con sus 18 hoyos y, debajo, un resumen. Hoy ese resumen solo mostraba 2 datos: "Bruto" y "Al par". En una fecha común, la tarjeta de un jugador muestra HCP, Gross y Neto — esta Tarea lleva ese mismo criterio a la tarjeta de la Final.
+
+Además, cuando tocás un jugador en la tabla **Acumulado**, la tarjeta te muestra las 18 hoyos del Día 1 y, pegado justo abajo, las 18 hoyos del Día 2 — sin ningún espacio entre un bloque y el otro. Esta Tarea le agrega un pequeño margen para separarlos visualmente.
+
+### Qué NO cambia
+
+- Las 3 tablas de resultados (Día 1, Día 2, Acumulado) — no se tocan. Esta Tarea es sobre la tarjeta que se abre al tocar un jugador, no sobre las tablas en sí.
+- El cálculo de quién gana la Final (`netoTotal`, `golpesFavor`) — no cambia ningún número, solo se agrega más información a la vista.
+- La tarjeta hoyo-por-hoyo (los círculos con cada score) — sigue exactamente igual.
+- La tarjeta de una fecha común (`showFechaTarjetaModal`) — ya mostraba HCP/Gross/Neto, no se tocó.
+- Ningún archivo del backend (`.gs`) — es un cambio 100% visual en `index.html`.
+
+### Cómo funciona
+
+Una sola función arma el resumen de cada día dentro de la tarjeta de la Final: `finalTarjetaBloqueDia_`. La usan las 3 tablas (Día 1, Día 2, Acumulado) cada vez que tocás un jugador, así que el cambio se ve reflejado en los 3 lugares con un solo arreglo.
+
+El resumen ahora muestra, en este orden: **Gross** (antes decía "Bruto"), **Hcp**, **Neto** (nuevo — se calcula como Gross menos Hcp, el mismo criterio que ya se usa en toda la app) y **Al par** (sin cambios). Si un jugador todavía no arrancó ese día, Gross y Neto muestran una rayita ("–") en vez de un número raro, en vez de mostrar una resta inválida.
+
+Cuando la tarjeta muestra los 2 días juntos (el caso de la tabla Acumulado), ahora cada bloque de día queda con un pequeño margen debajo, separándolo claramente del siguiente.
+
+### Cambio 1 — El resumen de la tarjeta: Gross, Hcp, Neto, Al par + espacio entre días
+
+**Archivo:** `index.html`
+
+**Por qué:** la función `finalTarjetaBloqueDia_` es la única que arma el bloque "tabla de 18 hoyos + resumen" de la tarjeta de la Final, y la reutilizan las tarjetas de Día 1, Día 2 y Acumulado. Al agregarle Hcp y Neto, y renombrar Bruto a Gross, el cambio se refleja en los 3 lugares de una. También se agrega el margen inferior (`margin-bottom:18px`) únicamente cuando la tarjeta muestra el título del día (`mostrarLabel`), que es justo el caso en que se ven 2 días seguidos (Acumulado) — así no se agrega espacio de más cuando se muestra un solo día (Día 1 o Día 2 solos).
+
+**Buscá:**
+```js
+function finalTarjetaBloqueDia_(nombreDia, scores, pares, indices, hcpJuego, gross, alPar, mostrarLabel){
+  var tarjeta = renderTarjeta18Hoyos(scores || [], pares || [], 'Score', indices || [], [], true, null);
+  var label = mostrarLabel ? ('<div style="font-family:\'Oswald\',sans-serif;font-size:13px;font-weight:700;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">' + nombreDia + ' · HCP ' + hcpJuego + '</div>') : '';
+  return label +
+    '<div class="ronda-modal-card">' + tarjeta + '</div>' +
+    '<div class="perf-ecl-resumen">' +
+      '<div class="perf-ecl-resumen-item"><span class="rlbl">Bruto</span><span class="perf-ecl-par">' + gross + '</span></div>' +
+      '<div class="perf-ecl-resumen-item"><span class="rlbl">Al par</span><span class="perf-ecl-par">' + finalPublicDiffTxt_(alPar) + '</span></div>' +
+    '</div>';
+}
+```
+
+**Reemplázá por:**
+```js
+function finalTarjetaBloqueDia_(nombreDia, scores, pares, indices, hcpJuego, gross, alPar, mostrarLabel){
+  var tarjeta = renderTarjeta18Hoyos(scores || [], pares || [], 'Score', indices || [], [], true, null);
+  var label = mostrarLabel ? ('<div style="font-family:\'Oswald\',sans-serif;font-size:13px;font-weight:700;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">' + nombreDia + ' · HCP ' + hcpJuego + '</div>') : '';
+  var grossTxt = (gross !== null && gross !== undefined) ? gross : '–';
+  var hcpTxt = (hcpJuego !== null && hcpJuego !== undefined) ? hcpJuego : '–';
+  var netoTxt = (gross !== null && gross !== undefined && hcpJuego !== null && hcpJuego !== undefined) ? (gross - hcpJuego) : '–';
+  var bloque = label +
+    '<div class="ronda-modal-card">' + tarjeta + '</div>' +
+    '<div class="perf-ecl-resumen">' +
+      '<div class="perf-ecl-resumen-item"><span class="rlbl">Gross</span><span class="perf-ecl-par">' + grossTxt + '</span></div>' +
+      '<div class="perf-ecl-resumen-item"><span class="rlbl">Hcp</span><span class="perf-ecl-par">' + hcpTxt + '</span></div>' +
+      '<div class="perf-ecl-resumen-item"><span class="rlbl">Neto</span><span class="perf-ecl-par">' + netoTxt + '</span></div>' +
+      '<div class="perf-ecl-resumen-item"><span class="rlbl">Al par</span><span class="perf-ecl-par">' + finalPublicDiffTxt_(alPar) + '</span></div>' +
+    '</div>';
+  return mostrarLabel ? ('<div style="margin-bottom:18px;">' + bloque + '</div>') : bloque;
+}
+```
+
+### Cómo lo probé
+
+Extraje la función real (`finalTarjetaBloqueDia_`, junto con `renderTarjeta18Hoyos` y `finalPublicDiffTxt_` que usa por detrás) y la corrí con Node contra 5 escenarios distintos: 22 chequeos automáticos, todos en verde. Confirmé entre otras cosas que:
+
+- Cuando se muestra un solo día (Día 1 o Día 2 solos), el resumen dice "Gross" (ya no "Bruto"), y suma "Hcp" y "Neto" con los valores correctos (Neto = Gross menos Hcp), manteniendo "Al par" al final, en ese orden.
+- Cuando se muestran los 2 días juntos (caso Acumulado), además aparece el título "Día 1 · HCP X" / "Día 2 · HCP X" como ya pasaba, y ahora todo el bloque queda envuelto con un margen de 18px abajo, separándolo del bloque siguiente.
+- Cuando se muestra un solo día, NO se agrega ningún margen de más (no hace falta, porque no hay otro bloque pegado al lado).
+- Si el jugador todavía no arrancó ese día (sin tarjeta cargada), Gross y Neto muestran una rayita ("–") en vez de un número sin sentido — no rompe nada.
+- La tabla de los 18 hoyos (los círculos de cada score) sigue exactamente igual que antes, sin el resumen propio de HCP/Medal/Golpes que tiene la tarjeta de una fecha común (ese resumen es otro, específico de la Final).
+
+Antes y después de escribir este documento verifiqué que el bloque "Buscá" aparece exactamente una vez en el código real (recién clonado de GitHub, commit `848bde9`, que ya tiene aplicada la Tarea 151), y que aplicar el cambio sobre ese código real da como resultado un archivo **idéntico, byte por byte**, al que efectivamente probé.
+
+### Preguntas de verificación
+
+1. Al tocar un jugador en la tabla Día 1 (o Día 2), ¿el resumen debajo de la tarjeta ahora dice "Gross" (en vez de "Bruto") y además muestra "Hcp" y "Neto"?
+2. Al tocar un jugador en la tabla Acumulado, ¿ahora hay un pequeño espacio entre el bloque del Día 1 y el bloque del Día 2 (ya no están pegados)?
+3. Si un jugador todavía no jugó el Día 2, ¿su tarjeta de ese día muestra una rayita ("–") en Gross y Neto en vez de un número que no tiene sentido?
+4. ¿La tabla de los 18 hoyos (los círculos con cada score) se ve exactamente igual que antes?
+
+## ✅ Respuestas de verificación — Tarea 152
+
+1. **Sí.** `finalTarjetaBloqueDia_` ahora calcula `grossTxt`, `hcpTxt` y `netoTxt` y los muestra en ese orden en `.perf-ecl-resumen`, con el label "Gross" (en vez de "Bruto"), seguido de "Hcp" y "Neto", y por último "Al par" sin cambios.
+
+2. **Sí.** Cuando `mostrarLabel=true` (caso Acumulado, donde se muestran los 2 días seguidos), la función envuelve el bloque completo en `<div style="margin-bottom:18px;">`. Cuando `mostrarLabel=false` (Día 1 o Día 2 solos), devuelve el bloque directo sin ese wrapper, sin agregar espacio de más.
+
+3. **Sí.** `grossTxt` devuelve `'–'` si `gross` es `null` o `undefined`, y `netoTxt` devuelve `'–'` si cualquiera de los dos operandos (gross o hcpJuego) es `null` o `undefined` — sin intentar hacer la resta.
+
+4. **Sí.** La parte de `renderTarjeta18Hoyos` no se tocó, solo se cambió el bloque `.perf-ecl-resumen` debajo.
+
+5. **Commit:** `23fe7df` — "T152: tarjeta Final — Gross/Hcp/Neto y espacio entre dias"
