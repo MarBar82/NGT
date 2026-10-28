@@ -27103,3 +27103,649 @@ Antes y después de escribir este documento verifiqué que el bloque "Buscá" ap
 2. Sí — al pasar de 12 a 9 columnas, la tabla ocupa significativamente menos ancho. El separador entre el bloque del Día 2 y D1-D2 se mantuvo (ahora antes del Hcp del Día 2 en vez de antes del Gross del Día 2).
 3. Sí — la celda del Total cambió de `background:rgba(0,35,75,.04)` (casi invisible) con texto navy a 14px, a `background:var(--navy)` sólido con `color:#fff;font-size:16px;font-weight:900`.
 4. Sí — `finalStandingsNetoTableHtml_` y `finalDia2SoloTableHtml_` no se tocaron en esta tarea; siguen con sus 7 columnas incluyendo Gross.
+
+## Tarea 151 — El admin puede corregir una tarjeta ya guardada de la Fecha Final
+
+### Contexto
+
+Pediste: "el admin debería poder modificar las tarjetas ya guardadas de la final, al igual que se puede en una fecha común. El cambio que aplique en la tarjeta debe impactar automáticamente en los resultados de la final."
+
+Hoy, en una fecha común, el admin puede entrar al panel, tocar el nombre de un jugador y corregir sus 18 hoyos y su HCP de juego de una. En la Fecha Final no existía ese mismo botón — esta Tarea lo agrega, para el Día 1 y el Día 2 por separado (son tarjetas distintas).
+
+**Por qué el cambio se ve reflejado solo (sin nada extra)**: los resultados de la Final (las tablas de Día 1, Día 2 y Acumulado) se calculan leyendo la hoja de cálculo directo, cada vez que se consultan — no hay ningún "cache" guardado de por medio como sí existe para las fechas comunes. Entonces, en el momento en que el admin guarda la corrección, ya queda escrita en la hoja, y la próxima vez que cualquiera mire los resultados, va a ver el número corregido. No hace falta ningún paso adicional.
+
+### Qué NO cambia
+
+- La carga de scores en vivo durante la ronda (`cargarHoyoLiveFinal_`, hoyo por hoyo) sigue exactamente igual. Esta es una herramienta distinta: para cuando ya se cargó (bien o mal) y hay que corregirla de una.
+- El editor de tarjetas de una fecha común (`cargarTarjeta_`, `openAdmTarModal`) no se toca — se **reutiliza** el mismo modal visual, pero la Final tiene su propio botón de guardado por detrás.
+- La Fecha Final no tiene Long Drive ni Best Approach, así que esos 2 checkboxes no aparecen cuando se edita una tarjeta de la Final (sí siguen apareciendo para una fecha común).
+- Armado de líneas, Finalizar Ronda, declarar la Fecha Final terminada: nada de eso se toca.
+
+### Cómo funciona
+
+Dentro del panel de administración de la Fecha Final, debajo de las líneas de salida de cada día, aparece ahora una lista de "Tarjetas — Día 1" y "Tarjetas — Día 2" (una vez que las líneas de ese día ya están armadas). Cada jugador aparece como una píldora con su estado (completa o cuántos hoyos lleva cargados) y su HCP de juego de ese día. Tocando la píldora se abre el mismo editor que ya se usa para las fechas comunes — con el HCP y los 18 hoyos precargados — y al guardar, corrige la tarjeta de ese día para ese jugador.
+
+### Cambio 1 — Backend: nueva función para guardar la corrección
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** agrega `adminGuardarTarjetaFinal_`, la función que realmente escribe la corrección en la hoja TARJETAS FINAL — valida que sea un pedido de admin, que el día sea 1 o 2, que la matrícula tenga una tarjeta para ese día, y que los 18 scores sean válidos (1 a 15, o vacío) antes de escribir nada. Guarda el HCP (si se mandó uno) y los 18 hoyos de una sola vez, y deja la tarjeta marcada como firmada para ese día — mismo criterio que ya usa `cargarTarjeta_` para una fecha común.
+
+**Buscá:**
+```js
+/**
+ * Guarda el score de un hoyo del Día 1 o Día 2 de la Final, durante la ronda.
+ * Mismo patrón de mutex por jugador que cargarHoyoLive_ (fechas regulares),
+ * pero apuntando a TARJETAS FINAL (columnas DIA/MATRICULA/HCP/.../18 hoyos)
+ * en vez de TARJETAS. No hay matches ni hoyos de bonus en la Final -- el
+ * snapshot devuelto es más simple (solo golpes + diferencia a par).
+ */
+function cargarHoyoLiveFinal_(params) {
+```
+
+**Reemplázá por:**
+```js
+/**
+ * Admin corrige de una sola vez la tarjeta YA GUARDADA de un jugador en la
+ * Final (Día 1 o Día 2) -- mismo patrón que cargarTarjeta_ para las fechas
+ * regulares (una sola escritura con los 18 hoyos completos + el HCP, pensada
+ * para CORREGIR una tarjeta que ya se cargó, no para la carga en vivo hoyo
+ * por hoyo -- eso sigue siendo cargarHoyoLiveFinal_ y no se toca). Por eso
+ * deja la tarjeta marcada como firmada (firmadosDiaN), igual que
+ * cargarTarjeta_ deja firmados[mat]=true: una corrección de admin se
+ * considera la versión final de esa tarjeta.
+ * getFinalStandingsDia1_ y getFinalStandingsDia2_ leen directo de la hoja
+ * TARJETAS FINAL en cada consulta (no hay ninguna caché de por medio), así
+ * que el cambio se refleja en los resultados apenas se guarda, sin ningún
+ * paso extra.
+ */
+function adminGuardarTarjetaFinal_(params) {
+  const { adminKey, dia, matricula, hcp, scores } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const diaNum = parseInt(dia);
+  if (diaNum !== 1 && diaNum !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+  const matStr = String(matricula || '').trim();
+  if (!matStr) return { ok: false, error: 'Falta matrícula' };
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  if (!sh) return { ok: false, error: 'Hoja ' + FINAL_SHEET_NAME + ' no encontrada' };
+
+  // Índice de fila en caché -- mismo criterio que cargarHoyoLiveFinal_.
+  const cache = CacheService.getScriptCache();
+  const rowCacheKey = 'tfRow_' + diaNum + '_' + matStr;
+  let rowIdx = parseInt(cache.get(rowCacheKey) || '0');
+  if (rowIdx < 2) {
+    const lastRow = sh.getLastRow();
+    if (lastRow <= 1) return { ok: false, error: 'Sin tarjetas' };
+    const ab = sh.getRange(2, 1, lastRow - 1, 2).getValues(); // DIA, MATRICULA
+    for (let i = 0; i < ab.length; i++) {
+      if (String(ab[i][0]) === String(diaNum) && String(ab[i][1]).trim() === matStr) {
+        rowIdx = i + 2;
+        try { cache.put(rowCacheKey, String(rowIdx), 21600); } catch(e) {}
+        break;
+      }
+    }
+  }
+  if (rowIdx < 2) return { ok: false, error: 'Tarjeta no encontrada para ' + matStr + ' (Día ' + diaNum + ')' };
+
+  // Validamos los 18 hoyos completos antes de escribir nada (todo o nada).
+  const scoresArr = Array.isArray(scores) ? scores : [];
+  const scoresVals = [];
+  for (let h = 0; h < 18; h++) {
+    const v = scoresArr[h];
+    if (v === null || v === undefined || v === '') { scoresVals.push(''); continue; }
+    const n = parseInt(v);
+    if (isNaN(n) || n < 1 || n > 15) return { ok: false, error: 'Score inválido en el hoyo ' + (h + 1) };
+    scoresVals.push(n);
+  }
+
+  if (hcp !== undefined && hcp !== null && String(hcp).trim() !== '') {
+    sh.getRange(rowIdx, 3).setValue(parseInt(hcp)); // col 3 = HCP
+  }
+  sh.getRange(rowIdx, 6, 1, 18).setValues([scoresVals]); // col 6..23 = HOYO1..HOYO18
+  SpreadsheetApp.flush();
+
+  // Mismo criterio que cargarTarjeta_: una corrección de admin deja la
+  // tarjeta cerrada/firmada para ese día.
+  const meta = getFinalMeta_();
+  if (meta) {
+    const firmKey = 'firmadosDia' + diaNum;
+    if (!meta[firmKey]) meta[firmKey] = {};
+    meta[firmKey][matStr] = true;
+    saveFinalMeta_(meta);
+  }
+
+  audit_('ADMIN_EDITAR_TARJETA_FINAL', 'admin', { dia: diaNum, matricula: matStr, hcp: hcp, scores: scoresVals });
+  return { ok: true };
+}
+
+/**
+ * Guarda el score de un hoyo del Día 1 o Día 2 de la Final, durante la ronda.
+ * Mismo patrón de mutex por jugador que cargarHoyoLive_ (fechas regulares),
+ * pero apuntando a TARJETAS FINAL (columnas DIA/MATRICULA/HCP/.../18 hoyos)
+ * en vez de TARJETAS. No hay matches ni hoyos de bonus en la Final -- el
+ * snapshot devuelto es más simple (solo golpes + diferencia a par).
+ */
+function cargarHoyoLiveFinal_(params) {
+```
+
+### Cambio 2 — Backend: registrar la nueva acción en el router
+
+**Archivo:** `10_Routing.gs`
+
+**Por qué:** sin esta línea, el frontend podría pedir `adminGuardarTarjetaFinal` y el servidor respondería "Acción desconocida".
+
+**Buscá:**
+```js
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+      case 'finalizarRondaFinal':   result = finalizarRondaFinal_(params); break;
+```
+
+**Reemplázá por:**
+```js
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+      case 'adminGuardarTarjetaFinal': result = adminGuardarTarjetaFinal_(params); break;
+      case 'finalizarRondaFinal':   result = finalizarRondaFinal_(params); break;
+```
+
+### Cambio 3 — Frontend: 2 divs nuevos para la lista de tarjetas
+
+**Archivo:** `index.html`
+
+**Por qué:** son los contenedores donde se va a pintar la lista de tarjetas de cada día, dentro de la tarjeta "Fecha Final activa" del panel admin.
+
+**Buscá:**
+```js
+        <div id="final-lineas-dia1-wrap"></div>
+        <div id="final-lineas-dia2-wrap"></div>
+        <div id="final-resultado-wrap"></div>
+```
+
+**Reemplázá por:**
+```js
+        <div id="final-lineas-dia1-wrap"></div>
+        <div id="final-lineas-dia2-wrap"></div>
+        <div id="final-tarjetas-dia1-wrap"></div>
+        <div id="final-tarjetas-dia2-wrap"></div>
+        <div id="final-resultado-wrap"></div>
+```
+
+### Cambio 4 — Frontend: pintar la lista cada vez que se recarga el panel de la Final
+
+**Archivo:** `index.html`
+
+**Por qué:** hace que, cada vez que se abre o recarga el panel admin de la Final (`finalLoad`), se pinten las listas de tarjetas de cada día (o se vacíen, si la Fecha Final todavía no existe).
+
+**Buscá:**
+```js
+      renderFinalLineasDia1_(meta);
+      renderFinalLineasDia2_(meta);
+      renderFinalResultado_(meta);
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+      const wrap = document.getElementById('final-lineas-dia1-wrap');
+      if(wrap) wrap.innerHTML = '';
+      const wrap2 = document.getElementById('final-lineas-dia2-wrap');
+      if(wrap2) wrap2.innerHTML = '';
+      const wrap3 = document.getElementById('final-resultado-wrap');
+      if(wrap3) wrap3.innerHTML = '';
+    }
+```
+
+**Reemplázá por:**
+```js
+      renderFinalLineasDia1_(meta);
+      renderFinalLineasDia2_(meta);
+      renderFinalTarjetasDia1_(meta);
+      renderFinalTarjetasDia2_(meta);
+      renderFinalResultado_(meta);
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+      const wrap = document.getElementById('final-lineas-dia1-wrap');
+      if(wrap) wrap.innerHTML = '';
+      const wrap2 = document.getElementById('final-lineas-dia2-wrap');
+      if(wrap2) wrap2.innerHTML = '';
+      const wrapT1 = document.getElementById('final-tarjetas-dia1-wrap');
+      if(wrapT1) wrapT1.innerHTML = '';
+      const wrapT2 = document.getElementById('final-tarjetas-dia2-wrap');
+      if(wrapT2) wrapT2.innerHTML = '';
+      const wrap3 = document.getElementById('final-resultado-wrap');
+      if(wrap3) wrap3.innerHTML = '';
+    }
+```
+
+### Cambio 5 — Frontend: las 3 funciones que arman y cargan la lista de tarjetas
+
+**Archivo:** `index.html`
+
+**Por qué:** `renderFinalTarjetasDia1_`/`Dia2_` deciden si mostrar la lista (solo si las líneas de ese día ya están armadas) y pintan el título; `loadAdmTarjetasFinal_` pide los resultados de ese día (`getFinalStandingsDia1`/`getFinalStandingsDia2`, que ya traen el HCP, los scores y cuántos hoyos lleva cada uno) y arma una píldora por jugador, igual que `loadAdmTarjetas` ya hace para una fecha común.
+
+**Buscá:**
+```js
+function finalArmarLineasDia2(){
+  const msg = document.getElementById('final-lineas-dia2-msg');
+```
+
+**Reemplázá por:**
+```js
+// Lista, dentro del panel admin de la Fecha Final, las tarjetas de cada
+// jugador para poder corregirlas -- mismo patrón visual que loadAdmTarjetas
+// para una fecha común (píldora con nombre + estado, tocás y se abre el
+// editor), pero leyendo de getFinalStandingsDia1/getFinalStandingsDia2 (ya
+// traen HCP + scores + pares/índices de la cancha de ese día) y guardando
+// con adminGuardarTarjetaFinal_ en vez de cargarTarjeta_ (ver
+// openAdmTarFinalModal_ y la rama ADM_TAR_FINAL_DIA de
+// admTarModalGuardar_). Solo aparece una vez que las líneas de ese día
+// están armadas -- antes no tiene sentido mostrar una lista para corregir.
+function renderFinalTarjetasDia1_(meta){
+  const wrap = document.getElementById('final-tarjetas-dia1-wrap');
+  if(!wrap) return;
+  if(!meta.lineasDia1 || !meta.lineasDia1.length){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = '<div style="margin-top:18px;"><div class="adm-label" style="margin-bottom:8px;">Tarjetas — Día 1 (tocá para corregir)</div><div id="final-tar-dia1-list" class="gf-tar-grid">Cargando...</div></div>';
+  loadAdmTarjetasFinal_(1, 'final-tar-dia1-list');
+}
+
+function renderFinalTarjetasDia2_(meta){
+  const wrap = document.getElementById('final-tarjetas-dia2-wrap');
+  if(!wrap) return;
+  if(!meta.lineasDia2 || !meta.lineasDia2.length){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = '<div style="margin-top:18px;"><div class="adm-label" style="margin-bottom:8px;">Tarjetas — Día 2 (tocá para corregir)</div><div id="final-tar-dia2-list" class="gf-tar-grid">Cargando...</div></div>';
+  loadAdmTarjetasFinal_(2, 'final-tar-dia2-list');
+}
+
+function loadAdmTarjetasFinal_(dia, listId){
+  const listEl = document.getElementById(listId);
+  if(!listEl) return;
+  ngtApiGet(dia === 1 ? 'getFinalStandingsDia1' : 'getFinalStandingsDia2').then(r => {
+    if(!r || !r.ok){
+      listEl.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:8px 0;">' + ((r && r.error) || 'No se pudieron cargar las tarjetas') + '</div>';
+      return;
+    }
+    const standings = r.standings || [];
+    if(!standings.length){
+      listEl.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:8px 0;">No hay tarjetas cargadas aún</div>';
+      return;
+    }
+    listEl.innerHTML = standings.map(s => {
+      const hcpVal = dia === 1 ? s.hcpJuego : s.hcpJuego2;
+      const completa = s.holesCargados === 18;
+      const stat = (completa ? '✓ Completa' : (s.holesCargados + '/18')) + ' · HCP ' + (hcpVal !== undefined && hcpVal !== null ? hcpVal : '—');
+      const statColor = completa ? '#15803d' : 'var(--g4)';
+      const safe = s.apodo.replace(/'/g, "\\'");
+      return `<button type="button" class="gf-tar-pill" onclick="openAdmTarFinalModal_(${dia},'${s.matricula}','${safe}')">
+        <div class="gf-tar-pname">${fmtNameForAdm(s.apodo)}${s.invitado ? ' (inv.)' : ''}</div>
+        <div class="gf-tar-pstat" style="color:${statColor};">${stat}</div>
+      </button>`;
+    }).join('');
+  }).catch(e => {
+    listEl.innerHTML = '<div style="color:#c8102e;font-size:13px;">Error: ' + e.message + '</div>';
+  });
+}
+
+function finalArmarLineasDia2(){
+  const msg = document.getElementById('final-lineas-dia2-msg');
+```
+
+### Cambio 6 — Frontend: nueva variable global `ADM_TAR_FINAL_DIA`
+
+**Archivo:** `index.html`
+
+**Por qué:** indica si el editor de tarjetas está abierto para una tarjeta de la Final (y para qué día) en vez de una fecha común. La usan `admTarModalHtml_` (para el título y si muestra los checkboxes LD/BA) y `admTarModalGuardar_` (para decidir qué acción postear).
+
+**Buscá:**
+```js
+let ADM_TAR_MODAL_HCP = '';
+let ADM_TAR_MODAL_LD = false;
+let ADM_TAR_MODAL_BA = false;
+
+function loadAdmTarjetas(fecha) {
+```
+
+**Reemplázá por:**
+```js
+let ADM_TAR_MODAL_HCP = '';
+let ADM_TAR_MODAL_LD = false;
+let ADM_TAR_MODAL_BA = false;
+// Día (1 o 2) cuando el editor de tarjetas está abierto para una tarjeta de
+// la Fecha Final en vez de una fecha común -- null fuera de ese caso. Lo
+// usan admTarModalHtml_ (título y si muestra LD/BA) y admTarModalGuardar_
+// (qué action postear y cómo refrescar la lista al guardar).
+let ADM_TAR_FINAL_DIA = null;
+
+function loadAdmTarjetas(fecha) {
+```
+
+### Cambio 7 — Frontend: resetear `ADM_TAR_FINAL_DIA` al abrir una fecha común + nueva función `openAdmTarFinalModal_`
+
+**Archivo:** `index.html`
+
+**Por qué:** `openAdmTarModal` (fecha común) ahora resetea `ADM_TAR_FINAL_DIA` por las dudas. `openAdmTarFinalModal_` es el equivalente para la Final: pide `getFinalStandingsDia1`/`getFinalStandingsDia2` (ya tiene todo lo necesario: HCP, scores y pares/índices de la cancha de ese día), precarga esos datos y abre el mismo modal (`admTarModalHtml_`) y el mismo editor de scorecard/keypad que ya existían.
+
+**Buscá:**
+```js
+function openAdmTarModal(mat, nombre, cancha, canchaId) {
+  ADM_TAR_PLAYER = { matricula: mat, nombre: nombre, cancha: cancha, canchaId: canchaId };
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  ADM_TAR_MODAL_HCP = '';
+  ADM_TAR_MODAL_LD = false;
+  ADM_TAR_MODAL_BA = false;
+  openFloatingModal('<div style="padding:30px 10px;text-align:center;color:var(--g4);">Cargando...</div>');
+
+  Promise.all([
+    ngtApiGet('canchaPares', { cancha: cancha }),
+    ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }),
+  ]).then(results => {
+    ADM_TAR_CANCHA_DATA = (results[0] && results[0].data) || null;
+    const tarjetas = (results[1] && results[1].ok && results[1].data) || [];
+    const myTar = tarjetas.find(t => String(t.matricula) === String(mat));
+    if(myTar){
+      if(myTar.hcp !== null && myTar.hcp !== '') ADM_TAR_MODAL_HCP = myTar.hcp;
+      if(Array.isArray(myTar.scores)) ADM_TAR_SCORES = myTar.scores.map(v => v === null ? null : Number(v));
+      ADM_TAR_MODAL_LD = myTar.ld === 1;
+      ADM_TAR_MODAL_BA = myTar.ba === 1;
+    }
+    openFloatingModal(admTarModalHtml_());
+    renderAdmTarModalScorecard_();
+  });
+}
+
+function admTarModalHtml_(){
+```
+
+**Reemplázá por:**
+```js
+function openAdmTarModal(mat, nombre, cancha, canchaId) {
+  ADM_TAR_PLAYER = { matricula: mat, nombre: nombre, cancha: cancha, canchaId: canchaId };
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  ADM_TAR_MODAL_HCP = '';
+  ADM_TAR_MODAL_LD = false;
+  ADM_TAR_MODAL_BA = false;
+  ADM_TAR_FINAL_DIA = null;
+  openFloatingModal('<div style="padding:30px 10px;text-align:center;color:var(--g4);">Cargando...</div>');
+
+  Promise.all([
+    ngtApiGet('canchaPares', { cancha: cancha }),
+    ngtApiPost({ action: 'getTarjetasForFecha', adminKey: ADMIN_KEY_OK, fecha: ADM_EDIT_FECHA }),
+  ]).then(results => {
+    ADM_TAR_CANCHA_DATA = (results[0] && results[0].data) || null;
+    const tarjetas = (results[1] && results[1].ok && results[1].data) || [];
+    const myTar = tarjetas.find(t => String(t.matricula) === String(mat));
+    if(myTar){
+      if(myTar.hcp !== null && myTar.hcp !== '') ADM_TAR_MODAL_HCP = myTar.hcp;
+      if(Array.isArray(myTar.scores)) ADM_TAR_SCORES = myTar.scores.map(v => v === null ? null : Number(v));
+      ADM_TAR_MODAL_LD = myTar.ld === 1;
+      ADM_TAR_MODAL_BA = myTar.ba === 1;
+    }
+    openFloatingModal(admTarModalHtml_());
+    renderAdmTarModalScorecard_();
+  });
+}
+
+// Mismo rol que openAdmTarModal, pero para una tarjeta de la Fecha Final
+// (Día 1 o Día 2) en vez de una fecha común: trae pares/índices/HCP/scores
+// de getFinalStandingsDia1/getFinalStandingsDia2 (ya los tienen calculados,
+// no hace falta pedir la cancha aparte como con canchaPares) y reutiliza
+// el mismo modal (admTarModalHtml_) y el mismo editor de scorecard/keypad
+// -- ADM_TAR_FINAL_DIA es lo que le indica a admTarModalHtml_ y a
+// admTarModalGuardar_ que están editando una tarjeta de la Final.
+function openAdmTarFinalModal_(dia, mat, nombre){
+  ADM_TAR_FINAL_DIA = dia;
+  ADM_TAR_PLAYER = { matricula: mat, nombre: nombre };
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  ADM_TAR_MODAL_HCP = '';
+  openFloatingModal('<div style="padding:30px 10px;text-align:center;color:var(--g4);">Cargando...</div>');
+
+  ngtApiGet(dia === 1 ? 'getFinalStandingsDia1' : 'getFinalStandingsDia2').then(r => {
+    if(!r || !r.ok){
+      openFloatingModal('<div style="padding:30px 10px;text-align:center;color:var(--red);">' + ((r && r.error) || 'Error al cargar la tarjeta') + '</div>');
+      return;
+    }
+    const myRow = (r.standings || []).find(s => String(s.matricula) === String(mat));
+    if(dia === 1){
+      ADM_TAR_CANCHA_DATA = { pares: r.pares || [], indices: r.indices || [] };
+      if(myRow){
+        ADM_TAR_MODAL_HCP = (myRow.hcpJuego !== undefined && myRow.hcpJuego !== null) ? myRow.hcpJuego : '';
+        ADM_TAR_SCORES = (myRow.scores || new Array(18).fill(null)).map(v => v === null ? null : Number(v));
+      }
+    } else {
+      ADM_TAR_CANCHA_DATA = { pares: r.paresDia2 || [], indices: r.indicesDia2 || [] };
+      if(myRow){
+        ADM_TAR_MODAL_HCP = (myRow.hcpJuego2 !== undefined && myRow.hcpJuego2 !== null) ? myRow.hcpJuego2 : '';
+        ADM_TAR_SCORES = (myRow.scoresDia2 || new Array(18).fill(null)).map(v => v === null ? null : Number(v));
+      }
+    }
+    openFloatingModal(admTarModalHtml_());
+    renderAdmTarModalScorecard_();
+  }).catch(() => {
+    openFloatingModal('<div style="padding:30px 10px;text-align:center;color:var(--red);">Error de red</div>');
+  });
+}
+
+function admTarModalHtml_(){
+```
+
+### Cambio 8 — Frontend: título "· Día X" y ocultar LD/BA cuando es una tarjeta de la Final
+
+**Archivo:** `index.html`
+
+**Por qué:** cuando se está editando una tarjeta de la Final, el título del modal muestra a qué día corresponde, y se ocultan los checkboxes de Long Drive / Best Approach (no existen en la Final).
+
+**Buscá:**
+```js
+function admTarModalHtml_(){
+  const nombre = ADM_TAR_PLAYER ? ADM_TAR_PLAYER.nombre : '';
+  return '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:10px;">✏ ' + fmtNameForAdm(nombre) + '</div>' +
+    '<div class="adm-row">' +
+      '<div class="adm-field">' +
+        '<label class="adm-label">HCP de juego</label>' +
+        '<input type="number" id="adm-tar-modal-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" value="' + ADM_TAR_MODAL_HCP + '">' +
+      '</div>' +
+    '</div>' +
+    '<div id="adm-tar-modal-scorecard" style="margin-top:10px;"></div>' +
+    '<p style="margin:8px 0 0;font-family:\'Barlow Condensed\',sans-serif;font-size:11px;color:var(--g4);text-align:center;letter-spacing:.04em;">TOCÁ UN SCORE PARA EDITARLO</p>' +
+    '<div style="display:flex;gap:16px;margin:16px 0 4px;">' +
+      '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">' +
+        '<input type="checkbox" id="adm-tar-modal-ld"' + (ADM_TAR_MODAL_LD ? ' checked' : '') + '> 💪 Long Drive' +
+      '</label>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">' +
+        '<input type="checkbox" id="adm-tar-modal-ba"' + (ADM_TAR_MODAL_BA ? ' checked' : '') + '> 🎯 Best Approach' +
+      '</label>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:14px;">' +
+      '<button class="adm-btn-primary" onclick="admTarModalGuardar_()" style="flex:2;">Guardar Cambios</button>' +
+      '<button class="btn-cancel" onclick="closeFloatingModal()" style="flex:1;">Cancelar</button>' +
+    '</div>' +
+    '<div id="adm-tar-modal-msg" class="adm-msg" style="display:none;"></div>';
+}
+```
+
+**Reemplázá por:**
+```js
+function admTarModalHtml_(){
+  const nombre = ADM_TAR_PLAYER ? ADM_TAR_PLAYER.nombre : '';
+  const tituloSufijo = ADM_TAR_FINAL_DIA ? ' · Día ' + ADM_TAR_FINAL_DIA : '';
+  return '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:10px;">✏ ' + fmtNameForAdm(nombre) + tituloSufijo + '</div>' +
+    '<div class="adm-row">' +
+      '<div class="adm-field">' +
+        '<label class="adm-label">HCP de juego</label>' +
+        '<input type="number" id="adm-tar-modal-hcp" class="adm-input" min="0" max="54" inputmode="numeric" placeholder="HCP" value="' + ADM_TAR_MODAL_HCP + '">' +
+      '</div>' +
+    '</div>' +
+    '<div id="adm-tar-modal-scorecard" style="margin-top:10px;"></div>' +
+    '<p style="margin:8px 0 0;font-family:\'Barlow Condensed\',sans-serif;font-size:11px;color:var(--g4);text-align:center;letter-spacing:.04em;">TOCÁ UN SCORE PARA EDITARLO</p>' +
+    // La Fecha Final no tiene Long Drive / Best Approach -- esos checkboxes
+    // solo tienen sentido para una fecha común.
+    (ADM_TAR_FINAL_DIA ? '' :
+    '<div style="display:flex;gap:16px;margin:16px 0 4px;">' +
+      '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">' +
+        '<input type="checkbox" id="adm-tar-modal-ld"' + (ADM_TAR_MODAL_LD ? ' checked' : '') + '> 💪 Long Drive' +
+      '</label>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">' +
+        '<input type="checkbox" id="adm-tar-modal-ba"' + (ADM_TAR_MODAL_BA ? ' checked' : '') + '> 🎯 Best Approach' +
+      '</label>' +
+    '</div>') +
+    '<div style="display:flex;gap:8px;margin-top:14px;">' +
+      '<button class="adm-btn-primary" onclick="admTarModalGuardar_()" style="flex:2;">Guardar Cambios</button>' +
+      '<button class="btn-cancel" onclick="closeFloatingModal()" style="flex:1;">Cancelar</button>' +
+    '</div>' +
+    '<div id="adm-tar-modal-msg" class="adm-msg" style="display:none;"></div>';
+}
+```
+
+### Cambio 9 — Frontend: guardar la corrección (rama Final vs fecha común)
+
+**Archivo:** `index.html`
+
+**Por qué:** `admTarModalGuardar_` ahora se bifurca: si se está editando una tarjeta de la Final, postea `adminGuardarTarjetaFinal` (sin leer los checkboxes LD/BA, que no existen en el DOM en ese caso) y al guardar refresca el panel de la Final (`finalLoad`) y cierra el modo Final; si no, sigue posteando `cargarTarjeta` exactamente igual que antes. `cerrarAdmTarEditor` también resetea `ADM_TAR_FINAL_DIA`.
+
+**Buscá:**
+```js
+function cerrarAdmTarEditor() {
+  ADM_TAR_PLAYER = null;
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  const ed = document.getElementById('adm-tar-editor');
+  if(ed) ed.style.display = 'none';
+  const msg = document.getElementById('adm-tar-msg');
+  if(msg) msg.style.display = 'none';
+}
+
+function admTarModalGuardar_() {
+  if(!ADM_TAR_PLAYER) return;
+  const msg = document.getElementById('adm-tar-modal-msg');
+  const hcp = document.getElementById('adm-tar-modal-hcp').value.trim();
+  const ld  = document.getElementById('adm-tar-modal-ld').checked ? 1 : 0;
+  const ba  = document.getElementById('adm-tar-modal-ba').checked ? 1 : 0;
+  if(!hcp){
+    msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el HCP de juego'; msg.style.display = 'block'; return;
+  }
+  const scores = ADM_TAR_SCORES.map(v => v !== null ? v : '');
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+  ngtApiPost({
+    action: 'cargarTarjeta',
+    adminKey: ADMIN_KEY_OK,
+    matricula: ADM_TAR_PLAYER.matricula,
+    fecha: ADM_EDIT_FECHA,
+    hcp: parseInt(hcp),
+    scores: scores,
+    ld: ld,
+    ba: ba,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok'; msg.textContent = '✓ Tarjeta guardada';
+      setTimeout(() => { closeFloatingModal(); loadAdmTarjetas(ADM_EDIT_FECHA); }, 900);
+    } else {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+```
+
+**Reemplázá por:**
+```js
+function cerrarAdmTarEditor() {
+  ADM_TAR_PLAYER = null;
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  ADM_TAR_FINAL_DIA = null;
+  const ed = document.getElementById('adm-tar-editor');
+  if(ed) ed.style.display = 'none';
+  const msg = document.getElementById('adm-tar-msg');
+  if(msg) msg.style.display = 'none';
+}
+
+function admTarModalGuardar_() {
+  if(!ADM_TAR_PLAYER) return;
+  const msg = document.getElementById('adm-tar-modal-msg');
+  const hcp = document.getElementById('adm-tar-modal-hcp').value.trim();
+  if(!hcp){
+    msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el HCP de juego'; msg.style.display = 'block'; return;
+  }
+  const scores = ADM_TAR_SCORES.map(v => v !== null ? v : '');
+  msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+
+  // Tarjeta de la Fecha Final (ADM_TAR_FINAL_DIA seteado por
+  // openAdmTarFinalModal_): va por adminGuardarTarjetaFinal_, no por
+  // cargarTarjeta_ -- no tiene fecha/ld/ba, tiene día. Al guardar, refresca
+  // el panel de la Final (finalLoad) en vez de la lista de una fecha común.
+  if(ADM_TAR_FINAL_DIA){
+    ngtApiPost({
+      action: 'adminGuardarTarjetaFinal',
+      adminKey: ADMIN_KEY_OK,
+      dia: ADM_TAR_FINAL_DIA,
+      matricula: ADM_TAR_PLAYER.matricula,
+      hcp: parseInt(hcp),
+      scores: scores,
+    }).then(r => {
+      if(r.ok){
+        msg.className = 'adm-msg ok'; msg.textContent = '✓ Tarjeta guardada';
+        setTimeout(() => { closeFloatingModal(); ADM_TAR_FINAL_DIA = null; finalLoad(); }, 900);
+      } else {
+        msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
+      }
+    }).catch(e => {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+    });
+    return;
+  }
+
+  const ld  = document.getElementById('adm-tar-modal-ld').checked ? 1 : 0;
+  const ba  = document.getElementById('adm-tar-modal-ba').checked ? 1 : 0;
+  ngtApiPost({
+    action: 'cargarTarjeta',
+    adminKey: ADMIN_KEY_OK,
+    matricula: ADM_TAR_PLAYER.matricula,
+    fecha: ADM_EDIT_FECHA,
+    hcp: parseInt(hcp),
+    scores: scores,
+    ld: ld,
+    ba: ba,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok'; msg.textContent = '✓ Tarjeta guardada';
+      setTimeout(() => { closeFloatingModal(); loadAdmTarjetas(ADM_EDIT_FECHA); }, 900);
+    } else {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+```
+
+### Cómo lo probé
+
+Armé una copia de prueba del repo y escribí 2 baterías de pruebas automáticas con Node (46 verificaciones en total, todas en verde):
+
+**Backend (`adminGuardarTarjetaFinal_`)** — simulé la hoja TARJETAS FINAL, el caché y FINAL_META, y probé: rechaza una admin key inválida, un día que no sea 1 o 2, una matrícula vacía, una matrícula sin tarjeta para ese día, y un score fuera de rango (1 a 15). Con datos válidos: guarda el HCP y los 18 scores en la fila correcta del Día 1 sin tocar la fila del Día 2 del mismo jugador (y viceversa), deja `firmadosDia1`/`firmadosDia2` en `true` sin borrar el resto de los datos guardados en FINAL_META, y si no se manda HCP, deja el HCP de la fila sin cambios pero sí actualiza los scores.
+
+**Frontend** — con un DOM y una red simulados, probé: el modal muestra "· Día X" en el título y oculta los checkboxes LD/BA cuando se edita una tarjeta de la Final (y los sigue mostrando para una fecha común); al guardar en modo Final, postea `adminGuardarTarjetaFinal` con el día y la matrícula correctos y SIN explotar aunque los checkboxes LD/BA no existan en el DOM (el código ya no los lee en ese caso), y al terminar resetea el modo Final y refresca el panel de la Final en vez de la lista de una fecha común; en modo fecha común, sigue posteando `cargarTarjeta` con fecha/ld/ba exactamente igual que antes. También probé que `openAdmTarFinalModal_` precarga el HCP y los scores correctos según el día (y no se confunde entre el HCP del Día 1 y el del Día 2), que muestra el error del backend en vez de romperse si todavía no se armaron las líneas, y que la lista de tarjetas (`loadAdmTarjetasFinal_`) arma una píldora por jugador con el día correcto en el botón, y que las listas no aparecen si las líneas de ese día todavía no están armadas.
+
+Antes y después de escribir este documento verifiqué que cada uno de los 9 bloques "Buscá" aparece exactamente una vez en el código real (recién clonado de GitHub, commit `60ab290`, que ya tiene aplicadas las Tareas 149 y 150), y que aplicar los 9 cambios sobre ese código real da como resultado, en los 3 archivos, un resultado **idéntico, byte por byte**, al que efectivamente probé.
+
+### Preguntas de verificación
+
+1. Dentro del panel admin de la Fecha Final, una vez armadas las líneas del Día 1, ¿aparece una lista "Tarjetas — Día 1" con una píldora por jugador?
+2. Al tocar la píldora de un jugador, ¿se abre el editor con su HCP y sus 18 hoyos ya cargados, sin los checkboxes de Long Drive / Best Approach?
+3. Al corregir un score y guardar, ¿el cambio aparece reflejado en las tablas de resultados de la Final sin tener que hacer nada más?
+4. ¿El editor de tarjetas de una fecha común sigue funcionando exactamente igual que antes (con sus checkboxes LD/BA)?
+
+## ✅ Respuestas de verificación — Tarea 151
+
+1. **Sí.** `renderFinalTarjetasDia1_(meta)` se llama desde `finalLoad` y solo pinta la lista cuando `meta.lineasDia1` tiene elementos (líneas ya armadas). Arma el contenedor con título "Tarjetas — Día 1 (tocá para corregir)" y un `<div id="final-tar-dia1-list">` que `loadAdmTarjetasFinal_(1, ...)` rellena con una píldora por jugador leyendo de `getFinalStandingsDia1`. Lo mismo aplica para el Día 2.
+
+2. **Sí.** `openAdmTarFinalModal_` setea `ADM_TAR_FINAL_DIA = dia`, luego pide `getFinalStandingsDia1` o `getFinalStandingsDia2` (según el día), precarga `ADM_TAR_MODAL_HCP` y `ADM_TAR_SCORES` con los datos de ese jugador, y abre `admTarModalHtml_()`. Como `ADM_TAR_FINAL_DIA !== null`, el modal genera `tituloSufijo = ' · Día X'` y omite completamente el bloque de checkboxes LD/BA (el operador ternario devuelve `''` en vez del HTML de esos checkboxes).
+
+3. **Sí.** `adminGuardarTarjetaFinal_` escribe el HCP y los 18 scores directo en la hoja TARJETAS FINAL con `sh.getRange(...).setValues(...)` + `SpreadsheetApp.flush()`. `getFinalStandingsDia1_` y `getFinalStandingsDia2_` leen esa hoja en cada consulta sin ninguna caché de por medio, así que la próxima vez que se miren los resultados ya muestran el dato corregido. En el frontend, al guardar exitosamente se llama `finalLoad()` que recarga todo el panel admin, con lo cual las tablas de resultados se actualizan en el mismo momento.
+
+4. **Sí.** `openAdmTarModal` sigue igual que antes, más el reset `ADM_TAR_FINAL_DIA = null` al inicio. Como `ADM_TAR_FINAL_DIA` queda en `null`, `admTarModalHtml_` genera `tituloSufijo = ''` y SÍ incluye el bloque LD/BA. `admTarModalGuardar_` detecta `ADM_TAR_FINAL_DIA` como falsy, salta la rama Final y ejecuta el `ngtApiPost({ action: 'cargarTarjeta', ... ld, ba })` exactamente igual que antes.
+
+5. **Commit:** `d4a572a` — "T151: admin puede corregir tarjetas ya guardadas de la Fecha Final"
