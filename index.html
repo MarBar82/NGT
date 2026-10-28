@@ -8781,9 +8781,9 @@ function finalDia2SoloTableHtml_(standings){
         '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
         '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
         '<td class="c"><span class="s">' + s.grossDia2 + '</span></td>' +
-        '<td class="c"><span class="s">' + s.hcpJuego2 + '</span></td>' +
-        '<td class="c"><span class="s">' + s.netoDia2 + '</span></td>' +
-        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(s.alParDia2) + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(s.alParDia2) + ';">' + s.netoDia2 + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(s.alParDia2) + '</td>' +
         '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
       '</tr>';
     });
@@ -9274,6 +9274,28 @@ function finalPublicDiffTxt_(diff){
     : '<span style="color:var(--green);">' + diff + '</span>';
 }
 
+// Color para la columna "Neto" y "Al par" de las 3 tablas de resultados de
+// la Fecha Final (Día 1, Día 2, Acumulado): en par o bajo par = verde,
+// sobre par = rojo. `diff` es la diferencia respecto al par -- si es null
+// (todavía no se jugó ningún hoyo) no se aplica color (queda el default).
+function finalTablaDiffColor_(diff){
+  if(diff === null || diff === undefined) return '';
+  return diff > 0 ? 'var(--red)' : 'var(--green)';
+}
+
+// Texto "Al par" (+2 / E / -3) de las 3 tablas de resultados de la Final --
+// a propósito NO es finalPublicDiffTxt_ (esa la usan otras pantallas, como
+// el resumen en vivo, con un criterio de color distinto: ahí un empate con
+// el par queda neutro). Acá el criterio es el mismo que el de la columna
+// "Neto" de estas 3 tablas (finalTablaDiffColor_) -- un empate con el par
+// cuenta como verde, para que nunca se vea un Neto en verde al lado de un
+// "E" en otro color en la misma fila.
+function finalTablaAlParTxt_(diff){
+  if(diff === null || diff === undefined) return '<span class="s dim">–</span>';
+  var txt = diff === 0 ? 'E' : (diff > 0 ? '+' + diff : String(diff));
+  return '<span class="s big" style="color:' + finalTablaDiffColor_(diff) + ';">' + txt + '</span>';
+}
+
 // Tabla genérica de posiciones NETO -- la usan el visor público del Día 1
 // (finalPublicRender) y la pestaña "Día 1" de "Mi Tarjeta" en la Fecha
 // Final (finalLiveLoadDia1), para no duplicar el armado de esta tabla en
@@ -9302,9 +9324,9 @@ function finalStandingsNetoTableHtml_(standings, titulo){
         '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
         '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
         '<td class="c"><span class="s">' + s.gross + '</span></td>' +
-        '<td class="c"><span class="s">' + s.hcpJuego + '</span></td>' +
-        '<td class="c"><span class="s">' + (s.gross - s.hcpJuego) + '</span></td>' +
-        '<td class="c"><span class="s big">' + finalPublicDiffTxt_(s.alPar) + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(s.alPar) + ';">' + (s.gross - s.hcpJuego) + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(s.alPar) + '</td>' +
         '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
       '</tr>';
     });
@@ -9361,13 +9383,20 @@ function finalPublicRender(allR, stR){
 
 // Tabla del acumulado de las 36 hoyos (Día 1 + Día 2) -- un bloque de 3
 // columnas (Gross/Hcp/Neto) por cada día, más D1-D2 (suma de los 2 netos,
-// sin golpes a favor), Favor y el TOTAL final (D1-D2 + Favor). El "Neto" de
-// cada día es siempre gross - hcp de ese día, SIN golpes a favor (esos solo
-// se suman una vez, en el TOTAL) -- por eso es distinto del `neto` que ya
-// trae getFinalStandingsDia1_ (ese sí incluye golpesFavor, porque se usa
-// para ordenar/armar las líneas del Día 2). Se muestra EN VIVO desde que
-// arranca el Día 2 -- mientras el jugador no cargó ningún hoyo todavía
-// (netoDia2 === null), el bloque del Día 2 se ve en gris con un "–".
+// sin golpes a favor), el Al par total (diffTotal, ya calculado en
+// getFinalStandingsDia2_), Favor y el TOTAL final (D1-D2 + Favor). El
+// "Neto" de cada día es siempre gross - hcp de ese día, SIN golpes a favor
+// (esos solo se suman una vez, en el TOTAL) -- por eso es distinto del
+// `neto` que ya trae getFinalStandingsDia1_ (ese sí incluye golpesFavor,
+// porque se usa para ordenar/armar las líneas del Día 2). Se muestra EN
+// VIVO desde que arranca el Día 2 -- mientras el jugador no cargó ningún
+// hoyo todavía (netoDia2 === null), el bloque del Día 2 se ve en gris con
+// un "–". Lleva una línea separadora fina (border-left) antes del bloque
+// del Día 2 y antes de D1-D2, para distinguir visualmente los 2 días del
+// total -- mismo criterio de color (finalTablaDiffColor_/finalTablaAlParTxt_)
+// que las tablas de Día 1 y Día 2 (finalStandingsNetoTableHtml_ /
+// finalDia2SoloTableHtml_): en par o bajo par = verde, sobre par = rojo, y
+// el Hcp siempre en gris (var(--g4)), nunca negro.
 function finalPublicStandingsDia2Html_(stR){
   var standings = stR.standings;
   var html = '<div class="card" style="margin-bottom:14px;">' +
@@ -9379,15 +9408,16 @@ function finalPublicStandingsDia2Html_(stR){
         '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
-        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;border-left:1px solid var(--g2);padding-left:16px;">Gross</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
-        '<th class="c" style="width:1%;white-space:nowrap;">D1-D2</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;border-left:1px solid var(--g2);padding-left:16px;">D1-D2</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;" title="Golpes a favor de la clasificación de temporada (posiciones 1-8)">Favor</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;background:var(--navy);color:#fff;border-radius:0;" title="Neto total de los 36 hoyos, con los golpes a favor ya aplicados">Total</th>' +
       '</tr></thead><tbody>';
   if(!standings.length){
-    html += '<tr><td colspan="11" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+    html += '<tr><td colspan="12" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
   } else {
     standings.forEach(function(s, i){
       var pos = i + 1;
@@ -9396,16 +9426,24 @@ function finalPublicStandingsDia2Html_(stR){
       var arrancoDia2 = s.netoDia2 !== null;
       var sumaNetos = netoDia1Puro + (arrancoDia2 ? s.netoDia2 : 0);
       var favorTxt = s.golpesFavor ? (s.golpesFavor > 0 ? '+' + s.golpesFavor : String(s.golpesFavor)) : '—';
+      // diffD1/diffD2 en 0 si todavía no hay ningún hoyo jugado ese día (en
+      // vez de null) para que el "Neto" de ese bloque y el "D1-D2" nunca
+      // queden sin color -- mismo criterio que ya usa el ordenamiento más
+      // arriba (getFinalStandingsDia2_: "(a.alParDia1 === null ? 0 : ...)").
+      var diffD1 = (s.alParDia1 === null ? 0 : s.alParDia1);
+      var diffD2 = (s.alParDia2 === null ? 0 : s.alParDia2);
+      var diffSuma = diffD1 + (arrancoDia2 ? diffD2 : 0);
       html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'ambos\')">' +
         '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
         '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
         '<td class="c"><span class="s">' + s.grossDia1 + '</span></td>' +
-        '<td class="c"><span class="s">' + s.hcpJuegoDia1 + '</span></td>' +
-        '<td class="c"><span class="s">' + netoDia1Puro + '</span></td>' +
-        '<td class="c"><span class="s' + (arrancoDia2 ? '' : ' dim') + '">' + (arrancoDia2 ? s.grossDia2 : '–') + '</span></td>' +
-        '<td class="c"><span class="s">' + s.hcpJuego2 + '</span></td>' +
-        '<td class="c"><span class="s' + (arrancoDia2 ? '' : ' dim') + '">' + (arrancoDia2 ? s.netoDia2 : '–') + '</span></td>' +
-        '<td class="c"><span class="s">' + sumaNetos + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuegoDia1 + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(diffD1) + ';">' + netoDia1Puro + '</span></td>' +
+        '<td class="c" style="border-left:1px solid var(--g2);padding-left:16px;"><span class="s' + (arrancoDia2 ? '' : ' dim') + '">' + (arrancoDia2 ? s.grossDia2 : '–') + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c"><span class="s' + (arrancoDia2 ? '' : ' dim') + '"' + (arrancoDia2 ? ' style="color:' + finalTablaDiffColor_(diffD2) + ';"' : '') + '>' + (arrancoDia2 ? s.netoDia2 : '–') + '</span></td>' +
+        '<td class="c" style="border-left:1px solid var(--g2);padding-left:16px;"><span class="s" style="color:' + finalTablaDiffColor_(diffSuma) + ';">' + sumaNetos + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(s.diffTotal) + '</td>' +
         '<td class="c"><span class="s">' + favorTxt + '</span></td>' +
         '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + s.netoTotal + '</span></td>' +
       '</tr>';
