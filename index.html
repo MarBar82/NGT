@@ -9381,22 +9381,26 @@ function finalPublicRender(allR, stR){
   }
 }
 
-// Tabla del acumulado de las 36 hoyos (Día 1 + Día 2) -- un bloque de 3
-// columnas (Gross/Hcp/Neto) por cada día, más D1-D2 (suma de los 2 netos,
-// sin golpes a favor), el Al par total (diffTotal, ya calculado en
-// getFinalStandingsDia2_), Favor y el TOTAL final (D1-D2 + Favor). El
-// "Neto" de cada día es siempre gross - hcp de ese día, SIN golpes a favor
-// (esos solo se suman una vez, en el TOTAL) -- por eso es distinto del
-// `neto` que ya trae getFinalStandingsDia1_ (ese sí incluye golpesFavor,
-// porque se usa para ordenar/armar las líneas del Día 2). Se muestra EN
-// VIVO desde que arranca el Día 2 -- mientras el jugador no cargó ningún
-// hoyo todavía (netoDia2 === null), el bloque del Día 2 se ve en gris con
-// un "–". Lleva una línea separadora fina (border-left) antes del bloque
-// del Día 2 y antes de D1-D2, para distinguir visualmente los 2 días del
-// total -- mismo criterio de color (finalTablaDiffColor_/finalTablaAlParTxt_)
-// que las tablas de Día 1 y Día 2 (finalStandingsNetoTableHtml_ /
+// Tabla del acumulado de las 36 hoyos (Día 1 + Día 2) -- un bloque de 2
+// columnas (Hcp/Neto) por cada día, más D1-D2 (suma de los 2 netos, sin
+// golpes a favor), Favor y el TOTAL final (D1-D2 + Favor). Sin las
+// columnas "Gross" ni "Al par" (Tarea 150: no entraba en pantalla de
+// celular) -- el Gross de cada día sigue haciendo falta para calcular el
+// Neto (netoDia1Puro/sumaNetos), solo que ya no se muestra como columna
+// propia. El "Neto" de cada día es siempre gross - hcp de ese día, SIN
+// golpes a favor (esos solo se suman una vez, en el TOTAL) -- por eso es
+// distinto del `neto` que ya trae getFinalStandingsDia1_ (ese sí incluye
+// golpesFavor, porque se usa para ordenar/armar las líneas del Día 2). Se
+// muestra EN VIVO desde que arranca el Día 2 -- mientras el jugador no
+// cargó ningún hoyo todavía (netoDia2 === null), su Neto del Día 2 se ve
+// en gris con un "–". Lleva una línea separadora fina (border-left) antes
+// del bloque del Día 2 y antes de D1-D2, para distinguir visualmente los 2
+// días del total -- mismo criterio de color (finalTablaDiffColor_) que las
+// tablas de Día 1 y Día 2 (finalStandingsNetoTableHtml_ /
 // finalDia2SoloTableHtml_): en par o bajo par = verde, sobre par = rojo, y
-// el Hcp siempre en gris (var(--g4)), nunca negro.
+// el Hcp siempre en gris (var(--g4)), nunca negro. El TOTAL va en una
+// celda con fondo navy sólido y el número grande en blanco, para que se
+// destaque como el resultado final de la fila.
 function finalPublicStandingsDia2Html_(stR){
   var standings = stR.standings;
   var html = '<div class="card" style="margin-bottom:14px;">' +
@@ -9405,19 +9409,16 @@ function finalPublicStandingsDia2Html_(stR){
       '<thead><tr>' +
         '<th class="c" style="width:28px;padding:6px 4px;"></th>' +
         '<th>Jugador</th>' +
-        '<th class="c" style="width:1%;white-space:nowrap;">Gross</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
-        '<th class="c" style="width:1%;white-space:nowrap;border-left:1px solid var(--g2);padding-left:16px;">Gross</th>' +
-        '<th class="c" style="width:1%;white-space:nowrap;">Hcp</th>' +
+        '<th class="c" style="width:1%;white-space:nowrap;border-left:1px solid var(--g2);padding-left:16px;">Hcp</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;">Neto</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;border-left:1px solid var(--g2);padding-left:16px;">D1-D2</th>' +
-        '<th class="c" style="width:1%;white-space:nowrap;">Al par</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;" title="Golpes a favor de la clasificación de temporada (posiciones 1-8)">Favor</th>' +
         '<th class="c" style="width:1%;white-space:nowrap;background:var(--navy);color:#fff;border-radius:0;" title="Neto total de los 36 hoyos, con los golpes a favor ya aplicados">Total</th>' +
       '</tr></thead><tbody>';
   if(!standings.length){
-    html += '<tr><td colspan="12" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
+    html += '<tr><td colspan="9" class="c" style="padding:20px;"><span class="s dim">Sin datos todavía</span></td></tr>';
   } else {
     standings.forEach(function(s, i){
       var pos = i + 1;
@@ -9436,16 +9437,13 @@ function finalPublicStandingsDia2Html_(stR){
       html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'ambos\')">' +
         '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
         '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
-        '<td class="c"><span class="s">' + s.grossDia1 + '</span></td>' +
         '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuegoDia1 + '</span></td>' +
         '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(diffD1) + ';">' + netoDia1Puro + '</span></td>' +
-        '<td class="c" style="border-left:1px solid var(--g2);padding-left:16px;"><span class="s' + (arrancoDia2 ? '' : ' dim') + '">' + (arrancoDia2 ? s.grossDia2 : '–') + '</span></td>' +
-        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego2 + '</span></td>' +
+        '<td class="c" style="border-left:1px solid var(--g2);padding-left:16px;"><span class="s" style="color:var(--g4);">' + s.hcpJuego2 + '</span></td>' +
         '<td class="c"><span class="s' + (arrancoDia2 ? '' : ' dim') + '"' + (arrancoDia2 ? ' style="color:' + finalTablaDiffColor_(diffD2) + ';"' : '') + '>' + (arrancoDia2 ? s.netoDia2 : '–') + '</span></td>' +
         '<td class="c" style="border-left:1px solid var(--g2);padding-left:16px;"><span class="s" style="color:' + finalTablaDiffColor_(diffSuma) + ';">' + sumaNetos + '</span></td>' +
-        '<td class="c">' + finalTablaAlParTxt_(s.diffTotal) + '</td>' +
         '<td class="c"><span class="s">' + favorTxt + '</span></td>' +
-        '<td class="c" style="background:rgba(0,35,75,.04);"><span class="s" style="font-size:14px;font-weight:900;color:var(--navy);">' + s.netoTotal + '</span></td>' +
+        '<td class="c" style="background:var(--navy);border-radius:0;"><span class="s" style="font-size:16px;font-weight:900;color:#fff;">' + s.netoTotal + '</span></td>' +
       '</tr>';
     });
   }
