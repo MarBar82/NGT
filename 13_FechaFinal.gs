@@ -410,6 +410,81 @@ function armarLineasFinalDia2_(params) {
 }
 
 /**
+ * Admin corrige de una sola vez la tarjeta YA GUARDADA de un jugador en la
+ * Final (Día 1 o Día 2) -- mismo patrón que cargarTarjeta_ para las fechas
+ * regulares (una sola escritura con los 18 hoyos completos + el HCP, pensada
+ * para CORREGIR una tarjeta que ya se cargó, no para la carga en vivo hoyo
+ * por hoyo -- eso sigue siendo cargarHoyoLiveFinal_ y no se toca). Por eso
+ * deja la tarjeta marcada como firmada (firmadosDiaN), igual que
+ * cargarTarjeta_ deja firmados[mat]=true: una corrección de admin se
+ * considera la versión final de esa tarjeta.
+ * getFinalStandingsDia1_ y getFinalStandingsDia2_ leen directo de la hoja
+ * TARJETAS FINAL en cada consulta (no hay ninguna caché de por medio), así
+ * que el cambio se refleja en los resultados apenas se guarda, sin ningún
+ * paso extra.
+ */
+function adminGuardarTarjetaFinal_(params) {
+  const { adminKey, dia, matricula, hcp, scores } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const diaNum = parseInt(dia);
+  if (diaNum !== 1 && diaNum !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+  const matStr = String(matricula || '').trim();
+  if (!matStr) return { ok: false, error: 'Falta matrícula' };
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  if (!sh) return { ok: false, error: 'Hoja ' + FINAL_SHEET_NAME + ' no encontrada' };
+
+  // Índice de fila en caché -- mismo criterio que cargarHoyoLiveFinal_.
+  const cache = CacheService.getScriptCache();
+  const rowCacheKey = 'tfRow_' + diaNum + '_' + matStr;
+  let rowIdx = parseInt(cache.get(rowCacheKey) || '0');
+  if (rowIdx < 2) {
+    const lastRow = sh.getLastRow();
+    if (lastRow <= 1) return { ok: false, error: 'Sin tarjetas' };
+    const ab = sh.getRange(2, 1, lastRow - 1, 2).getValues(); // DIA, MATRICULA
+    for (let i = 0; i < ab.length; i++) {
+      if (String(ab[i][0]) === String(diaNum) && String(ab[i][1]).trim() === matStr) {
+        rowIdx = i + 2;
+        try { cache.put(rowCacheKey, String(rowIdx), 21600); } catch(e) {}
+        break;
+      }
+    }
+  }
+  if (rowIdx < 2) return { ok: false, error: 'Tarjeta no encontrada para ' + matStr + ' (Día ' + diaNum + ')' };
+
+  // Validamos los 18 hoyos completos antes de escribir nada (todo o nada).
+  const scoresArr = Array.isArray(scores) ? scores : [];
+  const scoresVals = [];
+  for (let h = 0; h < 18; h++) {
+    const v = scoresArr[h];
+    if (v === null || v === undefined || v === '') { scoresVals.push(''); continue; }
+    const n = parseInt(v);
+    if (isNaN(n) || n < 1 || n > 15) return { ok: false, error: 'Score inválido en el hoyo ' + (h + 1) };
+    scoresVals.push(n);
+  }
+
+  if (hcp !== undefined && hcp !== null && String(hcp).trim() !== '') {
+    sh.getRange(rowIdx, 3).setValue(parseInt(hcp)); // col 3 = HCP
+  }
+  sh.getRange(rowIdx, 6, 1, 18).setValues([scoresVals]); // col 6..23 = HOYO1..HOYO18
+  SpreadsheetApp.flush();
+
+  // Mismo criterio que cargarTarjeta_: una corrección de admin deja la
+  // tarjeta cerrada/firmada para ese día.
+  const meta = getFinalMeta_();
+  if (meta) {
+    const firmKey = 'firmadosDia' + diaNum;
+    if (!meta[firmKey]) meta[firmKey] = {};
+    meta[firmKey][matStr] = true;
+    saveFinalMeta_(meta);
+  }
+
+  audit_('ADMIN_EDITAR_TARJETA_FINAL', 'admin', { dia: diaNum, matricula: matStr, hcp: hcp, scores: scoresVals });
+  return { ok: true };
+}
+
+/**
  * Guarda el score de un hoyo del Día 1 o Día 2 de la Final, durante la ronda.
  * Mismo patrón de mutex por jugador que cargarHoyoLive_ (fechas regulares),
  * pero apuntando a TARJETAS FINAL (columnas DIA/MATRICULA/HCP/.../18 hoyos)

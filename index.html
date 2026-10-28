@@ -2475,6 +2475,8 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
         <div id="final-resumen" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--navy);line-height:1.9;"></div>
         <div id="final-lineas-dia1-wrap"></div>
         <div id="final-lineas-dia2-wrap"></div>
+        <div id="final-tarjetas-dia1-wrap"></div>
+        <div id="final-tarjetas-dia2-wrap"></div>
         <div id="final-resultado-wrap"></div>
         <button class="btn-cancel" onclick="finalEliminar()" style="margin-top:18px;width:100%;">🗑 Eliminar Fecha Final</button>
         <div id="final-eliminar-msg" class="adm-msg" style="display:none;"></div>
@@ -4252,6 +4254,8 @@ function finalLoad(){
       }
       renderFinalLineasDia1_(meta);
       renderFinalLineasDia2_(meta);
+      renderFinalTarjetasDia1_(meta);
+      renderFinalTarjetasDia2_(meta);
       renderFinalResultado_(meta);
     } else {
       if(sinCrear) sinCrear.style.display = 'block';
@@ -4260,6 +4264,10 @@ function finalLoad(){
       if(wrap) wrap.innerHTML = '';
       const wrap2 = document.getElementById('final-lineas-dia2-wrap');
       if(wrap2) wrap2.innerHTML = '';
+      const wrapT1 = document.getElementById('final-tarjetas-dia1-wrap');
+      if(wrapT1) wrapT1.innerHTML = '';
+      const wrapT2 = document.getElementById('final-tarjetas-dia2-wrap');
+      if(wrapT2) wrapT2.innerHTML = '';
       const wrap3 = document.getElementById('final-resultado-wrap');
       if(wrap3) wrap3.innerHTML = '';
     }
@@ -4426,6 +4434,60 @@ function renderFinalLineasDia2_(meta){
   });
   html += '</div>';
   wrap.innerHTML = html;
+}
+
+// Lista, dentro del panel admin de la Fecha Final, las tarjetas de cada
+// jugador para poder corregirlas -- mismo patrón visual que loadAdmTarjetas
+// para una fecha común (píldora con nombre + estado, tocás y se abre el
+// editor), pero leyendo de getFinalStandingsDia1/getFinalStandingsDia2 (ya
+// traen HCP + scores + pares/índices de la cancha de ese día) y guardando
+// con adminGuardarTarjetaFinal_ en vez de cargarTarjeta_ (ver
+// openAdmTarFinalModal_ y la rama ADM_TAR_FINAL_DIA de
+// admTarModalGuardar_). Solo aparece una vez que las líneas de ese día
+// están armadas -- antes no tiene sentido mostrar una lista para corregir.
+function renderFinalTarjetasDia1_(meta){
+  const wrap = document.getElementById('final-tarjetas-dia1-wrap');
+  if(!wrap) return;
+  if(!meta.lineasDia1 || !meta.lineasDia1.length){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = '<div style="margin-top:18px;"><div class="adm-label" style="margin-bottom:8px;">Tarjetas — Día 1 (tocá para corregir)</div><div id="final-tar-dia1-list" class="gf-tar-grid">Cargando...</div></div>';
+  loadAdmTarjetasFinal_(1, 'final-tar-dia1-list');
+}
+
+function renderFinalTarjetasDia2_(meta){
+  const wrap = document.getElementById('final-tarjetas-dia2-wrap');
+  if(!wrap) return;
+  if(!meta.lineasDia2 || !meta.lineasDia2.length){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = '<div style="margin-top:18px;"><div class="adm-label" style="margin-bottom:8px;">Tarjetas — Día 2 (tocá para corregir)</div><div id="final-tar-dia2-list" class="gf-tar-grid">Cargando...</div></div>';
+  loadAdmTarjetasFinal_(2, 'final-tar-dia2-list');
+}
+
+function loadAdmTarjetasFinal_(dia, listId){
+  const listEl = document.getElementById(listId);
+  if(!listEl) return;
+  ngtApiGet(dia === 1 ? 'getFinalStandingsDia1' : 'getFinalStandingsDia2').then(r => {
+    if(!r || !r.ok){
+      listEl.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:8px 0;">' + ((r && r.error) || 'No se pudieron cargar las tarjetas') + '</div>';
+      return;
+    }
+    const standings = r.standings || [];
+    if(!standings.length){
+      listEl.innerHTML = '<div style="color:var(--g4);font-size:13px;padding:8px 0;">No hay tarjetas cargadas aún</div>';
+      return;
+    }
+    listEl.innerHTML = standings.map(s => {
+      const hcpVal = dia === 1 ? s.hcpJuego : s.hcpJuego2;
+      const completa = s.holesCargados === 18;
+      const stat = (completa ? '✓ Completa' : (s.holesCargados + '/18')) + ' · HCP ' + (hcpVal !== undefined && hcpVal !== null ? hcpVal : '—');
+      const statColor = completa ? '#15803d' : 'var(--g4)';
+      const safe = s.apodo.replace(/'/g, "\\'");
+      return `<button type="button" class="gf-tar-pill" onclick="openAdmTarFinalModal_(${dia},'${s.matricula}','${safe}')">
+        <div class="gf-tar-pname">${fmtNameForAdm(s.apodo)}${s.invitado ? ' (inv.)' : ''}</div>
+        <div class="gf-tar-pstat" style="color:${statColor};">${stat}</div>
+      </button>`;
+    }).join('');
+  }).catch(e => {
+    listEl.innerHTML = '<div style="color:#c8102e;font-size:13px;">Error: ' + e.message + '</div>';
+  });
 }
 
 function finalArmarLineasDia2(){
@@ -6395,6 +6457,11 @@ let ADM_TAR_KEYPAD_HOYO = null;
 let ADM_TAR_MODAL_HCP = '';
 let ADM_TAR_MODAL_LD = false;
 let ADM_TAR_MODAL_BA = false;
+// Día (1 o 2) cuando el editor de tarjetas está abierto para una tarjeta de
+// la Fecha Final en vez de una fecha común -- null fuera de ese caso. Lo
+// usan admTarModalHtml_ (título y si muestra LD/BA) y admTarModalGuardar_
+// (qué action postear y cómo refrescar la lista al guardar).
+let ADM_TAR_FINAL_DIA = null;
 
 function loadAdmTarjetas(fecha) {
   const listEl = document.getElementById('adm-tar-list');
@@ -6434,6 +6501,7 @@ function openAdmTarModal(mat, nombre, cancha, canchaId) {
   ADM_TAR_MODAL_HCP = '';
   ADM_TAR_MODAL_LD = false;
   ADM_TAR_MODAL_BA = false;
+  ADM_TAR_FINAL_DIA = null;
   openFloatingModal('<div style="padding:30px 10px;text-align:center;color:var(--g4);">Cargando...</div>');
 
   Promise.all([
@@ -6454,9 +6522,51 @@ function openAdmTarModal(mat, nombre, cancha, canchaId) {
   });
 }
 
+// Mismo rol que openAdmTarModal, pero para una tarjeta de la Fecha Final
+// (Día 1 o Día 2) en vez de una fecha común: trae pares/índices/HCP/scores
+// de getFinalStandingsDia1/getFinalStandingsDia2 (ya los tienen calculados,
+// no hace falta pedir la cancha aparte como con canchaPares) y reutiliza
+// el mismo modal (admTarModalHtml_) y el mismo editor de scorecard/keypad
+// -- ADM_TAR_FINAL_DIA es lo que le indica a admTarModalHtml_ y a
+// admTarModalGuardar_ que están editando una tarjeta de la Final.
+function openAdmTarFinalModal_(dia, mat, nombre){
+  ADM_TAR_FINAL_DIA = dia;
+  ADM_TAR_PLAYER = { matricula: mat, nombre: nombre };
+  ADM_TAR_SCORES = new Array(18).fill(null);
+  ADM_TAR_CANCHA_DATA = null;
+  ADM_TAR_MODAL_HCP = '';
+  openFloatingModal('<div style="padding:30px 10px;text-align:center;color:var(--g4);">Cargando...</div>');
+
+  ngtApiGet(dia === 1 ? 'getFinalStandingsDia1' : 'getFinalStandingsDia2').then(r => {
+    if(!r || !r.ok){
+      openFloatingModal('<div style="padding:30px 10px;text-align:center;color:var(--red);">' + ((r && r.error) || 'Error al cargar la tarjeta') + '</div>');
+      return;
+    }
+    const myRow = (r.standings || []).find(s => String(s.matricula) === String(mat));
+    if(dia === 1){
+      ADM_TAR_CANCHA_DATA = { pares: r.pares || [], indices: r.indices || [] };
+      if(myRow){
+        ADM_TAR_MODAL_HCP = (myRow.hcpJuego !== undefined && myRow.hcpJuego !== null) ? myRow.hcpJuego : '';
+        ADM_TAR_SCORES = (myRow.scores || new Array(18).fill(null)).map(v => v === null ? null : Number(v));
+      }
+    } else {
+      ADM_TAR_CANCHA_DATA = { pares: r.paresDia2 || [], indices: r.indicesDia2 || [] };
+      if(myRow){
+        ADM_TAR_MODAL_HCP = (myRow.hcpJuego2 !== undefined && myRow.hcpJuego2 !== null) ? myRow.hcpJuego2 : '';
+        ADM_TAR_SCORES = (myRow.scoresDia2 || new Array(18).fill(null)).map(v => v === null ? null : Number(v));
+      }
+    }
+    openFloatingModal(admTarModalHtml_());
+    renderAdmTarModalScorecard_();
+  }).catch(() => {
+    openFloatingModal('<div style="padding:30px 10px;text-align:center;color:var(--red);">Error de red</div>');
+  });
+}
+
 function admTarModalHtml_(){
   const nombre = ADM_TAR_PLAYER ? ADM_TAR_PLAYER.nombre : '';
-  return '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:10px;">✏ ' + fmtNameForAdm(nombre) + '</div>' +
+  const tituloSufijo = ADM_TAR_FINAL_DIA ? ' · Día ' + ADM_TAR_FINAL_DIA : '';
+  return '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:800;color:var(--navy);text-align:center;margin-bottom:10px;">✏ ' + fmtNameForAdm(nombre) + tituloSufijo + '</div>' +
     '<div class="adm-row">' +
       '<div class="adm-field">' +
         '<label class="adm-label">HCP de juego</label>' +
@@ -6465,6 +6575,9 @@ function admTarModalHtml_(){
     '</div>' +
     '<div id="adm-tar-modal-scorecard" style="margin-top:10px;"></div>' +
     '<p style="margin:8px 0 0;font-family:\'Barlow Condensed\',sans-serif;font-size:11px;color:var(--g4);text-align:center;letter-spacing:.04em;">TOCÁ UN SCORE PARA EDITARLO</p>' +
+    // La Fecha Final no tiene Long Drive / Best Approach -- esos checkboxes
+    // solo tienen sentido para una fecha común.
+    (ADM_TAR_FINAL_DIA ? '' :
     '<div style="display:flex;gap:16px;margin:16px 0 4px;">' +
       '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">' +
         '<input type="checkbox" id="adm-tar-modal-ld"' + (ADM_TAR_MODAL_LD ? ' checked' : '') + '> 💪 Long Drive' +
@@ -6472,7 +6585,7 @@ function admTarModalHtml_(){
       '<label style="display:flex;align-items:center;gap:6px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">' +
         '<input type="checkbox" id="adm-tar-modal-ba"' + (ADM_TAR_MODAL_BA ? ' checked' : '') + '> 🎯 Best Approach' +
       '</label>' +
-    '</div>' +
+    '</div>') +
     '<div style="display:flex;gap:8px;margin-top:14px;">' +
       '<button class="adm-btn-primary" onclick="admTarModalGuardar_()" style="flex:2;">Guardar Cambios</button>' +
       '<button class="btn-cancel" onclick="closeFloatingModal()" style="flex:1;">Cancelar</button>' +
@@ -6584,6 +6697,7 @@ function cerrarAdmTarEditor() {
   ADM_TAR_PLAYER = null;
   ADM_TAR_SCORES = new Array(18).fill(null);
   ADM_TAR_CANCHA_DATA = null;
+  ADM_TAR_FINAL_DIA = null;
   const ed = document.getElementById('adm-tar-editor');
   if(ed) ed.style.display = 'none';
   const msg = document.getElementById('adm-tar-msg');
@@ -6594,13 +6708,39 @@ function admTarModalGuardar_() {
   if(!ADM_TAR_PLAYER) return;
   const msg = document.getElementById('adm-tar-modal-msg');
   const hcp = document.getElementById('adm-tar-modal-hcp').value.trim();
-  const ld  = document.getElementById('adm-tar-modal-ld').checked ? 1 : 0;
-  const ba  = document.getElementById('adm-tar-modal-ba').checked ? 1 : 0;
   if(!hcp){
     msg.className = 'adm-msg err'; msg.textContent = 'Ingresá el HCP de juego'; msg.style.display = 'block'; return;
   }
   const scores = ADM_TAR_SCORES.map(v => v !== null ? v : '');
   msg.className = 'adm-msg'; msg.textContent = 'Guardando...'; msg.style.display = 'block';
+
+  // Tarjeta de la Fecha Final (ADM_TAR_FINAL_DIA seteado por
+  // openAdmTarFinalModal_): va por adminGuardarTarjetaFinal_, no por
+  // cargarTarjeta_ -- no tiene fecha/ld/ba, tiene día. Al guardar, refresca
+  // el panel de la Final (finalLoad) en vez de la lista de una fecha común.
+  if(ADM_TAR_FINAL_DIA){
+    ngtApiPost({
+      action: 'adminGuardarTarjetaFinal',
+      adminKey: ADMIN_KEY_OK,
+      dia: ADM_TAR_FINAL_DIA,
+      matricula: ADM_TAR_PLAYER.matricula,
+      hcp: parseInt(hcp),
+      scores: scores,
+    }).then(r => {
+      if(r.ok){
+        msg.className = 'adm-msg ok'; msg.textContent = '✓ Tarjeta guardada';
+        setTimeout(() => { closeFloatingModal(); ADM_TAR_FINAL_DIA = null; finalLoad(); }, 900);
+      } else {
+        msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
+      }
+    }).catch(e => {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+    });
+    return;
+  }
+
+  const ld  = document.getElementById('adm-tar-modal-ld').checked ? 1 : 0;
+  const ba  = document.getElementById('adm-tar-modal-ba').checked ? 1 : 0;
   ngtApiPost({
     action: 'cargarTarjeta',
     adminKey: ADMIN_KEY_OK,
