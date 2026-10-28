@@ -451,6 +451,16 @@ function cargarHoyoLiveFinal_(params) {
   }
   if (lineaIdx < 0) return { ok: false, error: 'No autorizado para cargar en esta línea' };
 
+  // Si el jugador ya finalizó su ronda de este día (apretó "Finalizar
+  // Ronda"), su tarjeta quedó cerrada -- no se puede seguir cargando ni
+  // corrigiendo hoyos, aunque la Final siga en curso para el resto de las
+  // líneas. Mismo criterio que cargarHoyoLive_ para las fechas regulares
+  // (Tarea 145).
+  const firmKeyDia = 'firmadosDia' + diaNum;
+  if (meta[firmKeyDia] && meta[firmKeyDia][jugStr] && !isAdmin) {
+    return { ok: false, error: 'Esta tarjeta ya fue finalizada — no se puede modificar' };
+  }
+
   // score: null/'' borra; entero 1-15 guarda
   let scoreVal;
   if (score === null || score === '' || score === undefined) {
@@ -659,7 +669,61 @@ function getLineaLiveFinal_(params) {
   if (lineaIdx < 0) return { ok: false, error: 'No pertenecés a ninguna línea del Día ' + dia };
 
   const snap = buildLineaSnapshotFinal_(dia, lineaIdx, meta);
-  return Object.assign({ ok: true, soloLectura: false }, snap || {});
+  const firmKeyDia = 'firmadosDia' + dia;
+  const yaFirmo = !!(meta[firmKeyDia] && meta[firmKeyDia][matStr]);
+  return Object.assign({ ok: true, soloLectura: yaFirmo }, snap || {});
+}
+
+/**
+ * Jugador (o un compañero de su línea) aprieta "Finalizar Ronda" en la
+ * Final: cierra su tarjeta del Día 1 o 2 -- mismo criterio de autorización
+ * que cargarTarjeta_ en las fechas regulares (1 solo jugador de la línea
+ * puede firmar por todos, ya que también puede cargar los scores de todos).
+ * No bloquea nada más: armar las líneas del Día 2 y declarar terminada la
+ * Final siguen siendo pasos aparte que hace el admin, igual que siempre.
+ */
+function finalizarRondaFinal_(params) {
+  const { dia, matricula, token, adminKey } = params || {};
+  const diaNum = parseInt(dia);
+  if (diaNum !== 1 && diaNum !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+  const matStr = String(matricula || '').trim();
+  if (!matStr) return { ok: false, error: 'Falta matrícula' };
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  const lineaKey = 'lineasDia' + diaNum;
+  const lineas = meta[lineaKey];
+  if (!lineas || !lineas.length) return { ok: false, error: 'Todavía no se armaron las líneas del Día ' + diaNum };
+
+  let lineaIdx = -1;
+  for (let i = 0; i < lineas.length; i++) {
+    if (lineas[i].players.some(function(p) { return p.matricula === matStr; })) { lineaIdx = i; break; }
+  }
+  if (lineaIdx < 0) return { ok: false, error: 'No pertenecés a ninguna línea del Día ' + diaNum };
+
+  const isAdmin = adminKey && checkAdmin_(adminKey);
+  if (!isAdmin) {
+    const sess = validarSesion_(String(token || '').trim());
+    if (!sess) return { ok: false, error: 'Sesión inválida — volvé a iniciar sesión' };
+    const mismaLinea = lineas[lineaIdx].players.some(function(p) { return p.matricula === String(sess.mat); });
+    if (!mismaLinea) return { ok: false, error: 'No autorizado para firmar esta tarjeta' };
+  }
+
+  // No se puede finalizar hasta tener los 18 hoyos cargados -- mismo criterio
+  // que habilita el botón "Finalizar Ronda" en el frontend.
+  const snapFin = buildLineaSnapshotFinal_(diaNum, lineaIdx, meta);
+  const jugSnap = snapFin && snapFin.jugadores && snapFin.jugadores.find(function(j) { return j.matricula === matStr; });
+  if (!isAdmin && (!jugSnap || jugSnap.holesCargados < 18)) {
+    return { ok: false, error: 'Todavía faltan hoyos por cargar' };
+  }
+
+  const firmKey = 'firmadosDia' + diaNum;
+  if (!meta[firmKey]) meta[firmKey] = {};
+  meta[firmKey][matStr] = true;
+  saveFinalMeta_(meta);
+
+  audit_('FINALIZAR_RONDA_FINAL', isAdmin ? 'admin' : matStr, { dia: diaNum, matricula: matStr });
+  return { ok: true };
 }
 
 /**
@@ -748,7 +812,20 @@ function getFinalStandingsDia1_() {
     };
   });
 
-  filas.sort(function(a, b) { return a.neto - b.neto; });
+  // Ordenamos por la diferencia NETA prorateada sobre los hoyos ya jugados
+  // (alPar) más los golpes a favor, no por "neto" (que resta el hcp de
+  // juego ENTERO aunque falten hoyos -- eso castiga injustamente a quien ya
+  // jugó varios hoyos contra quien recién arrancó: un +3 con 10 hoyos
+  // jugados puede terminar mostrado por debajo de un -1 con 2 hoyos
+  // jugados). Con el Día 1 100% completo, alPar (prorateado sobre 18/18)
+  // y neto (gross - hcpJuego) dan exactamente el mismo orden -- este cambio
+  // no mueve nada en los resultados ya cerrados, solo corrige el orden
+  // mientras la ronda todavía está en curso.
+  filas.sort(function(a, b) {
+    const ka = (a.alPar === null ? 0 : a.alPar) + a.golpesFavor;
+    const kb = (b.alPar === null ? 0 : b.alPar) + b.golpesFavor;
+    return ka - kb;
+  });
   return { ok: true, completo: completo, standings: filas, pares: cpPares, indices: cpIndices };
 }
 
@@ -860,7 +937,18 @@ function getFinalStandingsDia2_() {
     };
   });
 
-  filas.sort(function(a, b) { return a.netoTotal - b.netoTotal; });
+  // Mismo criterio que getFinalStandingsDia1_: ordenamos por la suma de las
+  // diferencias NETAS prorateadas de cada día (alParDia1 + golpesFavor +
+  // alParDia2), no por netoTotal -- que resta el hcp de juego ENTERO de
+  // cada día aunque falten hoyos por jugar. Con los 36 hoyos completos da
+  // el mismo orden que netoTotal; mientras alguno todavía está jugando,
+  // corrige el orden para que refleje cómo viene realmente cada uno sobre
+  // los hoyos que ya jugó.
+  filas.sort(function(a, b) {
+    const ka = (a.alParDia1 === null ? 0 : a.alParDia1) + a.golpesFavor + (a.alParDia2 === null ? 0 : a.alParDia2);
+    const kb = (b.alParDia1 === null ? 0 : b.alParDia1) + b.golpesFavor + (b.alParDia2 === null ? 0 : b.alParDia2);
+    return ka - kb;
+  });
   return { ok: true, standings: filas, paresDia1: (st1.pares || []), indicesDia1: (st1.indices || []), paresDia2: cpPares, indicesDia2: cpIndices };
 }
 

@@ -203,6 +203,7 @@ function doPost(e) {
       case 'setFinalPlayoffGanador':     result = setFinalPlayoffGanador_(params); break;
       case 'declararFechaFinalTerminada': result = declararFechaFinalTerminada_(params); break;
       case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+      case 'finalizarRondaFinal':   result = finalizarRondaFinal_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
   } catch (err) { result = { ok: false, error: String(err.message || err) }; }

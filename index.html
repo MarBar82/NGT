@@ -8905,7 +8905,7 @@ function finalLiveRenderHoyoActual(){
     html += '<div class="live-player-row" onclick="finalLiveOpenScoreModal(' + FINAL_LIVE_HOYO + ',\'' + jug.matricula + '\')">' +
       '<div class="live-player-info">' +
         '<div class="live-player-apodo">' + jug.apodo + (jug.invitado ? ' (inv.)' : '') + '</div>' +
-        '<div class="live-player-hcp">' + finalLiveDiffTxt_(jug.diffParcial) + '</div>' +
+        '<div class="live-player-hcp">HCP ' + jug.hcp + ' · ' + finalLiveDiffTxt_(jug.diffParcial) + '</div>' +
       '</div>' +
       '<div class="live-hole-wrap">' +
         '<div class="' + cls + '" style="width:52px;height:52px;cursor:pointer;">' +
@@ -8930,14 +8930,70 @@ function finalLiveRenderComplete(){
       '<div class="live-sum-stat">' + jug.grossParcial + ' golpes · ' + finalLiveDiffTxt_(jug.diffParcial) + '</div></div>' +
     '</div>';
   });
-  html += '</div><div class="adm-card-body" style="border-top:1px solid var(--g1);text-align:center;">' +
-    '<p style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;color:var(--g4);margin:0;">El resultado general se muestra recién cuando todas las líneas terminan.</p>' +
-    '</div></div>';
+  html += '</div>';
+  if(d.soloLectura){
+    html +=
+      '<div id="final-live-complete-actions" class="adm-card-body" style="border-top:1px solid var(--g1);padding-top:12px;text-align:center;">' +
+      '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:13px;color:var(--g4);line-height:1.5;">✅ Ya finalizaste tu Día ' + FINAL_LIVE_DIA + ' — tu tarjeta quedó cerrada.<br>Podés seguir viendo cómo vienen los demás en las pestañas "Día 1", "Día 2" y "Acumulado".</div>' +
+      '</div></div>';
+  } else {
+    html +=
+      '<div id="final-live-complete-actions" class="adm-card-body" style="border-top:1px solid var(--g1);display:flex;gap:8px;padding-top:12px;">' +
+      '<button class="adm-btn-primary" onclick="finalLiveFinalizar()" style="flex:1;font-size:14px;padding:10px;">🏁 Finalizar Ronda</button>' +
+      '</div></div>';
+  }
   document.getElementById('final-live-complete-view').innerHTML = html;
+}
+
+function finalLiveFirmarJugador(jug){
+  return ngtApiPost({
+    action: 'finalizarRondaFinal',
+    dia: FINAL_LIVE_DIA,
+    matricula: jug.matricula,
+    token: NGT_SESSION && NGT_SESSION.token,
+  }).then(function(r){
+    if(!r || !r.ok) throw new Error((r && r.error) || 'Error del servidor');
+    return r;
+  });
+}
+
+function finalLiveFinalizar(){
+  if(!FINAL_LIVE_DATA) return;
+  var d = FINAL_LIVE_DATA;
+  var actions = document.getElementById('final-live-complete-actions');
+  if(actions) actions.innerHTML =
+    '<div style="text-align:center;font-family:\'Barlow Condensed\',sans-serif;font-size:14px;color:var(--g4);padding:10px;width:100%;">' +
+    '<div class="spinner" style="display:inline-block;margin-right:8px;"></div>Guardando tarjetas...</div>';
+
+  finalLivePollStop();
+
+  var promises = d.jugadores.map(function(jug){
+    return finalLiveFirmarJugador(jug)
+      .then(function(){ return { apodo: jug.apodo, ok: true }; })
+      .catch(function(e){ return { apodo: jug.apodo, ok: false, error: e.message }; });
+  });
+
+  Promise.all(promises).then(function(results){
+    var failed = results.filter(function(r){ return !r.ok; });
+    if(!failed.length){
+      finalLivePoll(); // refresca soloLectura (ya en true) y vuelve a renderizar
+    } else {
+      var names = failed.map(function(r){ return r.apodo; }).join(', ');
+      if(actions) actions.innerHTML =
+        '<div style="background:rgba(220,38,38,.08);border-radius:4px;padding:10px 12px;font-family:\'Barlow Condensed\',sans-serif;font-size:13px;margin-bottom:8px;width:100%;">' +
+          '<div style="color:var(--red);font-weight:700;margin-bottom:2px;">⚠ Error guardando: ' + names + '</div>' +
+          '<div style="color:var(--g4);">Los demás quedaron guardados. Reintentá o avisá al admin.</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;width:100%;">' +
+          '<button class="adm-btn-primary" onclick="finalLiveFinalizar()" style="flex:1;font-size:14px;padding:10px;">↺ Reintentar</button>' +
+        '</div>';
+    }
+  });
 }
 
 function finalLiveOpenScoreModal(hoyo, mat){
   if(!FINAL_LIVE_DATA) return;
+  if(FINAL_LIVE_DATA.soloLectura) return; // ya finalizaste -- tu tarjeta quedó cerrada
   FINAL_LIVE_TARGET_MAT = mat;
   var jug = FINAL_LIVE_DATA.jugadores.find(function(j){ return j.matricula === mat; });
   var pares = FINAL_LIVE_DATA.pares || [];
@@ -8946,6 +9002,7 @@ function finalLiveOpenScoreModal(hoyo, mat){
   var apodo = jug ? jug.apodo : mat;
 
   document.getElementById('final-sm-player-name').textContent = apodo;
+  document.getElementById('final-sm-player-name').style.display = 'block';
   document.getElementById('final-sm-hoyo').textContent = 'Hoyo ' + hoyo;
   document.getElementById('final-sm-par').textContent = par ? 'Par ' + par : '';
   document.getElementById('final-sm-big').textContent = currentScore !== null ? currentScore : '–';
