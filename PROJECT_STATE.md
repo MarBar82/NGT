@@ -28212,3 +28212,99 @@ Antes y después de escribir este documento verifiqué que cada uno de los 5 blo
 4. **Sí.** `finalEditarCancha` valida `if(!canchaId1 || !canchaId2)` antes de postear y muestra el error "Elegí las 2 canchas (Día 1 y Día 2)." sin llamar al backend.
 
 5. **Commit:** `eeb2c09` — "T153: admin puede modificar cancha/color de la Fecha Final ya creada"
+
+## Tarea 154 — La tabla del Día 1 mostraba un Neto que no coincidía con el orden real
+
+### Contexto
+
+Pediste: *"Jugamos el primer dia de la final. La tabla del dia esta mal el orden de los jugadores. revisala y que queden en orden por neto. Y revisa que la del dia 2 cumpla el mismo orden para mañana."*
+
+Encontré el problema: el **orden** de la tabla del Día 1 en realidad ya estaba bien calculado — el problema era que la columna **"Neto"** mostraba un número que no incluía los "golpes a favor" (el bono o descuento que cada jugador trae de la clasificación de temporada, y que se calcula una sola vez al crear la Final). El orden de la tabla SÍ tiene en cuenta ese bono, pero el número de Neto que se mostraba, no — entonces el orden parecía estar mal, porque dos jugadores con el mismo Gross y el mismo Hcp podían terminar en posiciones distintas (correctamente, por su golpes a favor) pero mostrando el mismo número de "Neto", lo cual no tiene sentido a simple vista.
+
+**Ejemplo concreto para que quede clarísimo:** si el Jugador A tiene Gross 70 y Hcp 10, y el Jugador B tiene Gross 68 y Hcp 8, los dos "dan" 60 a simple cuenta (70-10 = 68-8 = 60). Pero si A tiene -3 golpes a favor y B tiene 0, el verdadero Neto de A es 57 y el de B es 60 — A debería ir primero. La tabla YA los ordenaba bien (A antes que B), pero la columna "Neto" mostraba "60" para los dos, así que parecía que estaban mal ordenados o empatados cuando en realidad no lo estaban.
+
+### Qué NO cambia
+
+- El **orden** de la tabla no se toca — ya estaba bien calculado (confirmé matemáticamente que el criterio de orden que ya usa el backend, `alPar + golpesFavor`, da exactamente el mismo orden que ordenar por el Neto verdadero, cuando el día ya está 100% jugado).
+- La tabla del **Día 2** (`finalDia2SoloTableHtml_`) — la revisé a fondo y **no tiene este problema**: en el Día 2 no se aplican golpes a favor (esos solo se suman una vez, en el Día 1), así que el Neto que se muestra ahí (`netoDia2`) y el orden de la tabla usan exactamente el mismo número — van a coincidir perfecto mañana, sin que haga falta tocar nada.
+- La tabla **Acumulado** — tampoco tiene este problema: ahí los golpes a favor se muestran en su propia columna ("Favor"), separados del Neto de cada día, así que no hay ningún número escondido que no coincida con el orden.
+- Ningún cálculo de puntos, hándicap, ni el resultado final de quién gana la Final — esto es pura y exclusivamente un arreglo de qué número se MUESTRA en una columna, usando un dato que el backend ya calculaba bien pero que la pantalla no estaba usando.
+
+### Cómo funciona
+
+La función que arma la tabla (`finalStandingsNetoTableHtml_`) recibía, para cada jugador, varios datos ya calculados — entre ellos el Neto verdadero (`neto`, que ya incluye los golpes a favor) y los golpes a favor (`golpesFavor`) por separado. Hasta ahora, para la columna "Neto", en vez de usar ese dato ya calculado, lo volvía a calcular con una resta simple (Gross menos Hcp) que se olvidaba de sumar los golpes a favor. Ahora usa directamente el Neto verdadero, y la columna "Al par" (que estaba al lado) también suma los golpes a favor para que los dos números de la fila sean consistentes entre sí y con el orden de la tabla.
+
+### Cambio 1 — La columna "Neto" (y "Al par") de la tabla del Día 1 ahora incluye los golpes a favor
+
+**Archivo:** `index.html`
+
+**Por qué:** así la columna "Neto" que ves coincide con el orden real de la tabla (que ya tenía en cuenta los golpes a favor) y con la columna "Al par" de la misma fila.
+
+**Buscá:**
+```js
+      var hoyoTxt = s.holesCargados === 18 ? 'Completo' : (s.holesCargados + '/18');
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia1\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s">' + s.gross + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(s.alPar) + ';">' + (s.gross - s.hcpJuego) + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(s.alPar) + '</td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
+      '</tr>';
+```
+
+**Reemplázá por:**
+```js
+      var hoyoTxt = s.holesCargados === 18 ? 'Completo' : (s.holesCargados + '/18');
+      // El orden de esta tabla (getFinalStandingsDia1_) ya suma golpesFavor
+      // (el bono/descuento de la clasificación de temporada, congelado al
+      // crear la Final) -- pero esta columna "Neto" mostraba gross-hcp SIN
+      // ese golpesFavor: el orden quedaba bien, pero el número no coincidía
+      // con lo que el orden mostraba, así que parecía mal ordenado. Ahora
+      // "Neto" y "Al par" incluyen golpesFavor, igual que el orden.
+      var alParConFavor = (s.alPar === null) ? null : (s.alPar + s.golpesFavor);
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia1\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s">' + s.gross + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(alParConFavor) + ';">' + s.neto + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(alParConFavor) + '</td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
+      '</tr>';
+```
+
+### Cómo lo probé
+
+Extraje la función real (`finalStandingsNetoTableHtml_`, junto con `finalTablaDiffColor_` y `finalTablaAlParTxt_` que usa por detrás) y la corrí con Node contra 6 escenarios: 15 chequeos automáticos, todos en verde. El más importante fue **reproducir el bug exacto**: armé 3 jugadores con el mismo Gross-Hcp (60 los tres, como en el ejemplo de arriba) pero golpes a favor distintos (-3, 0, +2). Confirmé que:
+
+- Antes del arreglo, los 3 hubieran mostrado "60" en la columna Neto (los tres iguales, aunque el orden real entre ellos fuera distinto).
+- Con el arreglo, cada uno muestra su Neto real (57, 60, 62) — tres valores distintos — y en el mismo orden ascendente que la tabla ya traía.
+- La columna "Al par" cambia de color (verde/rojo) correctamente cuando sumarle los golpes a favor invierte el signo (probé un caso donde esto pasa).
+- Si un jugador todavía no cargó ningún hoyo (Al par sin dato), sigue mostrando la rayita sin romperse.
+- Con golpes a favor en 0, el número no cambia respecto a antes (sigue siendo Gross menos Hcp).
+- Las demás columnas (Gross, Hcp, Hoyo, nombre, invitado, el link para abrir la tarjeta) siguen exactamente iguales.
+
+Además, repasé a fondo el código de la tabla del **Día 2** y de **Acumulado** para confirmar que no tienen este mismo problema (están explicadas en "Qué NO cambia" arriba) — no hace falta tocar nada ahí.
+
+Antes y después de escribir este documento verifiqué que el bloque "Buscá" aparece exactamente una vez en el código real (recién clonado de GitHub, commit `f7aba2d`, que ya tiene aplicada la Tarea 153), y que aplicar el cambio sobre ese código real da como resultado un archivo **idéntico, byte por byte**, al que efectivamente probé.
+
+### Preguntas de verificación
+
+1. En la tabla del Día 1, ¿el orden de los jugadores ahora coincide con los números que muestra la columna "Neto" (de menor a mayor)?
+2. Si dos jugadores tienen el mismo Gross y el mismo Hcp pero distintos golpes a favor, ¿ahora muestran números de "Neto" distintos (en vez del mismo número)?
+3. ¿La tabla del Día 2 (cuando se juegue mañana) va a seguir mostrando el Neto y el orden de forma consistente, sin necesitar ningún cambio?
+4. ¿Las demás columnas de la tabla del Día 1 (Gross, Hcp, Hoyo, nombre) se ven exactamente igual que antes?
+
+## ✅ Respuestas de verificación — Tarea 154
+
+1. **Sí.** La tabla ya ordenaba por `alPar + golpesFavor`. Ahora la columna "Neto" muestra `s.neto` (que el backend calcula como Gross − Hcp + golpesFavor) y "Al par" usa `alParConFavor = s.alPar + s.golpesFavor` — los tres valores (orden, Neto, Al par) son consistentes entre sí.
+
+2. **Sí.** Como `s.neto` incluye `golpesFavor`, dos jugadores con el mismo Gross y mismo Hcp pero distinto `golpesFavor` van a mostrar Netos distintos, reflejando exactamente por qué uno está por encima del otro en la tabla.
+
+3. **Sí.** En la tabla del Día 2 (`finalDia2SoloTableHtml_`) los golpes a favor no se aplican (solo se aplican en el Día 1), así que `netoDia2 = grossDia2 − hcpJuego2` y el orden usan el mismo número — no hay desincronización. No se toca nada ahí.
+
+4. **Sí.** Solo cambió el valor dentro de la celda "Neto" (de `s.gross - s.hcpJuego` a `s.neto`) y el argumento de `finalTablaDiffColor_`/`finalTablaAlParTxt_` para "Al par". El resto del `<tr>` es idéntico.
+
+5. **Commit:** `7e338bd` — "T154: tabla Dia 1 Final — Neto y Al par incluyen golpesFavor"
