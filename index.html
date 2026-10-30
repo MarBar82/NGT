@@ -9565,13 +9565,20 @@ function finalStandingsNetoTableHtml_(standings, titulo){
       var pos = i + 1;
       var posCell = pos === 1 ? '<span class="pos-dot d1"></span>' : pos === 2 ? '<span class="pos-dot d2"></span>' : pos === 3 ? '<span class="pos-dot d3"></span>' : '<span class="s dim" style="font-size:11px;">' + pos + '</span>';
       var hoyoTxt = s.holesCargados === 18 ? 'Completo' : (s.holesCargados + '/18');
+      // El orden de esta tabla (getFinalStandingsDia1_) ya suma golpesFavor
+      // (el bono/descuento de la clasificación de temporada, congelado al
+      // crear la Final) -- pero esta columna "Neto" mostraba gross-hcp SIN
+      // ese golpesFavor: el orden quedaba bien, pero el número no coincidía
+      // con lo que el orden mostraba, así que parecía mal ordenado. Ahora
+      // "Neto" y "Al par" incluyen golpesFavor, igual que el orden.
+      var alParConFavor = (s.alPar === null) ? null : (s.alPar + s.golpesFavor);
       html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia1\')">' +
         '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
         '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
         '<td class="c"><span class="s">' + s.gross + '</span></td>' +
         '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego + '</span></td>' +
-        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(s.alPar) + ';">' + (s.gross - s.hcpJuego) + '</span></td>' +
-        '<td class="c">' + finalTablaAlParTxt_(s.alPar) + '</td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(alParConFavor) + ';">' + s.neto + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(alParConFavor) + '</td>' +
         '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
       '</tr>';
     });
