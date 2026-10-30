@@ -28308,3 +28308,103 @@ Antes y después de escribir este documento verifiqué que el bloque "Buscá" ap
 4. **Sí.** Solo cambió el valor dentro de la celda "Neto" (de `s.gross - s.hcpJuego` a `s.neto`) y el argumento de `finalTablaDiffColor_`/`finalTablaAlParTxt_` para "Al par". El resto del `<tr>` es idéntico.
 
 5. **Commit:** `7e338bd` — "T154: tabla Dia 1 Final — Neto y Al par incluyen golpesFavor"
+
+## Tarea 155 — La columna "Neto" del Día 1 vuelve a mostrar el resultado puro de la ronda, sin golpes a favor
+
+### Contexto
+
+Después de la Tarea 154 (que hizo que la columna "Neto" del Día 1 incluyera los golpes a favor, para que coincidiera con el orden de la tabla), dijiste:
+
+*"Bien ahora se ordenan bien. Pero no quiero descontar los golpes a favor aca. Los golpes a favor solo en el acumulado tal cual esta ahora. Pero aca deberia mostrar el resultado del dia 1 tal cual una ronda de golf normal."*
+
+Dicho simple: el **orden** de la tabla del Día 1 está bien y no se toca (eso ya lo confirmaste). Lo que no querés es que la columna "Neto" (ni "Al par") le reste o sume los golpes a favor — querés ver ahí el resultado crudo de la ronda, como se vería en un día normal de golf. El golpes a favor solo tiene que aparecer, como ya aparece, en su propia columna "Favor" dentro de la pestaña Acumulado.
+
+### Qué NO cambia
+
+- El **orden** de la tabla del Día 1 no se toca — sigue viniendo ordenado desde el backend igual que antes (ese cálculo no se tocó en ningún momento, ni en la Tarea 154 ni en esta).
+- La pestaña **Acumulado** no se toca — ahí el golpes a favor sigue mostrándose en su propia columna "Favor", separado del Neto de cada día, exactamente como está hoy.
+- La tabla del **Día 2** no se toca — ahí nunca se aplicó golpes a favor (se aplica una sola vez, en el Día 1).
+- Ningún cálculo de hándicap, puntos o el resultado final de la Fecha Final — esto es pura y exclusivamente la columna "Neto"/"Al par" de la tabla del Día 1.
+
+### Cómo funciona
+
+Esta Tarea deshace, puntualmente, el cambio visual que hizo la Tarea 154: la columna "Neto" vuelve a mostrar `Gross − Hcp` (sin sumar/restar golpes a favor) y la columna "Al par" vuelve a usar el dato `alPar` solo (sin golpes a favor), tanto para el color (verde/rojo) como para el texto. El orden de las filas, que llega ya armado desde el backend, no se modifica — solo cambia qué número se pinta en esas dos columnas.
+
+### Cambio 1 — "Neto" y "Al par" del Día 1 vuelven a ser el resultado puro de la ronda
+
+**Archivo:** `index.html`
+
+**Por qué:** para que la tabla del Día 1 muestre el resultado "tal cual una ronda de golf normal", sin el ajuste de golpes a favor (que sigue existiendo, pero solo se ve en el Acumulado).
+
+**Buscá:**
+```js
+      var hoyoTxt = s.holesCargados === 18 ? 'Completo' : (s.holesCargados + '/18');
+      // El orden de esta tabla (getFinalStandingsDia1_) ya suma golpesFavor
+      // (el bono/descuento de la clasificación de temporada, congelado al
+      // crear la Final) -- pero esta columna "Neto" mostraba gross-hcp SIN
+      // ese golpesFavor: el orden quedaba bien, pero el número no coincidía
+      // con lo que el orden mostraba, así que parecía mal ordenado. Ahora
+      // "Neto" y "Al par" incluyen golpesFavor, igual que el orden.
+      var alParConFavor = (s.alPar === null) ? null : (s.alPar + s.golpesFavor);
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia1\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s">' + s.gross + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(alParConFavor) + ';">' + s.neto + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(alParConFavor) + '</td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
+      '</tr>';
+```
+
+**Reemplázá por:**
+```js
+      var hoyoTxt = s.holesCargados === 18 ? 'Completo' : (s.holesCargados + '/18');
+      // Esta columna "Neto" (y "Al par") muestra el resultado PURO del Día 1,
+      // tal cual una ronda de golf normal -- sin golpesFavor (el bono/descuento
+      // de la clasificación de temporada). El orden de la tabla (armado en
+      // getFinalStandingsDia1_) sí tiene en cuenta golpesFavor para decidir
+      // quién va primero en la clasificación real de la Final, pero el número
+      // que se ve acá es el crudo de la ronda. El golpesFavor se ve, en su
+      // propia columna "Favor", solo en la pestaña Acumulado (decisión de
+      // Marco, Tarea 155).
+      html += '<tr class="fecha-row-click" style="cursor:pointer;" onclick="showFinalTarjetaModal(\'' + s.matricula + '\',\'dia1\')">' +
+        '<td class="c" style="padding:6px 4px;">' + posCell + '</td>' +
+        '<td><div style="font-family:\'Oswald\',sans-serif;font-weight:700;color:var(--navy);text-transform:uppercase;">' + s.apodo + (s.invitado ? ' (inv.)' : '') + '</div></td>' +
+        '<td class="c"><span class="s">' + s.gross + '</span></td>' +
+        '<td class="c"><span class="s" style="color:var(--g4);">' + s.hcpJuego + '</span></td>' +
+        '<td class="c"><span class="s" style="color:' + finalTablaDiffColor_(s.alPar) + ';">' + (s.gross - s.hcpJuego) + '</span></td>' +
+        '<td class="c">' + finalTablaAlParTxt_(s.alPar) + '</td>' +
+        '<td class="c"><span class="s dim" style="font-size:12px;">' + hoyoTxt + '</span></td>' +
+      '</tr>';
+```
+
+### Cómo lo probé
+
+Extraje la función real (`finalStandingsNetoTableHtml_`, junto con `finalTablaDiffColor_` y `finalTablaAlParTxt_`) y la corrí con Node contra 7 escenarios: 16 chequeos automáticos, todos en verde. Entre ellos:
+
+- El mismo ejemplo de la Tarea 154 (3 jugadores con Gross-Hcp=60 pero golpes a favor distintos, -3/0/+2): ahora los 3 vuelven a mostrar "60" en la columna Neto — el resultado puro de la ronda, tal como pediste.
+- Un caso donde el golpes a favor antes le cambiaba el color a "Al par" (de rojo a verde): confirmé que ya NO pasa — "Al par" usa solo el dato puro y se mantiene en rojo para los dos jugadores del ejemplo.
+- Confirmé que el **orden** de las filas no se toca: esta función solo pinta las filas en el orden en que las recibe (ese orden lo decide el backend, en otra función, que no modifiqué).
+- Los casos sin cambios de siempre: jugador sin hoyos cargados (sin romperse), golpes a favor en 0 (no cambia nada), y las demás columnas (Gross, Hcp, Hoyo, nombre, invitado, tabla vacía) exactamente iguales.
+
+Antes y después de escribir este documento verifiqué que el bloque "Buscá" aparece exactamente una vez en el código real (recién clonado de GitHub, commit `f813f53`, que ya tiene aplicada la Tarea 154), y que aplicar el cambio sobre ese código real da como resultado un archivo **idéntico, byte por byte**, al que efectivamente probé.
+
+### Preguntas de verificación
+
+1. En la tabla del Día 1, ¿la columna "Neto" ahora vuelve a mostrar el resultado puro de la ronda (Gross menos Hcp), sin restar ni sumar golpes a favor?
+2. ¿El orden de los jugadores en esa misma tabla sigue siendo el mismo que ya tenías (sin cambios)?
+3. En la pestaña Acumulado, ¿el golpes a favor sigue viéndose en su propia columna "Favor", tal como está hoy?
+4. ¿Las demás columnas de la tabla del Día 1 (Gross, Hcp, Hoyo, nombre) se ven exactamente igual que antes?
+
+## ✅ Respuestas de verificación — Tarea 155
+
+1. **Sí.** La columna "Neto" vuelve a calcular `s.gross - s.hcpJuego` (igual que antes de T154) y "Al par" usa `s.alPar` directamente — ninguno incluye `golpesFavor`.
+
+2. **Sí.** El orden llega ya armado desde el backend (`getFinalStandingsDia1_`) y esta función solo pinta las filas en el orden recibido. No se tocó ningún cálculo de orden, ni en T154 ni en esta tarea.
+
+3. **Sí.** `finalPublicStandingsDia2Html_` (Acumulado) no se tocó en ninguna de las dos tareas. El `golpesFavor` sigue apareciendo en su propia columna "Favor" tal como estaba.
+
+4. **Sí.** Solo cambiaron los valores dentro de las celdas "Neto" y "Al par" — el resto del `<tr>` (Gross, Hcp, Hoyo, nombre, invitado, onclick) es idéntico.
+
+5. **Commit:** `9b854e0` — "T155: tabla Dia 1 Final — Neto/Al par vuelven al resultado puro de la ronda"
