@@ -2473,6 +2473,7 @@ button.perf-rbp-row:hover{background:var(--off);border-color:var(--red);}
       <div class="adm-card-hdr">🏆 Fecha Final activa</div>
       <div class="adm-card-body">
         <div id="final-resumen" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--navy);line-height:1.9;"></div>
+        <div id="final-edit-cancha-wrap"></div>
         <div id="final-lineas-dia1-wrap"></div>
         <div id="final-lineas-dia2-wrap"></div>
         <div id="final-tarjetas-dia1-wrap"></div>
@@ -4252,6 +4253,7 @@ function finalLoad(){
           '<div><b>Jugadores:</b> ' + nJug + '</div>' +
           '<div><b>Estado:</b> ' + meta.estado + '</div>';
       }
+      renderFinalEditCanchaWrap_(meta);
       renderFinalLineasDia1_(meta);
       renderFinalLineasDia2_(meta);
       renderFinalTarjetasDia1_(meta);
@@ -4260,6 +4262,8 @@ function finalLoad(){
     } else {
       if(sinCrear) sinCrear.style.display = 'block';
       if(yaCreada) yaCreada.style.display = 'none';
+      const wrapEC = document.getElementById('final-edit-cancha-wrap');
+      if(wrapEC) wrapEC.innerHTML = '';
       const wrap = document.getElementById('final-lineas-dia1-wrap');
       if(wrap) wrap.innerHTML = '';
       const wrap2 = document.getElementById('final-lineas-dia2-wrap');
@@ -4279,6 +4283,101 @@ function finalLoadColores(dia){
   const colorSel = document.getElementById('final-color' + dia);
   if(!sel || !colorSel) return;
   applyColoresCancha_(sel.value.trim(), colorSel, null);
+}
+
+// Panel para que el admin pueda cambiar la cancha y el color de salidas de
+// cada día una vez que la Fecha Final ya está creada -- mismo criterio que
+// el panel "Cancha" de una fecha regular (admEditarFechaTab/adminEditarFecha),
+// con sus propios ids (final-edit-*) para no interferir con los selects del
+// formulario de creación (final-cancha1/2, final-color1/2), que quedan
+// ocultos pero siguen existiendo en el DOM mientras la Final está activa.
+function renderFinalEditCanchaWrap_(meta){
+  const wrap = document.getElementById('final-edit-cancha-wrap');
+  if(!wrap) return;
+  wrap.innerHTML =
+    '<div class="adm-card" style="margin-top:14px;">' +
+      '<div class="adm-card-hdr">✏️ Modificar Cancha</div>' +
+      '<div class="adm-card-body">' +
+        '<div class="adm-row">' +
+          '<div class="adm-field">' +
+            '<label class="adm-label">Cancha Día 1</label>' +
+            '<select id="final-edit-cancha1" class="adm-input" onchange="finalEditLoadColores(1)"><option value="">Seleccionar cancha...</option></select>' +
+          '</div>' +
+          '<div class="adm-field">' +
+            '<label class="adm-label">Color de Salidas</label>' +
+            '<select id="final-edit-color1" class="adm-input"><option value="BLANCAS">Blancas (default)</option></select>' +
+          '</div>' +
+        '</div>' +
+        '<div class="adm-row" style="margin-top:10px;">' +
+          '<div class="adm-field">' +
+            '<label class="adm-label">Cancha Día 2</label>' +
+            '<select id="final-edit-cancha2" class="adm-input" onchange="finalEditLoadColores(2)"><option value="">Seleccionar cancha...</option></select>' +
+          '</div>' +
+          '<div class="adm-field">' +
+            '<label class="adm-label">Color de Salidas</label>' +
+            '<select id="final-edit-color2" class="adm-input"><option value="BLANCAS">Blancas (default)</option></select>' +
+          '</div>' +
+        '</div>' +
+        '<button class="adm-btn-primary" onclick="finalEditarCancha()" style="margin-top:14px;">Guardar Cancha</button>' +
+        '<div id="final-edit-cancha-msg" class="adm-msg" style="display:none;"></div>' +
+      '</div>' +
+    '</div>';
+
+  [1, 2].forEach(function(dia){
+    const sel = document.getElementById('final-edit-cancha' + dia);
+    if(!sel) return;
+    const curId = dia === 1 ? meta.canchaId1 : meta.canchaId2;
+    const curColor = dia === 1 ? meta.colorTee1 : meta.colorTee2;
+    let opts = '<option value="">Seleccionar cancha...</option>';
+    (ADM_CANCHAS || []).forEach(function(c){ opts += '<option value="' + c.id + '">' + c.nombre + '</option>'; });
+    sel.innerHTML = opts;
+    if(curId) sel.value = curId;
+    finalEditLoadColores(dia);
+    const colorSel = document.getElementById('final-edit-color' + dia);
+    if(colorSel && curColor && colorSel.querySelector('option[value="' + curColor + '"]')){
+      colorSel.value = curColor;
+    }
+  });
+}
+
+function finalEditLoadColores(dia){
+  const sel = document.getElementById('final-edit-cancha' + dia);
+  const colorSel = document.getElementById('final-edit-color' + dia);
+  if(!sel || !colorSel) return;
+  applyColoresCancha_(sel.value.trim(), colorSel, null);
+}
+
+function finalEditarCancha(){
+  const canchaId1 = document.getElementById('final-edit-cancha1').value.trim();
+  const colorTee1 = document.getElementById('final-edit-color1').value.trim();
+  const canchaId2 = document.getElementById('final-edit-cancha2').value.trim();
+  const colorTee2 = document.getElementById('final-edit-color2').value.trim();
+
+  const msg = document.getElementById('final-edit-cancha-msg');
+  msg.style.display = 'none';
+
+  if(!canchaId1 || !canchaId2){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Elegí las 2 canchas (Día 1 y Día 2).';
+    return;
+  }
+
+  msg.style.display = 'block'; msg.className = 'adm-msg'; msg.textContent = 'Guardando...';
+
+  ngtApiPost({
+    action: 'editarFechaFinal',
+    adminKey: ADMIN_KEY_OK,
+    canchaId1: canchaId1, colorTee1: colorTee1,
+    canchaId2: canchaId2, colorTee2: colorTee2,
+  }).then(function(r){
+    if(r && r.ok){
+      msg.className = 'adm-msg ok'; msg.textContent = '✓ Cancha actualizada';
+      finalLoad();
+    } else {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ ' + ((r && r.error) || 'Error');
+    }
+  }).catch(function(e){
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
 }
 
 function finalCrear(){

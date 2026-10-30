@@ -197,6 +197,7 @@ function doPost(e) {
       case 'agregarInvitadoALinea': result = agregarInvitadoALinea_(params); break;
       case 'agregarInvitadoSuelto':  result = agregarInvitadoSuelto_(params); break;
       case 'crearFechaFinal':       result = crearFechaFinal_(params); break;
+      case 'editarFechaFinal':      result = editarFechaFinal_(params); break;
       case 'eliminarFechaFinal':    result = eliminarFechaFinal_(params); break;
       case 'armarLineasFinalDia1':  result = armarLineasFinalDia1_(params); break;
       case 'armarLineasFinalDia2':  result = armarLineasFinalDia2_(params); break;

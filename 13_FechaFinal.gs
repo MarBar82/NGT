@@ -185,6 +185,76 @@ function crearFechaFinal_(params) {
 }
 
 /**
+ * editarFechaFinal_ — Admin cambia la cancha y/o el color de salidas de uno
+ * o los dos días de la Final YA CREADA, mismo criterio que editarFecha_ para
+ * una fecha regular: al cambiar cancha o color hay que recalcular el hándicap
+ * de juego de cada jugador para ese día (depende del rating/slope de la
+ * cancha+color elegidos), así que se reescribe la columna HCP de TARJETAS
+ * FINAL para todas las filas de ese día, además de ID CANCHA y COLOR TEE
+ * (estas dos últimas son solo registro -- los cálculos de pares/índices de
+ * las tablas de resultados y la carga en vivo usan meta.canchaId1/2, no la
+ * columna de la hoja, pero se actualizan igual para que quede consistente).
+ * No se tocan los scores ya cargados: si cambiás la cancha después de que
+ * algún jugador ya arrancó a cargar hoyos, el Neto de esos hoyos se recalcula
+ * con la cancha nueva (mismo comportamiento que ya tiene una fecha regular).
+ */
+function editarFechaFinal_(params) {
+  const { adminKey, canchaId1, colorTee1, canchaId2, colorTee2 } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const meta = getFinalMeta_();
+  if (!meta || !meta.estado) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+
+  if (!canchaId1 || !canchaId2) return { ok: false, error: 'Faltan las 2 canchas' };
+
+  const canchaName1 = lookupCanchaName_(canchaId1);
+  const canchaName2 = lookupCanchaName_(canchaId2);
+  if (!canchaName1) return { ok: false, error: 'Cancha del Día 1 no encontrada: ' + canchaId1 };
+  if (!canchaName2) return { ok: false, error: 'Cancha del Día 2 no encontrada: ' + canchaId2 };
+
+  const colorFinal1 = String(colorTee1 || 'BLANCAS').trim().toUpperCase();
+  const colorFinal2 = String(colorTee2 || 'BLANCAS').trim().toUpperCase();
+
+  const hcpInfo1 = buildHcpJuegoMap_(canchaId1, canchaName1, colorFinal1);
+  const hcpInfo2 = buildHcpJuegoMap_(canchaId2, canchaName2, colorFinal2);
+  if (!hcpInfo1 || !hcpInfo1.par) return { ok: false, error: 'No se encontró rating/par para la cancha del Día 1' };
+  if (!hcpInfo2 || !hcpInfo2.par) return { ok: false, error: 'No se encontró rating/par para la cancha del Día 2' };
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  if (!sh) return { ok: false, error: 'Hoja ' + FINAL_SHEET_NAME + ' no encontrada' };
+
+  const lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    const ab = sh.getRange(2, 1, lastRow - 1, 2).getValues(); // DIA, MATRICULA
+    ab.forEach(function(r, i) {
+      const dia = String(r[0]);
+      const mat = String(r[1]).trim();
+      if (!mat) return;
+      const rowIdx = i + 2;
+      if (dia === '1') {
+        sh.getRange(rowIdx, 4).setValue(canchaId1);     // ID CANCHA
+        sh.getRange(rowIdx, 5).setValue(colorFinal1);   // COLOR TEE
+        const hcp = hcpInfo1.hcpMap[mat];
+        if (hcp !== undefined) sh.getRange(rowIdx, 3).setValue(hcp); // HCP
+      } else if (dia === '2') {
+        sh.getRange(rowIdx, 4).setValue(canchaId2);
+        sh.getRange(rowIdx, 5).setValue(colorFinal2);
+        const hcp = hcpInfo2.hcpMap[mat];
+        if (hcp !== undefined) sh.getRange(rowIdx, 3).setValue(hcp);
+      }
+    });
+  }
+
+  meta.canchaId1 = canchaId1; meta.canchaName1 = canchaName1; meta.colorTee1 = colorFinal1; meta.par1 = hcpInfo1.par;
+  meta.canchaId2 = canchaId2; meta.canchaName2 = canchaName2; meta.colorTee2 = colorFinal2; meta.par2 = hcpInfo2.par;
+  saveFinalMeta_(meta);
+
+  audit_('EDITAR_FECHA_FINAL', 'admin', { canchaId1: canchaId1, canchaId2: canchaId2, colorTee1: colorFinal1, colorTee2: colorFinal2 });
+
+  return { ok: true, par1: hcpInfo1.par, par2: hcpInfo2.par };
+}
+
+/**
  * eliminarFechaFinal_ — Admin borra la Fecha Final por completo (los 2 días
  * juntos, todo o nada), para poder probar el flujo sin miedo a romper nada.
  * Deja el sistema como si nunca se hubiera creado.
