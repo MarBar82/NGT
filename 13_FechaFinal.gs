@@ -422,7 +422,13 @@ function armarLineasFinalDia2_(params) {
 
   const meta = getFinalMeta_();
   if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
-  if (meta.estado !== 'dia1_en_curso') {
+  // Se arma la primera vez con estado 'dia1_en_curso'. También se permite
+  // REARMAR con estado 'dia2_en_curso' (p.ej. si se armaron mal la primera
+  // vez) -- pero el chequeo de abajo (yaHayScoresDia2) bloquea el rearmado
+  // en cuanto algún jugador ya cargó un hoyo del Día 2, para no mezclar
+  // grupos a mitad de una ronda ya empezada.
+  const esReArmado = meta.estado === 'dia2_en_curso';
+  if (meta.estado !== 'dia1_en_curso' && !esReArmado) {
     return { ok: false, error: 'Las líneas del Día 2 no se pueden armar todavía (estado actual: ' + meta.estado + ')' };
   }
 
@@ -430,31 +436,48 @@ function armarLineasFinalDia2_(params) {
   if (!st.ok) return { ok: false, error: st.error || 'No se pudo calcular el resultado del Día 1' };
   if (!st.completo) return { ok: false, error: 'Todavía no se completaron los 18 hoyos del Día 1 de todos los jugadores' };
 
-  const ordered = st.standings; // ya viene ordenado mejor a peor NETO, con apodo/invitado incluidos
-  const n = ordered.length;
-  if (n < 2) return { ok: false, error: 'Se necesitan al menos 2 jugadores para armar líneas' };
-
-  // HCP del Día 2, ya calculado y guardado en TARJETAS FINAL al crear la fecha
+  // HCP del Día 2, ya calculado y guardado en TARJETAS FINAL al crear la
+  // fecha -- de paso, en la misma lectura, chequeamos si ya se cargó algún
+  // hoyo del Día 2 (para bloquear el rearmado si ya arrancó la ronda).
   const sh = getSheet_(FINAL_SHEET_NAME);
   const hcpDia2 = {};
+  let yaHayScoresDia2 = false;
   if (sh) {
     const lastRow = sh.getLastRow();
     if (lastRow > 1) {
-      const rows = sh.getRange(2, 1, lastRow - 1, 3).getValues(); // DIA, MATRICULA, HCP
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues(); // DIA, MATRICULA, HCP, ID CANCHA, COLOR TEE, HOYO1-18
       rows.forEach(function(r) {
-        if (String(r[0]) === '2') hcpDia2[String(r[1])] = r[2];
+        if (String(r[0]) !== '2') return;
+        hcpDia2[String(r[1])] = r[2];
+        const scores = r.slice(5, 23);
+        if (scores.some(function(v){ return v !== '' && v !== null && v !== undefined; })) yaHayScoresDia2 = true;
       });
     }
   }
+  if (esReArmado && yaHayScoresDia2) {
+    return { ok: false, error: 'Ya se cargaron scores del Día 2 -- no se pueden rearmar las líneas sin arriesgar la ronda en curso.' };
+  }
 
-  const sizes = calcularTamanosGruposFinal_(n); // mejor NETO → peor NETO
+  // Usamos el orden del ACUMULADO (getFinalStandingsDia2_, que sí suma los
+  // golpes a favor -- igual que la pestaña Acumulado), no el orden puro del
+  // Día 1 (getFinalStandingsDia1_, que desde la Tarea 156 ya NO suma golpes
+  // a favor -- correcto para la tabla del Día 1, pero las líneas de salida
+  // del Día 2 tienen que reflejar la clasificación real de la Final).
+  const st2 = getFinalStandingsDia2_();
+  if (!st2.ok) return { ok: false, error: st2.error || 'No se pudo calcular el acumulado' };
+
+  const ordered = st2.standings; // ya viene ordenado mejor a peor ACUMULADO (con golpesFavor), con apodo/invitado incluidos
+  const n = ordered.length;
+  if (n < 2) return { ok: false, error: 'Se necesitan al menos 2 jugadores para armar líneas' };
+
+  const sizes = calcularTamanosGruposFinal_(n); // mejor ACUMULADO → peor ACUMULADO
   const blocks = [];
   let idx = 0;
   sizes.forEach(function(size) {
     blocks.push(ordered.slice(idx, idx + size));
     idx += size;
   });
-  blocks.reverse(); // Línea 1 = peor NETO (sale primero) ... última línea = líderes
+  blocks.reverse(); // Línea 1 = peor ACUMULADO (sale primero) ... última línea = líderes
 
   const lineas = blocks.map(function(grp, i) {
     return {
@@ -474,7 +497,7 @@ function armarLineasFinalDia2_(params) {
   meta.estado = 'dia2_en_curso';
   saveFinalMeta_(meta);
 
-  audit_('ARMAR_LINEAS_FINAL_DIA2', 'admin', { lineas: lineas.length, jugadores: n });
+  audit_('ARMAR_LINEAS_FINAL_DIA2', 'admin', { lineas: lineas.length, jugadores: n, rearmado: esReArmado });
 
   return { ok: true, lineas: lineas };
 }

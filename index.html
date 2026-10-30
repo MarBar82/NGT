@@ -4533,6 +4533,18 @@ function renderFinalLineasDia2_(meta){
   });
   html += '</div>';
   wrap.innerHTML = html;
+  // Mientras nadie cargó ningún hoyo del Día 2 todavía, dejamos un botón
+  // para REARMAR las líneas (por si se armaron mal la primera vez) -- el
+  // backend vuelve a chequear que no haya scores cargados antes de aceptar
+  // el rearmado, así que este chequeo del lado del frontend es solo para no
+  // mostrar un botón que de todas formas el backend va a rechazar.
+  ngtApiGet('getFinalStandingsDia2').then(function(r){
+    if(r && r.ok && r.standings && r.standings.length && r.standings.every(function(s){ return !s.holesCargados; })){
+      wrap.innerHTML +=
+        '<button class="adm-btn-secondary" onclick="finalArmarLineasDia2()" style="margin-top:10px;width:100%;">↻ Rearmar Líneas Día 2</button>' +
+        '<div id="final-lineas-dia2-msg" class="adm-msg" style="display:none;"></div>';
+    }
+  }).catch(function(){});
 }
 
 // Lista, dentro del panel admin de la Fecha Final, las tarjetas de cada
