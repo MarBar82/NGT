@@ -28408,3 +28408,105 @@ Antes y después de escribir este documento verifiqué que el bloque "Buscá" ap
 4. **Sí.** Solo cambiaron los valores dentro de las celdas "Neto" y "Al par" — el resto del `<tr>` (Gross, Hcp, Hoyo, nombre, invitado, onclick) es idéntico.
 
 5. **Commit:** `9b854e0` — "T155: tabla Dia 1 Final — Neto/Al par vuelven al resultado puro de la ronda"
+
+## Tarea 156 — El orden de la tabla del Día 1 también debe ignorar los golpes a favor
+
+### Contexto
+
+Después de la Tarea 155 (que hizo que "Neto" y "Al par" del Día 1 volvieran a mostrar el resultado puro de la ronda, sin golpes a favor), dijiste:
+
+*"Ya esta code. Pero la tabla volvio a desordenarse. No respeta el neto."*
+
+Tenías razón, y el motivo es puntual: el **orden** de esa tabla nunca dejó de calcularse sumando los golpes a favor (eso no lo tocamos en la Tarea 155 — solo cambiamos qué número se mostraba). Entonces, apenas la columna "Neto" volvió a mostrar el resultado puro, el orden y el número dejaron de coincidir otra vez — exactamente el mismo síntoma de la Tarea 154, pero ahora en sentido contrario: antes el número no reflejaba el orden; ahora el orden no reflejaba el número.
+
+Lo comprobé con un ejemplo concreto: armé un jugador que jugó mucho peor que otro (18 hoyos de 5 contra 18 hoyos de 4, con el mismo hándicap) pero con un golpes a favor enorme a su favor. Con el código actual, ese jugador aparecía **primero** en la tabla a pesar de haber jugado peor — el golpes a favor lo "subía" en el orden aunque la columna Neto (que ya no lo incluye desde la Tarea 155) mostrara su resultado real, peor.
+
+### Qué NO cambia
+
+- La columna "Neto"/"Al par" del Día 1 — sigue mostrando el resultado puro de la ronda (eso ya quedó bien en la Tarea 155, no se toca).
+- La pestaña **Acumulado** — sigue ordenando y calculando la clasificación real de la Final CON los golpes a favor, tal cual corresponde (ese cálculo vive en otra función, `getFinalStandingsDia2_`, que arma su propio orden y no reutiliza el orden de esta tabla del Día 1 — lo confirmé leyendo el código: usa el dato de cada jugador por matrícula, no el orden del array).
+- La tabla del **Día 2** — tampoco se toca, nunca usó golpes a favor.
+- Ningún dato de cada jugador (Gross, Hcp, Neto, golpes a favor, Al par) — sigue estando todo igual, esto es pura y exclusivamente el criterio de ORDEN de las filas.
+
+### Cómo funciona
+
+La función que calcula los resultados del Día 1 (`getFinalStandingsDia1_`, en el backend) ordenaba las filas sumando el golpes a favor a la diferencia neta de cada jugador. Ahora ordena solo por la diferencia neta pura (la misma que se usa para la columna "Al par" y, en una ronda completa, da exactamente el mismo orden que "Gross menos Hcp" — la columna "Neto" que ves). El golpes a favor sigue calculado y disponible en cada fila (lo sigue necesitando la pestaña Acumulado para armar el total de los 36 hoyos), solo que ya no decide el orden de ESTA tabla.
+
+### Cambio 1 — El orden de la tabla del Día 1 ya no suma golpes a favor
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** para que el orden de las filas coincida con el número que ya se muestra en "Neto" y "Al par" desde la Tarea 155 (el resultado puro de la ronda).
+
+**Buscá:**
+```js
+  // Ordenamos por la diferencia NETA prorateada sobre los hoyos ya jugados
+  // (alPar) más los golpes a favor, no por "neto" (que resta el hcp de
+  // juego ENTERO aunque falten hoyos -- eso castiga injustamente a quien ya
+  // jugó varios hoyos contra quien recién arrancó: un +3 con 10 hoyos
+  // jugados puede terminar mostrado por debajo de un -1 con 2 hoyos
+  // jugados). Con el Día 1 100% completo, alPar (prorateado sobre 18/18)
+  // y neto (gross - hcpJuego) dan exactamente el mismo orden -- este cambio
+  // no mueve nada en los resultados ya cerrados, solo corrige el orden
+  // mientras la ronda todavía está en curso.
+  filas.sort(function(a, b) {
+    const ka = (a.alPar === null ? 0 : a.alPar) + a.golpesFavor;
+    const kb = (b.alPar === null ? 0 : b.alPar) + b.golpesFavor;
+    return ka - kb;
+  });
+```
+
+**Reemplázá por:**
+```js
+  // Ordenamos por la diferencia NETA prorateada sobre los hoyos ya jugados
+  // (alPar) SOLA, sin golpes a favor -- esta tabla del Día 1 muestra y
+  // ordena por el resultado puro de la ronda, tal cual una ronda de golf
+  // normal (decisión de Marco, Tarea 156). Los golpes a favor siguen
+  // existiendo y siguen decidiendo la clasificación real de la Final, pero
+  // eso se calcula aparte en getFinalStandingsDia2_ (que arma su propio
+  // orden con alParDia1 + golpesFavor + alParDia2, sin reutilizar el orden
+  // de este array) -- este cambio no afecta en nada al Acumulado ni al
+  // resultado de la Final.
+  // No usamos "neto" (que resta el hcp de juego ENTERO aunque falten hoyos
+  // -- eso castiga injustamente a quien ya jugó varios hoyos contra quien
+  // recién arrancó: un +3 con 10 hoyos jugados puede terminar mostrado por
+  // debajo de un -1 con 2 hoyos jugados). Con el Día 1 100% completo, alPar
+  // (prorateado sobre 18/18) da exactamente el mismo orden que el neto puro
+  // (gross - hcpJuego).
+  filas.sort(function(a, b) {
+    const ka = (a.alPar === null ? 0 : a.alPar);
+    const kb = (b.alPar === null ? 0 : b.alPar);
+    return ka - kb;
+  });
+```
+
+### Cómo lo probé
+
+Extraje la función real (`getFinalStandingsDia1_`, junto con `calcDiffNetoParcial_` y `calcStrokesPerHole_` que usa por detrás) y la corrí con Node contra 4 escenarios: 12 chequeos automáticos, todos en verde. El más importante fue **reproducir el bug exacto que reportaste**: armé un jugador que jugó mucho peor que otro (18 hoyos de 5 contra 18 hoyos de 4, mismo hándicap) pero con un golpes a favor enorme a su favor. Confirmé que:
+
+- Con el código **actual** (el que tenés ahora mismo, antes de este cambio): ese jugador sale **primero** en la tabla, a pesar de haber jugado peor — el favor lo sube en el orden aunque "Neto" ya no lo muestre.
+- Con el **arreglo**: el jugador que jugó mejor queda primero, coincidiendo con lo que muestra la columna Neto.
+- También probé el caso de 3 jugadores con exactamente el mismo resultado de ronda pero golpes a favor distintos (-3, 0, +2): quedan ordenados entre sí sin que el favor los mueva (el orden entre resultados idénticos queda estable, no "salta" por el favor).
+- Confirmé que el dato `golpesFavor` sigue viniendo en cada fila (lo necesita la pestaña Acumulado) — solo dejó de usarse para decidir el orden de esta tabla.
+- Probé también una ronda todavía en curso (9 de 18 hoyos cargados): el "Al par" prorateado sigue funcionando igual que siempre, sin cambios.
+
+Antes y después de escribir este documento verifiqué que el bloque "Buscá" aparece exactamente una vez en el código real (recién clonado de GitHub, commit `6e312ed`, que ya tiene aplicada la Tarea 155), y que aplicar el cambio sobre ese código real da como resultado un archivo **idéntico, byte por byte**, al que efectivamente probé.
+
+### Preguntas de verificación
+
+1. En la tabla del Día 1, ¿el orden de los jugadores ahora coincide con los números que muestra la columna "Neto" (de menor a mayor), igual que antes de que empezáramos con todo esto?
+2. Si algún jugador tiene golpes a favor grande (positivo o negativo), ¿ya no lo "salta" de posición en esta tabla del Día 1?
+3. En la pestaña Acumulado, ¿el golpes a favor sigue aplicándose igual que siempre para la clasificación real de la Final (sin cambios ahí)?
+4. ¿Las demás columnas y datos de la tabla del Día 1 (Gross, Hcp, Hoyo, nombre) se ven exactamente igual que antes?
+
+## ✅ Respuestas de verificación — Tarea 156
+
+1. **Sí.** `getFinalStandingsDia1_` ahora ordena por `alPar` solo (sin `+ golpesFavor`). Como la columna "Neto" muestra `gross - hcp` y con la ronda completa `alPar ≡ gross - hcp - par` (mismo criterio de orden), los dos van a coincidir.
+
+2. **Sí.** `golpesFavor` ya no entra en la key de sort de esta tabla — no puede cambiar la posición de nadie en el Día 1.
+
+3. **Sí.** `getFinalStandingsDia2_` tiene su propio sort (`alParDia1 + golpesFavor + alParDia2`) y no reutiliza el array de `getFinalStandingsDia1_` — lo lee por matrícula de forma independiente. No se tocó.
+
+4. **Sí.** El único cambio fue la expresión dentro de `.sort()` en el backend — los datos devueltos por fila (Gross, Hcp, Neto, golpesFavor, Al par, hoyos) son exactamente los mismos, solo cambia en qué posición del array queda cada fila.
+
+5. **Commit:** `53c6345` — "T156: orden tabla Dia 1 Final — ya no suma golpesFavor"
