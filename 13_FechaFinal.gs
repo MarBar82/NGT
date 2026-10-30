@@ -958,17 +958,23 @@ function getFinalStandingsDia1_() {
   });
 
   // Ordenamos por la diferencia NETA prorateada sobre los hoyos ya jugados
-  // (alPar) más los golpes a favor, no por "neto" (que resta el hcp de
-  // juego ENTERO aunque falten hoyos -- eso castiga injustamente a quien ya
-  // jugó varios hoyos contra quien recién arrancó: un +3 con 10 hoyos
-  // jugados puede terminar mostrado por debajo de un -1 con 2 hoyos
-  // jugados). Con el Día 1 100% completo, alPar (prorateado sobre 18/18)
-  // y neto (gross - hcpJuego) dan exactamente el mismo orden -- este cambio
-  // no mueve nada en los resultados ya cerrados, solo corrige el orden
-  // mientras la ronda todavía está en curso.
+  // (alPar) SOLA, sin golpes a favor -- esta tabla del Día 1 muestra y
+  // ordena por el resultado puro de la ronda, tal cual una ronda de golf
+  // normal (decisión de Marco, Tarea 156). Los golpes a favor siguen
+  // existiendo y siguen decidiendo la clasificación real de la Final, pero
+  // eso se calcula aparte en getFinalStandingsDia2_ (que arma su propio
+  // orden con alParDia1 + golpesFavor + alParDia2, sin reutilizar el orden
+  // de este array) -- este cambio no afecta en nada al Acumulado ni al
+  // resultado de la Final.
+  // No usamos "neto" (que resta el hcp de juego ENTERO aunque falten hoyos
+  // -- eso castiga injustamente a quien ya jugó varios hoyos contra quien
+  // recién arrancó: un +3 con 10 hoyos jugados puede terminar mostrado por
+  // debajo de un -1 con 2 hoyos jugados). Con el Día 1 100% completo, alPar
+  // (prorateado sobre 18/18) da exactamente el mismo orden que el neto puro
+  // (gross - hcpJuego).
   filas.sort(function(a, b) {
-    const ka = (a.alPar === null ? 0 : a.alPar) + a.golpesFavor;
-    const kb = (b.alPar === null ? 0 : b.alPar) + b.golpesFavor;
+    const ka = (a.alPar === null ? 0 : a.alPar);
+    const kb = (b.alPar === null ? 0 : b.alPar);
     return ka - kb;
   });
   return { ok: true, completo: completo, standings: filas, pares: cpPares, indices: cpIndices };
