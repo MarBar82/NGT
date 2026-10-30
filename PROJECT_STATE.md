@@ -28510,3 +28510,272 @@ Antes y después de escribir este documento verifiqué que el bloque "Buscá" ap
 4. **Sí.** El único cambio fue la expresión dentro de `.sort()` en el backend — los datos devueltos por fila (Gross, Hcp, Neto, golpesFavor, Al par, hoyos) son exactamente los mismos, solo cambia en qué posición del array queda cada fila.
 
 5. **Commit:** `53c6345` — "T156: orden tabla Dia 1 Final — ya no suma golpesFavor"
+
+## Tarea 157 — Las líneas del Día 2 se armaban con el orden del Día 1, no con el del Acumulado
+
+### Contexto
+
+Cerraste el Día 1 y armaste las líneas del Día 2, y me avisaste:
+
+*"Ya esta code. Pero la tabla volvio a desordenarse. No respeta el neto."* y después: *"Cerre el dia 1, y al armar las lineas dle dia 2 las hizo con el orden del dia 1. Hay que hacerlas con la tabla del acumulado, que es la que descuenta los golpes a favor."*
+
+Encontré el motivo exacto: la función que arma las líneas del Día 2 (`armarLineasFinalDia2_`) tomaba el orden directo de la tabla del Día 1 — y esa tabla, desde la Tarea 156, muestra y ordena por el resultado PURO de la ronda (sin golpes a favor, a propósito). Pero las líneas de salida del Día 2 tienen que reflejar la clasificación REAL de la Final hasta ese momento — la misma que ves en la pestaña Acumulado, que sí suma los golpes a favor. Al no actualizar esto cuando hicimos la Tarea 156, las líneas quedaron armadas con el criterio equivocado.
+
+Lo comprobé con un ejemplo armado a propósito: 6 jugadores con el mismo resultado puro de ronda, pero con golpes a favor muy distintos entre sí. El jugador con el MEJOR golpes a favor (el que, en el Acumulado, debería ir primero en la clasificación) terminaba en el código actual metido en el grupo de los que salen primero (el grupo de los "peores"), en vez de en el grupo de los líderes.
+
+Te pregunté si ya se había cargado algún score del Día 2 con esta agrupación incorrecta, y me confirmaste que **todavía nadie arrancó a jugar** — así que corregir esto ahora es 100% seguro: no se toca ningún score del Día 1 ni del Día 2 (no hay ninguno todavía), solo se vuelve a calcular la agrupación.
+
+### Qué NO cambia
+
+- Ningún score del Día 1 ni del Día 2 — esta Tarea solo toca cómo se agrupan los jugadores en líneas, nunca los resultados cargados.
+- La tabla del Día 1 (Neto/Al par puros, sin favor) y la pestaña Acumulado (con favor en su propia columna) — ninguna de las dos se toca, siguen exactamente igual que después de las Tareas 155/156.
+- El tamaño de los grupos (de a 4, o de a 3 si no cierra justo) — sigue siendo el mismo cálculo de siempre (`calcularTamanosGruposFinal_`), solo cambia QUIÉN entra en cada grupo.
+- Las líneas del Día 1 — no se tocan para nada, esto es solo sobre las líneas del Día 2.
+
+### Cómo funciona
+
+**Cambio 1 (el arreglo de fondo):** `armarLineasFinalDia2_` ahora toma el orden de `getFinalStandingsDia2_` (el mismo cálculo que usa la pestaña Acumulado, que sí suma los golpes a favor) en vez del orden de `getFinalStandingsDia1_` (el de la tabla del Día 1, que ya no los suma desde la Tarea 156). De paso, aproveché la misma lectura de la hoja para agregar una revisación: si ya se cargó algún hoyo del Día 2, ya no se puede "rearmar" (ver Cambio 2) — así protegemos una ronda que ya arrancó.
+
+**Cambio 2 (la forma de corregir esto, hoy y en el futuro):** antes, una vez armadas las líneas del Día 2, no había forma de volver a armarlas salvo editando la hoja a mano. Agregué un botón "↻ Rearmar Líneas Día 2" que aparece junto a las líneas ya armadas, **solo mientras nadie cargó ningún hoyo del Día 2 todavía** — así podés corregir la agrupación actual (que se armó con el criterio viejo) con un solo click, sin ningún riesgo, ni para el Día 1 ni para el Día 2. Elegí esta opción en vez de un editor manual de líneas porque es más simple, más rápida de tener lista ahora, y el riesgo es menor: no hay edición manual que pueda desordenar algo por error, solo se vuelve a calcular con el criterio correcto.
+
+### Cambio 1 — `armarLineasFinalDia2_` usa el orden del Acumulado (con golpes a favor)
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** para que las líneas del Día 2 reflejen la clasificación real de la Final (la del Acumulado), no el resultado puro del Día 1.
+
+**Buscá:**
+```js
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  if (meta.estado !== 'dia1_en_curso') {
+    return { ok: false, error: 'Las líneas del Día 2 no se pueden armar todavía (estado actual: ' + meta.estado + ')' };
+  }
+
+  const st = getFinalStandingsDia1_();
+  if (!st.ok) return { ok: false, error: st.error || 'No se pudo calcular el resultado del Día 1' };
+  if (!st.completo) return { ok: false, error: 'Todavía no se completaron los 18 hoyos del Día 1 de todos los jugadores' };
+
+  const ordered = st.standings; // ya viene ordenado mejor a peor NETO, con apodo/invitado incluidos
+  const n = ordered.length;
+  if (n < 2) return { ok: false, error: 'Se necesitan al menos 2 jugadores para armar líneas' };
+
+  // HCP del Día 2, ya calculado y guardado en TARJETAS FINAL al crear la fecha
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const hcpDia2 = {};
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 3).getValues(); // DIA, MATRICULA, HCP
+      rows.forEach(function(r) {
+        if (String(r[0]) === '2') hcpDia2[String(r[1])] = r[2];
+      });
+    }
+  }
+
+  const sizes = calcularTamanosGruposFinal_(n); // mejor NETO → peor NETO
+  const blocks = [];
+  let idx = 0;
+  sizes.forEach(function(size) {
+    blocks.push(ordered.slice(idx, idx + size));
+    idx += size;
+  });
+  blocks.reverse(); // Línea 1 = peor NETO (sale primero) ... última línea = líderes
+
+  const lineas = blocks.map(function(grp, i) {
+    return {
+      lineNum: i + 1,
+      players: grp.map(function(row) {
+        return {
+          matricula: row.matricula,
+          apodo: row.apodo,
+          hcp: hcpDia2[row.matricula] !== undefined ? hcpDia2[row.matricula] : '',
+          invitado: row.invitado,
+        };
+      }),
+    };
+  });
+
+  meta.lineasDia2 = lineas;
+  meta.estado = 'dia2_en_curso';
+  saveFinalMeta_(meta);
+
+  audit_('ARMAR_LINEAS_FINAL_DIA2', 'admin', { lineas: lineas.length, jugadores: n });
+
+  return { ok: true, lineas: lineas };
+}
+```
+
+**Reemplázá por:**
+```js
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  // Se arma la primera vez con estado 'dia1_en_curso'. También se permite
+  // REARMAR con estado 'dia2_en_curso' (p.ej. si se armaron mal la primera
+  // vez) -- pero el chequeo de abajo (yaHayScoresDia2) bloquea el rearmado
+  // en cuanto algún jugador ya cargó un hoyo del Día 2, para no mezclar
+  // grupos a mitad de una ronda ya empezada.
+  const esReArmado = meta.estado === 'dia2_en_curso';
+  if (meta.estado !== 'dia1_en_curso' && !esReArmado) {
+    return { ok: false, error: 'Las líneas del Día 2 no se pueden armar todavía (estado actual: ' + meta.estado + ')' };
+  }
+
+  const st = getFinalStandingsDia1_();
+  if (!st.ok) return { ok: false, error: st.error || 'No se pudo calcular el resultado del Día 1' };
+  if (!st.completo) return { ok: false, error: 'Todavía no se completaron los 18 hoyos del Día 1 de todos los jugadores' };
+
+  // HCP del Día 2, ya calculado y guardado en TARJETAS FINAL al crear la
+  // fecha -- de paso, en la misma lectura, chequeamos si ya se cargó algún
+  // hoyo del Día 2 (para bloquear el rearmado si ya arrancó la ronda).
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  const hcpDia2 = {};
+  let yaHayScoresDia2 = false;
+  if (sh) {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const rows = sh.getRange(2, 1, lastRow - 1, 23).getValues(); // DIA, MATRICULA, HCP, ID CANCHA, COLOR TEE, HOYO1-18
+      rows.forEach(function(r) {
+        if (String(r[0]) !== '2') return;
+        hcpDia2[String(r[1])] = r[2];
+        const scores = r.slice(5, 23);
+        if (scores.some(function(v){ return v !== '' && v !== null && v !== undefined; })) yaHayScoresDia2 = true;
+      });
+    }
+  }
+  if (esReArmado && yaHayScoresDia2) {
+    return { ok: false, error: 'Ya se cargaron scores del Día 2 -- no se pueden rearmar las líneas sin arriesgar la ronda en curso.' };
+  }
+
+  // Usamos el orden del ACUMULADO (getFinalStandingsDia2_, que sí suma los
+  // golpes a favor -- igual que la pestaña Acumulado), no el orden puro del
+  // Día 1 (getFinalStandingsDia1_, que desde la Tarea 156 ya NO suma golpes
+  // a favor -- correcto para la tabla del Día 1, pero las líneas de salida
+  // del Día 2 tienen que reflejar la clasificación real de la Final).
+  const st2 = getFinalStandingsDia2_();
+  if (!st2.ok) return { ok: false, error: st2.error || 'No se pudo calcular el acumulado' };
+
+  const ordered = st2.standings; // ya viene ordenado mejor a peor ACUMULADO (con golpesFavor), con apodo/invitado incluidos
+  const n = ordered.length;
+  if (n < 2) return { ok: false, error: 'Se necesitan al menos 2 jugadores para armar líneas' };
+
+  const sizes = calcularTamanosGruposFinal_(n); // mejor ACUMULADO → peor ACUMULADO
+  const blocks = [];
+  let idx = 0;
+  sizes.forEach(function(size) {
+    blocks.push(ordered.slice(idx, idx + size));
+    idx += size;
+  });
+  blocks.reverse(); // Línea 1 = peor ACUMULADO (sale primero) ... última línea = líderes
+
+  const lineas = blocks.map(function(grp, i) {
+    return {
+      lineNum: i + 1,
+      players: grp.map(function(row) {
+        return {
+          matricula: row.matricula,
+          apodo: row.apodo,
+          hcp: hcpDia2[row.matricula] !== undefined ? hcpDia2[row.matricula] : '',
+          invitado: row.invitado,
+        };
+      }),
+    };
+  });
+
+  meta.lineasDia2 = lineas;
+  meta.estado = 'dia2_en_curso';
+  saveFinalMeta_(meta);
+
+  audit_('ARMAR_LINEAS_FINAL_DIA2', 'admin', { lineas: lineas.length, jugadores: n, rearmado: esReArmado });
+
+  return { ok: true, lineas: lineas };
+}
+```
+
+### Cambio 2 — Botón "Rearmar Líneas Día 2" (mientras nadie cargó hoyos todavía)
+
+**Archivo:** `index.html`
+
+**Por qué:** para que puedas corregir, con un click, las líneas que ya se armaron con el criterio viejo — sin riesgo, porque solo se habilita mientras no hay ningún score cargado del Día 2.
+
+**Buscá:**
+```js
+  const lineas = meta.lineasDia2 || [];
+  if(!lineas.length){ wrap.innerHTML = ''; return; }
+  let html = '<div style="margin-top:18px;"><div class="adm-label" style="margin-bottom:8px;">Líneas de salida — Día 2</div>';
+  lineas.forEach(function(l){
+    html += '<div class="gf-lin-linea"><div class="gf-lin-hdr">Línea ' + l.lineNum + '</div><div class="gf-lin-players">';
+    (l.players || []).forEach(function(p){
+      html += '<div class="gf-lin-pill' + (p.invitado ? ' gf-lin-pill-inv' : '') + '">' +
+        '<span class="gf-lin-pname">' + p.apodo + (p.invitado ? ' (invitado)' : '') + '</span>' +
+        '<span style="font-size:12px;color:var(--g4);">HCP ' + (p.hcp !== '' && p.hcp !== null && p.hcp !== undefined ? p.hcp : '—') + '</span>' +
+        '</div>';
+    });
+    html += '</div></div>';
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+```
+
+**Reemplázá por:**
+```js
+  const lineas = meta.lineasDia2 || [];
+  if(!lineas.length){ wrap.innerHTML = ''; return; }
+  let html = '<div style="margin-top:18px;"><div class="adm-label" style="margin-bottom:8px;">Líneas de salida — Día 2</div>';
+  lineas.forEach(function(l){
+    html += '<div class="gf-lin-linea"><div class="gf-lin-hdr">Línea ' + l.lineNum + '</div><div class="gf-lin-players">';
+    (l.players || []).forEach(function(p){
+      html += '<div class="gf-lin-pill' + (p.invitado ? ' gf-lin-pill-inv' : '') + '">' +
+        '<span class="gf-lin-pname">' + p.apodo + (p.invitado ? ' (invitado)' : '') + '</span>' +
+        '<span style="font-size:12px;color:var(--g4);">HCP ' + (p.hcp !== '' && p.hcp !== null && p.hcp !== undefined ? p.hcp : '—') + '</span>' +
+        '</div>';
+    });
+    html += '</div></div>';
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+  // Mientras nadie cargó ningún hoyo del Día 2 todavía, dejamos un botón
+  // para REARMAR las líneas (por si se armaron mal la primera vez) -- el
+  // backend vuelve a chequear que no haya scores cargados antes de aceptar
+  // el rearmado, así que este chequeo del lado del frontend es solo para no
+  // mostrar un botón que de todas formas el backend va a rechazar.
+  ngtApiGet('getFinalStandingsDia2').then(function(r){
+    if(r && r.ok && r.standings && r.standings.length && r.standings.every(function(s){ return !s.holesCargados; })){
+      wrap.innerHTML +=
+        '<button class="adm-btn-secondary" onclick="finalArmarLineasDia2()" style="margin-top:10px;width:100%;">↻ Rearmar Líneas Día 2</button>' +
+        '<div id="final-lineas-dia2-msg" class="adm-msg" style="display:none;"></div>';
+    }
+  }).catch(function(){});
+}
+```
+
+### Cómo lo probé
+
+Extraje las funciones reales (`armarLineasFinalDia2_`, `getFinalStandingsDia1_`, `getFinalStandingsDia2_`, `calcularTamanosGruposFinal_`, y sus dependencias) y las corrí con Node contra 8 escenarios: 16 chequeos automáticos, todos en verde. Los más importantes:
+
+- **Reproduje el bug exacto** con 6 jugadores con el mismo resultado puro de ronda pero golpes a favor muy distintos: con el código **actual** (el que tenés ahora), el jugador con mejor golpes a favor terminaba en el grupo de los que salen primero, en vez del grupo de los líderes. Con el **arreglo**, termina correctamente en el grupo de los líderes.
+- Confirmé que **rearmar** las líneas funciona correctamente cuando todavía no hay ningún score del Día 2 cargado.
+- Confirmé que el rearmado se **bloquea** apenas hay un solo hoyo cargado de un solo jugador del Día 2 — con un mensaje claro de por qué.
+- Confirmé que los demás chequeos de siempre siguen funcionando sin cambios: admin key inválida bloqueada, estado no permitido bloqueado, Día 1 incompleto bloqueado, y que el HCP del Día 2 de cada jugador se sigue leyendo correctamente de la hoja.
+
+Antes y después de escribir este documento verifiqué que cada uno de los 2 bloques "Buscá" aparece exactamente una vez en el código real (recién clonado de GitHub, commit `9249e3d`, que ya tiene aplicada la Tarea 156), y que aplicar los 2 cambios sobre ese código real da como resultado, en ambos archivos, un resultado **idéntico, byte por byte**, al que efectivamente probé.
+
+### Qué tenés que hacer en la app, apenas se aplique este cambio
+
+Como las líneas del Día 2 que ya armaste quedaron con el criterio viejo (y todavía nadie arrancó a jugar), después del deploy entrá al panel de la Fecha Final y tocá el nuevo botón **"↻ Rearmar Líneas Día 2"** una sola vez — eso va a volver a armar los grupos ya con el criterio correcto (el del Acumulado). No hace falta tocar nada más.
+
+### Preguntas de verificación
+
+1. Después de tocar "↻ Rearmar Líneas Día 2", ¿el jugador que está primero en la pestaña Acumulado ahora aparece en la línea de los líderes (la última, la que sale al final)?
+2. Si volvés a entrar al panel sin que nadie haya cargado todavía ningún hoyo del Día 2, ¿el botón "Rearmar" sigue disponible?
+3. Apenas alguien cargue el primer hoyo del Día 2, ¿el botón "Rearmar" desaparece (o, si lo tocás de todas formas, te avisa que ya no se puede)?
+4. ¿Los scores del Día 1 siguen exactamente iguales que antes (nada se tocó ahí)?
+
+### Respuestas de verificación
+
+1. Sí — `armarLineasFinalDia2_` ahora usa `getFinalStandingsDia2_` (que incluye `golpesFavor` en el orden), así que el líder del Acumulado queda en la última línea (la de los líderes).
+2. Sí — el botón aparece siempre que `getFinalStandingsDia2` devuelva standings con `holesCargados === 0` para todos; mientras nadie juegue el Día 2 el botón se muestra cada vez que se recarga el panel.
+3. Sí — el frontend esconde el botón en cuanto algún jugador tiene `holesCargados > 0`; y si llegara a estar visible y se tocara igual, el backend rechaza el rearmado con "Ya se cargaron scores del Día 2".
+4. Sí — esta tarea no tocó ningún score, ni en el frontend ni en el backend; solo cambió el criterio de orden para armar los grupos del Día 2.
+
+**Commit:** `0c4a6c5` — "T157: armar lineas dia 2 con orden del acumulado (golpesFavor)"
