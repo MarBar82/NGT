@@ -27846,3 +27846,369 @@ Antes y después de escribir este documento verifiqué que el bloque "Buscá" ap
 4. **Sí.** La parte de `renderTarjeta18Hoyos` no se tocó, solo se cambió el bloque `.perf-ecl-resumen` debajo.
 
 5. **Commit:** `23fe7df` — "T152: tarjeta Final — Gross/Hcp/Neto y espacio entre dias"
+
+## Tarea 153 — El admin puede modificar la cancha y el color de salidas de la Fecha Final ya creada
+
+### Contexto
+
+Pediste: *"Necesito que el admin pueda modificar los datos de la cancha una vez creada la fecha, igual que una fecha normal. Tiene que poder cambiar las canchas y el color de salidas."*
+
+En una fecha común, el admin puede entrar al panel "Editando Fecha" y cambiar la cancha y el color de salidas en cualquier momento, aunque la fecha ya esté jugándose. En la Fecha Final no existía ese mismo botón — esta Tarea lo agrega. Como la Final tiene **2 canchas** (una para el Día 1 y otra para el Día 2), el panel nuevo deja cambiar las dos por separado.
+
+### Qué NO cambia
+
+- La carga de scores en vivo (`cargarHoyoLiveFinal_`) y la corrección de una tarjeta ya guardada (`adminGuardarTarjetaFinal_`, Tarea 151) — siguen exactamente igual.
+- Los jugadores inscriptos en la Final, los invitados y las líneas ya armadas — no se tocan.
+- Los scores de hoyos que ya se cargaron — no se borran ni se modifican. Solo cambia a qué cancha "apuntan" esos hoyos.
+- La creación de la Final (`crearFechaFinal_`, el formulario que se usa antes de crearla) — no se toca.
+- Ningún otro panel del admin.
+
+### Cómo funciona
+
+Dentro de "Fecha Final" (una vez que ya está creada), aparece una nueva tarjeta **"✏️ Modificar Cancha"** con 4 campos: Cancha y Color de Salidas del Día 1, Cancha y Color de Salidas del Día 2 — ya viene con los valores actuales cargados. Cambiás lo que necesites y tocás "Guardar Cancha".
+
+Al guardar, pasan 2 cosas para cada día que cambiaste:
+
+1. Se actualiza la cancha y el color guardados para ese día (son los que usan las 3 tablas de resultados — Día 1, Día 2, Acumulado — y la pantalla de carga en vivo para saber los pares e índices de cada hoyo).
+2. Se **recalcula el hándicap de juego** de cada jugador para ese día, usando el rating/slope de la cancha y color nuevos — exactamente lo mismo que ya hace una fecha común cuando le cambiás la cancha. Esto es necesario porque el Neto de cada jugador depende de su hándicap de juego EN esa cancha con ese color de salida: si no se recalculara, los resultados quedarían mal (mezclando el hándicap de la cancha vieja con los hoyos jugados en la cancha nueva).
+
+Si algún jugador ya cargó hoyos ese día, esos scores no se tocan — pero al recalcularse el hándicap, el Neto de esos hoyos se va a ver reflejado con el hándicap nuevo (mismo comportamiento que ya tiene una fecha común en este mismo caso).
+
+### Cambio 1 — Backend: nueva función para guardar el cambio de cancha/color
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** agrega `editarFechaFinal_`, la función que valida que el admin esté autorizado, que la Final ya exista, que las 2 canchas sean válidas y tengan rating cargado, y recién ahí escribe los cambios: actualiza la cancha/color guardados (para que las tablas de resultados y la carga en vivo los usen) y recalcula el hándicap de juego de cada jugador para el día correspondiente, directo en la hoja TARJETAS FINAL.
+
+**Buscá:**
+```js
+/**
+ * eliminarFechaFinal_ — Admin borra la Fecha Final por completo (los 2 días
+ * juntos, todo o nada), para poder probar el flujo sin miedo a romper nada.
+ * Deja el sistema como si nunca se hubiera creado.
+ */
+function eliminarFechaFinal_(params) {
+```
+
+**Reemplázá por:**
+```js
+/**
+ * editarFechaFinal_ — Admin cambia la cancha y/o el color de salidas de uno
+ * o los dos días de la Final YA CREADA, mismo criterio que editarFecha_ para
+ * una fecha regular: al cambiar cancha o color hay que recalcular el hándicap
+ * de juego de cada jugador para ese día (depende del rating/slope de la
+ * cancha+color elegidos), así que se reescribe la columna HCP de TARJETAS
+ * FINAL para todas las filas de ese día, además de ID CANCHA y COLOR TEE
+ * (estas dos últimas son solo registro -- los cálculos de pares/índices de
+ * las tablas de resultados y la carga en vivo usan meta.canchaId1/2, no la
+ * columna de la hoja, pero se actualizan igual para que quede consistente).
+ * No se tocan los scores ya cargados: si cambiás la cancha después de que
+ * algún jugador ya arrancó a cargar hoyos, el Neto de esos hoyos se recalcula
+ * con la cancha nueva (mismo comportamiento que ya tiene una fecha regular).
+ */
+function editarFechaFinal_(params) {
+  const { adminKey, canchaId1, colorTee1, canchaId2, colorTee2 } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const meta = getFinalMeta_();
+  if (!meta || !meta.estado) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+
+  if (!canchaId1 || !canchaId2) return { ok: false, error: 'Faltan las 2 canchas' };
+
+  const canchaName1 = lookupCanchaName_(canchaId1);
+  const canchaName2 = lookupCanchaName_(canchaId2);
+  if (!canchaName1) return { ok: false, error: 'Cancha del Día 1 no encontrada: ' + canchaId1 };
+  if (!canchaName2) return { ok: false, error: 'Cancha del Día 2 no encontrada: ' + canchaId2 };
+
+  const colorFinal1 = String(colorTee1 || 'BLANCAS').trim().toUpperCase();
+  const colorFinal2 = String(colorTee2 || 'BLANCAS').trim().toUpperCase();
+
+  const hcpInfo1 = buildHcpJuegoMap_(canchaId1, canchaName1, colorFinal1);
+  const hcpInfo2 = buildHcpJuegoMap_(canchaId2, canchaName2, colorFinal2);
+  if (!hcpInfo1 || !hcpInfo1.par) return { ok: false, error: 'No se encontró rating/par para la cancha del Día 1' };
+  if (!hcpInfo2 || !hcpInfo2.par) return { ok: false, error: 'No se encontró rating/par para la cancha del Día 2' };
+
+  const sh = getSheet_(FINAL_SHEET_NAME);
+  if (!sh) return { ok: false, error: 'Hoja ' + FINAL_SHEET_NAME + ' no encontrada' };
+
+  const lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    const ab = sh.getRange(2, 1, lastRow - 1, 2).getValues(); // DIA, MATRICULA
+    ab.forEach(function(r, i) {
+      const dia = String(r[0]);
+      const mat = String(r[1]).trim();
+      if (!mat) return;
+      const rowIdx = i + 2;
+      if (dia === '1') {
+        sh.getRange(rowIdx, 4).setValue(canchaId1);     // ID CANCHA
+        sh.getRange(rowIdx, 5).setValue(colorFinal1);   // COLOR TEE
+        const hcp = hcpInfo1.hcpMap[mat];
+        if (hcp !== undefined) sh.getRange(rowIdx, 3).setValue(hcp); // HCP
+      } else if (dia === '2') {
+        sh.getRange(rowIdx, 4).setValue(canchaId2);
+        sh.getRange(rowIdx, 5).setValue(colorFinal2);
+        const hcp = hcpInfo2.hcpMap[mat];
+        if (hcp !== undefined) sh.getRange(rowIdx, 3).setValue(hcp);
+      }
+    });
+  }
+
+  meta.canchaId1 = canchaId1; meta.canchaName1 = canchaName1; meta.colorTee1 = colorFinal1; meta.par1 = hcpInfo1.par;
+  meta.canchaId2 = canchaId2; meta.canchaName2 = canchaName2; meta.colorTee2 = colorFinal2; meta.par2 = hcpInfo2.par;
+  saveFinalMeta_(meta);
+
+  audit_('EDITAR_FECHA_FINAL', 'admin', { canchaId1: canchaId1, canchaId2: canchaId2, colorTee1: colorFinal1, colorTee2: colorFinal2 });
+
+  return { ok: true, par1: hcpInfo1.par, par2: hcpInfo2.par };
+}
+
+/**
+ * eliminarFechaFinal_ — Admin borra la Fecha Final por completo (los 2 días
+ * juntos, todo o nada), para poder probar el flujo sin miedo a romper nada.
+ * Deja el sistema como si nunca se hubiera creado.
+ */
+function eliminarFechaFinal_(params) {
+```
+
+### Cambio 2 — Backend: registrar la nueva acción en el router
+
+**Archivo:** `10_Routing.gs`
+
+**Por qué:** conecta la acción `editarFechaFinal` (la que posteará el frontend al guardar) con la función del Cambio 1.
+
+**Buscá:**
+```js
+      case 'crearFechaFinal':       result = crearFechaFinal_(params); break;
+      case 'eliminarFechaFinal':    result = eliminarFechaFinal_(params); break;
+```
+
+**Reemplázá por:**
+```js
+      case 'crearFechaFinal':       result = crearFechaFinal_(params); break;
+      case 'editarFechaFinal':      result = editarFechaFinal_(params); break;
+      case 'eliminarFechaFinal':    result = eliminarFechaFinal_(params); break;
+```
+
+### Cambio 3 — Frontend: nuevo espacio para la tarjeta "Modificar Cancha"
+
+**Archivo:** `index.html`
+
+**Por qué:** agrega el `<div>` donde se va a dibujar la nueva tarjeta, dentro del panel de la Fecha Final ya creada (al lado de donde ya se ven las líneas y las tarjetas de los jugadores).
+
+**Buscá:**
+```js
+        <div id="final-resumen" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--navy);line-height:1.9;"></div>
+        <div id="final-lineas-dia1-wrap"></div>
+```
+
+**Reemplázá por:**
+```js
+        <div id="final-resumen" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--navy);line-height:1.9;"></div>
+        <div id="final-edit-cancha-wrap"></div>
+        <div id="final-lineas-dia1-wrap"></div>
+```
+
+### Cambio 4 — Frontend: pintar (o limpiar) la tarjeta cada vez que se recarga el panel de la Final
+
+**Archivo:** `index.html`
+
+**Por qué:** cada vez que se abre o se refresca el panel de la Fecha Final (`finalLoad()`), hay que dibujar la tarjeta "Modificar Cancha" con los valores actuales (si la Final existe) o vaciarla (si no existe ninguna Final creada todavía) — mismo patrón que ya usan las otras tarjetas de este panel (líneas, tarjetas de jugadores, resultado).
+
+**Buscá:**
+```js
+      renderFinalLineasDia1_(meta);
+      renderFinalLineasDia2_(meta);
+      renderFinalTarjetasDia1_(meta);
+      renderFinalTarjetasDia2_(meta);
+      renderFinalResultado_(meta);
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+      const wrap = document.getElementById('final-lineas-dia1-wrap');
+      if(wrap) wrap.innerHTML = '';
+      const wrap2 = document.getElementById('final-lineas-dia2-wrap');
+      if(wrap2) wrap2.innerHTML = '';
+      const wrapT1 = document.getElementById('final-tarjetas-dia1-wrap');
+      if(wrapT1) wrapT1.innerHTML = '';
+      const wrapT2 = document.getElementById('final-tarjetas-dia2-wrap');
+      if(wrapT2) wrapT2.innerHTML = '';
+      const wrap3 = document.getElementById('final-resultado-wrap');
+      if(wrap3) wrap3.innerHTML = '';
+    }
+```
+
+**Reemplázá por:**
+```js
+      renderFinalEditCanchaWrap_(meta);
+      renderFinalLineasDia1_(meta);
+      renderFinalLineasDia2_(meta);
+      renderFinalTarjetasDia1_(meta);
+      renderFinalTarjetasDia2_(meta);
+      renderFinalResultado_(meta);
+    } else {
+      if(sinCrear) sinCrear.style.display = 'block';
+      if(yaCreada) yaCreada.style.display = 'none';
+      const wrapEC = document.getElementById('final-edit-cancha-wrap');
+      if(wrapEC) wrapEC.innerHTML = '';
+      const wrap = document.getElementById('final-lineas-dia1-wrap');
+      if(wrap) wrap.innerHTML = '';
+      const wrap2 = document.getElementById('final-lineas-dia2-wrap');
+      if(wrap2) wrap2.innerHTML = '';
+      const wrapT1 = document.getElementById('final-tarjetas-dia1-wrap');
+      if(wrapT1) wrapT1.innerHTML = '';
+      const wrapT2 = document.getElementById('final-tarjetas-dia2-wrap');
+      if(wrapT2) wrapT2.innerHTML = '';
+      const wrap3 = document.getElementById('final-resultado-wrap');
+      if(wrap3) wrap3.innerHTML = '';
+    }
+```
+
+### Cambio 5 — Frontend: las 3 funciones que dibujan, cargan colores y guardan el cambio
+
+**Archivo:** `index.html`
+
+**Por qué:** agrega `renderFinalEditCanchaWrap_` (dibuja la tarjeta con los 4 selects y los precarga con los valores actuales de la Final), `finalEditLoadColores` (actualiza las opciones de color disponibles cuando el admin cambia la cancha elegida, reutilizando el mismo helper `applyColoresCancha_` que ya usan el resto de los selectores de cancha de la app) y `finalEditarCancha` (lee lo que elegiste y lo manda al backend; si sale bien, refresca todo el panel con `finalLoad()`).
+
+**Buscá:**
+```js
+function finalLoadColores(dia){
+  const sel = document.getElementById('final-cancha' + dia);
+  const colorSel = document.getElementById('final-color' + dia);
+  if(!sel || !colorSel) return;
+  applyColoresCancha_(sel.value.trim(), colorSel, null);
+}
+```
+
+**Reemplázá por:**
+```js
+function finalLoadColores(dia){
+  const sel = document.getElementById('final-cancha' + dia);
+  const colorSel = document.getElementById('final-color' + dia);
+  if(!sel || !colorSel) return;
+  applyColoresCancha_(sel.value.trim(), colorSel, null);
+}
+
+// Panel para que el admin pueda cambiar la cancha y el color de salidas de
+// cada día una vez que la Fecha Final ya está creada -- mismo criterio que
+// el panel "Cancha" de una fecha regular (admEditarFechaTab/adminEditarFecha),
+// con sus propios ids (final-edit-*) para no interferir con los selects del
+// formulario de creación (final-cancha1/2, final-color1/2), que quedan
+// ocultos pero siguen existiendo en el DOM mientras la Final está activa.
+function renderFinalEditCanchaWrap_(meta){
+  const wrap = document.getElementById('final-edit-cancha-wrap');
+  if(!wrap) return;
+  wrap.innerHTML =
+    '<div class="adm-card" style="margin-top:14px;">' +
+      '<div class="adm-card-hdr">✏️ Modificar Cancha</div>' +
+      '<div class="adm-card-body">' +
+        '<div class="adm-row">' +
+          '<div class="adm-field">' +
+            '<label class="adm-label">Cancha Día 1</label>' +
+            '<select id="final-edit-cancha1" class="adm-input" onchange="finalEditLoadColores(1)"><option value="">Seleccionar cancha...</option></select>' +
+          '</div>' +
+          '<div class="adm-field">' +
+            '<label class="adm-label">Color de Salidas</label>' +
+            '<select id="final-edit-color1" class="adm-input"><option value="BLANCAS">Blancas (default)</option></select>' +
+          '</div>' +
+        '</div>' +
+        '<div class="adm-row" style="margin-top:10px;">' +
+          '<div class="adm-field">' +
+            '<label class="adm-label">Cancha Día 2</label>' +
+            '<select id="final-edit-cancha2" class="adm-input" onchange="finalEditLoadColores(2)"><option value="">Seleccionar cancha...</option></select>' +
+          '</div>' +
+          '<div class="adm-field">' +
+            '<label class="adm-label">Color de Salidas</label>' +
+            '<select id="final-edit-color2" class="adm-input"><option value="BLANCAS">Blancas (default)</option></select>' +
+          '</div>' +
+        '</div>' +
+        '<button class="adm-btn-primary" onclick="finalEditarCancha()" style="margin-top:14px;">Guardar Cancha</button>' +
+        '<div id="final-edit-cancha-msg" class="adm-msg" style="display:none;"></div>' +
+      '</div>' +
+    '</div>';
+
+  [1, 2].forEach(function(dia){
+    const sel = document.getElementById('final-edit-cancha' + dia);
+    if(!sel) return;
+    const curId = dia === 1 ? meta.canchaId1 : meta.canchaId2;
+    const curColor = dia === 1 ? meta.colorTee1 : meta.colorTee2;
+    let opts = '<option value="">Seleccionar cancha...</option>';
+    (ADM_CANCHAS || []).forEach(function(c){ opts += '<option value="' + c.id + '">' + c.nombre + '</option>'; });
+    sel.innerHTML = opts;
+    if(curId) sel.value = curId;
+    finalEditLoadColores(dia);
+    const colorSel = document.getElementById('final-edit-color' + dia);
+    if(colorSel && curColor && colorSel.querySelector('option[value="' + curColor + '"]')){
+      colorSel.value = curColor;
+    }
+  });
+}
+
+function finalEditLoadColores(dia){
+  const sel = document.getElementById('final-edit-cancha' + dia);
+  const colorSel = document.getElementById('final-edit-color' + dia);
+  if(!sel || !colorSel) return;
+  applyColoresCancha_(sel.value.trim(), colorSel, null);
+}
+
+function finalEditarCancha(){
+  const canchaId1 = document.getElementById('final-edit-cancha1').value.trim();
+  const colorTee1 = document.getElementById('final-edit-color1').value.trim();
+  const canchaId2 = document.getElementById('final-edit-cancha2').value.trim();
+  const colorTee2 = document.getElementById('final-edit-color2').value.trim();
+
+  const msg = document.getElementById('final-edit-cancha-msg');
+  msg.style.display = 'none';
+
+  if(!canchaId1 || !canchaId2){
+    msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Elegí las 2 canchas (Día 1 y Día 2).';
+    return;
+  }
+
+  msg.style.display = 'block'; msg.className = 'adm-msg'; msg.textContent = 'Guardando...';
+
+  ngtApiPost({
+    action: 'editarFechaFinal',
+    adminKey: ADMIN_KEY_OK,
+    canchaId1: canchaId1, colorTee1: colorTee1,
+    canchaId2: canchaId2, colorTee2: colorTee2,
+  }).then(function(r){
+    if(r && r.ok){
+      msg.className = 'adm-msg ok'; msg.textContent = '✓ Cancha actualizada';
+      finalLoad();
+    } else {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ ' + ((r && r.error) || 'Error');
+    }
+  }).catch(function(e){
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+```
+
+### Cómo lo probé
+
+Armé una copia de prueba del repo y escribí 2 baterías de pruebas automáticas con Node (45 verificaciones en total, todas en verde):
+
+**Backend (`editarFechaFinal_`, 26 chequeos)** — simulé la hoja TARJETAS FINAL (4 jugadores de ejemplo, 2 días) y FINAL_META, y probé: rechaza una admin key inválida, rechaza si no hay ninguna Fecha Final creada, rechaza si falta elegir una de las 2 canchas, rechaza una cancha que no existe, rechaza si la cancha elegida no tiene rating/par cargado. Con datos válidos: actualiza la cancha, el color y el par guardados para los 2 días, recalcula el hándicap de juego de cada jugador en la hoja según la cancha+color nuevos, actualiza también la cancha/color de cada fila (aunque esas 2 columnas no se usan para calcular, quedan consistentes), y **no toca los scores ya cargados** aunque sí les recalcula el hándicap con el que se calcula el Neto. También probé que mandar los mismos valores que ya estaban no rompe nada, y que un color vacío cae al default "Blancas".
+
+**Frontend (29 chequeos)** — con un DOM simulado, probé: la tarjeta "Modificar Cancha" se dibuja con los 4 selects precargados con los valores actuales de la Final (cancha y color de cada día), cambiar de cancha recarga la lista de colores disponibles para la cancha elegida, al guardar con éxito se postea `editarFechaFinal` con los valores de los 4 selects y se refresca todo el panel (`finalLoad()`), si falta elegir una de las 2 canchas no se postea nada y se muestra el error correspondiente, y si el backend devuelve un error se muestra ese mismo mensaje sin refrescar el panel.
+
+Antes y después de escribir este documento verifiqué que cada uno de los 5 bloques "Buscá" aparece exactamente una vez en el código real (recién clonado de GitHub, commit `1cab6e2`, que ya tiene aplicadas las Tareas 151 y 152), y que aplicar los 5 cambios sobre ese código real da como resultado, en los 3 archivos, un resultado **idéntico, byte por byte**, al que efectivamente probé.
+
+### Preguntas de verificación
+
+1. Dentro de "Fecha Final" (con la Final ya creada), ¿aparece una tarjeta "✏️ Modificar Cancha" con la cancha y el color de salidas actuales de cada día ya seleccionados?
+2. Si cambiás la cancha del Día 1 y tocás "Guardar Cancha", ¿el resumen de arriba ("Día 1: ...") se actualiza con la cancha y el par nuevos?
+3. Si algún jugador ya había cargado hoyos ese día, ¿esos scores siguen ahí (no se borran) después de cambiar la cancha?
+4. Si intentás guardar sin elegir una de las 2 canchas, ¿te avisa el error en vez de guardar algo incompleto?
+
+## ✅ Respuestas de verificación — Tarea 153
+
+1. **Sí.** `renderFinalEditCanchaWrap_(meta)` se llama desde `finalLoad` cada vez que se abre el panel (con la Final ya creada). Dibuja la tarjeta con 4 selects; en el loop `[1, 2].forEach` llena cada select con `ADM_CANCHAS`, setea `sel.value = curId` (la cancha actual de ese día leída de `meta`), llama `finalEditLoadColores` para cargar los colores disponibles, y luego restaura `colorSel.value = curColor` si esa opción ya existe en el select.
+
+2. **Sí.** Al guardar exitosamente, `finalEditarCancha` llama `finalLoad()`, que re-llama `renderFinalEditCanchaWrap_(meta)` y actualiza el `#final-resumen` con los nuevos valores (canchaName1/2 y par1/2 ya actualizados en FINAL_META por `editarFechaFinal_`).
+
+3. **Sí.** `editarFechaFinal_` solo escribe las columnas 3 (HCP), 4 (ID CANCHA) y 5 (COLOR TEE) de cada fila — las columnas 6-23 (HOYO1-HOYO18) no se tocan. El loop itera sobre las filas existentes pero únicamente llama `sh.getRange(rowIdx, 3/4/5).setValue(...)`.
+
+4. **Sí.** `finalEditarCancha` valida `if(!canchaId1 || !canchaId2)` antes de postear y muestra el error "Elegí las 2 canchas (Día 1 y Día 2)." sin llamar al backend.
+
+5. **Commit:** `eeb2c09` — "T153: admin puede modificar cancha/color de la Fecha Final ya creada"
