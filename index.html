@@ -6727,6 +6727,13 @@ function admTarModalHtml_(){
       '<button class="adm-btn-primary" onclick="admTarModalGuardar_()" style="flex:2;">Guardar Cambios</button>' +
       '<button class="btn-cancel" onclick="closeFloatingModal()" style="flex:1;">Cancelar</button>' +
     '</div>' +
+    // Solo para tarjetas de la Final: "Guardar Cambios" (adminGuardarTarjetaFinal_)
+    // siempre deja la tarjeta firmada/cerrada, aunque la ronda siga en curso --
+    // esto le da al admin una forma de volver a abrirla (sin tocar scores ni
+    // HCP) para que el jugador pueda seguir cargando sus propios hoyos en vivo.
+    (ADM_TAR_FINAL_DIA ?
+    '<button class="adm-btn-secondary" onclick="admTarModalReabrir_()" style="width:100%;margin-top:8px;">↻ Reabrir Tarjeta (para que el jugador siga cargando)</button>'
+    : '') +
     '<div id="adm-tar-modal-msg" class="adm-msg" style="display:none;"></div>';
 }
 
@@ -6891,6 +6898,30 @@ function admTarModalGuardar_() {
     if(r.ok){
       msg.className = 'adm-msg ok'; msg.textContent = '✓ Tarjeta guardada';
       setTimeout(() => { closeFloatingModal(); loadAdmTarjetas(ADM_EDIT_FECHA); }, 900);
+    } else {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+// Solo para tarjetas de la Final (ADM_TAR_FINAL_DIA seteado): le saca el
+// firmado a la tarjeta de este jugador/día, sin tocar scores ni HCP, para
+// que el jugador pueda seguir cargando sus propios hoyos en vivo.
+function admTarModalReabrir_(){
+  if(!ADM_TAR_PLAYER || !ADM_TAR_FINAL_DIA) return;
+  const msg = document.getElementById('adm-tar-modal-msg');
+  msg.className = 'adm-msg'; msg.textContent = 'Reabriendo...'; msg.style.display = 'block';
+  ngtApiPost({
+    action: 'reabrirTarjetaFinal',
+    adminKey: ADMIN_KEY_OK,
+    dia: ADM_TAR_FINAL_DIA,
+    matricula: ADM_TAR_PLAYER.matricula,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok'; msg.textContent = '✓ Tarjeta reabierta — el jugador ya puede seguir cargando';
+      setTimeout(() => { closeFloatingModal(); ADM_TAR_FINAL_DIA = null; finalLoad(); }, 1200);
     } else {
       msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
     }

@@ -578,6 +578,39 @@ function adminGuardarTarjetaFinal_(params) {
 }
 
 /**
+ * Admin "reabre" la tarjeta de un jugador de la Final (Día 1 o Día 2) que
+ * quedó firmada -- por ejemplo, después de corregir su HCP con
+ * adminGuardarTarjetaFinal_ (arriba), que SIEMPRE deja la tarjeta firmada,
+ * aunque la ronda todavía esté en curso. Mientras una tarjeta está firmada,
+ * cargarHoyoLiveFinal_ no deja que el jugador (ni nadie sin adminKey) siga
+ * cargando sus propios hoyos en vivo -- por eso, si se corrigió el HCP a
+ * mitad de una ronda, el jugador se queda bloqueado hasta reabrir.
+ * Reabrir NO toca ni los scores ni el HCP de esa tarjeta -- solo le sacar el
+ * firmado, para que el jugador pueda seguir cargando sus propios hoyos.
+ */
+function reabrirTarjetaFinal_(params) {
+  const { adminKey, dia, matricula } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const diaNum = parseInt(dia);
+  if (diaNum !== 1 && diaNum !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+  const matStr = String(matricula || '').trim();
+  if (!matStr) return { ok: false, error: 'Falta matrícula' };
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+
+  const firmKey = 'firmadosDia' + diaNum;
+  if (meta[firmKey] && meta[firmKey][matStr]) {
+    delete meta[firmKey][matStr];
+    saveFinalMeta_(meta);
+  }
+
+  audit_('REABRIR_TARJETA_FINAL', 'admin', { dia: diaNum, matricula: matStr });
+  return { ok: true };
+}
+
+/**
  * Guarda el score de un hoyo del Día 1 o Día 2 de la Final, durante la ronda.
  * Mismo patrón de mutex por jugador que cargarHoyoLive_ (fechas regulares),
  * pero apuntando a TARJETAS FINAL (columnas DIA/MATRICULA/HCP/.../18 hoyos)

@@ -206,6 +206,7 @@ function doPost(e) {
       case 'archivarFinalEnTarjetas':     result = archivarFinalEnTarjetasAdmin_(params); break;
       case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
       case 'adminGuardarTarjetaFinal': result = adminGuardarTarjetaFinal_(params); break;
+      case 'reabrirTarjetaFinal':   result = reabrirTarjetaFinal_(params); break;
       case 'finalizarRondaFinal':   result = finalizarRondaFinal_(params); break;
       default:               result = { ok: false, error: 'Acción desconocida: ' + action };
     }
