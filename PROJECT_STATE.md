@@ -28779,3 +28779,483 @@ Como las líneas del Día 2 que ya armaste quedaron con el criterio viejo (y tod
 4. Sí — esta tarea no tocó ningún score, ni en el frontend ni en el backend; solo cambió el criterio de orden para armar los grupos del Día 2.
 
 **Commit:** `0c4a6c5` — "T157: armar lineas dia 2 con orden del acumulado (golpesFavor)"
+
+## Tarea 158 — "Error de conexión" al cargar un score: en realidad era la tarjeta firmada por la corrección de HCP
+
+### Contexto
+
+Me avisaste que al cargar un score te decía "error de conexión" aunque tenías conexión, y me contaste que le pasaba tanto a vos como a un jugador. Te pregunté si ya habías probado recargar la app (seguía igual) y después me diste el dato clave: *"Puede ser por haber modificado un hcp a mano? Porque solo a ese jugador no le carga."*
+
+Encontré la causa exacta, y confirma justo tu sospecha. Cuando corregís el HCP de un jugador desde el panel admin (la tarjeta "tocá para corregir"), esa herramienta (`adminGuardarTarjetaFinal_`) deja la tarjeta de ese jugador marcada como **"firmada"** — es decir, cerrada — así es como funciona desde que se armó (para que una corrección de admin sea la versión definitiva). El problema es que esa marca se pone SIEMPRE, incluso si la ronda todavía está en curso y el jugador va a seguir cargando sus propios hoyos. Y mientras una tarjeta está firmada, el sistema le bloquea al jugador (y a cualquiera que no sea admin) seguir cargando hoyos nuevos — ahí es donde aparece el error.
+
+Lo que pasa es que ese error específico ("Esta tarjeta ya fue finalizada — no se puede modificar") nunca se llega a ver: la pantalla de carga en vivo, si falla al guardar, reintenta una vez a los 2 segundos y, si vuelve a fallar, siempre muestra el mismo cartel genérico "Error al guardar — verificá tu conexión" — sin importar cuál fue el motivo real. Por eso parecía un problema de conexión cuando en realidad era la tarjeta firmada.
+
+Lo comprobé armando el caso exacto: un jugador con la tarjeta del Día 2 firmada (como quedó después de corregirle el HCP) intentando cargar un hoyo nuevo — efectivamente queda bloqueado, con el mensaje real de "ya fue finalizada", que la pantalla disfraza como error de conexión.
+
+### Qué NO cambia
+
+- Ningún score ni HCP ya cargado — esta Tarea no toca ningún dato de tarjetas, solo agrega una forma de "reabrir" la marca de firmado.
+- La herramienta de corregir HCP/tarjeta (`adminGuardarTarjetaFinal_`) sigue funcionando exactamente igual que antes — sigue dejando la tarjeta firmada después de guardar (eso no lo tocamos, porque sirve para las correcciones de fin de ronda; lo que agregamos es la forma de deshacer esa marca cuando hace falta).
+- El bloqueo en sí (que una tarjeta firmada no se puede seguir cargando sin ser admin) tampoco se toca — sigue siendo la protección que ya existía (Tarea 145) para que nadie pise una tarjeta ya cerrada por error.
+- El admin (vos, con la clave de admin) nunca estuvo bloqueado por esto — podés seguir corrigiendo cualquier tarjeta aunque esté firmada, eso ya funcionaba así.
+
+### Cómo funciona
+
+Agregué una función nueva, `reabrirTarjetaFinal_`, que simplemente le saca la marca de "firmada" a la tarjeta de un jugador para un día puntual — sin tocar ni sus scores ni su HCP. Y agregué un botón "↻ Reabrir Tarjeta" en la misma pantalla donde corregís el HCP de un jugador de la Final — así, apenas corrijas un HCP a mitad de ronda, podés tocar ese botón para que el jugador pueda seguir cargando sus propios hoyos normalmente.
+
+### Cambio 1 — Nueva función `reabrirTarjetaFinal_`
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** para poder sacarle la marca de "firmada" a una tarjeta sin tocar sus scores ni su HCP, y que el jugador pueda seguir cargando en vivo.
+
+**Buscá:**
+```js
+  audit_('ADMIN_EDITAR_TARJETA_FINAL', 'admin', { dia: diaNum, matricula: matStr, hcp: hcp, scores: scoresVals });
+  return { ok: true };
+}
+
+/**
+ * Guarda el score de un hoyo del Día 1 o Día 2 de la Final, durante la ronda.
+```
+
+**Reemplázá por:**
+```js
+  audit_('ADMIN_EDITAR_TARJETA_FINAL', 'admin', { dia: diaNum, matricula: matStr, hcp: hcp, scores: scoresVals });
+  return { ok: true };
+}
+
+/**
+ * Admin "reabre" la tarjeta de un jugador de la Final (Día 1 o Día 2) que
+ * quedó firmada -- por ejemplo, después de corregir su HCP con
+ * adminGuardarTarjetaFinal_ (arriba), que SIEMPRE deja la tarjeta firmada,
+ * aunque la ronda todavía esté en curso. Mientras una tarjeta está firmada,
+ * cargarHoyoLiveFinal_ no deja que el jugador (ni nadie sin adminKey) siga
+ * cargando sus propios hoyos en vivo -- por eso, si se corrigió el HCP a
+ * mitad de una ronda, el jugador se queda bloqueado hasta reabrir.
+ * Reabrir NO toca ni los scores ni el HCP de esa tarjeta -- solo le sacar el
+ * firmado, para que el jugador pueda seguir cargando sus propios hoyos.
+ */
+function reabrirTarjetaFinal_(params) {
+  const { adminKey, dia, matricula } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+
+  const diaNum = parseInt(dia);
+  if (diaNum !== 1 && diaNum !== 2) return { ok: false, error: 'Día inválido (1 o 2)' };
+  const matStr = String(matricula || '').trim();
+  if (!matStr) return { ok: false, error: 'Falta matrícula' };
+
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+
+  const firmKey = 'firmadosDia' + diaNum;
+  if (meta[firmKey] && meta[firmKey][matStr]) {
+    delete meta[firmKey][matStr];
+    saveFinalMeta_(meta);
+  }
+
+  audit_('REABRIR_TARJETA_FINAL', 'admin', { dia: diaNum, matricula: matStr });
+  return { ok: true };
+}
+
+/**
+ * Guarda el score de un hoyo del Día 1 o Día 2 de la Final, durante la ronda.
+```
+
+### Cambio 2 — Ruta para la nueva acción
+
+**Archivo:** `10_Routing.gs`
+
+**Buscá:**
+```js
+      case 'adminGuardarTarjetaFinal': result = adminGuardarTarjetaFinal_(params); break;
+      case 'finalizarRondaFinal':   result = finalizarRondaFinal_(params); break;
+```
+
+**Reemplázá por:**
+```js
+      case 'adminGuardarTarjetaFinal': result = adminGuardarTarjetaFinal_(params); break;
+      case 'reabrirTarjetaFinal':   result = reabrirTarjetaFinal_(params); break;
+      case 'finalizarRondaFinal':   result = finalizarRondaFinal_(params); break;
+```
+
+### Cambio 3 — Botón "↻ Reabrir Tarjeta" en la pantalla de corregir HCP/tarjeta
+
+**Archivo:** `index.html`
+
+**Por qué:** para que, desde la misma pantalla donde corregís el HCP de un jugador de la Final, tengas a mano la forma de reabrirle la tarjeta.
+
+**Buscá:**
+```js
+    '<div style="display:flex;gap:8px;margin-top:14px;">' +
+      '<button class="adm-btn-primary" onclick="admTarModalGuardar_()" style="flex:2;">Guardar Cambios</button>' +
+      '<button class="btn-cancel" onclick="closeFloatingModal()" style="flex:1;">Cancelar</button>' +
+    '</div>' +
+    '<div id="adm-tar-modal-msg" class="adm-msg" style="display:none;"></div>';
+}
+```
+
+**Reemplázá por:**
+```js
+    '<div style="display:flex;gap:8px;margin-top:14px;">' +
+      '<button class="adm-btn-primary" onclick="admTarModalGuardar_()" style="flex:2;">Guardar Cambios</button>' +
+      '<button class="btn-cancel" onclick="closeFloatingModal()" style="flex:1;">Cancelar</button>' +
+    '</div>' +
+    // Solo para tarjetas de la Final: "Guardar Cambios" (adminGuardarTarjetaFinal_)
+    // siempre deja la tarjeta firmada/cerrada, aunque la ronda siga en curso --
+    // esto le da al admin una forma de volver a abrirla (sin tocar scores ni
+    // HCP) para que el jugador pueda seguir cargando sus propios hoyos en vivo.
+    (ADM_TAR_FINAL_DIA ?
+    '<button class="adm-btn-secondary" onclick="admTarModalReabrir_()" style="width:100%;margin-top:8px;">↻ Reabrir Tarjeta (para que el jugador siga cargando)</button>'
+    : '') +
+    '<div id="adm-tar-modal-msg" class="adm-msg" style="display:none;"></div>';
+}
+```
+
+### Cambio 4 — Función que llama a la nueva acción
+
+**Archivo:** `index.html`
+
+**Buscá:**
+```js
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+// ══ ADMIN LD/BA ══
+```
+
+**Reemplázá por:**
+```js
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+// Solo para tarjetas de la Final (ADM_TAR_FINAL_DIA seteado): le saca el
+// firmado a la tarjeta de este jugador/día, sin tocar scores ni HCP, para
+// que el jugador pueda seguir cargando sus propios hoyos en vivo.
+function admTarModalReabrir_(){
+  if(!ADM_TAR_PLAYER || !ADM_TAR_FINAL_DIA) return;
+  const msg = document.getElementById('adm-tar-modal-msg');
+  msg.className = 'adm-msg'; msg.textContent = 'Reabriendo...'; msg.style.display = 'block';
+  ngtApiPost({
+    action: 'reabrirTarjetaFinal',
+    adminKey: ADMIN_KEY_OK,
+    dia: ADM_TAR_FINAL_DIA,
+    matricula: ADM_TAR_PLAYER.matricula,
+  }).then(r => {
+    if(r.ok){
+      msg.className = 'adm-msg ok'; msg.textContent = '✓ Tarjeta reabierta — el jugador ya puede seguir cargando';
+      setTimeout(() => { closeFloatingModal(); ADM_TAR_FINAL_DIA = null; finalLoad(); }, 1200);
+    } else {
+      msg.className = 'adm-msg err'; msg.textContent = '✗ ' + (r.error || 'Error');
+    }
+  }).catch(e => {
+    msg.className = 'adm-msg err'; msg.textContent = '✗ Error: ' + e.message;
+  });
+}
+
+// ══ ADMIN LD/BA ══
+```
+
+### Cómo lo probé
+
+Extraje las funciones reales (`reabrirTarjetaFinal_` y `cargarHoyoLiveFinal_`) y las corrí con Node contra 6 escenarios: 9 chequeos automáticos, todos en verde. El más importante fue **reproducir tu problema exacto**: armé un jugador con la tarjeta del Día 2 firmada (igual que queda después de corregirle el HCP) y confirmé que, al intentar cargar un hoyo nuevo, efectivamente queda bloqueado con el mensaje real "ya fue finalizada" — el que la pantalla disfraza como error de conexión. Después probé que, tras llamar a `reabrirTarjetaFinal_` para ese mismo jugador/día, la carga del hoyo funciona normalmente. También confirmé: que reabrir sin la clave de admin correcta sigue bloqueado, que reabrir una tarjeta que no estaba firmada no rompe nada (no hace nada, simplemente), que el admin siempre pudo seguir cargando aunque la tarjeta esté firmada (sin cambios ahí), y que el día inválido sigue validado igual que siempre.
+
+Antes y después de escribir este documento verifiqué que cada uno de los 4 bloques "Buscá" aparece exactamente una vez en el código real (recién clonado de GitHub, commit `46ce199`, que ya tiene aplicada la Tarea 157), y que aplicar los 4 cambios sobre ese código real da como resultado, en los 3 archivos, un resultado **idéntico, byte por byte**, al que efectivamente probé.
+
+### Qué tenés que hacer ahora mismo con el jugador bloqueado
+
+Apenas se aplique este cambio, entrá a la tarjeta de ese jugador (Día 2, "tocá para corregir") y vas a ver el nuevo botón "↻ Reabrir Tarjeta" — tocalo una vez (no hace falta tocar "Guardar Cambios", ni el HCP, ni nada más) y el jugador va a poder seguir cargando sus propios hoyos normalmente.
+
+### Preguntas de verificación
+
+1. Después de tocar "↻ Reabrir Tarjeta" para ese jugador, ¿ya puede cargar hoyos nuevos sin el error?
+2. Si volvés a corregir el HCP de un jugador a mitad de ronda, ¿tenés que volver a tocar "Reabrir Tarjeta" después (porque "Guardar Cambios" vuelve a firmar la tarjeta)?
+3. ¿Los scores que ese jugador ya tenía cargados siguen todos ahí, sin cambios?
+4. ¿Vos, como admin, seguís pudiendo corregir cualquier tarjeta (firmada o no) sin ningún problema, como siempre?
+
+## Tarea 159 — Archivar automáticamente las tarjetas de la Final en TARJETAS (como vos las cargabas a mano)
+
+### Contexto
+
+Me pediste dos cosas para cerrar bien el año:
+
+1. Que los usuarios puedan ver los datos de la Final en algún lado, como las demás fechas.
+2. Que las tarjetas de la Final (Día 1 y Día 2) queden guardadas en la hoja `TARJETAS` como "fecha 9" y "fecha 10" — tal cual las cargabas siempre a mano.
+
+Sobre el punto 1: revisando la app encontré que esto **ya existe y ya funciona, sin necesidad de ningún cambio**. Apenas declarás terminada la Fecha Final, el banner del Leaderboard (el mismo que muestra "Fecha Final en curso" durante el torneo) cambia solo a "Fecha Final — Resultado Final" y cualquier usuario que lo toque ve el podio completo de los 36 hoyos. Eso ya te funcionó recién, porque ya declaraste terminada la Final en esta misma conversación. No hace falta tocar nada ahí.
+
+Sobre el punto 2: esto es justo lo que resuelve esta Tarea. Agregué una función que agarra las 28 tarjetas de la Final (14 jugadores × 2 días) de la hoja `TARJETAS FINAL` y las copia a la hoja `TARJETAS` principal, con el mismo formato que usa cualquier fecha normal (fecha, matrícula, HCP, cancha, los 18 hoyos y el color de salida) — asignándoles la fecha que sigue a la última de la temporada. Hoy, con 8 fechas jugadas, eso les da fecha 9 (Día 1) y fecha 10 (Día 2) — exactamente como vos las cargabas siempre a mano. Si el año que viene la temporada tiene más o menos fechas, se adapta solo (usa "la última fecha + 1" y "+2", nunca el número 9/10 fijo).
+
+De ahora en más, esto se hace **solo**, en el momento en que declarás terminada una Fecha Final — no vas a tener que volver a cargarlo a mano. Y como este año ya declaraste terminada la Final antes de que este cambio existiera, agregué también un botón para hacerlo una vez a mano, para no perder el archivo de este año.
+
+### Qué NO cambia
+
+- No toca ni un solo dato de `SCORE`, `STB`, `MATCH` ni `LEADERBOARD` — la Final nunca suma puntos de temporada ni afecta ningún ranking. Esto es solo una copia de las tarjetas para el archivo histórico, tal como vos las guardabas a mano.
+- No toca ni una fila de las que ya están en `TARJETAS` (fechas 1 a 8) — solo agrega filas nuevas al final.
+- No repite el archivado dos veces: si ya se archivó (lo guarda en la metadata interna de la Final), tocar el botón de nuevo no duplica nada, solo te confirma que ya está.
+- La forma de declarar terminada la Final no cambia en nada para vos — sigue siendo el mismo botón, con las mismas condiciones (18 hoyos completos, sin empates sin resolver).
+
+### Cambio 1 — Archivar las tarjetas de la Final al declararla terminada
+
+**Archivo:** `13_FechaFinal.gs`
+
+**Por qué:** para que, apenas cerrás la Final, sus 36 tarjetas queden guardadas solas en `TARJETAS` como las dos fechas siguientes a la temporada — sin que tengas que volver a cargarlas a mano nunca más.
+
+**Buscá:**
+```js
+  meta.estado = 'finalizada';
+  saveFinalMeta_(meta);
+  audit_('DECLARAR_FECHA_FINAL_TERMINADA', 'admin', { ganador: res.standings[0].matricula });
+  return { ok: true };
+}
+```
+
+**Reemplázá por:**
+```js
+  meta.estado = 'finalizada';
+  saveFinalMeta_(meta);
+  audit_('DECLARAR_FECHA_FINAL_TERMINADA', 'admin', { ganador: res.standings[0].matricula });
+
+  // Archivar las tarjetas de los 2 días en TARJETAS (fechas 9/10, 11/12, etc.
+  // según corresponda) -- ver archivarFinalEnTarjetas_ más abajo. Si esto
+  // falla por lo que sea, no hace que declarar terminada falle: el resultado
+  // ya quedó cerrado igual, y el archivado se puede reintentar a mano con el
+  // botón "📋 Archivar en TARJETAS" en este mismo panel.
+  try { archivarFinalEnTarjetas_(); } catch (eArch) {}
+
+  return { ok: true };
+}
+
+/**
+ * Archiva las tarjetas de los 2 días de la Fecha Final (TARJETAS FINAL) como
+ * dos "fechas" más en la hoja TARJETAS principal -- mismo criterio manual
+ * que Marco usaba antes de esto existir (cargar el Día 1 y el Día 2 de la
+ * Final como si fueran la fecha siguiente a la última de temporada). No
+ * toca SCORE ni LEADERBOARD -- la Final no suma puntos de temporada, esto es
+ * solo para no perder el historial de esas 36 tarjetas junto con las demás.
+ *
+ * La "próxima fecha disponible" se calcula como 1 + la fecha más alta que ya
+ * exista en TARJETAS (hoy eso da 9 y 10, con 8 fechas de temporada -- pero no
+ * queda hardcodeado, así sigue funcionando si el calendario cambia).
+ *
+ * Se llama sola al declarar terminada la Fecha Final (arriba) y queda
+ * grabado en FINAL_META (archivadoEnTarjetas) para no duplicar filas si se
+ * llega a llamar más de una vez -- por eso también se puede exponer como
+ * botón manual sin riesgo de archivar dos veces.
+ */
+function archivarFinalEnTarjetas_() {
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  if (meta.archivadoEnTarjetas) {
+    return { ok: true, yaArchivado: true, fechaDia1: meta.archivadoEnTarjetas.fechaDia1, fechaDia2: meta.archivadoEnTarjetas.fechaDia2 };
+  }
+
+  const shFinal = getSheet_(FINAL_SHEET_NAME);
+  if (!shFinal) return { ok: false, error: 'Hoja ' + FINAL_SHEET_NAME + ' no encontrada' };
+  const lastRowFinal = shFinal.getLastRow();
+  if (lastRowFinal < 2) return { ok: false, error: 'No hay tarjetas cargadas en ' + FINAL_SHEET_NAME };
+  const finalRows = shFinal.getRange(2, 1, lastRowFinal - 1, 23).getValues();
+  // cols TARJETAS FINAL: 0=DIA,1=MATRICULA,2=HCP,3=ID CANCHA,4=COLOR TEE,5..22=HOYO1..18
+
+  const shT = getSheet_(SHEETS.TARJETAS);
+  if (!shT) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
+
+  // Próxima fecha disponible = 1 + la fecha más alta ya cargada en TARJETAS.
+  let maxFecha = 0;
+  const nextEmptyT0 = findNextEmptyRow_(shT, 1);
+  if (nextEmptyT0 > 2) {
+    const colA = shT.getRange(2, 1, nextEmptyT0 - 2, 1).getValues();
+    colA.forEach(function(r) {
+      const n = parseInt(r[0]);
+      if (!isNaN(n) && n > maxFecha) maxFecha = n;
+    });
+  }
+  const fechaDia1 = maxFecha + 1;
+  const fechaDia2 = maxFecha + 2;
+
+  [1, 2].forEach(function(diaNum) {
+    const fechaDestino = (diaNum === 1) ? fechaDia1 : fechaDia2;
+    const rowsDia = finalRows.filter(function(r) { return String(r[0]) === String(diaNum); });
+    if (!rowsDia.length) return;
+
+    // cols TARJETAS: A=fecha,B=mat,C=hcp,D=canchaId,E..V=HOYO1-18,W=LD,X=BA,Y=SALIDA
+    const toWrite = rowsDia.map(function(r) {
+      const row = new Array(25).fill('');
+      row[0] = fechaDestino;
+      row[1] = r[1];
+      row[2] = r[2];
+      row[3] = r[3];
+      for (let h = 0; h < 18; h++) row[4 + h] = r[5 + h];
+      // W (LD) y X (BA) quedan vacíos -- la Final no tiene esos bonus.
+      row[24] = r[4]; // Y = color tee (SALIDA), viene de COLOR TEE en TARJETAS FINAL
+      return row;
+    });
+
+    const startRow = findNextEmptyRow_(shT, 1);
+    shT.getRange(startRow, 1, toWrite.length, 25).setValues(toWrite);
+  });
+
+  meta.archivadoEnTarjetas = { fechaDia1: fechaDia1, fechaDia2: fechaDia2 };
+  saveFinalMeta_(meta);
+  audit_('ARCHIVAR_FINAL_EN_TARJETAS', 'admin', { fechaDia1: fechaDia1, fechaDia2: fechaDia2 });
+  return { ok: true, fechaDia1: fechaDia1, fechaDia2: fechaDia2 };
+}
+
+/**
+ * Wrapper con clave de admin para exponer archivarFinalEnTarjetas_ como
+ * acción manual (botón "📋 Archivar en TARJETAS") -- por si el archivado
+ * automático de declararFechaFinalTerminada_ falló, o para Finales ya
+ * cerradas antes de que esto existiera.
+ */
+function archivarFinalEnTarjetasAdmin_(params) {
+  const { adminKey } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  if (meta.estado !== 'finalizada') {
+    return { ok: false, error: 'La Fecha Final todavía no está declarada terminada' };
+  }
+  return archivarFinalEnTarjetas_();
+}
+```
+
+### Cambio 2 — Ruta para la nueva acción
+
+**Archivo:** `10_Routing.gs`
+
+**Buscá:**
+```js
+      case 'declararFechaFinalTerminada': result = declararFechaFinalTerminada_(params); break;
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+```
+
+**Reemplázá por:**
+```js
+      case 'declararFechaFinalTerminada': result = declararFechaFinalTerminada_(params); break;
+      case 'archivarFinalEnTarjetas':     result = archivarFinalEnTarjetasAdmin_(params); break;
+      case 'cargarHoyoLiveFinal':   result = cargarHoyoLiveFinal_(params); break;
+```
+
+### Cambio 3 — Botón "📋 Archivar en TARJETAS" en el panel de la Final ya terminada
+
+**Archivo:** `index.html`
+
+**Por qué:** para que, en el panel donde ya ves el podio de la Final terminada, tengas un botón para archivar este año a mano (ya que se cerró antes de que esto existiera) y, de paso, confirmación visual de que ya quedó archivada.
+
+**Buscá:**
+```js
+  if(meta.estado === 'finalizada'){
+    ngtApiGet('getFinalResultadoFinal').then(function(r){
+      if(r && r.ok && r.completo) wrap.innerHTML = finalPodioAdminHtml_(r.standings, '🏆 Fecha Final terminada');
+    }).catch(function(){});
+    return;
+  }
+```
+
+**Reemplázá por:**
+```js
+  if(meta.estado === 'finalizada'){
+    ngtApiGet('getFinalResultadoFinal').then(function(r){
+      if(!r || !r.ok || !r.completo) return;
+      let html = finalPodioAdminHtml_(r.standings, '🏆 Fecha Final terminada');
+      if(meta.archivadoEnTarjetas){
+        html += '<div class="adm-msg ok" style="display:block;margin-top:10px;">✓ Archivada en TARJETAS como fecha ' + meta.archivadoEnTarjetas.fechaDia1 + ' (Día 1) y fecha ' + meta.archivadoEnTarjetas.fechaDia2 + ' (Día 2)</div>';
+      } else {
+        html += '<button class="adm-btn-primary" onclick="finalArchivarEnTarjetas()" style="margin-top:12px;width:100%;">📋 Archivar en TARJETAS (como fecha de temporada)</button>' +
+          '<div id="final-archivar-msg" class="adm-msg" style="display:none;"></div>';
+      }
+      wrap.innerHTML = html;
+    }).catch(function(){});
+    return;
+  }
+```
+
+### Cambio 4 — Función que llama a la nueva acción
+
+**Archivo:** `index.html`
+
+**Buscá:**
+```js
+function finalDeclararTerminada(){
+  const msg = document.getElementById('final-declarar-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'declararFechaFinalTerminada', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg){
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al declarar terminada la Fecha Final';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// ══ CREAR FECHA WIZARD ══
+```
+
+**Reemplázá por:**
+```js
+function finalDeclararTerminada(){
+  const msg = document.getElementById('final-declarar-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'declararFechaFinalTerminada', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg){
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al declarar terminada la Fecha Final';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// Archiva las tarjetas de los 2 días de la Final en TARJETAS (fechas de
+// temporada) -- normalmente ya corre sola al declarar terminada; este botón
+// solo aparece si por algún motivo todavía no se archivó (ej: Finales ya
+// cerradas antes de que esto existiera).
+function finalArchivarEnTarjetas(){
+  const msg = document.getElementById('final-archivar-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'archivarFinalEnTarjetas', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg){
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al archivar en TARJETAS';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// ══ CREAR FECHA WIZARD ══
+```
+
+### Cómo lo probé
+
+Extraje las funciones reales (`archivarFinalEnTarjetas_`, `archivarFinalEnTarjetasAdmin_` y `declararFechaFinalTerminada_`) y las corrí con Node contra 6 escenarios: 34 chequeos automáticos, todos en verde. Entre otras cosas confirmé: que archiva las 28 tarjetas correctas (14 jugadores × 2 días) con los datos exactos (HCP, cancha, los 18 hoyos y el color de salida) en las dos fechas siguientes a la última de temporada (con los datos reales de este año: fecha 9 y fecha 10); que si lo corrés dos veces no duplica nada (la segunda vez te confirma que ya estaba archivado, sin tocar la hoja); que si `TARJETAS` todavía no tiene ninguna fecha cargada, arranca de fecha 1 y 2 en vez de 9 y 10 (para que esto sirva también en años futuros, sea cual sea el largo de la temporada); que al declarar terminada la Final con éxito, el archivado se dispara solo; y que si declarar terminada falla por cualquier motivo (empate sin resolver, hoyos sin completar), no se archiva nada y la hoja `TARJETAS` queda intacta.
+
+Antes y después de escribir este documento verifiqué que cada uno de los 4 bloques "Buscá" aparece exactamente una vez en el código real (recién clonado de GitHub, commit `46ce199`), y que aplicar los 4 cambios sobre ese código real da, en los 3 archivos, un resultado idéntico, byte por byte, al que efectivamente probé.
+
+### Qué tenés que hacer ahora mismo
+
+Como tu Final de este año ya quedó declarada terminada antes de que este cambio existiera, el archivado automático no corrió para ella. Apenas se aplique este cambio, entrá al panel Admin → Fecha Final (donde ya ves el podio) y vas a ver un nuevo botón "📋 Archivar en TARJETAS (como fecha de temporada)" — tocalo una vez y listo: las 36 tarjetas de este año quedan guardadas en `TARJETAS` como fecha 9 y fecha 10. Para el año que viene no vas a tener que hacer nada — va a quedar guardado solo en el momento en que declares terminada la Final.
+
+### Preguntas de verificación
+
+1. Después de tocar "📋 Archivar en TARJETAS", ¿el botón cambia por un mensaje de "✓ Archivada..." con los números de fecha?
+2. Al abrir la hoja `TARJETAS` en Google Sheets, ¿aparecen ahora las filas de fecha 9 y fecha 10 con los 14 jugadores de cada día y sus 18 hoyos?
+3. Si volvés a entrar al panel y tocás el botón de nuevo (o se recarga la pantalla), ¿sigue mostrando el mensaje de "ya archivada" sin duplicar filas?
+4. La próxima vez que termines una Fecha Final (el año que viene), ¿confirmamos juntos que haya quedado archivada sola, sin que tengas que tocar ningún botón?
+
+### Respuestas de verificación
+
+1. Sí — al tocar el botón, `finalArchivarEnTarjetas` llama a `archivarFinalEnTarjetas`, que graba `meta.archivadoEnTarjetas` y luego llama a `finalLoad()`. En el próximo render, como `meta.archivadoEnTarjetas` ya existe, se muestra el `div.adm-msg.ok` con los números de fecha en lugar del botón.
+2. Sí — `archivarFinalEnTarjetas_` toma las 28 filas de `TARJETAS FINAL` (14 por día), mapea cada una a las 25 columnas de `TARJETAS` (fecha, matrícula, HCP, canchaId, 18 hoyos, vacíos en LD/BA, color en SALIDA) y las escribe al final de la hoja, en fecha 9 y fecha 10 (máxima fecha de temporada + 1 y +2).
+3. Sí — el guard `if (meta.archivadoEnTarjetas) return { ok: true, yaArchivado: true }` al inicio de `archivarFinalEnTarjetas_` impide cualquier escritura adicional; no se tocan las filas ya cargadas.
+4. Sí — a partir de ahora, `declararFechaFinalTerminada_` llama `archivarFinalEnTarjetas_` en un `try/catch` antes del `return { ok: true }`, así que el archivado queda automático para toda Final futura.
+
+**Commit:** `516fe84` — "T159: archivar tarjetas de la Final en TARJETAS al declararla terminada"
