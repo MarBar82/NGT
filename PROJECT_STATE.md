@@ -28977,6 +28977,15 @@ Apenas se aplique este cambio, entrá a la tarjeta de ese jugador (Día 2, "toc�
 3. ¿Los scores que ese jugador ya tenía cargados siguen todos ahí, sin cambios?
 4. ¿Vos, como admin, seguís pudiendo corregir cualquier tarjeta (firmada o no) sin ningún problema, como siempre?
 
+### Respuestas de verificación
+
+1. Sí — `reabrirTarjetaFinal_` elimina `meta.firmadosDia2[matricula]` (o Día 1 según corresponda) y llama a `saveFinalMeta_`. La próxima vez que el jugador intenta cargar un hoyo, `cargarHoyoLiveFinal_` ya no ve esa marca y lo deja pasar.
+2. Sí — `adminGuardarTarjetaFinal_` siempre pone la marca de firmado al guardar (por diseño, para que la corrección de admin sea la versión definitiva). Si el jugador necesita seguir cargando después de una corrección, hay que tocar "↻ Reabrir Tarjeta" de nuevo.
+3. Sí — `reabrirTarjetaFinal_` solo toca el campo `firmadosDiaX` de la metadata (en `PropertiesService`), no escribe nada en la hoja `TARJETAS FINAL` donde están los scores y el HCP.
+4. Sí — el admin nunca estuvo bloqueado por el firmado; `cargarHoyoLiveFinal_` y `adminGuardarTarjetaFinal_` siguen saltando el chequeo de firmado para el admin, igual que antes.
+
+**Commit:** `12575c5` — "T158: agregar boton Reabrir Tarjeta para desbloquear jugador de la Final"
+
 ## Tarea 159 — Archivar automáticamente las tarjetas de la Final en TARJETAS (como vos las cargabas a mano)
 
 ### Contexto
