@@ -1228,7 +1228,107 @@ function declararFechaFinalTerminada_(params) {
   meta.estado = 'finalizada';
   saveFinalMeta_(meta);
   audit_('DECLARAR_FECHA_FINAL_TERMINADA', 'admin', { ganador: res.standings[0].matricula });
+
+  // Archivar las tarjetas de los 2 días en TARJETAS (fechas 9/10, 11/12, etc.
+  // según corresponda) -- ver archivarFinalEnTarjetas_ más abajo. Si esto
+  // falla por lo que sea, no hace que declarar terminada falle: el resultado
+  // ya quedó cerrado igual, y el archivado se puede reintentar a mano con el
+  // botón "📋 Archivar en TARJETAS" en este mismo panel.
+  try { archivarFinalEnTarjetas_(); } catch (eArch) {}
+
   return { ok: true };
+}
+
+/**
+ * Archiva las tarjetas de los 2 días de la Fecha Final (TARJETAS FINAL) como
+ * dos "fechas" más en la hoja TARJETAS principal -- mismo criterio manual
+ * que Marco usaba antes de esto existir (cargar el Día 1 y el Día 2 de la
+ * Final como si fueran la fecha siguiente a la última de temporada). No
+ * toca SCORE ni LEADERBOARD -- la Final no suma puntos de temporada, esto es
+ * solo para no perder el historial de esas 36 tarjetas junto con las demás.
+ *
+ * La "próxima fecha disponible" se calcula como 1 + la fecha más alta que ya
+ * exista en TARJETAS (hoy eso da 9 y 10, con 8 fechas de temporada -- pero no
+ * queda hardcodeado, así sigue funcionando si el calendario cambia).
+ *
+ * Se llama sola al declarar terminada la Fecha Final (arriba) y queda
+ * grabado en FINAL_META (archivadoEnTarjetas) para no duplicar filas si se
+ * llega a llamar más de una vez -- por eso también se puede exponer como
+ * botón manual sin riesgo de archivar dos veces.
+ */
+function archivarFinalEnTarjetas_() {
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  if (meta.archivadoEnTarjetas) {
+    return { ok: true, yaArchivado: true, fechaDia1: meta.archivadoEnTarjetas.fechaDia1, fechaDia2: meta.archivadoEnTarjetas.fechaDia2 };
+  }
+
+  const shFinal = getSheet_(FINAL_SHEET_NAME);
+  if (!shFinal) return { ok: false, error: 'Hoja ' + FINAL_SHEET_NAME + ' no encontrada' };
+  const lastRowFinal = shFinal.getLastRow();
+  if (lastRowFinal < 2) return { ok: false, error: 'No hay tarjetas cargadas en ' + FINAL_SHEET_NAME };
+  const finalRows = shFinal.getRange(2, 1, lastRowFinal - 1, 23).getValues();
+  // cols TARJETAS FINAL: 0=DIA,1=MATRICULA,2=HCP,3=ID CANCHA,4=COLOR TEE,5..22=HOYO1..18
+
+  const shT = getSheet_(SHEETS.TARJETAS);
+  if (!shT) return { ok: false, error: 'Hoja TARJETAS no encontrada' };
+
+  // Próxima fecha disponible = 1 + la fecha más alta ya cargada en TARJETAS.
+  let maxFecha = 0;
+  const nextEmptyT0 = findNextEmptyRow_(shT, 1);
+  if (nextEmptyT0 > 2) {
+    const colA = shT.getRange(2, 1, nextEmptyT0 - 2, 1).getValues();
+    colA.forEach(function(r) {
+      const n = parseInt(r[0]);
+      if (!isNaN(n) && n > maxFecha) maxFecha = n;
+    });
+  }
+  const fechaDia1 = maxFecha + 1;
+  const fechaDia2 = maxFecha + 2;
+
+  [1, 2].forEach(function(diaNum) {
+    const fechaDestino = (diaNum === 1) ? fechaDia1 : fechaDia2;
+    const rowsDia = finalRows.filter(function(r) { return String(r[0]) === String(diaNum); });
+    if (!rowsDia.length) return;
+
+    // cols TARJETAS: A=fecha,B=mat,C=hcp,D=canchaId,E..V=HOYO1-18,W=LD,X=BA,Y=SALIDA
+    const toWrite = rowsDia.map(function(r) {
+      const row = new Array(25).fill('');
+      row[0] = fechaDestino;
+      row[1] = r[1];
+      row[2] = r[2];
+      row[3] = r[3];
+      for (let h = 0; h < 18; h++) row[4 + h] = r[5 + h];
+      // W (LD) y X (BA) quedan vacíos -- la Final no tiene esos bonus.
+      row[24] = r[4]; // Y = color tee (SALIDA), viene de COLOR TEE en TARJETAS FINAL
+      return row;
+    });
+
+    const startRow = findNextEmptyRow_(shT, 1);
+    shT.getRange(startRow, 1, toWrite.length, 25).setValues(toWrite);
+  });
+
+  meta.archivadoEnTarjetas = { fechaDia1: fechaDia1, fechaDia2: fechaDia2 };
+  saveFinalMeta_(meta);
+  audit_('ARCHIVAR_FINAL_EN_TARJETAS', 'admin', { fechaDia1: fechaDia1, fechaDia2: fechaDia2 });
+  return { ok: true, fechaDia1: fechaDia1, fechaDia2: fechaDia2 };
+}
+
+/**
+ * Wrapper con clave de admin para exponer archivarFinalEnTarjetas_ como
+ * acción manual (botón "📋 Archivar en TARJETAS") -- por si el archivado
+ * automático de declararFechaFinalTerminada_ falló, o para Finales ya
+ * cerradas antes de que esto existiera.
+ */
+function archivarFinalEnTarjetasAdmin_(params) {
+  const { adminKey } = params || {};
+  if (!checkAdmin_(adminKey)) return { ok: false, error: 'No autorizado' };
+  const meta = getFinalMeta_();
+  if (!meta) return { ok: false, error: 'No hay ninguna Fecha Final creada' };
+  if (meta.estado !== 'finalizada') {
+    return { ok: false, error: 'La Fecha Final todavía no está declarada terminada' };
+  }
+  return archivarFinalEnTarjetas_();
 }
 
 /**

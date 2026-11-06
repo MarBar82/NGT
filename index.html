@@ -4629,7 +4629,15 @@ function renderFinalResultado_(meta){
 
   if(meta.estado === 'finalizada'){
     ngtApiGet('getFinalResultadoFinal').then(function(r){
-      if(r && r.ok && r.completo) wrap.innerHTML = finalPodioAdminHtml_(r.standings, '🏆 Fecha Final terminada');
+      if(!r || !r.ok || !r.completo) return;
+      let html = finalPodioAdminHtml_(r.standings, '🏆 Fecha Final terminada');
+      if(meta.archivadoEnTarjetas){
+        html += '<div class="adm-msg ok" style="display:block;margin-top:10px;">✓ Archivada en TARJETAS como fecha ' + meta.archivadoEnTarjetas.fechaDia1 + ' (Día 1) y fecha ' + meta.archivadoEnTarjetas.fechaDia2 + ' (Día 2)</div>';
+      } else {
+        html += '<button class="adm-btn-primary" onclick="finalArchivarEnTarjetas()" style="margin-top:12px;width:100%;">📋 Archivar en TARJETAS (como fecha de temporada)</button>' +
+          '<div id="final-archivar-msg" class="adm-msg" style="display:none;"></div>';
+      }
+      wrap.innerHTML = html;
     }).catch(function(){});
     return;
   }
@@ -4705,6 +4713,24 @@ function finalDeclararTerminada(){
       finalLoad();
     } else if(msg){
       msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al declarar terminada la Fecha Final';
+    }
+  }).catch(function(){
+    if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
+  });
+}
+
+// Archiva las tarjetas de los 2 días de la Final en TARJETAS (fechas de
+// temporada) -- normalmente ya corre sola al declarar terminada; este botón
+// solo aparece si por algún motivo todavía no se archivó (ej: Finales ya
+// cerradas antes de que esto existiera).
+function finalArchivarEnTarjetas(){
+  const msg = document.getElementById('final-archivar-msg');
+  if(msg) msg.style.display = 'none';
+  ngtApiPost({ action: 'archivarFinalEnTarjetas', adminKey: ADMIN_KEY_OK }).then(function(r){
+    if(r && r.ok){
+      finalLoad();
+    } else if(msg){
+      msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = (r && r.error) || 'Error al archivar en TARJETAS';
     }
   }).catch(function(){
     if(msg){ msg.style.display = 'block'; msg.className = 'adm-msg err'; msg.textContent = 'Error de red'; }
